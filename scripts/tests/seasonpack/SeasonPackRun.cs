@@ -751,7 +751,10 @@ internal static class Program
         var registrySrc = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Registry/ContentHashRegistry.cs"));
         Check(registrySrc.Contains("public int RemapSubdlId(string uploadId, string entryId)"),
             "F-M435: the registry can rewrite a stored handle");
-        Check(registrySrc.Contains("x.PackId, uploadId") && registrySrc.Contains("x.SubdlId, uploadId"),
+        // F-M668: die Pack-Kennung steht in der Matrix (SourceId der `pack`-Zeile), die Untertitel-Kennung
+        // weiter an der Zeile (`SubdlId`) — beide werden umgeschrieben, nur an ihrem neuen Ort.
+        Check(registrySrc.Contains("SourceMatrix.PackMark(") && registrySrc.Contains("SourceMatrix.RemapId(_db, uploadId, entryId)")
+              && registrySrc.Contains("x.SubdlId, uploadId"),
             "F-M435: subtitle rows AND pack rows are rewritten");
         var coordinatorSrc = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Pipeline/SeasonPackCoordinator.cs"));
         Check(coordinatorSrc.Contains("pack entry id {Id} taken from myPublishedSubtitles"),

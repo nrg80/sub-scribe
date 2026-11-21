@@ -246,28 +246,10 @@ public class MediaEntity
     // F-M88c: the upload-side completion mark; a file whose embedded side is complete is skipped.
     public DateTime? SubtitlesUploadedAt { get; set; }
 
-    /// <summary>
-    /// F-M557 (Operator-Entscheidung 16.11.2026: „Alle spuren bearbeitet im durchlauf oder übersprungen
-    /// ist zu für die Quelle?"): der Zugeh-Stempel JE QUELLE. Er sagt: für diese Quelle wurde jede
-    /// vorhandene Dialogspur der Datei in einem Durchlauf entschieden — hochgeladen oder bewusst
-    /// übersprungen. Ein Upload bei tvst schliesst die Datei NICHT für SubDL; genau das war der Fehler,
-    /// den <see cref="SubtitlesUploadedAt"/> als eine globale Marke gemacht hat.
-    /// </summary>
-    public DateTime? CompleteSubdl { get; set; }
-
-    /// <summary>F-M557: Zugeh-Stempel für tvsubtitles.net (Serien).</summary>
-    public DateTime? CompleteTvSubtitles { get; set; }
-
-    /// <summary>F-M557: Zugeh-Stempel für moviesubtitles.org (Filme).</summary>
-    public DateTime? CompleteMsub { get; set; }
-
-    /// <summary>
-    /// F-M562: die Spursignatur, die zu den Stempeln gehört — die verschiedenen (Sprache, HI)-Paare der
-    /// Datei, sortiert und verkettet. Weicht sie beim nächsten Nachsehen ab (Spur dazu, Remux, andere
-    /// Sprache), gilt die Datei wieder als offen; ohne diese Zeile wäre der Stempel eine Behauptung über
-    /// einen Zustand, der sich ändern kann.
-    /// </summary>
-    public string? CompleteSignature { get; set; }
+    // F-M668 (21.11.2026): der Zugeh-Stempel je Quelle (F-M557) und die Spursignatur (F-M562) standen
+    // hier als `CompleteSubdl`/`CompleteTvSubtitles`/`CompleteMsub`/`CompleteSignature`. Sie sind in die
+    // Marken-Matrix gewandert (`Kind = file`, Signatur im Feld `Fingerprint`) und werden hier NICHT mehr
+    // geführt: ein Urteil hat genau einen Ort (F-M668).
 
     // F-M283 (user decision 02.10.2026): the download-side completion mark is GONE.
     //
@@ -373,62 +355,12 @@ public abstract class SubtitleState
     /// </summary>
     public string? OriginId { get; set; }
 
-    /// <summary>
-    /// F-M488 (operator order 15.11.2026): the four marks are separate fields, one per source AND
-    /// direction, so a row says by itself what happened where — no reading of <see cref="Status"/> and
-    /// no guessing. <c>SubdlDownloadId</c> is the SubDL entry the subtitle was fetched from.
-    /// </summary>
-    public string? SubdlDownloadId { get; set; }
-
-    /// <summary>F-M488: the SubDL id the uploaded subtitle got.</summary>
-    public string? SubdlUploadId { get; set; }
-
-    /// <summary>F-M488: the tvsubtitles.net subtitle id the subtitle was fetched from (e.g. <c>170678</c>).</summary>
-    public string? TvSubtitlesDownloadId { get; set; }
-
-    /// <summary>
-    /// F-M488: the tvsubtitles.net subtitle id our own upload got, read back from the episode page after
-    /// the send. Null means the id could not be read back — it is never filled with a guess.
-    /// </summary>
-    public string? TvSubtitlesUploadId { get; set; }
-
-    /// <summary>
-    /// F-M490 (operator order 15.11.2026): when OUR upload to SubDL happened (UTC). A timestamp rather
-    /// than a flag, because "uploaded" without "when" answers half the question — and because a row can
-    /// carry both sources: uploaded to SubDL in March, to tvsubtitles.net in November.
-    /// </summary>
-    public DateTime? SubdlUploadedAt { get; set; }
-
-    /// <summary>
-    /// F-M490: when OUR upload to tvsubtitles.net happened (UTC). Independent of
-    /// <see cref="SubdlUploadedAt"/> — that is the whole point of two fields.
-    /// </summary>
-    public DateTime? TvSubtitlesUploadedAt { get; set; }
-
-    /// <summary>
-    /// F-M507 (Schema 14): die Id, unter der moviesubtitles.org diesen Untertitel führt — die
-    /// Gegenseite der Eintragsseite <c>subtitle-&lt;id&gt;.html</c>. Eigenes Feld je Quelle und
-    /// Richtung, wie die vier Kennzeichen aus F-M488: eine Zeile soll von sich aus sagen, was wo
-    /// passiert ist, ohne <see cref="Status"/> zu deuten.
-    /// </summary>
-    public string? MoviesubtitlesDownloadId { get; set; }
-
-    /// <summary>
-    /// F-M507 (Schema 14): die Id, die unser eigener Upload bei moviesubtitles.org bekommen hat.
-    /// <para>
-    /// Das Feld steht hier mit der Spalte, weil die Migration beide Richtungen auf einmal anlegt;
-    /// GESCHRIEBEN wird es erst in Etappe 2b, wenn der Upload dieser Quelle verdrahtet ist. Null heißt
-    /// deshalb heute „noch nicht ermittelt" und nicht „kein Upload".
-    /// </para>
-    /// </summary>
-    public string? MoviesubtitlesUploadId { get; set; }
-
-    /// <summary>
-    /// F-M507 (Schema 14): wann UNSER Upload zu moviesubtitles.org lief (UTC) — ein Zeitpunkt, kein
-    /// Schalter, aus demselben Grund wie <see cref="SubdlUploadedAt"/>. Geschrieben wird er in
-    /// Etappe 2b.
-    /// </summary>
-    public DateTime? MoviesubtitlesUploadedAt { get; set; }
+    // F-M668 (21.11.2026): die neun Marken-Spalten je Quelle und Richtung (`SubdlDownloadId`,
+    // `SubdlUploadId`, `SubdlUploadedAt`, dasselbe für tvsubtitles und moviesubtitles) standen hier und
+    // an den Sidecars. Sie sind in die Marken-Matrix gewandert (Anker = Medien-Hash, Art = `track` bzw.
+    // `track-hi`, `SourceId` = Abruf-Id, `UploadId` = Einsende-Id, `ClosedAt` = Einsende-Zeitpunkt) und
+    // werden hier NICHT mehr geführt: ein Urteil hat genau einen Ort (F-M668). Was bleibt, ist die
+    // Herkunft (`Origin`/`OriginId`) und `SubdlId` — beides sind Eigenschaften der Zeile, keine Marken.
 }
 
 /// <summary>
@@ -876,17 +808,6 @@ public class PackEntity
     /// <summary>Release name the pack carries — one release for the whole season, never a mixture.</summary>
     public string? ReleaseName { get; set; }
 
-    /// <summary>
-    /// The packed id of THIS row's own source when the upload answered with one, else the pack NAME —
-    /// which is unique per season and content and is what the postprocessing pass can match against.
-    /// <para>
-    /// F-M642: seit die Quelle im Schluessel steht, gibt es je Quelle eine eigene Zeile und damit
-    /// genau eine Kennung pro Zeile. SubDLs Pack-Id steht also nie neben einer tvst-Kennung in
-    /// derselben Zeile; wer die Kennung einer Quelle braucht, fragt mit dieser Quelle.
-    /// </para>
-    /// </summary>
-    public string? PackId { get; set; }
-
     /// <summary>Episode numbers the pack carries, comma separated and ascending ("1,2,3").</summary>
     public string Episodes { get; set; } = string.Empty;
 
@@ -897,61 +818,13 @@ public class PackEntity
     public string? AbsorbedIds { get; set; }
 
     /// <summary>
-    /// F-M466: fingerprint of the pack as it was built — the hash over its member contents plus the
-    /// release it carries. It answers "is the pack the same one?" in one comparison, without
-    /// re-deriving anything from the subtitle rows: equal fingerprint means the same members in the
-    /// same shape, so nothing is re-sent; a different one means the set changed and the pack is
-    /// legitimately new. Rows written before this column existed carry null and fall back to the
-    /// member comparison.
-    /// </summary>
-    public string? Fingerprint { get; set; }
-
-    /// <summary>
-    /// F-M644 (Betreiber-Vorgabe 20.11.2026): der Grund, aus dem die QUELLE diesen Behälter abgelehnt
-    /// hat — null, solange nichts abgelehnt wurde.
-    /// <para>
-    /// SubDL antwortet auf einen Pack, dessen Inhalt es schon hat, mit einer Ablehnung
-    /// („already exist"/„duplicate") und nimmt nichts an. Bis hierher war das eine Zeile im Log und
-    /// sonst nichts: die Zeile im Store blieb leer, der nächste Lauf baute denselben Behälter und bekam
-    /// dieselbe Absage — bei jedem Lauf, für immer. Der Grund steht deshalb in der Zeile, die der Pack
-    /// ohnehin hat, zusammen mit dem Fingerabdruck seines Inhalts (<see cref="Fingerprint"/>).
-    /// </para>
-    /// </summary>
-    public string? RefusalReason { get; set; }
-
-    /// <summary>F-M644: wann abgelehnt wurde (UTC) — die Zeile nennt den Grund mit seinem Datum.</summary>
-    public DateTime? RefusedAt { get; set; }
-
-    /// <summary>
-    /// F-M650: die STAFFEL-SIGNATUR, auf der die Ablehnung beruht — die Signatur der Dateien im
-    /// Augenblick der Absage (<see cref="Pipeline.SeasonPackCoordinator.SeasonSignature"/>).
-    /// <para>
-    /// Warum sie gebraucht wird: der Fingerabdruck (<see cref="Fingerprint"/>) beschreibt die
-    /// MITGLIEDER eines Behälters und lässt sich erst vergleichen, wenn gesammelt und entpackt wurde.
-    /// Die Signatur ist vor der Extraktion bekannt — sie sagt „diese Staffel ist dieselbe wie bei der
-    /// Absage". Steht sie unverändert und hat die Quelle den Behälter nicht, ist das Paar für diese
-    /// Quelle geschlossen: es wird weder gesammelt noch entpackt. Erst eine neue Folge oder eine
-    /// geänderte Datei ergibt eine andere Signatur und damit einen neuen Versuch.
-    /// </para>
-    /// </summary>
-    public string? RefusedSignature { get; set; }
-
-    /// <summary>
-    /// F-M644: wann dieser Behälter tatsächlich durchgegangen ist (UTC) — der Beleg der Zeile.
-    /// <para>
-    /// Je Zeile und damit je Quelle, genau wie <c>SubdlUploadedAt</c>/<c>TvSubtitlesUploadedAt</c> auf
-    /// der Untertitelzeile: „der Pack ist bei SubDL durch" und „der Pack ist bei tvst durch" sind zwei
-    /// Aussagen, und keine darf die andere vortäuschen. Gesetzt wird sie erst, wenn der Versand
-    /// wirklich angenommen wurde (SubDL: <c>uploadSubtitle</c> mit Kennung; tvst: angenommener Versand);
-    /// solange nur abgelehnt wurde, bleibt sie null.
-    /// </para>
-    /// <para>
-    /// BELEG UND ABLEHNUNG SCHLIESSEN SICH AUS: eine Zeile trägt entweder <see cref="UploadedAt"/> oder
-    /// <see cref="RefusalReason"/>/<see cref="RefusedAt"/>, nie beides. Der Erfolg räumt die Absage weg,
-    /// die Absage den Beleg — sonst stünde „durch" neben „abgelehnt am …" und niemand wüsste, was gilt.
-    /// </para>
-    /// </summary>
-    public DateTime? UploadedAt { get; set; }
+    /// F-M668 (21.11.2026): die Behälter-Kennung der Quelle (`PackId`), der Mitglieder-Fingerabdruck
+    /// (`Fingerprint`), die Ablehnung (`RefusalReason`/`RefusedAt`/`RefusedSignature`) und das Urteil
+    /// `UploadedAt` standen hier. Sie sind in die Marken-Matrix gewandert (`Kind = pack`, `SourceId` =
+    /// Behälter-Kennung, `ClosedAt` = Urteil, `Fingerprint`, `RefusalReason`/`RefusedAt`/
+    /// `RefusalSignature`) und werden hier NICHT mehr geführt: ein Urteil hat genau einen Ort (F-M668).
+    /// Diese Zeile trägt ab jetzt nur noch die MITGLIEDER — Release, Folgen, aufgesogene Einzel-Ids —,
+    /// die kein Urteil einer Quelle sind.
 
     /// <summary>When the row was first written (UTC).</summary>
     public DateTime Created { get; set; } = DateTime.UtcNow;
@@ -959,6 +832,69 @@ public class PackEntity
     /// <summary>When the row last changed (UTC).</summary>
     public DateTime Updated { get; set; } = DateTime.UtcNow;
 }
+
+/// <summary>
+/// F-M668: EIN Pack, wie ihn die Leser sehen — die Mitglieder aus der <c>packs</c>-Zeile und das Urteil
+/// aus der Marken-Matrix.
+/// <para>
+/// WARUM EIN EIGENER TYP: das Urteil steht seit F-M668 nur noch in <c>source_matrix</c>, die Mitglieder
+/// (Release, Folgen, aufgesogene Kennungen) weiter in <c>packs</c>. Wer „ist dieser Behälter oben?" oder
+/// „warum wurde er abgelehnt?" fragt, braucht beide — und zwar als EINE Antwort, nicht als zwei Abfragen
+/// an zwei Stellen. Der Typ macht außerdem sichtbar, dass seine Urteils-Felder NICHT schreibbar sind:
+/// geschrieben wird über <c>ContentHashRegistry.RecordPack</c>/<c>RecordPackRefusal</c>.
+/// </para>
+/// </summary>
+public sealed class PackView
+{
+    /// <summary>Der Schlüssel der <c>packs</c>-Zeile (Serie, Staffel, Sprache, Variante, Quelle).</summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>Die Quelle des Behälters (<see cref="PackEntity.SubdlSource"/> oder <see cref="PackEntity.TvSubtitlesSource"/>).</summary>
+    public string Source { get; set; } = PackEntity.SubdlSource;
+
+    /// <summary>Serie des Behälters.</summary>
+    public string ImdbId { get; set; } = string.Empty;
+
+    /// <summary>Staffel.</summary>
+    public int Season { get; set; }
+
+    /// <summary>Sprache des Behälters.</summary>
+    public string Language { get; set; } = string.Empty;
+
+    /// <summary>HI-Variante des Behälters (dreiwertig, F-M285).</summary>
+    public bool? HearingImpaired { get; set; }
+
+    /// <summary>Release, den der Behälter trägt.</summary>
+    public string? ReleaseName { get; set; }
+
+    /// <summary>Folgen des Behälters, kommasepariert und aufsteigend.</summary>
+    public string Episodes { get; set; } = string.Empty;
+
+    /// <summary>Die Einzel-Kennungen, die in diesem Behälter aufgegangen sind.</summary>
+    public string? AbsorbedIds { get; set; }
+
+    /// <summary>F-M390/F-M668: die Kennung des Behälters BEI DER QUELLE (Matrix-<c>SourceId</c>); null, solange keine bekannt ist.</summary>
+    public string? PackId { get; set; }
+
+    /// <summary>F-M466/F-M668: Fingerabdruck der Mitglieder (Matrix-<c>Fingerprint</c>) — „ist das derselbe Behälter?".</summary>
+    public string? Fingerprint { get; set; }
+
+    /// <summary>F-M644/F-M668: der Grund, aus dem die Quelle den Behälter abgelehnt hat; null, solange nichts abgelehnt wurde.</summary>
+    public string? RefusalReason { get; set; }
+
+    /// <summary>F-M644/F-M668: wann abgelehnt wurde (UTC).</summary>
+    public DateTime? RefusedAt { get; set; }
+
+    /// <summary>F-M650/F-M668: die Staffel-Signatur, auf der die Ablehnung beruht.</summary>
+    public string? RefusedSignature { get; set; }
+
+    /// <summary>F-M644/F-M668: wann der Behälter wirklich durchging (Matrix-<c>ClosedAt</c>); null bei Ablehnung.</summary>
+    public DateTime? UploadedAt { get; set; }
+
+    /// <summary>Wahr, wenn es für diesen Behälter überhaupt eine Matrix-Zeile gibt (Urteil oder Absage).</summary>
+    public bool HasVerdict { get; set; }
+}
+
 
 /// <summary>
 /// F-M667 (Betreiber-Vorgabe 21.11.2026): EINE Marke je (Medium, Quelle, Art) — die Matrix, die die
@@ -1059,11 +995,27 @@ public class SourceMatrixEntity
     /// </summary>
     public string? SourceId { get; set; }
 
+    /// <summary>
+    /// F-M668 (21.11.2026): die Id der EINSENDUNG bei dieser Quelle — getrennt von
+    /// <see cref="SourceId"/>, weil beide Nummern in verschiedenen Bereichen liegen (gemessen: Eintrag
+    /// 3758706 gegen Upload 380828, F-M435). Bis Schema 18 stand sie in der breiten Spalte
+    /// <c>SubdlUploadId</c>/<c>TvSubtitlesUploadId</c>/<c>MoviesubtitlesUploadId</c>; sie gehört zur
+    /// Marke, nicht zur Zeile. Null heißt „die Antwort nannte keine" — es wird keine erfunden.
+    /// </summary>
+    public string? UploadId { get; set; }
+
     /// <summary>Grund einer Ablehnung durch die Quelle (nur <c>pack</c> belegt); null, solange nichts abgelehnt wurde.</summary>
     public string? RefusalReason { get; set; }
 
     /// <summary>Wann abgelehnt wurde (UTC) — die Zeile nennt den Grund mit seinem Datum.</summary>
     public DateTime? RefusedAt { get; set; }
+
+    /// <summary>
+    /// F-M650/F-M668: die STAFFEL-SIGNATUR, auf der eine Ablehnung beruht (nur <c>pack</c> belegt).
+    /// Sie stand bis Schema 18 in der Spalte <c>packs.RefusedSignature</c>; der Fingerabdruck der
+    /// Mitglieder lässt sich erst nach dem Entpacken vergleichen, die Signatur steht vorher fest.
+    /// </summary>
+    public string? RefusalSignature { get; set; }
 
     /// <summary>Wann die Zeile zuletzt geschrieben wurde (UTC).</summary>
     public DateTime Written { get; set; } = DateTime.UtcNow;

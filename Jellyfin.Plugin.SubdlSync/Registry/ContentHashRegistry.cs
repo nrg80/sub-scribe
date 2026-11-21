@@ -698,54 +698,18 @@ public sealed class ContentHashRegistry : IDisposable
             existing.SubdlId = subdlId;
         }
 
-        // F-M488: die vier Kennzeichen, gleiche Regel wie bei den Sidecars — nur schreiben, wenn bekannt.
-        if (!string.IsNullOrEmpty(subdlUploadId))
-        {
-            existing.SubdlUploadId = subdlUploadId;
-        }
-
-        if (!string.IsNullOrEmpty(tvSubtitlesUploadId))
-        {
-            existing.TvSubtitlesUploadId = tvSubtitlesUploadId;
-        }
-
-        if (!string.IsNullOrEmpty(subdlDownloadId))
-        {
-            existing.SubdlDownloadId = subdlDownloadId;
-        }
-
-        if (!string.IsNullOrEmpty(tvSubtitlesDownloadId))
-        {
-            existing.TvSubtitlesDownloadId = tvSubtitlesDownloadId;
-        }
-
-        // F-M507: das Kennzeichen der dritten Quelle — dieselbe Regel wie bei den Sidecars.
-        if (!string.IsNullOrEmpty(moviesubtitlesDownloadId))
-        {
-            existing.MoviesubtitlesDownloadId = moviesubtitlesDownloadId;
-        }
-
-        // F-M508: das Upload-Kennzeichen der dritten Quelle, dieselbe Regel — nur schreiben, wenn bekannt.
-        if (!string.IsNullOrEmpty(moviesubtitlesUploadId))
-        {
-            existing.MoviesubtitlesUploadId = moviesubtitlesUploadId;
-        }
-
-        // F-M490: "hochgeladen" je Quelle, mit Zeitpunkt.
-        if (subdlUploadedAt.HasValue)
-        {
-            existing.SubdlUploadedAt = subdlUploadedAt;
-        }
-
-        if (tvSubtitlesUploadedAt.HasValue)
-        {
-            existing.TvSubtitlesUploadedAt = tvSubtitlesUploadedAt;
-        }
-
-        if (moviesubtitlesUploadedAt.HasValue)
-        {
-            existing.MoviesubtitlesUploadedAt = moviesubtitlesUploadedAt;
-        }
+        // F-M488/F-M490/F-M507 — F-M668: die Marken je Quelle und Richtung stehen NICHT mehr als Spalten
+        // an dieser Zeile, sondern als Zeilen der Marken-Matrix (`Kind = track`/`track-hi`, Anker =
+        // Medien-Hash). Geschrieben wird ausschließlich dort; ein Doppelschreiben gibt es nicht.
+        // Eine Spur-Marke gilt je (Medium, Quelle, Sprache, Variante) — zwei Spuren derselben Sprache
+        // sind EINE Marke, und der spätere Zeitstempel gewinnt.
+        var media = _db.Media.FindById(mediaHash);
+        SourceMatrix.WriteTrackMark(_db, media, mediaHash, SourceMatrix.Subdl, language, hearingImpaired,
+            subdlUploadedAt, subdlDownloadId, subdlUploadId);
+        SourceMatrix.WriteTrackMark(_db, media, mediaHash, SourceMatrix.TvSubtitles, language, hearingImpaired,
+            tvSubtitlesUploadedAt, tvSubtitlesDownloadId, tvSubtitlesUploadId);
+        SourceMatrix.WriteTrackMark(_db, media, mediaHash, SourceMatrix.MovieSubtitles, language, hearingImpaired,
+            moviesubtitlesUploadedAt, moviesubtitlesDownloadId, moviesubtitlesUploadId);
 
         _db.Embeds.Upsert(existing);
         RefreshMediaAggregates(mediaHash);
@@ -1236,47 +1200,78 @@ public sealed class ContentHashRegistry : IDisposable
             return false;
         }
 
-        // F-M490: das eigene "hochgeladen" der Quelle ist die erste Antwort. Das Kennzeichen (F-M488)
-        // bleibt als zweite: eine Zeile, die eine Id hat, ist hochgeladen, auch wenn der Zeitstempel
-        // fehlt (Altdaten aus Schema 11). Beide Ablagen zaehlen — embeds UND sidecars.
-        if (provider == SubtitleProvider.TvSubtitles)
+        // F-M668: DIE Marke dieser Quelle ist eine Zeile der Matrix (`track` bzw. `track-hi`), keine
+        // Spalte an der Zeile. Sie ist geschlossen, sobald ein Zeitpunkt ODER eine Einsende-Id daran
+        // haengt — eine bloße Abruf-Id belegt einen Fund, keine Einsendung.
+        if (SourceMatrix.TrackMark(_db, mediaHash, Quelle(provider), language, hearingImpaired).IsClosed)
         {
-            return _db.Embeds.Exists(x => x.MediaHash == mediaHash
-                    && x.Language == language
-                    && x.HearingImpaired == hearingImpaired
-                    && (x.TvSubtitlesUploadedAt != null || !string.IsNullOrEmpty(x.TvSubtitlesUploadId)))
-                || _db.Sidecars.Exists(x => x.MediaHash == mediaHash
-                    && x.Language == language
-                    && x.HearingImpaired == hearingImpaired
-                    && (x.TvSubtitlesUploadedAt != null || !string.IsNullOrEmpty(x.TvSubtitlesUploadId)));
+            return true;
         }
 
-        // F-M508: dieselbe Frage fuer die Film-Adresse der Familie — eigene Spalten, eigene Antwort.
-        if (provider == SubtitleProvider.MovieSubtitles)
+        // Altbestand OHNE jede Quellenmarke (Schema 11): `Status=uploaded` plus `SubdlId` ist der einzige
+        // Beleg, den solche Zeilen tragen (F-M489). Er zaehlt nur fuer SubDL — vor der Zwei-Quellen-Kette
+        // war SubDL das einzige Ziel, und fuer tvst waere dieselbe Zeile der Fehler selbst (F-M500).
+        if (provider != SubtitleProvider.Subdl)
         {
-            return _db.Embeds.Exists(x => x.MediaHash == mediaHash
-                    && x.Language == language
-                    && x.HearingImpaired == hearingImpaired
-                    && (x.MoviesubtitlesUploadedAt != null || !string.IsNullOrEmpty(x.MoviesubtitlesUploadId)))
-                || _db.Sidecars.Exists(x => x.MediaHash == mediaHash
-                    && x.Language == language
-                    && x.HearingImpaired == hearingImpaired
-                    && (x.MoviesubtitlesUploadedAt != null || !string.IsNullOrEmpty(x.MoviesubtitlesUploadId)));
+            return false;
         }
 
         return _db.Embeds.Exists(x => x.MediaHash == mediaHash
                 && x.Language == language
                 && x.HearingImpaired == hearingImpaired
-                && (x.SubdlUploadedAt != null
-                    || !string.IsNullOrEmpty(x.SubdlUploadId)
-                    || (x.Status == SubtitleStatus.Uploaded && !string.IsNullOrEmpty(x.SubdlId))))
+                && x.Status == SubtitleStatus.Uploaded
+                && !string.IsNullOrEmpty(x.SubdlId))
             || _db.Sidecars.Exists(x => x.MediaHash == mediaHash
                 && x.Language == language
                 && x.HearingImpaired == hearingImpaired
-                && (x.SubdlUploadedAt != null
-                    || !string.IsNullOrEmpty(x.SubdlUploadId)
-                    || (x.Status == SubtitleStatus.Uploaded && !string.IsNullOrEmpty(x.SubdlId))));
+                && x.Status == SubtitleStatus.Uploaded
+                && !string.IsNullOrEmpty(x.SubdlId));
     }
+
+    /// <summary>F-M668: der Quellenname einer Marke — dieselben Werte, die die Matrix im Feld <c>Source</c> führt.</summary>
+    /// <param name="provider">The source.</param>
+    /// <returns>The source's mark name.</returns>
+    private static string Quelle(SubtitleProvider provider) => provider switch
+    {
+        SubtitleProvider.Subdl => SourceMatrix.Subdl,
+        SubtitleProvider.TvSubtitles => SourceMatrix.TvSubtitles,
+        _ => SourceMatrix.MovieSubtitles,
+    };
+
+    /// <summary>
+    /// F-M668/F-M653: die Einsende-Id, die diese Quelle an dieser Spur hinterlassen hat — die Kennung,
+    /// mit der ein aufgegangener Einzelupload später gelöscht werden kann. Sie steht an der Spur-Marke
+    /// der Matrix; null heißt „die Antwort nannte keine".
+    /// </summary>
+    /// <param name="mediaHash">Medien-Hash der Datei.</param>
+    /// <param name="language">Sprache der Spur.</param>
+    /// <param name="hearingImpaired">HI-Variante der Spur.</param>
+    /// <param name="provider">Die Quelle, deren Einsende-Id gefragt ist.</param>
+    /// <returns>Die Id der Einsendung, oder null.</returns>
+    public string? UploadIdFor(string? mediaHash, string language, bool hearingImpaired, SubtitleProvider provider)
+    {
+        if (string.IsNullOrEmpty(mediaHash))
+        {
+            return null;
+        }
+
+        string id = SourceMatrix.TrackMark(_db, mediaHash, Quelle(provider), language, hearingImpaired).UploadId is { Length: > 0 } upload
+            ? upload
+            : string.Empty;
+        return id.Length == 0 ? null : id;
+    }
+
+    /// <summary>
+    /// F-M668: hat IRGENDEINE Quelle dieses Paar geschlossen? Die Frage, die eine Zeile ohne eigene
+    /// Quellenmarke braucht (F-M500) — ohne sie wäre „hochgeladen, Quelle unbekannt" nicht mehr ablesbar.
+    /// </summary>
+    /// <param name="mediaHash">Der Medien-Hash der Datei.</param>
+    /// <param name="language">Die Sprache des Paars.</param>
+    /// <param name="hearingImpaired">Die HI-Variante des Paars.</param>
+    /// <returns>Wahr, wenn mindestens eine Quelle das Paar geschlossen hat.</returns>
+    private bool AnySourceClosed(string? mediaHash, string language, bool hearingImpaired)
+        => SourceMatrix.Sources.Any(quelle =>
+            SourceMatrix.TrackMark(_db, mediaHash, quelle, language, hearingImpaired).IsClosed);
 
     /// <summary>
     /// Recorded rejection reason for a specific embedded stream position, else null.
@@ -1413,30 +1408,31 @@ public sealed class ContentHashRegistry : IDisposable
     public Dictionary<(string ImdbId, int Season), HashSet<(string Language, bool HearingImpaired)>> PacksBySeason()
     {
         var karte = new Dictionary<(string, int), HashSet<(string, bool)>>();
-        foreach (var row in _db.Packs.FindAll())
+
+        // F-M668: das Urteil steht in der Matrix (Kind = pack); die `packs`-Zeile trägt nur die
+        // Mitglieder. Gelesen wird die Matrix — eine Absage ist kein Pack (F-M644).
+        foreach (var row in SourceMatrix.Rows(_db, null, MarkKind.Pack))
         {
-            if (string.IsNullOrWhiteSpace(row.ImdbId) || row.Season < 1)
+            if (string.IsNullOrWhiteSpace(row.ImdbId) || row.Season is not > 0)
             {
                 continue;
             }
 
             // F-M644: eine abgelehnte Zeile ist kein Pack — sonst haette die Absage die Staffel fuer
             // immer als „gepackt" gefuehrt, und ein geaenderter Inhalt waere nie wieder versucht worden.
-            if (!string.IsNullOrWhiteSpace(row.RefusalReason))
+            if (!string.IsNullOrWhiteSpace(row.RefusalReason) || row.ClosedAt == null)
             {
                 continue;
             }
 
-            var schluessel = (row.ImdbId!, row.Season);
+            var schluessel = (row.ImdbId, row.Season!.Value);
             if (!karte.TryGetValue(schluessel, out var paare))
             {
                 paare = new HashSet<(string, bool)>();
                 karte[schluessel] = paare;
             }
 
-            paare.Add((
-                Language.LanguageMapper.Canonical(row.Language) ?? (row.Language ?? string.Empty).ToUpperInvariant(),
-                row.HearingImpaired ?? false));
+            paare.Add((SourceMatrix.Normalise(row.Language), row.HearingImpaired ?? false));
         }
 
         return karte;
@@ -1454,39 +1450,28 @@ public sealed class ContentHashRegistry : IDisposable
     {
         var karte = new Dictionary<(string, int), HashSet<(string, bool)>>();
         string gesucht = string.IsNullOrWhiteSpace(source) ? PackEntity.SubdlSource : source;
-        foreach (var row in _db.Packs.FindAll())
+        foreach (var row in SourceMatrix.Rows(_db, gesucht, MarkKind.Pack))
         {
-            if (string.IsNullOrWhiteSpace(row.ImdbId) || row.Season < 1)
+            if (string.IsNullOrWhiteSpace(row.ImdbId) || row.Season is not > 0)
             {
                 continue;
             }
 
             // F-M644: eine abgelehnte Zeile ist kein Pack — sonst haette die Absage die Staffel fuer
             // immer als „gepackt" gefuehrt, und ein geaenderter Inhalt waere nie wieder versucht worden.
-            if (!string.IsNullOrWhiteSpace(row.RefusalReason))
+            if (!string.IsNullOrWhiteSpace(row.RefusalReason) || row.ClosedAt == null)
             {
                 continue;
             }
 
-            // F-M642: eine Zeile ohne Quelle ist Bestand und damit SubDL.
-            if (!string.Equals(
-                    string.IsNullOrWhiteSpace(row.Source) ? PackEntity.SubdlSource : row.Source,
-                    gesucht,
-                    StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            var schluessel = (row.ImdbId!, row.Season);
+            var schluessel = (row.ImdbId, row.Season!.Value);
             if (!karte.TryGetValue(schluessel, out var paare))
             {
                 paare = new HashSet<(string, bool)>();
                 karte[schluessel] = paare;
             }
 
-            paare.Add((
-                Language.LanguageMapper.Canonical(row.Language) ?? (row.Language ?? string.Empty).ToUpperInvariant(),
-                row.HearingImpaired ?? false));
+            paare.Add((SourceMatrix.Normalise(row.Language), row.HearingImpaired ?? false));
         }
 
         return karte;
@@ -1634,55 +1619,16 @@ public sealed class ContentHashRegistry : IDisposable
             existing.OriginId = originId;
         }
 
-        // F-M488: die vier Kennzeichen, je Quelle und Richtung eines. Gleiche Regel wie oben — ohne
-        // Kenntnis wird nichts geschrieben, und ein leerer Wert löscht keine Angabe.
-        if (!string.IsNullOrEmpty(subdlDownloadId))
-        {
-            existing.SubdlDownloadId = subdlDownloadId;
-        }
-
-        if (!string.IsNullOrEmpty(subdlUploadId))
-        {
-            existing.SubdlUploadId = subdlUploadId;
-        }
-
-        if (!string.IsNullOrEmpty(tvSubtitlesDownloadId))
-        {
-            existing.TvSubtitlesDownloadId = tvSubtitlesDownloadId;
-        }
-
-        if (!string.IsNullOrEmpty(tvSubtitlesUploadId))
-        {
-            existing.TvSubtitlesUploadId = tvSubtitlesUploadId;
-        }
-
-        // F-M507: das Kennzeichen der dritten Quelle, gleiche Regel — nur schreiben, wenn bekannt.
-        if (!string.IsNullOrEmpty(moviesubtitlesDownloadId))
-        {
-            existing.MoviesubtitlesDownloadId = moviesubtitlesDownloadId;
-        }
-
-        // F-M508: das Upload-Kennzeichen der dritten Quelle, gleiche Regel.
-        if (!string.IsNullOrEmpty(moviesubtitlesUploadId))
-        {
-            existing.MoviesubtitlesUploadId = moviesubtitlesUploadId;
-        }
-
-        // F-M490: "hochgeladen" je Quelle, mit Zeitpunkt. Ein Zeitpunkt wird nie zurueckgesetzt.
-        if (subdlUploadedAt.HasValue)
-        {
-            existing.SubdlUploadedAt = subdlUploadedAt;
-        }
-
-        if (tvSubtitlesUploadedAt.HasValue)
-        {
-            existing.TvSubtitlesUploadedAt = tvSubtitlesUploadedAt;
-        }
-
-        if (moviesubtitlesUploadedAt.HasValue)
-        {
-            existing.MoviesubtitlesUploadedAt = moviesubtitlesUploadedAt;
-        }
+        // F-M488/F-M490/F-M507 — F-M668: die Marken je Quelle und Richtung stehen nicht mehr als Spalten
+        // an dieser Zeile, sondern als Zeilen der Marken-Matrix (Anker = Medien-Hash, Art = `track` bzw.
+        // `track-hi`). Geschrieben wird ausschließlich dort — dieselbe Regel wie bei den eingebetteten
+        // Spuren, damit ein Seitenwagen und eine Spur derselben Sprache DIESELBE Marke tragen.
+        SourceMatrix.WriteTrackMark(_db, media, mediaHash, SourceMatrix.Subdl, language, hearingImpaired,
+            subdlUploadedAt, subdlDownloadId, subdlUploadId);
+        SourceMatrix.WriteTrackMark(_db, media, mediaHash, SourceMatrix.TvSubtitles, language, hearingImpaired,
+            tvSubtitlesUploadedAt, tvSubtitlesDownloadId, tvSubtitlesUploadId);
+        SourceMatrix.WriteTrackMark(_db, media, mediaHash, SourceMatrix.MovieSubtitles, language, hearingImpaired,
+            moviesubtitlesUploadedAt, moviesubtitlesDownloadId, moviesubtitlesUploadId);
 
         if (!string.IsNullOrEmpty(fileName))
         {
@@ -1875,14 +1821,19 @@ public sealed class ContentHashRegistry : IDisposable
             return false;
         }
 
-        if (provider == SubtitleProvider.TvSubtitles)
+        // F-M668: die Antwort kommt aus der Marke des Paares, zu dem die Zeile gehört — eine Sidecar
+        // trägt keine eigenen Marken-Spalten mehr. Eine Sidecar ohne Medienbezug hat kein Paar und
+        // damit keine Marke; sie ist dann für jede Quelle offen.
+        if (IsUploadedTo(row.MediaHash, row.Language, row.HearingImpaired ?? false, provider))
         {
-            return row.TvSubtitlesUploadedAt != null || !string.IsNullOrEmpty(row.TvSubtitlesUploadId);
+            return true;
         }
 
-        return row.SubdlUploadedAt != null
-            || !string.IsNullOrEmpty(row.SubdlUploadId)
-            || (row.Status == SubtitleStatus.Uploaded && !string.IsNullOrEmpty(row.SubdlId));
+        // F-M500: eine `uploaded`-Zeile OHNE jede Quellenmarke stammt aus der Zeit vor der
+        // Zwei-Quellen-Kette und damit von SubDL — für tvst zaehlt sie nicht.
+        return provider == SubtitleProvider.Subdl
+               && row.Status == SubtitleStatus.Uploaded
+               && !AnySourceClosed(row.MediaHash, row.Language, row.HearingImpaired ?? false);
     }
 
     /// <summary>Recorded rejection reason for this content, else null.</summary>
@@ -1957,6 +1908,11 @@ public sealed class ContentHashRegistry : IDisposable
         source = string.IsNullOrWhiteSpace(source) ? PackEntity.SubdlSource : source;
         string id = ScribeDbContext.PackKey(imdbId, season, language, hearingImpaired, source);
         var existing = _db.Packs.FindById(id);
+
+        // F-M668: die MITGLIEDER stehen weiter an der `packs`-Zeile (Release, Folgen, aufgesogene
+        // Einzel-Ids) — das ist kein Urteil einer Quelle. Das URTEIL (angenommen, Behälter-Kennung,
+        // Fingerabdruck) steht ausschließlich in der Matrix; die Urteils-Spalten dieser Tabelle gibt es
+        // nicht mehr.
         _db.Packs.Upsert(new PackEntity
         {
             Id = id,
@@ -1966,22 +1922,27 @@ public sealed class ContentHashRegistry : IDisposable
             Language = language,
             HearingImpaired = hearingImpaired,
             ReleaseName = releaseName,
-            PackId = packId,
             Episodes = string.Join(",", episodes.OrderBy(e => e).Select(e => e.ToString(System.Globalization.CultureInfo.InvariantCulture))),
             AbsorbedIds = absorbedIds == null ? existing?.AbsorbedIds : string.Join(",", absorbedIds),
-            // F-M466: the fingerprint is the memo — same members in the same shape mean the same pack.
-            Fingerprint = string.IsNullOrWhiteSpace(fingerprint) ? existing?.Fingerprint : fingerprint,
-            // F-M644: was oben ist, ist nicht mehr abgelehnt. Der Erfolg raeumt die Absage derselben
-            // Zeile weg und setzt den Beleg — sonst stuende neben einem vorhandenen Pack ein
-            // „abgelehnt am ...", und „Pack ist durch" waere nirgends abzulesen.
-            RefusalReason = null,
-            RefusedAt = null,
-            // F-M650: mit der Absage faellt auch die Signatur, auf der sie beruhte.
-            RefusedSignature = null,
-            UploadedAt = DateTime.UtcNow,
             Created = existing?.Created ?? DateTime.UtcNow,
             Updated = DateTime.UtcNow,
         });
+
+        // Der Beleg: die Quelle hat den Behälter angenommen. Er räumt eine frühere Absage derselben Zeile
+        // weg (F-M644) und trägt den Fingerabdruck der Mitglieder (F-M466).
+        SourceMatrix.WritePackMark(
+            _db,
+            imdbId,
+            season,
+            language,
+            hearingImpaired,
+            source,
+            DateTime.UtcNow,
+            packId,
+            fingerprint,
+            refusalReason: null,
+            refusedAt: null,
+            refusalSignature: null);
     }
 
     /// <summary>
@@ -2033,6 +1994,9 @@ public sealed class ContentHashRegistry : IDisposable
         source = string.IsNullOrWhiteSpace(source) ? PackEntity.SubdlSource : source;
         string id = ScribeDbContext.PackKey(imdbId, season, language, hearingImpaired, source);
         var existing = _db.Packs.FindById(id);
+
+        // F-M668: die Mitglieder bleiben an der `packs`-Zeile — eine Absage löscht keinen Beleg. Das
+        // URTEIL (Ablehnung mit Grund, Datum und Signatur) steht ausschließlich in der Matrix.
         _db.Packs.Upsert(new PackEntity
         {
             Id = id,
@@ -2042,21 +2006,25 @@ public sealed class ContentHashRegistry : IDisposable
             Language = language,
             HearingImpaired = hearingImpaired,
             ReleaseName = existing?.ReleaseName,
-            PackId = existing?.PackId,
             Episodes = existing?.Episodes ?? string.Empty,
             AbsorbedIds = existing?.AbsorbedIds,
-            Fingerprint = string.IsNullOrWhiteSpace(fingerprint) ? existing?.Fingerprint : fingerprint,
-            RefusalReason = reason,
-            RefusedAt = DateTime.UtcNow,
-            // F-M650: die Signatur, auf der die Absage beruht. Ohne sie waere die Absage erst nach
-            // dem Sammeln pruefbar (Fingerabdruck) — mit ihr steht sie vor der Extraktion fest.
-            RefusedSignature = string.IsNullOrWhiteSpace(signature) ? existing?.RefusedSignature : signature,
-            // F-M644: die Absage ist das Gegenteil eines Belegs — ein abgelehnter Behälter ist nie
-            // „durch". Was hier steht, raeumt den Beleg der Zeile weg.
-            UploadedAt = null,
             Created = existing?.Created ?? DateTime.UtcNow,
             Updated = DateTime.UtcNow,
         });
+
+        SourceMatrix.WritePackMark(
+            _db,
+            imdbId,
+            season,
+            language,
+            hearingImpaired,
+            source,
+            closedAt: null,
+            sourceId: null,
+            fingerprint: fingerprint,
+            refusalReason: reason,
+            refusedAt: DateTime.UtcNow,
+            refusalSignature: signature);
     }
 
     /// <summary>
@@ -2088,25 +2056,9 @@ public sealed class ContentHashRegistry : IDisposable
         }
 
         // Beide Quellen: der Reset gilt der STAFFEL, nicht einer Quelle. Was danach gebaut wird,
-        // entscheidet die Pack-Phase selbst (F-M644 ueber den Fingerabdruck).
-        int geloescht = 0;
-        foreach (var row in _db.Packs.FindAll()
-                     .Where(x => string.Equals(x.ImdbId, media.ImdbId, StringComparison.Ordinal)
-                                 && x.Season == media.Season
-                                 && !string.IsNullOrWhiteSpace(x.RefusalReason))
-                     .ToList())
-        {
-            row.RefusalReason = null;
-            row.RefusedAt = null;
-            // F-M650: die Signatur der Absage faellt mit — sonst stuende nach dem Reset eine Signatur
-            // ohne Grund in der Zeile und ein neuer Lauf haette keinen Grund, sie zu pruefen.
-            row.RefusedSignature = null;
-            row.Updated = DateTime.UtcNow;
-            _db.Packs.Upsert(row);
-            geloescht++;
-        }
-
-        return geloescht;
+        // entscheidet die Pack-Phase selbst (F-M644 ueber den Fingerabdruck). F-M668: die Absagen stehen
+        // in der Matrix (Kind = pack), die `packs`-Zeile trägt sie nicht mehr.
+        return SourceMatrix.ClearPackRefusals(_db, media.ImdbId, media.Season.Value);
     }
 
     /// <summary>
@@ -2223,18 +2175,23 @@ public sealed class ContentHashRegistry : IDisposable
         }
 
         foreach (var row in _db.Packs.FindAll()
-                     .Where(x => string.Equals(x.PackId, uploadId, StringComparison.Ordinal)
-                                 // F-M642: die nachzutragende Kennung ist eine SubDL-Upload-Id — nur
-                                 // SubDL-Zeilen koennen sie tragen.
-                                 && string.Equals(
-                                     string.IsNullOrWhiteSpace(x.Source) ? PackEntity.SubdlSource : x.Source,
-                                     PackEntity.SubdlSource,
-                                     StringComparison.Ordinal))
+                     .Where(x => string.Equals(
+                         string.IsNullOrWhiteSpace(x.Source) ? PackEntity.SubdlSource : x.Source,
+                         PackEntity.SubdlSource,
+                         StringComparison.Ordinal))
                      .ToList())
         {
-            row.PackId = entryId;
-            row.Updated = DateTime.UtcNow;
-            _db.Packs.Upsert(row);
+            // F-M668: die Behälter-Kennung steht in der Matrix (Kind = pack, SourceId) — nur SubDL-Zeilen
+            // können eine SubDL-Upload-Id tragen (F-M642). Ohne Matrix-Zeile gibt es keine Kennung und
+            // damit nichts nachzutragen.
+            if (SourceMatrix.PackMark(_db, row.ImdbId, row.Season, row.Language, row.HearingImpaired ?? false,
+                    PackEntity.SubdlSource).SourceId is not { } alt
+                || !string.Equals(alt, uploadId, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            SourceMatrix.RemapId(_db, uploadId, entryId);
             changed++;
         }
 
@@ -2305,13 +2262,31 @@ public sealed class ContentHashRegistry : IDisposable
                 continue;
             }
 
-            if (string.IsNullOrEmpty(pack.PackId) || carried.Contains(pack.PackId!))
+            // F-M668: die Behälter-Kennung steht in der Matrix (Kind = pack, SourceId).
+            string? kennung = SourceMatrix.PackMark(
+                _db, pack.ImdbId, pack.Season, pack.Language, pack.HearingImpaired ?? false,
+                PackEntity.SubdlSource).SourceId;
+
+            if (string.IsNullOrEmpty(kennung) || carried.Contains(kennung!))
             {
                 continue;
             }
 
             _db.Packs.DeleteMany(p => p.Id == pack.Id);
             removed++;
+
+            // Die Matrix-Zeile fällt mit: eine Behälter-Kennung ohne Mitglieder ist ein Beleg ohne
+            // Träger, und ein stehengebliebener Beleg deaktiviert die Staffel für immer (F-M396).
+            string matrixKey = SourceMatrix.KeyOf(
+                SourceMatrix.AnchorOf(null, pack.ImdbId, pack.Season),
+                PackEntity.SubdlSource,
+                MarkKind.Pack,
+                pack.Language,
+                pack.HearingImpaired ?? false);
+            if (!string.IsNullOrEmpty(matrixKey) && _db.Matrix.FindById(matrixKey) != null)
+            {
+                _db.Matrix.Delete(matrixKey);
+            }
         }
 
         if (removed > 0)
@@ -2333,7 +2308,7 @@ public sealed class ContentHashRegistry : IDisposable
     /// <param name="hearingImpaired">HI/SDH variant.</param>
     /// <param name="source">F-M642: the source the pack belongs to; must be named explicitly (F-M655).</param>
     /// <returns>The stored row, or null.</returns>
-    public PackEntity? GetPack(
+    public PackView? GetPack(
         string? imdbId, int season, string? language, bool hearingImpaired,
         string source)
     {
@@ -2342,8 +2317,41 @@ public sealed class ContentHashRegistry : IDisposable
             return null;
         }
 
-        return _db.Packs.FindById(
+        var mitglieder = _db.Packs.FindById(
             ScribeDbContext.PackKey(imdbId!, season, language!, hearingImpaired, source));
+
+        // F-M668: das URTEIL steht in der Matrix (Kind = pack) — die `packs`-Zeile trägt nur die
+        // Mitglieder. Beides wird hier zu EINER Antwort zusammengeführt; gibt es weder Zeile noch Marke,
+        // ist der Behälter unbekannt.
+        var marke = SourceMatrix.PackMark(_db, imdbId, season, language, hearingImpaired, source);
+        bool hatMarke = SourceMatrix.Find(
+            _db,
+            SourceMatrix.KeyOf(SourceMatrix.AnchorOf(null, imdbId, season), source, MarkKind.Pack, language, hearingImpaired)) != null;
+
+        if (mitglieder == null && !hatMarke)
+        {
+            return null;
+        }
+
+        return new PackView
+        {
+            Id = mitglieder?.Id ?? string.Empty,
+            Source = mitglieder?.Source ?? source,
+            ImdbId = imdbId!,
+            Season = season,
+            Language = mitglieder?.Language ?? SourceMatrix.Normalise(language),
+            HearingImpaired = hearingImpaired,
+            ReleaseName = mitglieder?.ReleaseName,
+            Episodes = mitglieder?.Episodes ?? string.Empty,
+            AbsorbedIds = mitglieder?.AbsorbedIds,
+            PackId = marke.SourceId,
+            Fingerprint = marke.Fingerprint,
+            RefusalReason = marke.RefusalReason,
+            RefusedAt = marke.RefusedAt,
+            RefusedSignature = marke.RefusalSignature,
+            UploadedAt = marke.ClosedAt,
+            HasVerdict = hatMarke,
+        };
     }
 
     /// <summary>
@@ -2409,10 +2417,8 @@ public sealed class ContentHashRegistry : IDisposable
     /// F-M571 (Operator-Anweisung 17.11.2026: „Already up as a pack ist doch etwas das kann man mit dem
     /// ersten file prüfen und den rest dann überspringen"): alle Pack-Paare EINER Staffel in EINER Frage.
     /// <para>
-    /// Vorher fragte der Pack-Planer je (Staffel, Sprache, HI) einzeln in den Store und schrieb je Paar
-    /// eine Zeile — an einer einzigen Staffel „The Thundermans" waren das 67 Abfragen und 67 Zeilen in
-    /// einer Minute, obwohl die Antwort für alle dieselbe war („already up as a pack"). Packs entstehen
-    /// nur bei SubDL; ein Blick auf die Staffel genügt.
+    /// F-M668: gelesen wird die Matrix (Kind = pack) — dort steht das Urteil, und eine Ablehnung ist
+    /// kein Pack (F-M644). Die `packs`-Zeile trägt nur die Mitglieder.
     /// </para>
     /// </summary>
     /// <param name="imdbId">Series IMDb id.</param>
@@ -2428,21 +2434,15 @@ public sealed class ContentHashRegistry : IDisposable
             return gepackt;
         }
 
-        foreach (var row in _db.Packs.FindAll()
+        foreach (var row in SourceMatrix.Rows(_db, string.IsNullOrWhiteSpace(source) ? PackEntity.SubdlSource : source, MarkKind.Pack)
                      .Where(x => string.Equals(x.ImdbId, imdbId, StringComparison.Ordinal)
                                  && x.Season == season
-                                 // F-M642: eine Zeile ohne Quelle ist Bestand und damit SubDL.
-                                 && string.Equals(
-                                     string.IsNullOrWhiteSpace(x.Source) ? PackEntity.SubdlSource : x.Source,
-                                     source,
-                                     StringComparison.Ordinal)
                                  // F-M644: eine Ablehnung ist kein Pack.
-                                 && string.IsNullOrWhiteSpace(x.RefusalReason))
+                                 && string.IsNullOrWhiteSpace(x.RefusalReason)
+                                 && x.ClosedAt != null)
                      .ToList())
         {
-            gepackt.Add((
-                Language.LanguageMapper.Canonical(row.Language) ?? (row.Language ?? string.Empty).ToUpperInvariant(),
-                row.HearingImpaired ?? false));
+            gepackt.Add((SourceMatrix.Normalise(row.Language), row.HearingImpaired ?? false));
         }
 
         return gepackt;
@@ -2545,34 +2545,57 @@ public sealed class ContentHashRegistry : IDisposable
             return false;
         }
 
-        if (provider == SubtitleProvider.TvSubtitles)
+        // F-M668: gefragt wird die Marke des PAARES, zu dem die Zeile mit diesem Inhalt gehoert. Die
+        // Frage bleibt inhaltlich global (derselbe Text kann unter einem anderen Medien-Hash liegen),
+        // aber sie liest keinen Spaltenbesitz mehr: die Marke ist die der Quelle, und die Spur-Zeile
+        // liefert nur, WELCHES Paar gemeint ist.
+        foreach (var zeile in _db.Embeds.FindAll().Where(x => string.Equals(x.ContentHash, contentHash, StringComparison.Ordinal)))
         {
-            return _db.Embeds.Exists(x => x.ContentHash == contentHash
-                    && (x.TvSubtitlesUploadedAt != null || !string.IsNullOrEmpty(x.TvSubtitlesUploadId)))
-                || _db.Sidecars.Exists(x => x.ContentHash == contentHash
-                    && (x.TvSubtitlesUploadedAt != null || !string.IsNullOrEmpty(x.TvSubtitlesUploadId)));
+            if (ZeileIstFuerQuelleBelegt(zeile.MediaHash, zeile.Language, zeile.HearingImpaired ?? false,
+                    zeile.Status, zeile.SubdlId, provider))
+            {
+                return true;
+            }
         }
 
-        // F-M508: die Film-Adresse der Familie haelt nur, was IHRE Spalten belegen — eine markenlose
-        // Zeile stammt aus der Zeit vor der Zwei-Quellen-Kette und damit von SubDL.
-        if (provider == SubtitleProvider.MovieSubtitles)
+        foreach (var zeile in _db.Sidecars.FindAll().Where(x => string.Equals(x.ContentHash, contentHash, StringComparison.Ordinal)))
         {
-            return _db.Embeds.Exists(x => x.ContentHash == contentHash
-                    && (x.MoviesubtitlesUploadedAt != null || !string.IsNullOrEmpty(x.MoviesubtitlesUploadId)))
-                || _db.Sidecars.Exists(x => x.ContentHash == contentHash
-                    && (x.MoviesubtitlesUploadedAt != null || !string.IsNullOrEmpty(x.MoviesubtitlesUploadId)));
+            if (ZeileIstFuerQuelleBelegt(zeile.MediaHash, zeile.Language, zeile.HearingImpaired ?? false,
+                    zeile.Status, zeile.SubdlId, provider))
+            {
+                return true;
+            }
         }
 
-        return _db.Embeds.Exists(x => x.ContentHash == contentHash
-                && (x.SubdlUploadedAt != null
-                    || !string.IsNullOrEmpty(x.SubdlUploadId)
-                    || (x.Status == SubtitleStatus.Uploaded && !string.IsNullOrEmpty(x.SubdlId))
-                    || UploadedWithoutSourceMark(x)))
-            || _db.Sidecars.Exists(x => x.ContentHash == contentHash
-                && (x.SubdlUploadedAt != null
-                    || !string.IsNullOrEmpty(x.SubdlUploadId)
-                    || (x.Status == SubtitleStatus.Uploaded && !string.IsNullOrEmpty(x.SubdlId))
-                    || UploadedWithoutSourceMark(x)));
+        return false;
+    }
+
+    /// <summary>
+    /// F-M668: ist dieser Text für DIESE Quelle schon oben? Die Antwort kommt aus der Marke des Paares;
+    /// dazu die zwei Altregeln, die eine Zeile ohne Marke braucht (Schema 11: <c>Uploaded</c> plus
+    /// <c>SubdlId</c>; F-M500: <c>Uploaded</c> ohne jede Quellenmarke zählt für SubDL).
+    /// </summary>
+    /// <param name="mediaHash">Medien-Hash der Zeile.</param>
+    /// <param name="language">Sprache der Zeile.</param>
+    /// <param name="hearingImpaired">HI-Variante der Zeile.</param>
+    /// <param name="status">Status der Zeile.</param>
+    /// <param name="subdlId">SubDL-Kennung der Zeile, falls vorhanden.</param>
+    /// <param name="provider">Die fragende Quelle.</param>
+    /// <returns>Wahr, wenn diese Quelle den Text hält.</returns>
+    private bool ZeileIstFuerQuelleBelegt(
+        string? mediaHash, string language, bool hearingImpaired, string status, string? subdlId, SubtitleProvider provider)
+    {
+        if (IsUploadedTo(mediaHash, language, hearingImpaired, provider))
+        {
+            return true;
+        }
+
+        if (provider != SubtitleProvider.Subdl || !string.Equals(status, SubtitleStatus.Uploaded, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        return !string.IsNullOrEmpty(subdlId) || !AnySourceClosed(mediaHash, language, hearingImpaired);
     }
 
     /// <summary>
@@ -2589,32 +2612,6 @@ public sealed class ContentHashRegistry : IDisposable
             // Upload-Weg kann nichts halten; sie zu fragen waere eine Frage ohne Adressat.
             .Where(Api.Endpoints.SubtitleEndpointCatalog.HasUploadPath)
             .Any(other => other != provider && IsContentUploadedFor(contentHash, other));
-
-    /// <summary>F-M500: <c>Uploaded</c>-Zeile ohne jede Quellenmarke — "irgendwo hochgeladen", Quelle unbekannt.</summary>
-    /// <param name="row">Embed row.</param>
-    /// <returns>True when the row claims an upload without naming the source.</returns>
-    private static bool UploadedWithoutSourceMark(EmbedTrackEntity row)
-        => row.Status == SubtitleStatus.Uploaded
-            && row.SubdlUploadedAt == null
-            && row.TvSubtitlesUploadedAt == null
-            && row.MoviesubtitlesUploadedAt == null
-            && string.IsNullOrEmpty(row.SubdlUploadId)
-            && string.IsNullOrEmpty(row.TvSubtitlesUploadId)
-            && string.IsNullOrEmpty(row.MoviesubtitlesUploadId)
-            && string.IsNullOrEmpty(row.SubdlId);
-
-    /// <summary>F-M500: dasselbe fuer Sidecar-Zeilen.</summary>
-    /// <param name="row">Sidecar row.</param>
-    /// <returns>True when the row claims an upload without naming the source.</returns>
-    private static bool UploadedWithoutSourceMark(SidecarEntity row)
-        => row.Status == SubtitleStatus.Uploaded
-            && row.SubdlUploadedAt == null
-            && row.TvSubtitlesUploadedAt == null
-            && row.MoviesubtitlesUploadedAt == null
-            && string.IsNullOrEmpty(row.SubdlUploadId)
-            && string.IsNullOrEmpty(row.TvSubtitlesUploadId)
-            && string.IsNullOrEmpty(row.MoviesubtitlesUploadId)
-            && string.IsNullOrEmpty(row.SubdlId);
 
     /// <summary>
     /// F-M298: records the verdict for a SKIPPED candidate. The state is derived from the CONTENT and
@@ -2917,20 +2914,11 @@ public sealed class ContentHashRegistry : IDisposable
             return false;
         }
 
-        var media = _db.Media.FindById(mediaHash);
-        if (media == null)
-        {
-            return false;
-        }
-
-        var stamp = provider switch
-        {
-            SubtitleProvider.Subdl => media.CompleteSubdl,
-            SubtitleProvider.TvSubtitles => media.CompleteTvSubtitles,
-            SubtitleProvider.MovieSubtitles => media.CompleteMsub,
-            _ => null,
-        };
-        if (stamp == null)
+        // F-M668: der Zugeh-Stempel EINER Quelle ist eine `file`-Zeile der Matrix; die Spursignatur, zu
+        // der er gehört, steht als Fingerabdruck daneben. Damit gehört die Signatur JE QUELLE — vorher
+        // war sie eine gemeinsame Spalte an der Medienzeile.
+        var marke = SourceMatrix.FileMark(_db, mediaHash, Quelle(provider));
+        if (marke.ClosedAt == null)
         {
             return false;
         }
@@ -2940,7 +2928,7 @@ public sealed class ContentHashRegistry : IDisposable
             return true;
         }
 
-        return string.Equals(media.CompleteSignature ?? string.Empty, signature, StringComparison.Ordinal);
+        return string.Equals(marke.Fingerprint ?? string.Empty, signature, StringComparison.Ordinal);
     }
 
     /// <summary>
@@ -2977,32 +2965,9 @@ public sealed class ContentHashRegistry : IDisposable
         int stempel = 0;
         if (stamps)
         {
-            EnsureMedia(mediaHash, patch: m =>
-            {
-                if (m.CompleteSubdl != null)
-                {
-                    m.CompleteSubdl = null;
-                    stempel++;
-                }
-
-                if (m.CompleteTvSubtitles != null)
-                {
-                    m.CompleteTvSubtitles = null;
-                    stempel++;
-                }
-
-                if (m.CompleteMsub != null)
-                {
-                    m.CompleteMsub = null;
-                    stempel++;
-                }
-
-                if (!string.IsNullOrEmpty(m.CompleteSignature))
-                {
-                    m.CompleteSignature = null;
-                    stempel++;
-                }
-            });
+            // F-M668: die Zugeh-Stempel sind `file`-Zeilen der Matrix — je Quelle eine, mit der Signatur
+            // im Fingerabdruck. Sie fallen mit ihrer Signatur, weil die Signatur zu ihnen gehört.
+            stempel = SourceMatrix.ClearFileMarks(_db, mediaHash);
         }
 
         int urteile = verdicts
@@ -3028,16 +2993,11 @@ public sealed class ContentHashRegistry : IDisposable
             return null;
         }
 
-        var media = _db.Media.FindById(mediaHash);
-        if (media == null)
-        {
-            return null;
-        }
-
         DateTime? neuester = null;
-        foreach (var stempel in new[] { media.CompleteSubdl, media.CompleteTvSubtitles, media.CompleteMsub })
+        foreach (var quelle in SourceMatrix.Sources)
         {
-            if (stempel is { } wert && (neuester == null || wert > neuester.Value))
+            if (SourceMatrix.FileMark(_db, mediaHash, quelle).ClosedAt is { } wert
+                && (neuester == null || wert > neuester.Value))
             {
                 neuester = wert;
             }
@@ -3080,24 +3040,9 @@ public sealed class ContentHashRegistry : IDisposable
             return;
         }
 
-        _db.EnsureMedia(mediaHash, m =>
-        {
-            var now = DateTime.UtcNow;
-            switch (provider)
-            {
-                case SubtitleProvider.Subdl:
-                    m.CompleteSubdl = now;
-                    break;
-                case SubtitleProvider.TvSubtitles:
-                    m.CompleteTvSubtitles = now;
-                    break;
-                case SubtitleProvider.MovieSubtitles:
-                    m.CompleteMsub = now;
-                    break;
-            }
-
-            m.CompleteSignature = signature;
-        });
+        // F-M668: das Zugeh-Urteil ist eine `file`-Zeile der Matrix, je Quelle eine, mit der Spursignatur
+        // als Fingerabdruck (F-M557/F-M562). Geschrieben wird ausschließlich dort.
+        SourceMatrix.WriteFileMark(_db, _db.Media.FindById(mediaHash), mediaHash, Quelle(provider), DateTime.UtcNow, signature);
     }
 
     /// <summary>
@@ -3647,24 +3592,23 @@ public sealed class ContentHashRegistry : IDisposable
     /// <returns>Anzahl der verworfenen Zeilen (eingebettet + Sidecar).</returns>
     public int ClearVerdictsWithoutEvidence()
     {
-        static bool OhneBeleg(SubtitleState zeile, (string? Origin, string? OriginId) herkunft)
+        // F-M583/F-M668: ein Urteil hat nur Bestand, wenn irgendeine Quelle das Paar geschlossen hat
+        // (Marke mit Zeitpunkt oder Einsende-Id in der Matrix) oder wenn die Herkunft bekannt ist.
+        bool OhneBeleg(string? mediaHash, string language, bool? hearingImpaired, string status, string? reason,
+            (string? Origin, string? OriginId) herkunft)
         {
-            if (zeile.Status != SubtitleStatus.Rejected)
+            if (!string.Equals(status, SubtitleStatus.Rejected, StringComparison.Ordinal))
             {
                 return false;
             }
 
-            if (zeile.Reason != RejectReason.SelfEcho && zeile.Reason != RejectReason.DuplicateContent)
+            if (!string.Equals(reason, RejectReason.SelfEcho, StringComparison.Ordinal)
+                && !string.Equals(reason, RejectReason.DuplicateContent, StringComparison.Ordinal))
             {
                 return false;
             }
 
-            bool marke = !string.IsNullOrEmpty(zeile.SubdlUploadId)
-                || !string.IsNullOrEmpty(zeile.TvSubtitlesUploadId)
-                || !string.IsNullOrEmpty(zeile.MoviesubtitlesUploadId)
-                || zeile.SubdlUploadedAt != null
-                || zeile.TvSubtitlesUploadedAt != null
-                || zeile.MoviesubtitlesUploadedAt != null;
+            bool marke = AnySourceClosed(mediaHash, language, hearingImpaired ?? false);
 
             return !marke && herkunft.Origin is null;
         }
@@ -3672,7 +3616,8 @@ public sealed class ContentHashRegistry : IDisposable
         int entfernt = 0;
         foreach (var zeile in _db.Embeds.FindAll().ToList())
         {
-            if (OhneBeleg(zeile, GetOrigin(zeile.ContentHash)))
+            if (OhneBeleg(zeile.MediaHash, zeile.Language, zeile.HearingImpaired, zeile.Status, zeile.Reason,
+                    GetOrigin(zeile.ContentHash)))
             {
                 _db.Embeds.Delete(zeile.Id);
                 entfernt++;
@@ -3681,7 +3626,8 @@ public sealed class ContentHashRegistry : IDisposable
 
         foreach (var zeile in _db.Sidecars.FindAll().ToList())
         {
-            if (OhneBeleg(zeile, (zeile.Origin, zeile.OriginId)))
+            if (OhneBeleg(zeile.MediaHash, zeile.Language, zeile.HearingImpaired, zeile.Status, zeile.Reason,
+                    (zeile.Origin, zeile.OriginId)))
             {
                 _db.Sidecars.Delete(zeile.Id);
                 entfernt++;

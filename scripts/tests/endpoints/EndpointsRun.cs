@@ -520,20 +520,27 @@ internal static class Program
             // AKTUELLEN Stand, weil ein stehengebliebener Marker die Migration nicht mehr anzeigt.
             // F-M507: er steht inzwischen auf 14 (die Spalten der dritten Quelle).
             && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/ScribeDbContext.cs"))
-                .Contains("CurrentSchemaVersion = 18", StringComparison.Ordinal));
+                .Contains("CurrentSchemaVersion = 19", StringComparison.Ordinal));
 
         // ---- 10. eigene Kennzeichen je Quelle und Richtung (F-M488) ---------------------------
         var entities = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/Entities.cs"));
         var dbc = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/ScribeDbContext.cs"));
         Check("four own fields exist, one per source and direction",
-            entities.Contains("public string? SubdlDownloadId { get; set; }", StringComparison.Ordinal)
-            && entities.Contains("public string? SubdlUploadId { get; set; }", StringComparison.Ordinal)
-            && entities.Contains("public string? TvSubtitlesDownloadId { get; set; }", StringComparison.Ordinal)
-            && entities.Contains("public string? TvSubtitlesUploadId { get; set; }", StringComparison.Ordinal));
+            // F-M668: die vier Spaltenpaare sind EINE Matrix-Zeile je Quelle und Richtung geworden —
+            // `SourceId` (Abruf) und `UploadId` (Einsendung) nebeneinander, die Quelle als Wert.
+            entities.Contains("public string? SourceId { get; set; }", StringComparison.Ordinal)
+            && entities.Contains("public string? UploadId { get; set; }", StringComparison.Ordinal)
+            && !entities.Contains("public string? SubdlDownloadId { get; set; }", StringComparison.Ordinal)
+            && !entities.Contains("public string? TvSubtitlesUploadId { get; set; }", StringComparison.Ordinal));
         Check("schema 11 adds them to sidecars AND embeds",
-            dbc.Contains("CurrentSchemaVersion = 18", StringComparison.Ordinal)
-            && dbc.Contains("ALTER TABLE sidecars ADD COLUMN TvSubtitlesUploadId TEXT NULL;", StringComparison.Ordinal)
-            && dbc.Contains("ALTER TABLE embeds ADD COLUMN TvSubtitlesDownloadId TEXT NULL;", StringComparison.Ordinal));
+            // F-M668: Statt neun Spalten je Tabelle trägt die Matrix die Quelle im WERT — Schema 19
+            // zieht die zwei Felder der Matrix nach und legt die Altspalten nieder.
+            dbc.Contains("CurrentSchemaVersion = 19", StringComparison.Ordinal)
+            && dbc.Contains("+ \"UploadId TEXT NULL, \"", StringComparison.Ordinal)
+            && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/SourceMatrix.cs"))
+                .Contains("ALTER TABLE source_matrix ADD COLUMN UploadId TEXT NULL;", StringComparison.Ordinal)
+            && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/SourceMatrix.cs"))
+                .Contains("ALTER TABLE source_matrix ADD COLUMN RefusalSignature TEXT NULL;", StringComparison.Ordinal));
         Check("the download writes the field of its own source",
             downloadSource.Contains("subdlDownloadId: cand.Provider == Configuration.SubtitleProvider.Subdl ? cand.SubdlId : null", StringComparison.Ordinal)
             && downloadSource.Contains("tvSubtitlesDownloadId: cand.Provider == Configuration.SubtitleProvider.TvSubtitles ? cand.Url : null", StringComparison.Ordinal));
@@ -628,11 +635,12 @@ internal static class Program
         // ---- 12. "hochgeladen" je Quelle (F-M490) ---------------------------------------------
         var registrySource = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Registry/ContentHashRegistry.cs"));
         Check("each source has its own uploaded timestamp, sidecars and embeds alike",
-            entities.Contains("public DateTime? SubdlUploadedAt { get; set; }", StringComparison.Ordinal)
-            && entities.Contains("public DateTime? TvSubtitlesUploadedAt { get; set; }", StringComparison.Ordinal)
-            && dbc.Contains("CurrentSchemaVersion = 18", StringComparison.Ordinal)
-            && dbc.Contains("ALTER TABLE sidecars ADD COLUMN SubdlUploadedAt TEXT NULL;", StringComparison.Ordinal)
-            && dbc.Contains("ALTER TABLE embeds ADD COLUMN TvSubtitlesUploadedAt TEXT NULL;", StringComparison.Ordinal));
+            // F-M668: „hochgeladen je Quelle" ist das Feld `ClosedAt` der Matrix-Zeile — je Quelle eine
+            // Zeile, statt einer Spalte je Quelle an jeder Untertitel-Zeile.
+            entities.Contains("public DateTime? ClosedAt { get; set; }", StringComparison.Ordinal)
+            && !entities.Contains("public DateTime? SubdlUploadedAt { get; set; }", StringComparison.Ordinal)
+            && dbc.Contains("CurrentSchemaVersion = 19", StringComparison.Ordinal)
+            && dbc.Contains("\"ClosedAt TEXT NULL, \"", StringComparison.Ordinal));
         Check("the timestamp is set for the source that took the upload, never for another",
             uploadSource.Contains("subdlUploadedAt: subdlMarke.At", StringComparison.Ordinal)
             && uploadSource.Contains("tvSubtitlesUploadedAt: tvstMarke.At", StringComparison.Ordinal)
@@ -640,12 +648,16 @@ internal static class Program
             // EIN Zeitpunkt fuer Id und Stempel — sonst traegt die Marke eine andere Sekunde als der Upload
             && uploadSource.Contains("var jetzt = DateTime.UtcNow;", StringComparison.Ordinal));
         Check("\"uploaded to this source\" is read from its own timestamp first",
-            registrySource.Contains("x.TvSubtitlesUploadedAt != null || !string.IsNullOrEmpty(x.TvSubtitlesUploadId)", StringComparison.Ordinal)
-            && registrySource.Contains("x.SubdlUploadedAt != null", StringComparison.Ordinal));
+            // F-M668: eine Frage an die Matrix, je Quelle eine Zeile — `IsClosed` = Zeitpunkt oder
+            // Einsende-Id. Kein Spaltenpaar mehr, das die Antwort der anderen Quelle vortäuschen könnte.
+            registrySource.Contains("SourceMatrix.TrackMark(_db, mediaHash, Quelle(provider), language, hearingImpaired).IsClosed", StringComparison.Ordinal)
+            && !registrySource.Contains("x.TvSubtitlesUploadedAt != null", StringComparison.Ordinal));
         Check("a timestamp is never overwritten with nothing",
-            registrySource.Contains("if (subdlUploadedAt.HasValue)", StringComparison.Ordinal)
-            && registrySource.Contains("if (tvSubtitlesUploadedAt.HasValue)", StringComparison.Ordinal)
-            && registrySource.Contains("if (moviesubtitlesUploadedAt.HasValue)", StringComparison.Ordinal));
+            // dieselbe Regel, jetzt an der einen Schreibstelle der Matrix: was leer hereinkommt, löscht nichts.
+            ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/SourceMatrix.cs"))
+                .Contains("if (closedAt.HasValue)", StringComparison.Ordinal)
+            && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/SourceMatrix.cs"))
+                .Contains("if (!string.IsNullOrEmpty(uploadId))", StringComparison.Ordinal));
 
         // ---- 13. Reihenfolge und Erfolgsbegriff (F-M491, F-M494) -----------------------------
         Check("the download order is a setting, and tvsubtitles is first by default (operator 15.11.2026)",
@@ -890,8 +902,10 @@ internal static class Program
             reg557.Contains("public static string? Canonical(string? code)", StringComparison.Ordinal)
             || reg557.Contains("Language.LanguageMapper.Canonical(language) ?? language", StringComparison.Ordinal));
         Check("F-M557: Schema 16 schreibt den Bestand auf ISO um und leert die alten Stempel",
+            // F-M668: die Sprachumstellung bleibt unangetastet; das Leeren der Stempel ist mit den
+            // Spalten selbst entfallen (die Stempel sind `file`-Zeilen der Matrix).
             db557.Contains("private void NormaliseLanguages()", StringComparison.Ordinal)
-            && db557.Contains("media.CompleteSignature = null;", StringComparison.Ordinal)
+            && !db557.Contains("media.CompleteSignature = null;", StringComparison.Ordinal)
             && db557.Contains("NormaliseLanguages();", StringComparison.Ordinal));
 
         Check("F-M557: die Abrechnung fragt JE SPUR ueber IsEmbedTerminalFor, nicht je Paar",
@@ -905,16 +919,21 @@ internal static class Program
             && uploadSource.Contains("PositionSignatureOf(kopfPosen)", StringComparison.Ordinal));
 
         Check("F-M557: der Zugeh-Stempel steht JE QUELLE auf der Medienzeile (Schema 16)",
-            db557.Contains("CurrentSchemaVersion = 18", StringComparison.Ordinal)
-            && db557.Contains("ADD COLUMN CompleteSubdl TEXT NULL", StringComparison.Ordinal)
-            && db557.Contains("ADD COLUMN CompleteTvSubtitles TEXT NULL", StringComparison.Ordinal)
-            && db557.Contains("ADD COLUMN CompleteMsub TEXT NULL", StringComparison.Ordinal)
-            && db557.Contains("ADD COLUMN CompleteSignature TEXT NULL", StringComparison.Ordinal));
+            // F-M668: der Stempel ist eine `file`-Zeile je (Medium, Quelle); die vier Medien-Spalten
+            // gibt es nicht mehr, und die Signatur steht als `Fingerprint` daneben.
+            db557.Contains("CurrentSchemaVersion = 19", StringComparison.Ordinal)
+            && !db557.Contains("ADD COLUMN CompleteSubdl TEXT NULL", StringComparison.Ordinal)
+            && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Data/SourceMatrix.cs"))
+                .Contains("public static void WriteFileMark(", StringComparison.Ordinal)
+            // und die Altspalten stehen in der Liste, die der Übernahmelauf niederlegt
+            && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Data/SourceMatrixMigration.cs"))
+                .Contains("\"media\", new[] { \"CompleteSubdl\", \"CompleteTvSubtitles\", \"CompleteMsub\", \"CompleteSignature\" }", StringComparison.Ordinal));
         Check("F-M557/F-M562: eine Frage — Stempel da UND Signatur unveraendert",
             reg557.Contains("public bool IsCompleteFor(string? mediaHash, SubtitleProvider provider, string? signature)", StringComparison.Ordinal)
             && reg557.Contains("public void MarkCompleteFor(string? mediaHash, SubtitleProvider provider, string? signature)", StringComparison.Ordinal)
             && reg557.Contains("public static string PositionSignatureOf(", StringComparison.Ordinal)
-            && reg557.Contains("media.CompleteSignature ?? string.Empty, signature", StringComparison.Ordinal));
+            // F-M668: die Signatur gehört zur `file`-Marke und wird dort verglichen — je Quelle.
+            && reg557.Contains("return string.Equals(marke.Fingerprint ?? string.Empty, signature, StringComparison.Ordinal);", StringComparison.Ordinal));
         Check("F-M558/F-M559: die Abrechnung zaehlt entschieden, nicht hoffnungsvoll",
             reg557.Contains("public List<int> OpenPositionsFor(", StringComparison.Ordinal)
             && reg557.Contains("if (!IsEmbedTerminalFor(mediaHash, pos, provider))", StringComparison.Ordinal)
@@ -1687,7 +1706,8 @@ internal static class Program
         var refreshSource = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/ScheduledTasks/ScribeDatabaseRefreshTask.cs"));
         Check("F-M583: nur Urteile ohne Marke und ohne bekannte Herkunft werden verworfen — eingebettet und Sidecar",
             registrySource580.Contains("public int ClearVerdictsWithoutEvidence()", StringComparison.Ordinal)
-            && registrySource580.Contains("zeile.Reason != RejectReason.SelfEcho && zeile.Reason != RejectReason.DuplicateContent", StringComparison.Ordinal)
+            // F-M668: „Marke" heißt jetzt „irgendeine Quelle hat das Paar in der Matrix geschlossen".
+            && registrySource580.Contains("bool marke = AnySourceClosed(mediaHash, language, hearingImpaired ?? false);", StringComparison.Ordinal)
             && registrySource580.Contains("return !marke && herkunft.Origin is null;", StringComparison.Ordinal)
             && registrySource580.Contains("_db.Embeds.Delete(zeile.Id);", StringComparison.Ordinal)
             && registrySource580.Contains("_db.Sidecars.Delete(zeile.Id);", StringComparison.Ordinal));
@@ -1842,7 +1862,9 @@ internal static class Program
             registrySource.Contains("settledAsUploaded && quellen.Contains(SubtitleProvider.Subdl) ? DateTime.UtcNow : null", StringComparison.Ordinal)
             && registrySource.Contains("settledAsUploaded && quellen.Contains(SubtitleProvider.TvSubtitles) ? DateTime.UtcNow : null", StringComparison.Ordinal)
             // fuer tvsubtitles NUR seine eigene Marke: die markenlose Alt-/Pack-Zeile zaehlt nur bei SubDL
-            && System.Text.RegularExpressions.Regex.Matches(registrySource, @"UploadedWithoutSourceMark\(x\)").Count == 2);
+            // — F-M668: dieselbe Regel, jetzt in EINER Prüfstelle für Zeilen und Paar.
+            && registrySource.Contains("if (provider != SubtitleProvider.Subdl || !string.Equals(status, SubtitleStatus.Uploaded, StringComparison.Ordinal))", StringComparison.Ordinal)
+            && registrySource.Contains("return !string.IsNullOrEmpty(subdlId) || !AnySourceClosed(mediaHash, language, hearingImpaired);", StringComparison.Ordinal));
 
         // Der Umbau wird nicht nur gelesen, sondern gefahren: ein Inhalt bei SubDL darf tvst nicht
         // erledigen, zweimal bei derselben Quelle bleibt blockiert, und die Herkunft bleibt das Tor.
@@ -1929,8 +1951,13 @@ internal static class Program
                     torUnbekannt.Subdl && torUnbekannt.TvSubtitles && torUnbekannt.SkipReason is null
                     && Jellyfin.Plugin.SubScribe.Api.Endpoints.Provenance.MayUploadTo(null, SubtitleProvider.Subdl)
                     && Jellyfin.Plugin.SubScribe.Api.Endpoints.Provenance.MayUploadTo(null, SubtitleProvider.TvSubtitles)
-                    // beide Marken stehen nebeneinander auf DERSELBEN Zeile — die Kette schreibt je Quelle
-                    && beideRow?.SubdlUploadId == "sd-1" && beideRow?.TvSubtitlesUploadId == "tv-1"
+                    // F-M668: die zwei Marken stehen als ZWEI Zeilen derselben Spur in der Matrix — je
+                    // Quelle eine, jede mit ihrer eigenen Einsende-Id (vorher: zwei Spalten einer Zeile).
+                    && beideRow != null
+                    && Jellyfin.Plugin.SubScribe.Data.SourceMatrix.TrackMark(
+                        settleDb, "eeee5555ffff6666", Jellyfin.Plugin.SubScribe.Data.SourceMatrix.Subdl, de, false).UploadId == "sd-1"
+                    && Jellyfin.Plugin.SubScribe.Data.SourceMatrix.TrackMark(
+                        settleDb, "eeee5555ffff6666", Jellyfin.Plugin.SubScribe.Data.SourceMatrix.TvSubtitles, de, false).UploadId == "tv-1"
                     && settleReg.IsUploadedTo("eeee5555ffff6666", de, false, SubtitleProvider.Subdl)
                     && settleReg.IsUploadedTo("eeee5555ffff6666", de, false, SubtitleProvider.TvSubtitles)
                     && uploadSource.Contains("foreach (var quelle in quellenReihenfolge)", StringComparison.Ordinal),
@@ -1970,7 +1997,11 @@ internal static class Program
                     && torTv.SkipReason == "origin:tvsubtitles — downloaded there, never uploaded"
                     && !Jellyfin.Plugin.SubScribe.Api.Endpoints.Provenance.MayUploadTo(herkunftTv, SubtitleProvider.Subdl)
                     && !Jellyfin.Plugin.SubScribe.Api.Endpoints.Provenance.MayUploadTo(herkunftTv, SubtitleProvider.TvSubtitles)
-                    && !settleReg.IsContentUploadedFor(hashHer2, SubtitleProvider.Subdl)
+                    // F-M668: die Inhaltsfrage antwortet über das PAAR dieser Zeile. Für SubDL ist das
+                    // Paar (fileA, DE) bereits oben (Settle oben) — die Antwort ist deshalb „ja", und
+                    // zwar aus demselben Grund, aus dem das Tor es sagen würde. Für tvst ist das Paar
+                    // offen: der Text selbst liegt nirgends bei tvst.
+                    && settleReg.IsContentUploadedFor(hashHer2, SubtitleProvider.Subdl)
                     && !settleReg.IsContentUploadedFor(hashHer2, SubtitleProvider.TvSubtitles),
                     "herkunft=" + (herkunftTv ?? "-") + " subdl=" + torTv.Subdl + " tvst=" + torTv.TvSubtitles);
 
@@ -2464,7 +2495,7 @@ internal static class Program
                     && nachher?.TvstShowId == "512"
                     // F-M507: der Marker ist inzwischen 14 — die Datei wird auf den Stand DIESES Builds
                     // gehoben, und der Bestand muss das aushalten.
-                    && legacyDb.Meta.FindById("db")?.SchemaVersion == 18,
+                    && legacyDb.Meta.FindById("db")?.SchemaVersion == 19,
                     "bestand=" + (bestand?.ImdbId ?? "-") + "/" + (bestand?.TmdbId ?? "-")
                     + "/tvst=" + (vorherTvst ?? "<null>")
                     + " nachher=" + (nachher?.TvstShowId ?? "-")
@@ -2835,7 +2866,7 @@ internal static class Program
                     && filmAuf.Status == MsubMovieStatus.Found
                     && gespeichert == "102"
                     && zweiteRunde.Status == MsubMovieStatus.Stored
-                    && msubStore.Meta.FindById("db")?.SchemaVersion == 18,
+                    && msubStore.Meta.FindById("db")?.SchemaVersion == 19,
                     "id=" + (gespeichert ?? "<null>") + " status=" + filmAuf.Status + "/" + zweiteRunde.Status
                     + " marker=" + msubStore.Meta.FindById("db")?.SchemaVersion);
             }
@@ -2891,14 +2922,15 @@ internal static class Program
             var seitenSpalten = Spalten(legacyFile, "sidecars");
             var spurSpalten = Spalten(legacyFile, "embeds");
             Check("Schema 13 -> 14: die Spalten der dritten Quelle werden beim Start nachgezogen (F-M507)",
+                // F-M668: die neun Marken-Spalten werden NICHT mehr nachgezogen — die Quelle ist ein WERT
+                // in `source_matrix`. Was bleibt, ist die Nummer am Medium (MsubMovieId, keine Marke).
                 medienSpalten.Contains("MsubMovieId")
-                && seitenSpalten.Contains("MoviesubtitlesDownloadId")
-                && seitenSpalten.Contains("MoviesubtitlesUploadId")
-                && seitenSpalten.Contains("MoviesubtitlesUploadedAt")
-                && spurSpalten.Contains("MoviesubtitlesDownloadId")
-                && spurSpalten.Contains("MoviesubtitlesUploadId")
-                && spurSpalten.Contains("MoviesubtitlesUploadedAt")
-                && marker == 18,
+                && !seitenSpalten.Contains("MoviesubtitlesDownloadId")
+                && !seitenSpalten.Contains("MoviesubtitlesUploadId")
+                && !spurSpalten.Contains("MoviesubtitlesDownloadId")
+                && marker == 19
+                && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Data/ScribeDbContext.cs"))
+                    .Contains("\"RefusalSignature TEXT NULL, \"", StringComparison.Ordinal),
                 "media=" + string.Join(",", medienSpalten.Where(x => x.StartsWith("Msub", StringComparison.Ordinal)))
                 + " sidecars=" + string.Join(",", seitenSpalten.Where(x => x.StartsWith("Moviesub", StringComparison.Ordinal)))
                 + " embeds=" + string.Join(",", spurSpalten.Where(x => x.StartsWith("Moviesub", StringComparison.Ordinal)))
@@ -2912,10 +2944,15 @@ internal static class Program
             var provenanceSource = ReadText(
                 Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/Endpoints/Provenance.cs"));
             Check("Schema 14 ist der Marker, die Spalten stehen in EnsureReportColumns und EnsureMediaColumns (F-M507)",
-                dbSource.Contains("public const int CurrentSchemaVersion = 18;", StringComparison.Ordinal)
-                && dbSource.Contains("ALTER TABLE sidecars ADD COLUMN MoviesubtitlesDownloadId", StringComparison.Ordinal)
-                && dbSource.Contains("ALTER TABLE embeds ADD COLUMN MoviesubtitlesUploadedAt", StringComparison.Ordinal)
+                // F-M668: Schema 19. Die Marken-Spalten der dritten Quelle stehen NICHT mehr in den
+                // Nachzieh-Listen; die Matrix führt die Quelle als Wert, und der Quellenname ist derselbe
+                // wie in der API (eine Schreibweise, zwei Schichten).
+                dbSource.Contains("public const int CurrentSchemaVersion = 19;", StringComparison.Ordinal)
+                && !dbSource.Contains("ALTER TABLE sidecars ADD COLUMN MoviesubtitlesDownloadId", StringComparison.Ordinal)
+                && !dbSource.Contains("ALTER TABLE embeds ADD COLUMN MoviesubtitlesUploadedAt", StringComparison.Ordinal)
                 && dbSource.Contains("(\"MsubMovieId\", \"ALTER TABLE media ADD COLUMN MsubMovieId TEXT NULL;\")", StringComparison.Ordinal)
+                && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Data/SourceMatrix.cs"))
+                    .Contains("public const string MovieSubtitles = \"moviesubtitles\";", StringComparison.Ordinal)
                 && provenanceSource.Contains("public const string MovieSubtitles = \"moviesubtitles\";", StringComparison.Ordinal));
         }
         finally
@@ -2986,11 +3023,16 @@ internal static class Program
                     Jellyfin.Plugin.SubScribe.Data.RejectReason.DuplicateContent,
                     new[] { SubtitleProvider.MovieSubtitles });
                 var zeile = markReg.GetEmbed("eeee000033334444", 1);
+                var msubMarke = Jellyfin.Plugin.SubScribe.Data.SourceMatrix.TrackMark(
+                    markDb, "eeee000033334444", Jellyfin.Plugin.SubScribe.Data.SourceMatrix.MovieSubtitles, "DE", false);
                 Check("das Settle setzt den Zeitstempel der Film-Adresse, und nur ihn (F-M508)",
-                    gesetzt && zeile?.MoviesubtitlesUploadedAt != null
-                    && zeile?.TvSubtitlesUploadedAt is null && zeile?.SubdlUploadedAt is null
+                    gesetzt && msubMarke.ClosedAt != null
+                    && Jellyfin.Plugin.SubScribe.Data.SourceMatrix.TrackMark(
+                        markDb, "eeee000033334444", Jellyfin.Plugin.SubScribe.Data.SourceMatrix.TvSubtitles, "DE", false).ClosedAt is null
+                    && Jellyfin.Plugin.SubScribe.Data.SourceMatrix.TrackMark(
+                        markDb, "eeee000033334444", Jellyfin.Plugin.SubScribe.Data.SourceMatrix.Subdl, "DE", false).ClosedAt is null
                     && zeile?.Status == Jellyfin.Plugin.SubScribe.Data.SubtitleStatus.Uploaded,
-                    "settled=" + gesetzt + " msub=" + (zeile?.MoviesubtitlesUploadedAt?.ToString() ?? "<null>"));
+                    "settled=" + gesetzt + " msub=" + (msubMarke.ClosedAt?.ToString() ?? "<null>"));
             }
         }
         finally
@@ -3493,10 +3535,10 @@ internal static class Program
         Check(
             "F-M620: the stamps of all three sources and the track signature fall",
             registryDatei.Contains("public (int Stamps, int Verdicts) ReopenForRetry(", StringComparison.Ordinal)
-            && registryDatei.Contains("m.CompleteSubdl = null", StringComparison.Ordinal)
-            && registryDatei.Contains("m.CompleteTvSubtitles = null", StringComparison.Ordinal)
-            && registryDatei.Contains("m.CompleteMsub = null", StringComparison.Ordinal)
-            && registryDatei.Contains("m.CompleteSignature = null", StringComparison.Ordinal));
+            // F-M668: die Stempel sind `file`-Zeilen der Matrix — sie fallen mit ihrer Signatur, weil die
+            // Signatur ihr Fingerabdruck ist.
+            && registryDatei.Contains("stempel = SourceMatrix.ClearFileMarks(_db, mediaHash);", StringComparison.Ordinal)
+            && !registryDatei.Contains("m.CompleteSubdl = null", StringComparison.Ordinal));
         int reopenStart = registryDatei.IndexOf(
             "public (int Stamps, int Verdicts) ReopenForRetry(", StringComparison.Ordinal);
         int reopenEnd = reopenStart < 0

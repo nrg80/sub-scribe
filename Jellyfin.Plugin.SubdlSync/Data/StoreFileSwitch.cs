@@ -81,26 +81,39 @@ public static class StoreFileSwitch
             File.Copy(alt, tmp, overwrite: true);
 
             // Der Aufbau der neuen Datei geht denselben Weg wie jeder Start — EnsureCreated, die
-            // Spalten-Nachzüge und die Belegtabelle inklusive. Nur der Wechsel selbst wird übersprungen,
-            // sonst riefe er sich selbst auf.
+            // Spalten-Nachzüge, die Beleg- und die Marken-Tabelle inklusive. Nur der Wechsel selbst wird
+            // übersprungen, sonst riefe er sich selbst auf.
             using (var db = new ScribeDbContext(dataDir, tmp, logger))
             {
-                var geschrieben = SourceMarkStore.BackfillFromColumns(db.Context);
-                var spalten = SourceMarkStore.CountColumnsBySource(db.Context);
-                var belege = SourceMarkStore.CountBySource(db.Context);
+                // F-M668: die Marken der Vorgängerin müssen in der neuen Datei ankommen — und die
+                // Altspalten müssen dort WEG sein (kein doppelter Datenbestand). Beides wird an der
+                // gebauten Datei geprüft, nicht an den Zahlen des Laufs.
+                var uebernahme = db.MatrixOutcome;
+                var pruefung = SourceMatrixMigration.Inspect(tmp);
 
-                foreach (var paar in spalten)
+                if (pruefung.LegacyColumns != 0)
                 {
-                    belege.TryGetValue(paar.Key, out int ist);
-                    if (ist != paar.Value)
+                    logger?.LogWarning(
+                        "[Sub Scribe] format change aborted: {Count} wide column(s) survived the takeover — the previous file stays the live store (F-M637/F-M668).",
+                        pruefung.LegacyColumns);
+                    Abandon(tmp);
+                    return (Outcome.KeptPrevious, alt);
+                }
+
+                if (uebernahme is { Ran: true })
+                {
+                    foreach (var paar in uebernahme.Read)
                     {
-                        logger?.LogWarning(
-                            "[Sub Scribe] format change aborted: source \"{Source}\" has {Columns} record(s) with marks in the columns but {Marks} mark(s) in the new table — the previous file stays the live store (F-M637).",
-                            paar.Key,
-                            paar.Value,
-                            ist);
-                        Abandon(tmp);
-                        return (Outcome.KeptPrevious, alt);
+                        uebernahme.Written.TryGetValue(paar.Key, out int geschrieben);
+                        if (geschrieben == 0)
+                        {
+                            logger?.LogWarning(
+                                "[Sub Scribe] format change aborted: source \"{Pair}\" had {Rows} old row(s) but no mark in the new table — the previous file stays the live store (F-M637).",
+                                paar.Key,
+                                paar.Value);
+                            Abandon(tmp);
+                            return (Outcome.KeptPrevious, alt);
+                        }
                     }
                 }
 
@@ -108,7 +121,7 @@ public static class StoreFileSwitch
                 logger?.LogInformation(
                     "[Sub Scribe] format change verified: {Records} record(s), marks per source {Marks} — previous file kept beside it (F-M637/F-M638).",
                     dateien,
-                    string.Join(", ", Belege(belege)));
+                    string.Join(", ", Belege(pruefung.Marks)));
             }
 
             // Ein liegengebliebenes Side-File der LIVE-Datei würde nach dem Umbenennen auf die neue Datei

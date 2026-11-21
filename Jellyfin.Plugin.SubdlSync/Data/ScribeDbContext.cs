@@ -115,14 +115,14 @@ public sealed class ScribeDbContext : IDisposable
     // bekommt die Tabelle der Quellenbelege (source_marks), aber das ist additiv — der alte Bestand bleibt
     // vollständig lesbar, und ein Marker-Sprung würde die Bestandsprüfungen der Testharnisse auf einen
     // Stand ziehen, der noch nicht gebaut ist.
-    // F-M667 (21.11.2026): raised to 18. Die Marken-Matrix (`source_matrix`) kommt als EINE Tabelle je
-    // (Medium, Quelle, Art) hinzu; der Bestand wird beim ersten Start einmalig aus den breiten Spalten
-    // übernommen, und die breiten Spalten bleiben lesbar (Rückfallebene). Der Marker wandert mit, weil die
-    // Datei danach eine Tabelle trägt, die ein älterer Build nicht kennt — und weil ohne ihn ein zweiter
-    // Start den Übernahmelauf wiederholen müsste. Die Übernahme selbst hängt NICHT am Marker: sie läuft,
-    // wenn die Tabelle fehlt (siehe SourceMatrixMigration), damit ein abgebrochener Lauf beim nächsten
-    // Start nachgeholt wird statt für immer als „erledigt" zu gelten.
-    public const int CurrentSchemaVersion = 18;
+    // F-M668 (21.11.2026): raised to 19. Die Marken-Matrix (`source_matrix`) ist die EINZIGE Wahrheit für
+    // Quellen-Urteile; die breiten Quellen-Spalten an `embeds`, `sidecars`, `media` und `packs` sind aus
+    // der Datei ENTFERNT (kein doppelter Datenbestand) — die Übernahme beim Start füllt die Matrix aus
+    // ihnen und legt sie danach in derselben Transaktion nieder (siehe SourceMatrixMigration). Der Marker
+    // steigt, weil die Datei danach eine Tabelle trägt und Spalten NICHT mehr hat, die ein älterer Build
+    // erwartet. Die Übernahme selbst hängt NICHT am Marker: sie läuft, solange Altspalten in der Datei
+    // stehen, damit ein abgebrochener Lauf beim nächsten Start nachgeholt wird.
+    public const int CurrentSchemaVersion = 19;
 
     /// <summary>
     /// F-M667: die DDL der Marken-Matrix. Sie steht hier, wo die anderen Tabellen entstehen, und wird
@@ -145,8 +145,12 @@ public sealed class ScribeDbContext : IDisposable
         + "Fingerprint TEXT NULL, "
         + "MtimeUnix INTEGER NULL, "
         + "SourceId TEXT NULL, "
+        // F-M668: die Einsende-Id liegt NEBEN der Eintrags-Id (beide Nummernkreise sind verschieden).
+        + "UploadId TEXT NULL, "
         + "RefusalReason TEXT NULL, "
         + "RefusedAt TEXT NULL, "
+        // F-M650/F-M668: die Staffel-Signatur, auf der eine Absage beruht.
+        + "RefusalSignature TEXT NULL, "
         + "Written TEXT NOT NULL DEFAULT '');";
 
     /// <summary>F-M667: die Indizes der Marken-Matrix — dieselbe Begründung wie <see cref="SourceMatrixDdl"/>.</summary>
@@ -199,17 +203,16 @@ public sealed class ScribeDbContext : IDisposable
             _dbPath = wechsel.LivePath;
         }
 
-        // F-M667: die Übernahme in die Marken-Matrix läuft VOR dem Öffnen des Stores — sie sichert
-        // zuerst die alte Datei (Zeitstempel im Namen) und füllt dann die Matrix aus den breiten
-        // Spalten, die danach unangetastet weiterlesbar bleiben. Sie ist damit der einzige Pfad, der
-        // das alte Format SCHREIBEND übernimmt; der Rückfall in `SourceMatrix` liest es weiter, bis
-        // Schritt B die Spalten stilllegt.
+        // F-M667/F-M668: die Übernahme in die Marken-Matrix läuft VOR dem Öffnen des Stores — sie sichert
+        // zuerst die alte Datei (Zeitstempel im Namen), füllt dann die Matrix aus den breiten Spalten und
+        // legt diese in DERSELBEN Transaktion nieder. Danach gibt es genau eine Wahrheit. Das Ergebnis
+        // wird festgehalten, damit der Formatwechsel (F-M637) es prüfen kann, ohne die Arbeit zu
+        // wiederholen.
         //
         // Sie läuft auf BEIDEN Wegen: die Datei, die der Formatwechsel gerade gebaut hat, braucht
         // dieselbe Füllung. Nur die Sicherung entfällt dort — die Datei, aus der sie entstand, bleibt
         // nach F-M638 liegen und ist die Sicherung selbst.
-        SourceMatrixMigration.Run(_dbPath, logger, backup: explicitPath == null);
-
+        MatrixOutcome = SourceMatrixMigration.Run(_dbPath, logger, backup: explicitPath == null);
         _db = new ScribeSqliteContext(_dbPath);
 
         // F-M514: the context itself warns now (a rejected row, a rebuilt tracker), so it needs the
@@ -299,6 +302,13 @@ public sealed class ScribeDbContext : IDisposable
     public ScribeSet<SourceMatrixEntity> Matrix { get; }
 
     /// <summary>
+    /// F-M668: was die Übernahme in die Marken-Matrix bei DIESEM Öffnen getan hat — Zeilen gelesen,
+    /// Marken geschrieben, Sicherung angelegt. Null, wenn nichts zu übernehmen war. Der Formatwechsel
+    /// (F-M637) prüft damit, dass die neue Datei die Marken der Vorgängerin wirklich trägt.
+    /// </summary>
+    public SourceMatrixMigration.Outcome? MatrixOutcome { get; private set; }
+
+    /// <summary>
     /// True when the data file was written by a NEWER plugin build than this one. Callers must not
     /// write in that case: the newer build may store fields this one would silently drop.
     /// </summary>
@@ -377,16 +387,11 @@ public sealed class ScribeDbContext : IDisposable
                 + "Language TEXT NOT NULL DEFAULT '', "
                 + "HearingImpaired INTEGER NULL, "
                 + "ReleaseName TEXT NULL, "
-                + "PackId TEXT NULL, "
                 + "Episodes TEXT NOT NULL DEFAULT '', "
                 + "AbsorbedIds TEXT NULL, "
-                + "Fingerprint TEXT NULL, "
-                // F-M644: Grund und Datum einer Ablehnung stehen in der Zeile, die der Pack ohnehin hat.
-                + "RefusalReason TEXT NULL, "
-                + "RefusedAt TEXT NULL, "
-                // F-M650: die Staffel-Signatur, auf der die Ablehnung beruht.
-                + "RefusedSignature TEXT NULL, "
-                + "UploadedAt TEXT NULL, "
+                // F-M668: die Behälter-Kennung, der Fingerabdruck, die Ablehnung samt Signatur und das
+                // Urteil sind aus dieser Tabelle VERSCHWUNDEN — sie stehen in `source_matrix`
+                // (Kind = pack). Hier bleiben nur die Mitglieder, die kein Urteil einer Quelle sind.
                 + "Created TEXT NOT NULL DEFAULT '', "
                 + "Updated TEXT NOT NULL DEFAULT '');");
             _db.Database.ExecuteSqlRaw("CREATE INDEX IF NOT EXISTS IX_packs_ImdbId ON packs (ImdbId);");
@@ -580,30 +585,10 @@ public sealed class ScribeDbContext : IDisposable
                      ("embeds", "Origin", "ALTER TABLE embeds ADD COLUMN Origin TEXT NULL;"),
                      ("embeds", "OriginId", "ALTER TABLE embeds ADD COLUMN OriginId TEXT NULL;"),
 
-                     // F-M488 (schema 11): vier eigene Kennzeichen, je Quelle und Richtung eines.
-                     ("sidecars", "SubdlDownloadId", "ALTER TABLE sidecars ADD COLUMN SubdlDownloadId TEXT NULL;"),
-                     ("sidecars", "SubdlUploadId", "ALTER TABLE sidecars ADD COLUMN SubdlUploadId TEXT NULL;"),
-                     ("sidecars", "TvSubtitlesDownloadId", "ALTER TABLE sidecars ADD COLUMN TvSubtitlesDownloadId TEXT NULL;"),
-                     ("sidecars", "TvSubtitlesUploadId", "ALTER TABLE sidecars ADD COLUMN TvSubtitlesUploadId TEXT NULL;"),
-                     ("embeds", "SubdlDownloadId", "ALTER TABLE embeds ADD COLUMN SubdlDownloadId TEXT NULL;"),
-                     ("embeds", "SubdlUploadId", "ALTER TABLE embeds ADD COLUMN SubdlUploadId TEXT NULL;"),
-                     ("embeds", "TvSubtitlesDownloadId", "ALTER TABLE embeds ADD COLUMN TvSubtitlesDownloadId TEXT NULL;"),
-                     ("embeds", "TvSubtitlesUploadId", "ALTER TABLE embeds ADD COLUMN TvSubtitlesUploadId TEXT NULL;"),
-
-                     // F-M490 (schema 12): "hochgeladen" je Quelle, mit Zeitpunkt.
-                     ("sidecars", "SubdlUploadedAt", "ALTER TABLE sidecars ADD COLUMN SubdlUploadedAt TEXT NULL;"),
-                     ("sidecars", "TvSubtitlesUploadedAt", "ALTER TABLE sidecars ADD COLUMN TvSubtitlesUploadedAt TEXT NULL;"),
-                     ("embeds", "SubdlUploadedAt", "ALTER TABLE embeds ADD COLUMN SubdlUploadedAt TEXT NULL;"),
-                     ("embeds", "TvSubtitlesUploadedAt", "ALTER TABLE embeds ADD COLUMN TvSubtitlesUploadedAt TEXT NULL;"),
-
-                     // F-M507 (schema 14): die dritte Quelle, je Richtung ihr eigenes Kennzeichen und
-                     // ihr eigener Upload-Zeitpunkt — dieselben drei Felder in beiden Untertitel-Tabellen.
-                     ("sidecars", "MoviesubtitlesDownloadId", "ALTER TABLE sidecars ADD COLUMN MoviesubtitlesDownloadId TEXT NULL;"),
-                     ("sidecars", "MoviesubtitlesUploadId", "ALTER TABLE sidecars ADD COLUMN MoviesubtitlesUploadId TEXT NULL;"),
-                     ("sidecars", "MoviesubtitlesUploadedAt", "ALTER TABLE sidecars ADD COLUMN MoviesubtitlesUploadedAt TEXT NULL;"),
-                     ("embeds", "MoviesubtitlesDownloadId", "ALTER TABLE embeds ADD COLUMN MoviesubtitlesDownloadId TEXT NULL;"),
-                     ("embeds", "MoviesubtitlesUploadId", "ALTER TABLE embeds ADD COLUMN MoviesubtitlesUploadId TEXT NULL;"),
-                     ("embeds", "MoviesubtitlesUploadedAt", "ALTER TABLE embeds ADD COLUMN MoviesubtitlesUploadedAt TEXT NULL;")
+                     // F-M668: die neun Marken-Spalten je Quelle und Richtung (F-M488/F-M490/F-M507)
+                     // werden NICHT mehr nachgezogen — sie sind Zeilen der Marken-Matrix
+                     // (`Kind = track`/`track-hi`). Eine Datei, die sie noch trägt, verliert sie beim
+                     // Öffnen (SourceMatrixMigration); eine neue hat sie nie.
                  })
         {
             try
@@ -636,8 +621,12 @@ public sealed class ScribeDbContext : IDisposable
     }
 
     /// <summary>
-    /// F-M466: adds the pack fingerprint column. A table that already carries it is left alone, so
-    /// the pass runs on every start and costs one PRAGMA.
+    /// F-M642: zieht die Quellen-Spalte der <c>packs</c>-Zeile nach und schreibt ihren Schlüssel fort.
+    /// <para>
+    /// F-M668: der Fingerabdruck (F-M466) wird hier NICHT mehr nachgezogen — er steht in der
+    /// Marken-Matrix (`Kind = pack`), und eine Spalte, die ein älterer Bestand noch trägt, fällt beim
+    /// Öffnen mit den übrigen Altspalten (SourceMatrixMigration).
+    /// </para>
     /// </summary>
     private void EnsurePackColumns()
     {
@@ -657,13 +646,6 @@ public sealed class ScribeDbContext : IDisposable
                 {
                     existing.Add(reader.GetString(1));
                 }
-            }
-
-            const string Name = "Fingerprint";
-            if (!existing.Contains(Name))
-            {
-                _db.Database.ExecuteSqlRaw("ALTER TABLE packs ADD COLUMN Fingerprint TEXT NULL;");
-                LogUtil.Normal(_logger, "[Sub Scribe] data file: column {Column} added to packs.", Name);
             }
 
             // F-M642: die Quelle der Zeile. Der Bestand kennt sie nicht — und sein Schluessel nennt
@@ -693,18 +675,10 @@ public sealed class ScribeDbContext : IDisposable
                     umgeschrieben);
             }
 
-            // F-M644: Grund und Datum einer Ablehnung. Additiv — eine Zeile ohne diese Spalten ist eine
-            // Zeile ohne Ablehnung, es wird also nichts nachgetragen und nichts umgeschrieben.
-            // F-M650: die Signatur der Staffel gehoert dazu (nullable, also ebenfalls rein additiv) —
-            // eine bestehende Zeile ohne sie gilt als Signatur unbekannt und wird neu versucht.
-            foreach (var spalte in new[] { "RefusalReason", "RefusedAt", "RefusedSignature", "UploadedAt" })
-            {
-                if (!existing.Contains(spalte))
-                {
-                    _db.Database.ExecuteSqlRaw($"ALTER TABLE packs ADD COLUMN {spalte} TEXT NULL;");
-                    LogUtil.Normal(_logger, "[Sub Scribe] data file: column {Column} added to packs.", spalte);
-                }
-            }
+            // F-M668: KEINE Spalten fuer Fingerabdruck, Ablehnung, Signatur und Urteil mehr an dieser
+            // Tabelle — sie stehen in `source_matrix` (Kind = pack). Die uralte `Fingerprint`-Spalte aus
+            // F-M466 ist damit ebenfalls Geschichte: ihr Wert wandert beim Öffnen in die Matrix und die
+            // Spalte fällt (siehe SourceMatrixMigration).
         }
         catch (Exception ex)
         {
@@ -735,12 +709,9 @@ public sealed class ScribeDbContext : IDisposable
                      ("TvstShowId", "ALTER TABLE media ADD COLUMN TvstShowId TEXT NULL;"),
                      ("MsubMovieId", "ALTER TABLE media ADD COLUMN MsubMovieId TEXT NULL;"),
 
-                     // F-M557/F-M562 (schema 15): der Zugeh-Stempel JE QUELLE plus die Spursignatur, zu
-                     // der er gehoert. Eine globale Marke gibt es weiter, sie entscheidet aber nichts mehr.
-                     ("CompleteSubdl", "ALTER TABLE media ADD COLUMN CompleteSubdl TEXT NULL;"),
-                     ("CompleteTvSubtitles", "ALTER TABLE media ADD COLUMN CompleteTvSubtitles TEXT NULL;"),
-                     ("CompleteMsub", "ALTER TABLE media ADD COLUMN CompleteMsub TEXT NULL;"),
-                     ("CompleteSignature", "ALTER TABLE media ADD COLUMN CompleteSignature TEXT NULL;"),
+                     // F-M668: die Zugeh-Stempel je Quelle (F-M557) und die Spursignatur (F-M562) stehen
+                     // NICHT mehr an der Medienzeile — sie sind Zeilen der Marken-Matrix (`Kind = file`,
+                     // Signatur im Feld `Fingerprint`). Ein Nachtragen gibt es deshalb nicht mehr.
 
                      // F-M661: der Tag, an dem die Suche fuer diese Datei zuletzt LEER ausging —
                      // ein eigenes Urteil neben dem Such-Stempel, weil es den Takt verlaengert.
@@ -815,18 +786,9 @@ public sealed class ScribeDbContext : IDisposable
                 }
             }
 
-            foreach (var media in _db.MediaRows.ToList())
-            {
-                if (media.CompleteSubdl != null || media.CompleteTvSubtitles != null
-                    || media.CompleteMsub != null || media.CompleteSignature != null)
-                {
-                    media.CompleteSubdl = null;
-                    media.CompleteTvSubtitles = null;
-                    media.CompleteMsub = null;
-                    media.CompleteSignature = null;
-                    _db.MediaRows.Update(media);
-                }
-            }
+            // F-M668: der Block, der die Zugeh-Stempel der Medienzeile leerte (Schema-16-Wanderung), ist
+            // mit den Spalten selbst entfallen — die Stempel stehen jetzt als `file`-Zeilen in der
+            // Marken-Matrix. Die Sprachumstellung selbst bleibt unangetastet (bekanntes Verhalten).
 
             int n = _db.SaveChanges();
             if (geaendert > 0)

@@ -182,10 +182,13 @@ internal static class ReportingRun
         // F-M501: 13 carries media.TvstShowId — der Marker wird mit jeder Spalte gehoben, die ein
         // aelterer Build beim Schreiben verlieren wuerde.
         // F-M507: der Marker steht auf 14 — die Spalten der dritten Quelle (Filme) kamen dazu.
-        Check(db.Contains("CurrentSchemaVersion = 18", StringComparison.Ordinal)
+        // F-M668: Schema 19 — die Marken-Spalten von damals sind entfallen (Quelle ist ein WERT in
+        // `source_matrix`); die Herkunft (F-M486) steht weiter an der Zeile und wird nachgezogen.
+        Check(db.Contains("CurrentSchemaVersion = 19", StringComparison.Ordinal)
               && db.Contains("ALTER TABLE sidecars ADD COLUMN Origin", StringComparison.Ordinal)
-              && db.Contains("ALTER TABLE sidecars ADD COLUMN TvSubtitlesUploadId", StringComparison.Ordinal),
-            "the schema version is bumped with the columns (11 carries source and direction marks)");
+              && !db.Contains("ALTER TABLE sidecars ADD COLUMN TvSubtitlesUploadId", StringComparison.Ordinal)
+              && db.Contains("+ \"UploadId TEXT NULL, \"", StringComparison.Ordinal),
+            "the schema version is bumped with the columns (19 carries the matrix, the marks are rows)");
 
         string api = Read(plugin, "Api/ScribeApiClient.cs");
         Check(api.Contains("\"subtitlePage\"", StringComparison.Ordinal) && api.Contains("c.NId = page[(slash + 1)..]", StringComparison.Ordinal),

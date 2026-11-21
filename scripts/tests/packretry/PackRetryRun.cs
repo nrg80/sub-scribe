@@ -656,10 +656,13 @@ internal static class Program
         string entitySource = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Data", "Entities.cs"));
         Check(entitySource.Contains("public string? Fingerprint { get; set; }", StringComparison.Ordinal),
             "F-M466: the memo row carries the fingerprint");
+        // F-M668: der Fingerabdruck steht in der Marken-Matrix (Kind = pack), nicht mehr als Spalte an
+        // `packs`; ein älterer Bestand wird beim Öffnen dorthin übernommen und die Spalte fällt.
         string dbSource = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Data", "ScribeDbContext.cs"));
-        Check(dbSource.Contains("ALTER TABLE packs ADD COLUMN Fingerprint TEXT NULL;", StringComparison.Ordinal)
-              && dbSource.Contains("EnsurePackColumns();", StringComparison.Ordinal),
-            "F-M466: an older data file gets the column on start, guarded by the table's own column list");
+        Check(dbSource.Contains("+ \"Fingerprint TEXT NULL, \"", StringComparison.Ordinal)
+              && dbSource.Contains("EnsurePackColumns();", StringComparison.Ordinal)
+              && !dbSource.Contains("ALTER TABLE packs ADD COLUMN Fingerprint TEXT NULL;", StringComparison.Ordinal),
+            "F-M466: der Fingerabdruck hat seine Spalte in der Matrix — nachgezogen wird dort");
 
         // ── 33. F-M644: eine abgelehnte Pack-Zeile wird gemerkt, nicht wiederholt ───────────────────
         // Die Zeile im Store (Grund, Datum, Fingerabdruck, UploadedAt) prueft `storex` mit dem echten
@@ -681,8 +684,10 @@ internal static class Program
               && reg.Contains("&& string.IsNullOrWhiteSpace(row.RefusalReason);", StringComparison.Ordinal),
             "F-M644: a refused row is not a pack — \"is this season packed?\" says no");
 
-        Check(reg.Contains("if (!string.IsNullOrWhiteSpace(row.RefusalReason))", StringComparison.Ordinal)
-              && reg.Split("if (!string.IsNullOrWhiteSpace(row.RefusalReason))").Length - 1 >= 2,
+        // F-M668: beide Pack-Karten lesen die Matrix (je Quelle gefiltert) und lassen eine Absage aus —
+        // die Bedingung steht dort neben `ClosedAt`, weil ein gescheiterter Behälter kein Urteil hat.
+        Check(reg.Contains("if (!string.IsNullOrWhiteSpace(row.RefusalReason) || row.ClosedAt == null)", StringComparison.Ordinal)
+              && reg.Split("if (!string.IsNullOrWhiteSpace(row.RefusalReason) || row.ClosedAt == null)").Length - 1 >= 2,
             "F-M644: and the pack maps of both sources leave it out, so a changed content is planned again");
 
         Console.WriteLine();

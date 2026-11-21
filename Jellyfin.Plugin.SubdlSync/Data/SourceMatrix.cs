@@ -5,8 +5,8 @@
 // under the terms of the GNU General Public License as published by the
 // Free Software Foundation, either version 3 of the License, or (at your
 // option) any later version.
-// Sub Scribe is distributed WITHOUT ANY WARRANTY; without even the
-// implied warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+// Sub Scribe is distributed WITHOUT ANY WARRANTY; without even the implied
+// warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 // See the GNU General Public License for more details.
 
 using System;
@@ -21,8 +21,8 @@ namespace Jellyfin.Plugin.SubScribe.Data;
 /// F-M667: die vier Arten, für die es ein Urteil je Quelle gibt.
 /// <para>
 /// Die HI-Variante ist eine eigene ART und kein Feld: ein Urteil über die normale Spur sagt nichts
-/// über die HI-Spur, und in der Matrix ist die Art der billigste Ort, das auseinanderzuhalten —
-/// dieselbe Entscheidung, die die beiden Spaltenpaare heute schon je Richtung treffen.
+/// über die HI-Spur, und in der Matrix ist die Art der billigste Ort, das auseinanderzuhalten — dieselbe
+/// Entscheidung, die die beiden Spaltenpaare vorher je Richtung getroffen haben.
 /// </para>
 /// </summary>
 public static class MarkKind
@@ -49,18 +49,22 @@ public static class MarkKind
 }
 
 /// <summary>
-/// F-M667: Zugriff auf die Marken-Matrix (<c>source_matrix</c>) — der Schlüssel, die eine
-/// Lese-Fassade und der Rückfall auf die breiten Spalten.
+/// F-M667/F-M668: Zugriff auf die Marken-Matrix (<c>source_matrix</c>) — der Schlüssel, die Lese-Fassade
+/// und die EINZIGEN Schreibwege für Quellen-Urteile.
 /// <para>
-/// ZWEI LESEWEGE, EIN ERGEBNIS: die Matrix ist die Ziel-Struktur; solange Schritt B die Schreiber
-/// nicht umgestellt hat, kann eine Marke dort fehlen, die in den alten Spalten steht. Jede Frage
-/// hier liest deshalb die Matrix und fällt — NUR wenn dort keine Zeile steht — auf die alten
-/// Spalten zurück (<c>FromMatrix</c> sagt, wer geantwortet hat). Das ist die Rückfallebene, von der
-/// F-M327 spricht; sie verschwindet mit Schritt B.
+/// EINE WAHRHEIT, KEIN RÜCKFALL: seit F-M668 (12.3.0.0) ist die Matrix der einzige Ort, an dem ein
+/// Quellen-Urteil steht. Die breiten Spalten, aus denen sie bis Schritt A gefüllt wurde
+/// (<c>SubdlUploadedAt</c> … an <c>embeds</c>/<c>sidecars</c>, <c>CompleteSubdl</c> … an <c>media</c>,
+/// Ablehnung und Fingerabdruck an <c>packs</c>), sind aus der Live-Datei ENTFERNT; es gibt keinen
+/// zweiten Lesepfad und keinen zweiten Schreibpfad. Diese Klasse liest und schreibt ausschließlich die
+/// Matrix.
 /// </para>
 /// <para>
-/// KEIN ZWEITER SCHREIBPFAD: in diesem Schritt schreibt nur der Migrationslauf
-/// (<see cref="SourceMatrixMigration"/>) in die Tabelle. Diese Klasse liest und legt die Tabelle an.
+/// WAS EINE ZEILE BEDEUTET: sie steht für ein Urteil der Quelle über (Medium, Sprache, Variante) —
+/// <c>track</c>/<c>track-hi</c> für die Spur, <c>file</c> für „diese Datei ist für die Quelle zu",
+/// <c>pack</c> für den Staffelbehälter. Fehlt die Zeile, ist die Quelle offen. Eine Spur-Marke gilt je
+/// Paar, nicht je Position: zwei Spuren derselben Sprache sind EINE Marke (der spätere Zeitstempel
+/// gewinnt) — dieselbe Regel, die die alte Spalten-Fassung über „irgendeine Zeile dieses Paares" hatte.
 /// </para>
 /// </summary>
 public static class SourceMatrix
@@ -136,7 +140,8 @@ public static class SourceMatrix
     }
 
     /// <summary>
-    /// Legt die Tabelle an, falls sie fehlt. Additiv — ein Bestand bleibt lesbar (F-M327).
+    /// Legt die Tabelle an, falls sie fehlt, und zieht die zwei Felder nach, die Schritt B additiv
+    /// ergänzt hat (<c>UploadId</c>, <c>RefusalSignature</c>). Additiv — ein Bestand bleibt lesbar.
     /// <para>
     /// Die Anweisungen stehen als Konstante in <see cref="ScribeDbContext"/> und werden HIER
     /// ausgeführt, weil der Migrationslauf sie schon VOR dem Öffnen des Stores braucht: eine Tabelle,
@@ -155,6 +160,37 @@ public static class SourceMatrix
             {
                 db.Database.ExecuteSqlRaw(index);
             }
+
+            // F-M668: eine Datei, die die Matrix schon aus Schritt A (Schema 18) trägt, kennt die zwei
+            // neuen Felder nicht. SQLite hat kein „ADD COLUMN IF NOT EXISTS", also erst fragen.
+            var vorhanden = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            using (var cmd = db.Database.GetDbConnection().CreateCommand())
+            {
+                if (cmd.Connection!.State != System.Data.ConnectionState.Open)
+                {
+                    cmd.Connection.Open();
+                }
+
+                cmd.CommandText = "PRAGMA table_info(source_matrix);";
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    vorhanden.Add(reader.GetString(1));
+                }
+            }
+
+            foreach (var (column, ddl) in new[]
+                     {
+                         ("UploadId", "ALTER TABLE source_matrix ADD COLUMN UploadId TEXT NULL;"),
+                         ("RefusalSignature", "ALTER TABLE source_matrix ADD COLUMN RefusalSignature TEXT NULL;"),
+                     })
+            {
+                if (!vorhanden.Contains(column))
+                {
+                    db.Database.ExecuteSqlRaw(ddl);
+                    logger?.LogInformation("[Sub Scribe] data file: column {Column} added to source_matrix.", column);
+                }
+            }
         }
         catch (Exception ex)
         {
@@ -166,34 +202,16 @@ public static class SourceMatrix
     /// <param name="db">The plugin's data context.</param>
     /// <param name="id">Key from <see cref="KeyOf"/>.</param>
     /// <returns>The row, or null.</returns>
-    public static SourceMatrixEntity? Find(ScribeSqliteContext db, string id)
-    {
-        if (db == null || string.IsNullOrEmpty(id))
-        {
-            return null;
-        }
-
-        try
-        {
-            lock (db.Gate)
-            {
-                return db.SourceMatrixRows.AsNoTracking().FirstOrDefault(r => r.Id == id);
-            }
-        }
-        catch (Exception)
-        {
-            // Ein Store, der nicht antwortet, heißt „keine Zeile" — und dann antwortet der Rückfall.
-            return null;
-        }
-    }
+    public static SourceMatrixEntity? Find(ScribeDbContext db, string id)
+        => db == null || string.IsNullOrEmpty(id) ? null : db.Matrix.FindById(id);
 
     /// <summary>Zählt die Zeilen der Matrix je Art und Quelle — die Prüfgrundlage der Migration.</summary>
     /// <param name="db">The plugin's data context.</param>
     /// <returns>"source|kind" → number of rows.</returns>
-    public static Dictionary<string, int> CountByKind(ScribeSqliteContext db)
+    public static Dictionary<string, int> CountByKind(ScribeDbContext db)
     {
         var zaehler = new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (var gruppe in db.SourceMatrixRows.AsNoTracking()
+        foreach (var gruppe in db.Matrix.FindAll()
                      .GroupBy(r => new { r.Source, r.Kind })
                      .Select(g => new { g.Key.Source, g.Key.Kind, N = g.Count() })
                      .ToList())
@@ -204,83 +222,45 @@ public static class SourceMatrix
         return zaehler;
     }
 
+    /// <summary>Alle Marken einer Quelle und Art — die Lesefassung für Karten über ganze Staffeln.</summary>
+    /// <param name="db">The plugin's data context.</param>
+    /// <param name="source">The source, or null for all.</param>
+    /// <param name="kind">One of <see cref="MarkKind"/>, or null for all.</param>
+    /// <returns>The matching rows.</returns>
+    public static List<SourceMatrixEntity> Rows(ScribeDbContext db, string? source, string? kind)
+        => db.Matrix.FindAll()
+            .Where(r => (source == null || string.Equals(r.Source, source, StringComparison.Ordinal))
+                        && (kind == null || string.Equals(r.Kind, kind, StringComparison.Ordinal)))
+            .ToList();
+
     /// <summary>
     /// Die Marke einer SPUR: geschlossen heißt „für diese Quelle hochgeladen" (der Upload-Zeitstempel
-    /// der Quelle), <c>SourceId</c> ist der Eintrag, aus dem sie kam.
+    /// der Quelle), <c>SourceId</c> ist der Eintrag, aus dem sie kam, <c>UploadId</c> die Einsendung.
     /// </summary>
     /// <param name="db">The plugin's data context.</param>
     /// <param name="mediaHash">Media hash of the file.</param>
     /// <param name="source">The source.</param>
     /// <param name="language">ISO 639-2 language.</param>
     /// <param name="hearingImpaired">True for the SDH variant.</param>
-    /// <returns>The mark; <c>FromMatrix=false</c> means the old columns answered.</returns>
+    /// <returns>The mark; a mark without a timestamp is „open" but may carry an id.</returns>
     public static Mark TrackMark(
-        ScribeSqliteContext db, string? mediaHash, string source, string? language, bool hearingImpaired)
-    {
-        string kind = MarkKind.ForTrack(hearingImpaired);
-        string key = KeyOf(AnchorOf(mediaHash, null), source, kind, Normalise(language), hearingImpaired);
-        var zeile = Find(db, key);
-        if (zeile != null)
-        {
-            return Mark.FromRow(zeile);
-        }
-
-        // Rückfall: die breiten Spalten der Spur-Zeilen (F-M327). Zwei Spuren einer Sprache sind zwei
-        // Zeilen — die Frage ist die nach dem Paar, also gewinnt der späteste Zeitstempel.
-        DateTime? geschlossen = null;
-        string? quelle = null;
-        string iso = Normalise(language);
-        foreach (var spur in TrackRows(db, mediaHash))
-        {
-            if (!SpracheGleich(spur.Language, iso) || (spur.HearingImpaired != null && spur.HearingImpaired != hearingImpaired))
-            {
-                continue;
-            }
-
-            var (zeit, id) = spur.For(source);
-            if (zeit != null && (geschlossen == null || zeit > geschlossen))
-            {
-                geschlossen = zeit;
-            }
-
-            if (quelle == null && !string.IsNullOrEmpty(id))
-            {
-                quelle = id;
-            }
-        }
-
-        return new Mark(source, kind, geschlossen, quelle, null, null, null, null, false);
-    }
+        ScribeDbContext db, string? mediaHash, string source, string? language, bool hearingImpaired)
+        => TrackMarkOf(Find(db, KeyOf(AnchorOf(mediaHash, null), source, MarkKind.ForTrack(hearingImpaired), language, hearingImpaired)),
+            source, MarkKind.ForTrack(hearingImpaired));
 
     /// <summary>
     /// Die Marke einer DATEI: geschlossen heißt „jede vorhandene Dialogspur dieser Datei ist für diese
-    /// Quelle entschieden" (der Zugeh-Stempel der Quelle, F-M557).
+    /// Quelle entschieden" (der Zugeh-Stempel der Quelle, F-M557). <c>Fingerprint</c> trägt die
+    /// Spursignatur, zu der der Stempel gehört (F-M562).
     /// </summary>
     /// <param name="db">The plugin's data context.</param>
     /// <param name="mediaHash">Media hash of the file.</param>
     /// <param name="source">The source.</param>
     /// <returns>The mark.</returns>
-    public static Mark FileMark(ScribeSqliteContext db, string? mediaHash, string source)
+    public static Mark FileMark(ScribeDbContext db, string? mediaHash, string source)
     {
         string key = KeyOf(AnchorOf(mediaHash, null), source, MarkKind.File, null, false);
-        var zeile = Find(db, key);
-        if (zeile != null)
-        {
-            return Mark.FromRow(zeile);
-        }
-
-        var media = string.IsNullOrEmpty(mediaHash)
-            ? null
-            : db.MediaRows.AsNoTracking().FirstOrDefault(m => m.Id == mediaHash);
-        DateTime? geschlossen = source switch
-        {
-            Subdl => media?.CompleteSubdl,
-            TvSubtitles => media?.CompleteTvSubtitles,
-            MovieSubtitles => media?.CompleteMsub,
-            _ => null,
-        };
-
-        return new Mark(source, MarkKind.File, geschlossen, null, null, null, null, null, false);
+        return FromRow(Find(db, key), source, MarkKind.File);
     }
 
     /// <summary>
@@ -295,35 +275,325 @@ public static class SourceMatrix
     /// <param name="source">The source.</param>
     /// <returns>The mark.</returns>
     public static Mark PackMark(
-        ScribeSqliteContext db, string? imdbId, int season, string? language, bool hearingImpaired, string source)
+        ScribeDbContext db, string? imdbId, int season, string? language, bool hearingImpaired, string source)
     {
-        string key = KeyOf(AnchorOf(null, imdbId, season), source, MarkKind.Pack, Normalise(language), hearingImpaired);
-        var zeile = Find(db, key);
-        if (zeile != null)
+        string key = KeyOf(AnchorOf(null, imdbId, season), source, MarkKind.Pack, language, hearingImpaired);
+        return FromRow(Find(db, key), source, MarkKind.Pack);
+    }
+
+    /// <summary>
+    /// Schreibt die Marke EINER SPUR für EINE Quelle. Was leer hereinkommt, löscht nichts: eine Id ohne
+    /// Kenntnis überschreibt keine frühere, ein Zeitpunkt ohne Wert bleibt der alte (dieselbe Regel wie
+    /// die breiten Spalten vorher).
+    /// </summary>
+    /// <param name="db">The plugin's data context.</param>
+    /// <param name="media">Die Medienzeile, zu der die Spur gehört (liefert IMDb/TMDb/Staffel/Folge), oder null.</param>
+    /// <param name="mediaHash">Der Medien-Hash der Spur.</param>
+    /// <param name="source">Die Quelle der Marke.</param>
+    /// <param name="language">Sprache der Spur.</param>
+    /// <param name="hearingImpaired">HI-Variante der Spur.</param>
+    /// <param name="closedAt">Zeitpunkt der Einsendung, oder null.</param>
+    /// <param name="downloadId">Id des Abrufs bei dieser Quelle, oder null.</param>
+    /// <param name="uploadId">Id der Einsendung bei dieser Quelle, oder null.</param>
+    public static void WriteTrackMark(
+        ScribeDbContext db,
+        MediaEntity? media,
+        string? mediaHash,
+        string source,
+        string? language,
+        bool hearingImpaired,
+        DateTime? closedAt,
+        string? downloadId,
+        string? uploadId)
+    {
+        if (string.IsNullOrWhiteSpace(mediaHash)
+            || (closedAt == null && string.IsNullOrEmpty(downloadId) && string.IsNullOrEmpty(uploadId)))
         {
-            return Mark.FromRow(zeile);
+            return;
         }
 
-        string iso = Normalise(language);
-        var pack = db.PackRows.AsNoTracking().ToList().FirstOrDefault(p =>
-            string.Equals(p.ImdbId, imdbId ?? string.Empty, StringComparison.Ordinal)
-            && p.Season == season
-            && string.Equals(Quelle(p.Source), source, StringComparison.Ordinal)
-            && SpracheGleich(p.Language, iso)
-            && (p.HearingImpaired ?? false) == hearingImpaired);
+        string kind = MarkKind.ForTrack(hearingImpaired);
+        string key = KeyOf(AnchorOf(mediaHash, null), source, kind, language, hearingImpaired);
+        if (string.IsNullOrEmpty(key))
+        {
+            return;
+        }
 
-        return pack == null
-            ? new Mark(source, MarkKind.Pack, null, null, null, null, null, null, false)
-            : new Mark(
-                source,
-                MarkKind.Pack,
-                pack.UploadedAt,
-                pack.PackId,
-                pack.Fingerprint,
-                null,
-                pack.RefusalReason,
-                pack.RefusedAt,
-                false);
+        var row = db.Matrix.FindById(key) ?? new SourceMatrixEntity
+        {
+            Id = key,
+            MediaHash = mediaHash!,
+            Source = source,
+            Kind = kind,
+            Language = Normalise(language),
+        };
+
+        row.MediaHash = mediaHash!;
+        row.ImdbId = media?.ImdbId ?? row.ImdbId;
+        row.TmdbId = media?.TmdbId ?? row.TmdbId;
+        row.Season = media?.Season ?? row.Season;
+        row.Episode = media?.Episode ?? row.Episode;
+        row.HearingImpaired = hearingImpaired;
+
+        if (closedAt.HasValue)
+        {
+            row.ClosedAt = closedAt;
+        }
+
+        if (!string.IsNullOrEmpty(downloadId))
+        {
+            row.SourceId = downloadId;
+        }
+
+        if (!string.IsNullOrEmpty(uploadId))
+        {
+            row.UploadId = uploadId;
+        }
+
+        row.Written = DateTime.UtcNow;
+        db.Matrix.Upsert(row);
+    }
+
+    /// <summary>
+    /// Schreibt die Marke einer DATEI für EINE Quelle: „alle Spuren entschieden" plus die Spursignatur,
+    /// zu der das Urteil gehört (F-M557/F-M562).
+    /// </summary>
+    /// <param name="db">The plugin's data context.</param>
+    /// <param name="media">Die Medienzeile, oder null.</param>
+    /// <param name="mediaHash">Der Medien-Hash der Datei.</param>
+    /// <param name="source">Die Quelle, die fertig ist.</param>
+    /// <param name="closedAt">Der Zeitpunkt des Urteils, oder null.</param>
+    /// <param name="signature">Die Spursignatur des Durchlaufs, oder null.</param>
+    public static void WriteFileMark(
+        ScribeDbContext db, MediaEntity? media, string? mediaHash, string source, DateTime? closedAt, string? signature)
+    {
+        if (string.IsNullOrWhiteSpace(mediaHash) || closedAt == null)
+        {
+            return;
+        }
+
+        string key = KeyOf(AnchorOf(mediaHash, null), source, MarkKind.File, null, false);
+        if (string.IsNullOrEmpty(key))
+        {
+            return;
+        }
+
+        var row = db.Matrix.FindById(key) ?? new SourceMatrixEntity
+        {
+            Id = key,
+            MediaHash = mediaHash!,
+            Source = source,
+            Kind = MarkKind.File,
+            Language = string.Empty,
+        };
+
+        row.MediaHash = mediaHash!;
+        row.ImdbId = media?.ImdbId ?? row.ImdbId;
+        row.TmdbId = media?.TmdbId ?? row.TmdbId;
+        row.Season = media?.Season ?? row.Season;
+        row.Episode = media?.Episode ?? row.Episode;
+        row.ClosedAt = closedAt;
+        // Die Signatur ist der Fingerabdruck, gegen den dieses Urteil gilt: weicht sie beim nächsten
+        // Nachsehen ab, ist die Datei für diese Quelle wieder offen (F-M562).
+        row.Fingerprint = signature;
+
+        // Ein Erfolg räumt eine frühere Absage derselben Zeile weg — Beleg und Absage schließen sich aus.
+        row.RefusalReason = null;
+        row.RefusedAt = null;
+        row.RefusalSignature = null;
+        row.Written = DateTime.UtcNow;
+        db.Matrix.Upsert(row);
+    }
+
+    /// <summary>
+    /// Schreibt das Urteil eines PACKS: angenommen (mit Behälter-Kennung und Mitglieder-Fingerabdruck)
+    /// oder abgelehnt (mit Grund, Datum und der Staffel-Signatur, auf der die Absage beruht).
+    /// </summary>
+    /// <param name="db">The plugin's data context.</param>
+    /// <param name="imdbId">Serie.</param>
+    /// <param name="season">Staffel.</param>
+    /// <param name="language">Sprache des Behälters.</param>
+    /// <param name="hearingImpaired">HI-Variante des Behälters.</param>
+    /// <param name="source">Die Quelle, deren Urteil geschrieben wird.</param>
+    /// <param name="closedAt">Zeitpunkt der Annahme, oder null bei einer Absage.</param>
+    /// <param name="sourceId">Behälter-Kennung bei der Quelle, oder null.</param>
+    /// <param name="fingerprint">Mitglieder-Fingerabdruck, oder null.</param>
+    /// <param name="refusalReason">Grund der Absage, oder null.</param>
+    /// <param name="refusedAt">Zeitpunkt der Absage, oder null.</param>
+    /// <param name="refusalSignature">Staffel-Signatur der Absage, oder null.</param>
+    public static void WritePackMark(
+        ScribeDbContext db,
+        string? imdbId,
+        int season,
+        string? language,
+        bool hearingImpaired,
+        string source,
+        DateTime? closedAt,
+        string? sourceId,
+        string? fingerprint,
+        string? refusalReason,
+        DateTime? refusedAt,
+        string? refusalSignature)
+    {
+        if (string.IsNullOrWhiteSpace(imdbId) || season < 1 || string.IsNullOrWhiteSpace(language))
+        {
+            return;
+        }
+
+        string key = KeyOf(AnchorOf(null, imdbId, season), source, MarkKind.Pack, language, hearingImpaired);
+        if (string.IsNullOrEmpty(key))
+        {
+            return;
+        }
+
+        var row = db.Matrix.FindById(key) ?? new SourceMatrixEntity
+        {
+            Id = key,
+            MediaHash = string.Empty,
+            ImdbId = imdbId!,
+            Source = source,
+            Kind = MarkKind.Pack,
+            Language = Normalise(language),
+            Season = season,
+            HearingImpaired = hearingImpaired,
+        };
+
+        row.ImdbId = imdbId!;
+        row.Season = season;
+        row.HearingImpaired = hearingImpaired;
+
+        if (!string.IsNullOrEmpty(sourceId))
+        {
+            row.SourceId = sourceId;
+        }
+
+        // Ein leerer Fingerabdruck überschreibt keinen bekannten: die Zeile behält den letzten Beleg.
+        if (!string.IsNullOrWhiteSpace(fingerprint))
+        {
+            row.Fingerprint = fingerprint;
+        }
+
+        if (refusalReason != null)
+        {
+            // Absage: kein Urteil, aber Grund, Datum und die Signatur, auf der sie beruht (F-M650).
+            row.ClosedAt = null;
+            row.RefusalReason = refusalReason;
+            row.RefusedAt = refusedAt ?? DateTime.UtcNow;
+            if (!string.IsNullOrWhiteSpace(refusalSignature))
+            {
+                row.RefusalSignature = refusalSignature;
+            }
+        }
+        else if (closedAt != null)
+        {
+            // Annahme: das Urteil — und die Absage derselben Zeile fällt (F-M644).
+            row.ClosedAt = closedAt;
+            row.RefusalReason = null;
+            row.RefusedAt = null;
+            row.RefusalSignature = null;
+        }
+
+        row.Written = DateTime.UtcNow;
+        db.Matrix.Upsert(row);
+    }
+
+    /// <summary>Nimmt die Zugeh-Stempel einer Datei für ALLE Quellen zurück (Datei-Reset, F-M620).</summary>
+    /// <param name="db">The plugin's data context.</param>
+    /// <param name="mediaHash">Der Medien-Hash der Datei.</param>
+    /// <returns>Wie viele Stempel gefallen sind.</returns>
+    public static int ClearFileMarks(ScribeDbContext db, string? mediaHash)
+    {
+        if (string.IsNullOrWhiteSpace(mediaHash))
+        {
+            return 0;
+        }
+
+        int gefallen = 0;
+        foreach (string source in Sources)
+        {
+            string key = KeyOf(AnchorOf(mediaHash, null), source, MarkKind.File, null, false);
+            var row = string.IsNullOrEmpty(key) ? null : db.Matrix.FindById(key);
+            if (row != null)
+            {
+                db.Matrix.Delete(row.Id);
+                gefallen++;
+            }
+        }
+
+        return gefallen;
+    }
+
+    /// <summary>
+    /// Nimmt die Absage eines PACKS zurück (Datei-Reset einer Staffel, F-M620/F-M644) — das Urteil
+    /// „angenommen" bleibt stehen, denn ein Beleg ist kein Urteil, das ein Reset wegnehmen darf.
+    /// </summary>
+    /// <param name="db">The plugin's data context.</param>
+    /// <param name="imdbId">Serie.</param>
+    /// <param name="season">Staffel.</param>
+    /// <returns>Wie viele Zeilen ihre Absage verloren haben.</returns>
+    public static int ClearPackRefusals(ScribeDbContext db, string? imdbId, int season)
+    {
+        if (string.IsNullOrWhiteSpace(imdbId) || season < 1)
+        {
+            return 0;
+        }
+
+        int geloescht = 0;
+        foreach (var row in Rows(db, null, MarkKind.Pack)
+                     .Where(x => string.Equals(x.ImdbId, imdbId, StringComparison.Ordinal)
+                                 && x.Season == season
+                                 && !string.IsNullOrWhiteSpace(x.RefusalReason))
+                     .ToList())
+        {
+            row.RefusalReason = null;
+            row.RefusedAt = null;
+            row.RefusalSignature = null;
+            row.Written = DateTime.UtcNow;
+            db.Matrix.Upsert(row);
+            geloescht++;
+        }
+
+        return geloescht;
+    }
+
+    /// <summary>
+    /// Schreibt eine Kennung um: die alte Einsende-Id wird zur Eintrags-Id (F-M435), beim Pack die
+    /// Behälter-Kennung. Betroffen sind alle Marken, die die alte Kennung tragen.
+    /// </summary>
+    /// <param name="db">The plugin's data context.</param>
+    /// <param name="oldId">Die gespeicherte Kennung.</param>
+    /// <param name="newId">Die Kennung des veröffentlichten Eintrags.</param>
+    /// <returns>Wie viele Matrix-Zeilen umgeschrieben wurden.</returns>
+    public static int RemapId(ScribeDbContext db, string oldId, string newId)
+    {
+        if (string.IsNullOrWhiteSpace(oldId) || string.IsNullOrWhiteSpace(newId)
+            || string.Equals(oldId, newId, StringComparison.Ordinal))
+        {
+            return 0;
+        }
+
+        int geaendert = 0;
+        foreach (var row in db.Matrix.FindAll()
+                     .Where(x => string.Equals(x.UploadId, oldId, StringComparison.Ordinal)
+                                 || string.Equals(x.SourceId, oldId, StringComparison.Ordinal))
+                     .ToList())
+        {
+            if (string.Equals(row.UploadId, oldId, StringComparison.Ordinal))
+            {
+                row.UploadId = newId;
+            }
+
+            if (string.Equals(row.SourceId, oldId, StringComparison.Ordinal))
+            {
+                row.SourceId = newId;
+            }
+
+            row.Written = DateTime.UtcNow;
+            db.Matrix.Upsert(row);
+            geaendert++;
+        }
+
+        return geaendert;
     }
 
     /// <summary>Normiert eine Sprachangabe so, wie die Matrix sie führt (ISO 639-2, Großbuchstaben).</summary>
@@ -332,117 +602,57 @@ public static class SourceMatrix
     public static string Normalise(string? language)
         => Language.LanguageMapper.Canonical(language) ?? (language ?? string.Empty).Trim().ToUpperInvariant();
 
-    private static string Quelle(string? source)
-        => string.IsNullOrWhiteSpace(source) ? Subdl : source!;
+    private static Mark TrackMarkOf(SourceMatrixEntity? row, string source, string kind)
+        => FromRow(row, source, kind);
 
-    private static bool SpracheGleich(string? a, string b)
-        => string.Equals(Normalise(a), b, StringComparison.Ordinal);
-
-    /// <summary>Die Spur-Zeilen eines Mediums aus beiden Tabellen, als Rückfall-Fassung.</summary>
-    private static IEnumerable<SpurMarken> TrackRows(ScribeSqliteContext db, string? mediaHash)
-    {
-        if (string.IsNullOrEmpty(mediaHash))
-        {
-            yield break;
-        }
-
-        foreach (var e in db.EmbedRows.AsNoTracking().Where(x => x.MediaHash == mediaHash).ToList())
-        {
-            yield return new SpurMarken(
-                e.Language,
-                e.HearingImpaired,
-                e.SubdlDownloadId,
-                e.SubdlUploadedAt,
-                e.TvSubtitlesDownloadId,
-                e.TvSubtitlesUploadedAt,
-                e.MoviesubtitlesDownloadId,
-                e.MoviesubtitlesUploadedAt);
-        }
-
-        foreach (var s in db.SidecarRows.AsNoTracking().Where(x => x.MediaHash == mediaHash).ToList())
-        {
-            yield return new SpurMarken(
-                s.Language,
-                s.HearingImpaired,
-                s.SubdlDownloadId,
-                s.SubdlUploadedAt,
-                s.TvSubtitlesDownloadId,
-                s.TvSubtitlesUploadedAt,
-                s.MoviesubtitlesDownloadId,
-                s.MoviesubtitlesUploadedAt);
-        }
-    }
+    private static Mark FromRow(SourceMatrixEntity? row, string source, string kind)
+        => row == null
+            ? new Mark(source, kind, null, null, null, null, null, null, null, null)
+            : new Mark(
+                row.Source,
+                row.Kind,
+                row.ClosedAt,
+                row.SourceId,
+                row.UploadId,
+                row.Fingerprint,
+                row.MtimeUnix,
+                row.RefusalReason,
+                row.RefusedAt,
+                row.RefusalSignature);
 }
 
 /// <summary>
-/// F-M667: das Ergebnis EINER Marken-Frage — und die Auskunft, wer sie beantwortet hat.
+/// F-M667/F-M668: das Ergebnis EINER Marken-Frage.
+/// <para>
+/// Es gibt keine zweite Antwortquelle mehr: was hier leer ist, ist in der Matrix leer — und damit für
+/// die Quelle offen.
+/// </para>
 /// </summary>
 /// <param name="Source">The source the mark belongs to.</param>
 /// <param name="Kind">One of <see cref="MarkKind"/>.</param>
 /// <param name="ClosedAt">The verdict "closed", or null for open.</param>
-/// <param name="SourceId">The id at that source, when known.</param>
+/// <param name="SourceId">The id at that source (the entry), when known.</param>
+/// <param name="UploadId">The submission id at that source, when known.</param>
 /// <param name="Fingerprint">Content fingerprint (file/pack only).</param>
 /// <param name="MtimeUnix">File mtime the fingerprint belongs to (file/pack only).</param>
 /// <param name="RefusalReason">Why the source refused, when it did.</param>
 /// <param name="RefusedAt">When it refused.</param>
-/// <param name="FromMatrix">True when the matrix answered, false when the old columns did.</param>
+/// <param name="RefusalSignature">The season signature a pack refusal rests on (F-M650).</param>
 public sealed record Mark(
     string Source,
     string Kind,
     DateTime? ClosedAt,
     string? SourceId,
+    string? UploadId,
     string? Fingerprint,
     long? MtimeUnix,
     string? RefusalReason,
     DateTime? RefusedAt,
-    bool FromMatrix)
+    string? RefusalSignature)
 {
-    /// <summary>Die Marke aus einer Matrix-Zeile.</summary>
-    /// <param name="row">The stored row.</param>
-    /// <returns>The mark, answered by the matrix.</returns>
-    public static Mark FromRow(SourceMatrixEntity row)
-        => new(
-            row.Source,
-            row.Kind,
-            row.ClosedAt,
-            row.SourceId,
-            row.Fingerprint,
-            row.MtimeUnix,
-            row.RefusalReason,
-            row.RefusedAt,
-            true);
-}
-
-/// <summary>
-/// F-M667: die quellenbezogenen Felder EINER Spur, wie sie in den breiten Spalten stehen — damit der
-/// Rückfall für eingebettete Spuren und Sidecars dieselbe Regel benutzt.
-/// </summary>
-/// <param name="Language">Language of the track.</param>
-/// <param name="HearingImpaired">HI flag, three-valued.</param>
-/// <param name="SubdlDownloadId">SubDL entry id.</param>
-/// <param name="SubdlUploadedAt">SubDL upload time.</param>
-/// <param name="TvSubtitlesDownloadId">tvsubtitles entry id.</param>
-/// <param name="TvSubtitlesUploadedAt">tvsubtitles upload time.</param>
-/// <param name="MoviesubtitlesDownloadId">moviesubtitles entry id.</param>
-/// <param name="MoviesubtitlesUploadedAt">moviesubtitles upload time.</param>
-internal sealed record SpurMarken(
-    string Language,
-    bool? HearingImpaired,
-    string? SubdlDownloadId,
-    DateTime? SubdlUploadedAt,
-    string? TvSubtitlesDownloadId,
-    DateTime? TvSubtitlesUploadedAt,
-    string? MoviesubtitlesDownloadId,
-    DateTime? MoviesubtitlesUploadedAt)
-{
-    /// <summary>Zeitpunkt und Id dieser Spur für EINE Quelle.</summary>
-    /// <param name="source">The source.</param>
-    /// <returns>The upload time and the source's own id, or nulls.</returns>
-    public (DateTime? Zeit, string? Id) For(string source) => source switch
-    {
-        SourceMatrix.Subdl => (SubdlUploadedAt, SubdlDownloadId),
-        SourceMatrix.TvSubtitles => (TvSubtitlesUploadedAt, TvSubtitlesDownloadId),
-        SourceMatrix.MovieSubtitles => (MoviesubtitlesUploadedAt, MoviesubtitlesDownloadId),
-        _ => (null, null),
-    };
+    /// <summary>
+    /// Wahr, wenn die Quelle das Paar geschlossen hat: ein Zeitpunkt ODER eine Einsende-Id. Eine bloße
+    /// Abruf-Id (<see cref="SourceId"/>) schließt nichts — sie belegt einen Fund, keine Einsendung.
+    /// </summary>
+    public bool IsClosed => ClosedAt != null || !string.IsNullOrEmpty(UploadId);
 }

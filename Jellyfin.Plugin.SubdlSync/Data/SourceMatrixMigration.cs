@@ -20,23 +20,23 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.SubScribe.Data;
 
 /// <summary>
-/// F-M667: die einmalige Übernahme des Bestands in die Marken-Matrix.
+/// F-M667/F-M668: die einmalige Übernahme des Altbestands in die Marken-Matrix — und das Niederlegen
+/// der breiten Spalten in derselben Transaktion.
 /// <para>
-/// WAS HIER PASSIERT, UND WARUM VOR DEM ÖFFNEN DES STORES: die Marken standen bis Schema 17 als breite
+/// WAS HIER PASSIERT, UND WARUM VOR DEM ÖFFNEN DES STORES: die Marken standen bis Schema 18 als breite
 /// Spalten an den Zeilen (<c>SubdlUploadedAt</c>/<c>TvSubtitlesUploadedAt</c>/<c>MoviesubtitlesUploadedAt</c>
-/// an <c>embeds</c> und <c>sidecars</c>, <c>CompleteSubdl</c>/<c>CompleteTvSubtitles</c>/<c>CompleteMsub</c>
-/// an <c>media</c>, die Ablehnung an <c>packs</c>). Diese Klasse liest sie EINMAL, sichert vorher die
-/// ganze Datei unter einem Zeitstempel-Namen und legt je (Medium, Quelle, Art) eine Zeile in
-/// <c>source_matrix</c> an. Danach sind die alten Spalten unangetastet und bleiben lesbar — die
-/// Rückfallebene, bis Schritt B (12.3.0.0) die Schreiber umstellt (F-M327).
+/// samt Abruf- und Einsende-Ids an <c>embeds</c> und <c>sidecars</c>, <c>CompleteSubdl</c>/
+/// <c>CompleteTvSubtitles</c>/<c>CompleteMsub</c>/<c>CompleteSignature</c> an <c>media</c>, Fingerabdruck
+/// und Ablehnung an <c>packs</c>). Diese Klasse liest sie EINMAL, sichert vorher die ganze Datei unter
+/// einem Zeitstempel-Namen, schreibt je (Medium, Quelle, Art) eine Zeile in <c>source_matrix</c> und
+/// ENTFERNT die Altspalten danach — in EINER Transaktion. Es gibt also keine zwei Wahrheiten: was
+/// übernommen ist, steht nur noch in der Matrix; der alte Stand lebt allein in der Sicherungsdatei.
 /// </para>
 /// <para>
-/// WANN SIE LÄUFT: wenn die Datei existiert, ein Store ist (<c>meta</c> vorhanden) und die Tabelle
-/// <c>source_matrix</c> FEHLT. Das ist die ehrliche Bedingung: ein Lauf, der mittendrin abbricht, hat
-/// entweder die Tabelle noch nicht angelegt (dann läuft er beim nächsten Start erneut) oder sie ist da
-/// und gefüllt (dann ist nichts zu tun). Der Schema-Marker ist NICHT die Bedingung — er wird beim
-/// Öffnen auf 18 gehoben, und eine Übernahme, die an ihm hinge, wäre nach einem Abbruch für immer
-/// verloren.
+/// WANN SIE LÄUFT: wenn die Datei existiert, ein Store ist (<c>meta</c> vorhanden) und noch irgendeine
+/// Altspalte darin steht. Das ist die ehrliche Bedingung — ein Lauf, der mittendrin abbricht, rollt
+/// zurück und wird beim nächsten Start nachgeholt; eine übernommene Datei hat keine Altspalten mehr und
+/// tut nichts (idempotent). Der Schema-Marker ist NICHT die Bedingung.
 /// </para>
 /// <para>
 /// WARUM SQL UND NICHT DAS MODELL: der Lauf arbeitet auf einer Datei, die ein ÄLTERES Schema hat — ihre
@@ -97,12 +97,12 @@ public static class SourceMatrixMigration
                 return new Outcome(false, null, leer, leer, 0);
             }
 
-            // Schon übernommen? Dann ist nichts zu tun — der zweite Start darf weder Zeilen noch eine
-            // Sicherung erzeugen. Die Bedingung ist „Tabelle fehlt ODER sie ist noch leer": der
-            // Formatwechsel (F-M637) baut seine neue Datei über denselben Kontext und legt die Tabelle
-            // dabei an; leer heißt dort „noch nicht übernommen", nicht „nichts zu übernehmen".
-            bool tabelleFehlt = !TableExists(conn, "source_matrix");
-            if (!tabelleFehlt && CountMatrix(conn) > 0)
+            // F-M668: DIE BEDINGUNG IST DER BESTAND, NICHT DER MARKER. Solange irgendwo noch eine breite
+            // Marken-Spalte steht, ist etwas zu übernehmen; sind alle weg, ist der Lauf erledigt und ein
+            // zweiter Start tut nichts (idempotent). Damit wird auch ein abgebrochener Lauf beim nächsten
+            // Start nachgeholt, statt für immer als „erledigt" zu gelten.
+            var altspalten = LegacyColumns(conn);
+            if (altspalten.Count == 0)
             {
                 return new Outcome(false, null, leer, leer, 0);
             }
@@ -117,21 +117,20 @@ public static class SourceMatrixMigration
             alteZeilen += LeseDateien(conn, zeilen, gelesen);
             alteZeilen += LesePacks(conn, zeilen, gelesen);
 
-            // SICHERUNG ZUERST — vor der ersten Änderung an der Datei. Ein WAL-Rest wird vorher
-            // eingefaltet, sonst fehlt der Kopie alles seit dem letzten Checkpoint (F-M326). Eine
-            // vorhandene, nur noch leere Tabelle braucht keine Sicherung: die breiten Spalten, aus
-            // denen gefüllt wird, sind unangetastet, und an ihnen ändert dieser Lauf nichts.
+            // SICHERUNG ZUERST — vor der ersten Änderung an der Datei, und mit dem VOLLSTÄNDIGEN
+            // Altbestand darin (Betreiber-Vorgabe 21.11.2026: „Kein doppelter Datenbestand … der
+            // Altbestand darf nur als Sicherheitskopie weiterexistieren"). Ein WAL-Rest wird vorher
+            // eingefaltet, sonst fehlt der Kopie alles seit dem letzten Checkpoint (F-M326).
             Checkpoint(conn);
             string? sicherung = null;
-            if (backup && tabelleFehlt)
+            if (backup)
             {
                 sicherung = BackupPathFor(dbPath);
                 File.Copy(dbPath, sicherung, overwrite: true);
             }
 
-            // EINE Transaktion um Anlegen UND Füllen: bricht der Lauf ab, verschwindet auch die neue
-            // Tabelle wieder — und der nächste Start holt ihn nach. Bliebe die leere Tabelle stehen,
-            // gälte die Übernahme als erledigt, obwohl keine einzige Marke darin steht.
+            // EINE Transaktion um Anlegen, Füllen UND Niederlegen der Altspalten: bricht der Lauf ab,
+            // ist die Datei unverändert — Matrix wie Spalten —, und der nächste Start holt ihn nach.
             using var tx = conn.BeginTransaction();
 
             // Tabelle und Indizes anlegen. Dieselbe DDL, die der Store selbst benutzt — eine Tabelle,
@@ -151,8 +150,24 @@ public static class SourceMatrixMigration
                 ix.ExecuteNonQuery();
             }
 
+            // Eine Datei aus Schritt A (Schema 18) trägt die Tabelle ohne die zwei Felder, die Schritt B
+            // ergänzt. Sie werden IN der Transaktion nachgezogen, damit der INSERT unten passt.
+            EnsureMatrixColumns(conn, tx);
+
             int marken = zeilen.Count;
             int geschrieben = Schreibe(conn, tx, zeilen.Values);
+
+            // F-M668: die Altspalten FALLEN — in derselben Transaktion, die die Marken geschrieben hat.
+            // Danach existiert jedes Urteil genau einmal: in `source_matrix`.
+            var gefallen = new List<string>();
+            foreach (var (table, column) in altspalten)
+            {
+                using var drop = conn.CreateCommand();
+                drop.Transaction = tx;
+                drop.CommandText = "ALTER TABLE " + table + " DROP COLUMN " + column + ";";
+                drop.ExecuteNonQuery();
+                gefallen.Add(table + "." + column);
+            }
 
             var nachher = new Dictionary<string, int>(StringComparer.Ordinal);
             using (var zaehl = conn.CreateCommand())
@@ -170,11 +185,12 @@ public static class SourceMatrixMigration
 
             int zusammengelegt = alteZeilen - marken;
             logger?.LogInformation(
-                "[Sub Scribe] source matrix filled from the wide columns (F-M667): {Rows} mark(s) from {Old} old row(s), "
-                + "{Merged} merged, backup {Backup}.",
+                "[Sub Scribe] source matrix filled from the wide columns (F-M668): {Rows} mark(s) from {Old} old row(s), "
+                + "{Merged} merged, {Dropped} wide column(s) dropped, backup {Backup}.",
                 geschrieben,
                 alteZeilen,
                 zusammengelegt,
+                gefallen.Count,
                 sicherung == null ? "none" : Path.GetFileName(sicherung));
 
             foreach (string quelle in SourceMatrix.Sources)
@@ -270,6 +286,7 @@ public static class SourceMatrixMigration
             }
 
             spalten.Add((prefix + "DownloadId", Select(prefix + "DownloadId")));
+            spalten.Add((prefix + "UploadId", Select(prefix + "UploadId")));
             spalten.Add((prefix + "UploadedAt", Select(prefix + "UploadedAt")));
         }
 
@@ -301,7 +318,13 @@ public static class SourceMatrixMigration
                     }
 
                     var zeit = werte[prefix + "UploadedAt"] as DateTime?;
-                    if (zeit == null)
+                    string? abrufId = werte[prefix + "DownloadId"] as string;
+                    string? einsendeId = werte[prefix + "UploadId"] as string;
+
+                    // F-M668: eine Zeile ist auch dann eine Marke, wenn sie nur eine Einsende-Id trägt
+                    // (Schema 11 kannte keinen Upload-Zeitpunkt). Bisher zählte sie über die Spalte; jetzt
+                    // zählt die Id selbst — was hier steht, geht sonst mit der Spalte verloren.
+                    if (zeit == null && string.IsNullOrEmpty(abrufId) && string.IsNullOrEmpty(einsendeId))
                     {
                         continue;
                     }
@@ -322,7 +345,8 @@ public static class SourceMatrixMigration
                         Episode = AsInt(werte["Episode"]),
                         HearingImpaired = hi,
                         ClosedAt = zeit,
-                        SourceId = werte[prefix + "DownloadId"] as string,
+                        SourceId = abrufId,
+                        UploadId = einsendeId,
                     }, SourceMatrix.AnchorOf(mediaHash, null));
                 }
             }
@@ -435,6 +459,7 @@ public static class SourceMatrixMigration
             ("Fingerprint", S("Fingerprint")),
             ("RefusalReason", S("RefusalReason")),
             ("RefusedAt", S("RefusedAt")),
+            ("RefusedSignature", S("RefusedSignature")),
             ("UploadedAt", S("UploadedAt")),
         };
 
@@ -483,6 +508,7 @@ public static class SourceMatrixMigration
                 SourceId = werte["PackId"] as string,
                 RefusalReason = werte["RefusalReason"] as string,
                 RefusedAt = werte["RefusedAt"] as DateTime?,
+                RefusalSignature = werte["RefusedSignature"] as string,
             }, SourceMatrix.AnchorOf(null, imdb, season));
         }
 
@@ -516,6 +542,16 @@ public static class SourceMatrixMigration
 
         neu.Written = DateTime.UtcNow;
 
+        if (neu.UploadId != null && neu.UploadId.Length == 0)
+        {
+            neu.UploadId = null;
+        }
+
+        if (neu.RefusalSignature != null && neu.RefusalSignature.Length == 0)
+        {
+            neu.RefusalSignature = null;
+        }
+
         if (!zeilen.TryGetValue(key, out var vorhanden))
         {
             zeilen[key] = neu;
@@ -528,18 +564,25 @@ public static class SourceMatrixMigration
 
             // Die Id gehoert zum Urteil: geschlossen wurde die Marke zu DIESEM Zeitpunkt von DIESEM
             // Eintrag. Eine Id vom frueheren Zeitstempel neben dem spaeteren Datum waere eine falsche
-            // Auskunft — deshalb wandert sie mit.
+            // Auskunft — deshalb wandert sie mit (Eintrags-Id und Einsende-Id).
             if (!string.IsNullOrEmpty(neu.SourceId))
             {
                 vorhanden.SourceId = neu.SourceId;
             }
+
+            if (!string.IsNullOrEmpty(neu.UploadId))
+            {
+                vorhanden.UploadId = neu.UploadId;
+            }
         }
 
         vorhanden.SourceId ??= neu.SourceId;
+        vorhanden.UploadId ??= neu.UploadId;
         vorhanden.Fingerprint ??= neu.Fingerprint;
         vorhanden.MtimeUnix ??= neu.MtimeUnix;
         vorhanden.RefusalReason ??= neu.RefusalReason;
         vorhanden.RefusedAt ??= neu.RefusedAt;
+        vorhanden.RefusalSignature ??= neu.RefusalSignature;
         if (string.IsNullOrEmpty(vorhanden.ImdbId))
         {
             vorhanden.ImdbId = neu.ImdbId;
@@ -563,16 +606,18 @@ public static class SourceMatrixMigration
         cmd.Transaction = tx;
         cmd.CommandText =
             "INSERT OR IGNORE INTO source_matrix (Id, MediaHash, ImdbId, TmdbId, Source, Kind, Language, Season, "
-            + "Episode, HearingImpaired, ClosedAt, Fingerprint, MtimeUnix, SourceId, RefusalReason, RefusedAt, Written) "
+            + "Episode, HearingImpaired, ClosedAt, Fingerprint, MtimeUnix, SourceId, UploadId, RefusalReason, "
+            + "RefusedAt, RefusalSignature, Written) "
             + "VALUES ($Id, $MediaHash, $ImdbId, $TmdbId, $Source, $Kind, $Language, $Season, $Episode, "
-            + "$HearingImpaired, $ClosedAt, $Fingerprint, $MtimeUnix, $SourceId, $RefusalReason, $RefusedAt, $Written);";
+            + "$HearingImpaired, $ClosedAt, $Fingerprint, $MtimeUnix, $SourceId, $UploadId, $RefusalReason, "
+            + "$RefusedAt, $RefusalSignature, $Written);";
 
         var p = new Dictionary<string, SqliteParameter>(StringComparer.Ordinal);
         foreach (string name in new[]
                  {
                      "$Id", "$MediaHash", "$ImdbId", "$TmdbId", "$Source", "$Kind", "$Language", "$Season",
                      "$Episode", "$HearingImpaired", "$ClosedAt", "$Fingerprint", "$MtimeUnix", "$SourceId",
-                     "$RefusalReason", "$RefusedAt", "$Written",
+                     "$UploadId", "$RefusalReason", "$RefusedAt", "$RefusalSignature", "$Written",
                  })
         {
             var param = cmd.CreateParameter();
@@ -598,8 +643,10 @@ public static class SourceMatrixMigration
             p["$Fingerprint"].Value = (object?)z.Fingerprint ?? DBNull.Value;
             p["$MtimeUnix"].Value = (object?)z.MtimeUnix ?? DBNull.Value;
             p["$SourceId"].Value = (object?)z.SourceId ?? DBNull.Value;
+            p["$UploadId"].Value = (object?)z.UploadId ?? DBNull.Value;
             p["$RefusalReason"].Value = (object?)z.RefusalReason ?? DBNull.Value;
             p["$RefusedAt"].Value = MomentOderNull(z.RefusedAt);
+            p["$RefusalSignature"].Value = (object?)z.RefusalSignature ?? DBNull.Value;
             p["$Written"].Value = MomentOderNull(z.Written) ?? DBNull.Value;
             n += cmd.ExecuteNonQuery();
         }
@@ -619,6 +666,117 @@ public static class SourceMatrixMigration
     // ---------------------------------------------------------------------------------------------
     // Kleine Helfer: Spalten fragen, Werte lesen, WAL einfalten.
     // ---------------------------------------------------------------------------------------------
+
+    /// <summary>
+    /// F-M668: die Altspalten, die dieser Lauf übernimmt UND danach niederlegt. EINE Liste, damit
+    /// „was wird übernommen" und „was fällt" nicht auseinanderlaufen können — eine Spalte, die
+    /// übernommen aber nicht entfernt wird, wäre der doppelte Datenbestand, den F-M668 verbietet.
+    /// </summary>
+    private static readonly (string Table, string[] Columns)[] LegacyColumnsByTable =
+    {
+        ("embeds", new[]
+        {
+            "SubdlDownloadId", "SubdlUploadId", "SubdlUploadedAt",
+            "TvSubtitlesDownloadId", "TvSubtitlesUploadId", "TvSubtitlesUploadedAt",
+            "MoviesubtitlesDownloadId", "MoviesubtitlesUploadId", "MoviesubtitlesUploadedAt",
+        }),
+        ("sidecars", new[]
+        {
+            "SubdlDownloadId", "SubdlUploadId", "SubdlUploadedAt",
+            "TvSubtitlesDownloadId", "TvSubtitlesUploadId", "TvSubtitlesUploadedAt",
+            "MoviesubtitlesDownloadId", "MoviesubtitlesUploadId", "MoviesubtitlesUploadedAt",
+        }),
+        ("media", new[] { "CompleteSubdl", "CompleteTvSubtitles", "CompleteMsub", "CompleteSignature" }),
+        ("packs", new[] { "PackId", "Fingerprint", "RefusalReason", "RefusedAt", "RefusedSignature", "UploadedAt" }),
+    };
+
+    /// <summary>Die Altspalten, die in dieser Datei tatsächlich noch stehen (Tabelle + Spalte).</summary>
+    /// <param name="conn">Open connection to the data file.</param>
+    /// <returns>The columns to take over and to drop.</returns>
+    public static List<(string Table, string Column)> LegacyColumns(SqliteConnection conn)
+    {
+        var gefunden = new List<(string, string)>();
+        foreach (var (table, columns) in LegacyColumnsByTable)
+        {
+            if (!TableExists(conn, table))
+            {
+                continue;
+            }
+
+            foreach (string column in columns)
+            {
+                if (ColumnExists(conn, table, column))
+                {
+                    gefunden.Add((table, column));
+                }
+            }
+        }
+
+        return gefunden;
+    }
+
+    /// <summary>
+    /// F-M668: die zwei Felder, die Schritt B an der Matrix ergänzt. Eine Datei aus Schritt A trägt die
+    /// Tabelle ohne sie — der Einfüge-Befehl würde sonst scheitern.
+    /// </summary>
+    private static void EnsureMatrixColumns(SqliteConnection conn, SqliteTransaction tx)
+    {
+        foreach (var (column, ddl) in new[]
+                 {
+                     ("UploadId", "ALTER TABLE source_matrix ADD COLUMN UploadId TEXT NULL;"),
+                     ("RefusalSignature", "ALTER TABLE source_matrix ADD COLUMN RefusalSignature TEXT NULL;"),
+                 })
+        {
+            if (ColumnExists(conn, "source_matrix", column))
+            {
+                continue;
+            }
+
+            using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = ddl;
+            cmd.ExecuteNonQuery();
+        }
+    }
+
+    /// <summary>
+    /// F-M668: was in einer Datei steht — je Quelle und Art die Zahl der Marken in der Matrix und die
+    /// Zahl der Altspalten, die noch auf eine Übernahme warten. Der Formatwechsel (F-M637) prüft damit,
+    /// dass die neue Datei die Marken der Vorgängerin wirklich trägt.
+    /// </summary>
+    /// <param name="path">Path of a data file.</param>
+    /// <returns>Marks per "source|kind" and the number of legacy columns still present.</returns>
+    public static (Dictionary<string, int> Marks, int LegacyColumns) Inspect(string path)
+    {
+        var marken = new Dictionary<string, int>(StringComparer.Ordinal);
+        if (!File.Exists(path))
+        {
+            return (marken, 0);
+        }
+
+        using var conn = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = path,
+            Mode = SqliteOpenMode.ReadOnly,
+            Pooling = false,
+        }.ToString());
+        conn.Open();
+
+        if (!TableExists(conn, "source_matrix"))
+        {
+            return (marken, LegacyColumns(conn).Count);
+        }
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT Source, Kind, COUNT(*) FROM source_matrix GROUP BY Source, Kind;";
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            marken[r.GetString(0) + "|" + r.GetString(1)] = r.GetInt32(2);
+        }
+
+        return (marken, LegacyColumns(conn).Count);
+    }
 
     /// <summary>Der Spalten-Präfix einer Quelle in den breiten Spalten.</summary>
     private static string PrefixOf(string source) => source switch
@@ -662,13 +820,6 @@ public static class SourceMatrixMigration
         }
 
         return wert;
-    }
-
-    private static int CountMatrix(SqliteConnection conn)
-    {
-        using var cmd = conn.CreateCommand();
-        cmd.CommandText = "SELECT COUNT(*) FROM source_matrix;";
-        return Convert.ToInt32(cmd.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 
     private static bool TableExists(SqliteConnection conn, string table)
