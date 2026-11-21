@@ -48,13 +48,13 @@ internal static class SwapRun
 
         // 1) Der Seeder-Weg: Gate MIT Registry -> schreibt Tags, schreibt die Zeilen
         string h1 = reg.GetMediaHash(work)!;
-        reg.EnsureMedia(h1, "aa11bb22cc33dd44aa11bb22cc33dd44", work);
+        reg.EnsureFile(h1, "aa11bb22cc33dd44aa11bb22cc33dd44", work);
         var streams = Probe(work);
         var gate = new LanguageTagGate(Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance, cfg, reg);
         var res = gate.RunAsync(work, streams, ffmpeg, CancellationToken.None).GetAwaiter().GetResult();
         Console.WriteLine("Seeder-Gate: " + res.UntaggedSeen + " untagged, " + res.Wanted.Count + " erkannt, " + res.Written + " geschrieben");
         string cur = res.NewHash ?? h1;
-        reg.EnsureMedia(cur, "aa11bb22cc33dd44aa11bb22cc33dd44", work);
+        reg.EnsureFile(cur, "aa11bb22cc33dd44aa11bb22cc33dd44", work);
         foreach (var (pos, lang, hi) in res.Tracks) reg.ObserveEmbed(cur, pos, lang, hi);
         Console.WriteLine("  Registry-Zeilen unter " + cur + ": " + reg.GetEmbeds(cur).Count);
 

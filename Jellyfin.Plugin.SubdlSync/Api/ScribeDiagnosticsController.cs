@@ -66,9 +66,9 @@ public class ScribeDiagnosticsController : ControllerBase
                 })
                 .ToList();
 
-            var embeds = db.Embeds.FindAll().ToList();
+            var embeds = db.Tracks.FindAll().ToList();
             var sidecars = db.Sidecars.FindAll().ToList();
-            var media = db.Media.FindAll().ToList();
+            var media = db.Files.FindAll().ToList();
             var runs = db.Runs.FindAll().OrderByDescending(r => r.Started).Take(20).ToList();
             var oshashes = db.Oshashes.Count();
             var burnedCandidates = db.RejectedCandidates.Count();
@@ -83,7 +83,7 @@ public class ScribeDiagnosticsController : ControllerBase
                 .Take(20)
                 .Select(m => new
                 {
-                    m.Id,
+                    m.FileId,
                     m.Path,
                     m.ImdbId,
                     m.TmdbId,

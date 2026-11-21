@@ -185,11 +185,15 @@ internal static class ReportingRun
         // F-M668: Schema 19 — die Marken-Spalten von damals sind entfallen (Quelle ist ein WERT in
         // `source_matrix`); die Herkunft (F-M486) steht weiter an der Zeile und wird nachgezogen.
         // F-M669: 20 — die Spur-Position gehört in den Schlüssel der Spur-Arten.
-        Check(db.Contains("CurrentSchemaVersion = 21", StringComparison.Ordinal)
-              && db.Contains("ALTER TABLE sidecars ADD COLUMN Origin", StringComparison.Ordinal)
-              && !db.Contains("ALTER TABLE sidecars ADD COLUMN TvSubtitlesUploadId", StringComparison.Ordinal)
-              && db.Contains("+ \"UploadId TEXT NULL, \"", StringComparison.Ordinal),
-            "the schema version is bumped with the columns (20 carries the matrix, the marks are rows per position)");
+        // F-M671: Schema 22. Die vier Entity-Tabellen tragen ihre Kennung im Schlüssel (`FileId`,
+        // `TrackId`, `PackId`); die Herkunft einer Spur ist der Quellen-NAME, eine Quellen-Id steht
+        // in `reference`. Die alten Marken-Spalten an `sidecars` gibt es nicht mehr — und keine
+        // Nachzieh-Anweisung dafür.
+        Check(db.Contains("CurrentSchemaVersion = 22", StringComparison.Ordinal)
+              && db.Contains("CREATE TABLE IF NOT EXISTS file (", StringComparison.Ordinal)
+              && db.Contains("+ \"FileId TEXT NOT NULL PRIMARY KEY, \"", StringComparison.Ordinal)
+              && !db.Contains("ALTER TABLE sidecars ADD COLUMN TvSubtitlesUploadId", StringComparison.Ordinal),
+            "the schema version is bumped with the tables (22 carries the four entity levels and their ids)");
 
         string api = Read(plugin, "Api/ScribeApiClient.cs");
         Check(api.Contains("\"subtitlePage\"", StringComparison.Ordinal) && api.Contains("c.NId = page[(slash + 1)..]", StringComparison.Ordinal),

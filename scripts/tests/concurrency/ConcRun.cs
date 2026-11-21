@@ -85,7 +85,7 @@ for (int w = 0; w < 3; w++)
             int n = i++;
             Guard(() =>
             {
-                db.Media.Upsert(new MediaEntity { Id = "m" + ((n + wid * 13) % 40), Path = "/x/" + ((n + wid * 13) % 40) + ".mkv", LastSeen = DateTime.UtcNow });
+                db.Files.Upsert(new FileEntity { OsHash = "m" + ((n + wid * 13) % 40), Path = "/x/" + ((n + wid * 13) % 40) + ".mkv", LastSeen = DateTime.UtcNow });
                 oshash.Store("/x/" + ((n + wid * 13) % 40) + ".mkv", "hash" + (n % 40), 1000 + (n % 40), 0);
                 db.WorkerRuns.Upsert(new WorkerRunEntity { Id = "w" + wid, Name = "W" + wid, Started = DateTime.UtcNow, Outcome = "ok", Detail = "n" + n });
             });
@@ -113,8 +113,8 @@ var diagReader = new Thread(() =>
         Guard(() =>
         {
             _ = db.Counters.FindAll().ToList();
-            _ = db.Embeds.FindAll().ToList();
-            _ = db.Media.FindAll().ToList();
+            _ = db.Tracks.FindAll().ToList();
+            _ = db.Files.FindAll().ToList();
             _ = db.Oshashes.Count();
         });
         Interlocked.Increment(ref readerOps);
@@ -163,7 +163,7 @@ foreach (var e in errors.Distinct().Take(10))
 }
 
 // The store must still answer, and hold what the writer put in it.
-var media = db.Media.Count();
+var media = db.Files.Count();
 Console.WriteLine("media rows     : " + media);
 Console.WriteLine("meta reachable : " + (db.Meta.FindById("db") != null));
 

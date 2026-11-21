@@ -696,6 +696,10 @@
     "T334": {
       "suite": "storex",
       "checks": 39
+    },
+    "T335": {
+      "suite": "storex",
+      "checks": 20
     }
   }
 }

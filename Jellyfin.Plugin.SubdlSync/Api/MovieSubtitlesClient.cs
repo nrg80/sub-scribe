@@ -41,7 +41,7 @@ namespace Jellyfin.Plugin.SubScribe.Api;
 /// build an upload, send an upload, create a film. The DOWNLOAD side is wired since F-M507 (Etappe 2a):
 /// <see cref="Endpoints.MovieSubtitlesDownloadEndpoint"/> uses <see cref="FindMovieAsync"/>,
 /// <see cref="MovieAsync"/> and <see cref="DownloadAsync"/>, the movie number lives in
-/// <c>MediaEntity.MsubMovieId</c>, and the source has its two switches. The UPLOAD side is wired since
+/// <c>FileEntity.MsubMovieId</c>, and the source has its two switches. The UPLOAD side is wired since
 /// F-M508 (Etappe 2b): <see cref="Endpoints.MovieSubtitlesUploadEndpoint"/> builds the form out of
 /// <see cref="BuildUpload"/> and hands it to <see cref="UploadAsync"/>. CREATING A FILM is built since
 /// F-M513: <see cref="BuildAddMovie"/>/<see cref="AddMovieAsync"/> post <c>add-movie.php</c>, and

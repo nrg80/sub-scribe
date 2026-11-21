@@ -1184,7 +1184,7 @@ public sealed class DownloadPipeline : IDisposable
         {
             if (!string.IsNullOrEmpty(mediaHash))
             {
-                Registry.MarkAndFlush(() => Registry.EnsureMedia(mediaHash, item.Id.ToString("D"), mediaPath));
+                Registry.MarkAndFlush(() => Registry.EnsureFile(mediaHash, item.Id.ToString("D"), mediaPath));
             }
 
             // F-M257: record what the container carries, before any work decision is taken. The

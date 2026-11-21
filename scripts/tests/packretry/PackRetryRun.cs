@@ -661,10 +661,14 @@ internal static class Program
         // F-M668: der Fingerabdruck steht in der Marken-Matrix (Kind = pack), nicht mehr als Spalte an
         // `packs`; ein älterer Bestand wird beim Öffnen dorthin übernommen und die Spalte fällt.
         string dbSource = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Data", "ScribeDbContext.cs"));
-        Check(dbSource.Contains("+ \"Fingerprint TEXT NULL, \"", StringComparison.Ordinal)
-              && dbSource.Contains("EnsurePackColumns();", StringComparison.Ordinal)
-              && !dbSource.Contains("ALTER TABLE packs ADD COLUMN Fingerprint TEXT NULL;", StringComparison.Ordinal),
-            "F-M466: der Fingerabdruck hat seine Spalte in der Matrix — nachgezogen wird dort");
+        // F-M671: der Fingerabdruck der Mitglieder steht seit Schema 22 am Behälter selbst
+        // (`pack.Signature`), weil er eine Eigenschaft seiner Mitglieder ist; das URTEIL der Quelle
+        // steht in `upload`. Eine Spalte `packs.Fingerprint` gibt es nicht mehr, und nachgezogen wird
+        // sie auch nicht.
+        Check(dbSource.Contains("+ \"Signature TEXT NULL, \"", StringComparison.Ordinal)
+              && !dbSource.Contains("ALTER TABLE packs ADD COLUMN Fingerprint TEXT NULL;", StringComparison.Ordinal)
+              && !dbSource.Contains("ALTER TABLE pack ADD COLUMN Fingerprint TEXT NULL;", StringComparison.Ordinal),
+            "F-M466/F-M671: der Fingerabdruck hat seine Spalte am Behälter — eine Altspalte wird nicht nachgezogen");
 
         // ── 33. F-M644: eine abgelehnte Pack-Zeile wird gemerkt, nicht wiederholt ───────────────────
         // Die Zeile im Store (Grund, Datum, Fingerabdruck, UploadedAt) prueft `storex` mit dem echten

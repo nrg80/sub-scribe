@@ -460,8 +460,8 @@ internal static class Program
                 Path.Combine(fm517Root, "mit-zeile"), null))
             {
                 var reg = new Jellyfin.Plugin.SubScribe.Registry.ContentHashRegistry(db, null, null);
-                reg.EnsureMedia(fm517Hash, jellyfinItemId: null, path: fm517Pfad);
-                int vorher = db.Media.Count();
+                reg.EnsureFile(fm517Hash, jellyfinItemId: null, path: fm517Pfad);
+                int vorher = db.Files.Count();
 
                 var aufloeser = new TvstShowResolver(new TvSubtitlesClient(new HttpClient(listenSeite)), null);
                 var ohneHash = await aufloeser
@@ -474,13 +474,13 @@ internal static class Program
                         mediaPath: fm517Pfad)
                     .ConfigureAwait(false);
 
-                int nachher = db.Media.Count();
+                int nachher = db.Files.Count();
                 Check("ohne Medien-Hash, aber mit Pfad-Zeile: die gefundene Seriennummer steht danach in der Zeile (F-M517)",
                     ohneHash.Resolved && ohneHash.ShowId == 512 && ohneHash.Status == TvstShowStatus.Found
-                    && db.Media.FindById(fm517Hash)?.TvstShowId == "512"
+                    && db.Files.FindById(fm517Hash)?.TvstShowId == "512"
                     && reg.TvstShowIdAtPath(fm517Pfad) == "512"
                     && nachher == vorher && vorher == 1,
-                    "id=" + (db.Media.FindById(fm517Hash)?.TvstShowId ?? "<null>")
+                    "id=" + (db.Files.FindById(fm517Hash)?.TvstShowId ?? "<null>")
                     + " zeilen=" + vorher + "->" + nachher);
 
                 var zweite = await aufloeser
@@ -514,9 +514,9 @@ internal static class Program
                     .ConfigureAwait(false);
                 Check("ohne Hash UND ohne Pfad-Zeile: nichts geschrieben, die Nummer gilt nur fuer diesen Lauf (F-M517)",
                     ohneZeile.Resolved && ohneZeile.ShowId == 512
-                    && dbLeer.Media.Count() == 0
+                    && dbLeer.Files.Count() == 0
                     && MediaNumberNote.Of(Jellyfin.Plugin.SubScribe.Registry.MediaNumberWrite.None) == MediaNumberNote.NotStored,
-                    "zeilen=" + dbLeer.Media.Count());
+                    "zeilen=" + dbLeer.Files.Count());
             }
         }
         finally

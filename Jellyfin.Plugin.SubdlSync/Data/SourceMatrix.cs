@@ -400,7 +400,7 @@ public static class SourceMatrix
     /// <param name="uploadId">Id der Einsendung bei dieser Quelle, oder null.</param>
     public static void WriteTrackMark(
         ScribeDbContext db,
-        MediaEntity? media,
+        FileEntity? media,
         string? mediaHash,
         string source,
         string? language,
@@ -471,7 +471,7 @@ public static class SourceMatrix
     /// <param name="closedAt">Der Zeitpunkt des Urteils, oder null.</param>
     /// <param name="signature">Die Spursignatur des Durchlaufs, oder null.</param>
     public static void WriteFileMark(
-        ScribeDbContext db, MediaEntity? media, string? mediaHash, string source, DateTime? closedAt, string? signature)
+        ScribeDbContext db, FileEntity? media, string? mediaHash, string source, DateTime? closedAt, string? signature)
     {
         if (string.IsNullOrWhiteSpace(mediaHash) || closedAt == null)
         {
@@ -636,7 +636,7 @@ public static class SourceMatrix
             return 0;
         }
 
-        WriteTrackMark(db, db.Media.FindById(mediaHash), mediaHash, source, language, hearingImpaired, subPos,
+        WriteTrackMark(db, db.Files.FindById(mediaHash), mediaHash, source, language, hearingImpaired, subPos,
             closedAt: null, downloadId: null, uploadId: uploadId);
         return 1;
     }

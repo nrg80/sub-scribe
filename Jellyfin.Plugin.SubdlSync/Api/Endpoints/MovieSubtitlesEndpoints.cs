@@ -26,7 +26,7 @@ namespace Jellyfin.Plugin.SubScribe.Api.Endpoints;
 /// <para>
 /// Die Arbeitsteilung ist die des Hauses: die AUFLÖSUNG („welche Nummer hat dieser Film auf der Seite")
 /// gehört in den Store und steht in <see cref="MsubMovieResolver"/> — sie schreibt
-/// <c>MediaEntity.MsubMovieId</c> und liest sie beim nächsten Mal. Dieser Endpunkt ist der TRANSPORT:
+/// <c>FileEntity.MsubMovieId</c> und liest sie beim nächsten Mal. Dieser Endpunkt ist der TRANSPORT:
 /// er nimmt die Nummer aus <see cref="SubtitleQuery.MovieId"/> (oder löst selbst, wenn ein Aufrufer ohne
 /// Store fragt), holt die EINZELNE Filmseite und gibt die Einträge der gesuchten Sprache zurück.
 /// </para>

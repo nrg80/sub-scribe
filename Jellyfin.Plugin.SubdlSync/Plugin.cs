@@ -509,7 +509,7 @@ public class Plugin : BasePlugin<Configuration.PluginConfiguration>, IHasWebPage
     /// file. The engine then in use had a non-thread-safe object mapper, so the concurrent
     /// schema setup raced and one task died with
     /// <c>System.NotSupportedException: Member Id not found on BsonMapper for type
-    /// EmbedTrackEntity</c> (measured 26.09.2026 at 08:21:09.081/.082, prune and OSHash firing
+    /// TrackEntity</c> (measured 26.09.2026 at 08:21:09.081/.082, prune and OSHash firing
     /// in the same scheduler tick — the first occurrence in any log). The task itself is fine:
     /// started alone it completes normally.
     /// </para>

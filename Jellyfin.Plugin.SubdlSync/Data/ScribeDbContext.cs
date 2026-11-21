@@ -102,14 +102,14 @@ public sealed class ScribeDbContext : IDisposable
     // silent. The old file is imported once on first start and kept as a .bak (F-M327).
     // F-M501 (15.11.2026): raised to 13. The MEDIA record gained `TvstShowId` — die Nummer der Serie
     // bei tvsubtitles.net, auf derselben Ebene wie TmdbId und ImdbId. Die Spalte wird beim Start
-    // nachgezogen (EnsureMediaColumns), ein Bestand bleibt also gueltig und lesbar; der Marker wandert
+    // nachgezogen (das Kennungs-Modell), ein Bestand bleibt also gueltig und lesbar; der Marker wandert
     // mit, weil ein aelterer Build das Feld nicht kennt und es beim Schreiben stillschweigend
     // verlieren wuerde.
     // F-M507 (15.11.2026): raised to 14. Die dritte Quelle bekommt ihre eigenen Spalten — je Quelle und
     // Richtung eine (MoviesubtitlesDownloadId, MoviesubtitlesUploadId) plus den Upload-Zeitpunkt
     // (MoviesubtitlesUploadedAt) an `sidecars` UND `embeds`, und das MEDIA-Record die Film-Nummer der
     // Gegenseite (`MsubMovieId`, dieselbe Ebene wie TvstShowId). Nachgezogen beim Start
-    // (EnsureReportColumns/EnsureMediaColumns), Bestandszeilen bleiben unangetastet und lesen die neuen
+    // (das Kennungs-Modell), Bestandszeilen bleiben unangetastet und lesen die neuen
     // Felder als null.
     // F-M637 (Entwurf): der Marker bleibt auf 17. Der Store wechselt zwar die Datei (sub-scribe.sqlite) und
     // bekommt die Tabelle der Quellenbelege (source_marks), aber das ist additiv — der alte Bestand bleibt
@@ -133,7 +133,134 @@ public sealed class ScribeDbContext : IDisposable
     // Quellen-Id steht danach GENAU EINMAL in `source_matrix` (`SourceId` = Eintrag/Fund, `UploadId` =
     // Einsendung). Der Marker steigt, weil die Datei danach eine Tabelle und zwei Spalten NICHT mehr hat,
     // die ein älterer Build liest bzw. schreibt.
-    public const int CurrentSchemaVersion = 21;
+    public const int CurrentSchemaVersion = 22;
+
+    /// <summary>
+    /// F-M671: die DDL der vier Entity-Tabellen. Sie steht hier, wo die anderen Tabellen entstehen, und
+    /// wird von <see cref="IdModel.EnsureTables"/> ausgeführt — der Migrationslauf braucht sie schon VOR
+    /// dem Öffnen des Stores, also bevor es einen Kontext gibt, der sie anlegen könnte.
+    /// <para>
+    /// Der Name der Tabellen IST die Ebene: <c>pack</c>, <c>file</c>, <c>track</c>, <c>sidecar</c>. Die
+    /// Schlüssel heißen wie ihre Kennung (<c>PackId</c>, <c>FileId</c>, <c>TrackId</c>) — es gibt keine
+    /// Spalte mehr, die „Id" heißt und etwas anderes meint.
+    /// </para>
+    /// </summary>
+    public const string FileTableDdl =
+        "CREATE TABLE IF NOT EXISTS file ("
+        + "FileId TEXT NOT NULL PRIMARY KEY, "
+        + "PackId TEXT NULL, "
+        + "OsHash TEXT NULL, "
+        + "FileName TEXT NULL, "
+        + "Size INTEGER NULL, "
+        + "MtimeUnix INTEGER NULL, "
+        + "Path TEXT NULL, "
+        + "JellyfinItemId TEXT NULL, "
+        + "ImdbId TEXT NULL, "
+        + "TmdbId TEXT NULL, "
+        + "TvstShowId TEXT NULL, "
+        + "MsubMovieId TEXT NULL, "
+        + "SdId TEXT NULL, "
+        + "IsSeries INTEGER NOT NULL DEFAULT 0, "
+        + "Season INTEGER NULL, "
+        + "Episode INTEGER NULL, "
+        + "LanguagesAvailable TEXT NULL, "
+        + "SubtitlesUploadedAt TEXT NULL, "
+        + "LastSearchUtc TEXT NULL, "
+        + "LastSearchLanguages TEXT NULL, "
+        + "LastSearchEmptyUtc TEXT NULL, "
+        + "Created TEXT NOT NULL DEFAULT '', "
+        + "LastSeen TEXT NOT NULL DEFAULT '');";
+
+    /// <summary>F-M671: die DDL der Spurtabelle — Kennung, Datei und Pack, Spurnummer, Inhalt, Herkunft.</summary>
+    public const string TrackTableDdl =
+        "CREATE TABLE IF NOT EXISTS track ("
+        + "TrackId TEXT NOT NULL, "
+        + "FileId TEXT NOT NULL, "
+        + "PackId TEXT NULL, "
+        + "TrackNumber INTEGER NOT NULL DEFAULT 0, "
+        + "MediaHash TEXT NOT NULL DEFAULT '', "
+        + "SubPos INTEGER NOT NULL DEFAULT 0, "
+        + "Language TEXT NOT NULL DEFAULT '', "
+        + "HearingImpaired INTEGER NULL, "
+        + "Forced INTEGER NULL, "
+        + "ContentHash TEXT NULL, "
+        + "Status TEXT NOT NULL DEFAULT '', "
+        + "Reason TEXT NULL, "
+        + "StatusAt TEXT NOT NULL DEFAULT '', "
+        + "Origin TEXT NULL, "
+        // F-M672 (Schritt B): die fremde Id gehört nach `reference`. Solange die Tabelle nicht steht,
+        // wird die Spalte mitgeführt, damit kein Bestand stillschweigend verloren geht.
+        + "OriginId TEXT NULL, "
+        + "DetectionAttemptedAt TEXT NULL, "
+        + "DetectionOutcome TEXT NULL, "
+        + "Created TEXT NOT NULL DEFAULT '', "
+        + "LastSeen TEXT NOT NULL DEFAULT '', "
+        + "PRIMARY KEY (TrackId, FileId));";
+
+    /// <summary>F-M671: die DDL der Seitenwagen-Tabelle — dieselben Ebenen, aber ohne Pack.</summary>
+    public const string SidecarTableDdl =
+        "CREATE TABLE IF NOT EXISTS sidecar ("
+        + "TrackId TEXT NOT NULL, "
+        + "FileId TEXT NOT NULL, "
+        // F-M671: KEIN PackId — ein Seitenwagen ist `0000-yyyyy-zzz` und gehört zu keinem Pack.
+        + "TrackNumber INTEGER NOT NULL DEFAULT 0, "
+        + "MediaHash TEXT NOT NULL DEFAULT '', "
+        + "ContentHash TEXT NULL, "
+        + "FileName TEXT NULL, "
+        + "Path TEXT NULL, "
+        + "Language TEXT NOT NULL DEFAULT '', "
+        + "HearingImpaired INTEGER NULL, "
+        + "Forced INTEGER NULL, "
+        + "Status TEXT NOT NULL DEFAULT '', "
+        + "Reason TEXT NULL, "
+        + "StatusAt TEXT NOT NULL DEFAULT '', "
+        + "Origin TEXT NULL, "
+        // F-M672 (Schritt B): siehe `track` — die fremde Id wandert nach `reference`.
+        + "OriginId TEXT NULL, "
+        + "ImdbId TEXT NULL, "
+        + "TmdbId TEXT NULL, "
+        + "IsSeries INTEGER NOT NULL DEFAULT 0, "
+        + "Season INTEGER NULL, "
+        + "Episode INTEGER NULL, "
+        + "Created TEXT NOT NULL DEFAULT '', "
+        + "LastSeen TEXT NOT NULL DEFAULT '', "
+        + "PRIMARY KEY (TrackId, FileId));";
+
+    /// <summary>F-M671: die DDL der Pack-Tabelle — Kennung, Staffelschlüssel, Mitglieder, Signatur.</summary>
+    public const string PackTableDdl =
+        "CREATE TABLE IF NOT EXISTS pack ("
+        + "PackId TEXT NOT NULL PRIMARY KEY, "
+        + "SeasonKey TEXT NOT NULL DEFAULT '', "
+        + "Source TEXT NOT NULL DEFAULT 'subdl', "
+        + "ImdbId TEXT NOT NULL DEFAULT '', "
+        + "TmdbId TEXT NULL, "
+        + "Season INTEGER NOT NULL DEFAULT 0, "
+        + "Language TEXT NOT NULL DEFAULT '', "
+        + "HearingImpaired INTEGER NULL, "
+        + "ReleaseName TEXT NULL, "
+        + "Signature TEXT NULL, "
+        + "MtimeUnix INTEGER NULL, "
+        + "EpisodeCount INTEGER NOT NULL DEFAULT 0, "
+        + "Episodes TEXT NOT NULL DEFAULT '', "
+        + "AbsorbedIds TEXT NULL, "
+        + "Created TEXT NOT NULL DEFAULT '', "
+        + "Updated TEXT NOT NULL DEFAULT '');";
+
+    /// <summary>F-M671: die Indizes der vier Entity-Tabellen (Adressen, nicht Identitäten).</summary>
+    public static readonly string[] IdModelIndexDdl =
+    {
+        "CREATE UNIQUE INDEX IF NOT EXISTS IX_file_OsHash ON file (OsHash);",
+        "CREATE INDEX IF NOT EXISTS IX_file_PackId ON file (PackId);",
+        "CREATE INDEX IF NOT EXISTS IX_file_ImdbId ON file (ImdbId);",
+        "CREATE INDEX IF NOT EXISTS IX_file_Path ON file (Path);",
+        "CREATE INDEX IF NOT EXISTS IX_track_FileId ON track (FileId);",
+        "CREATE INDEX IF NOT EXISTS IX_track_MediaHash ON track (MediaHash);",
+        "CREATE INDEX IF NOT EXISTS IX_track_ContentHash ON track (ContentHash);",
+        "CREATE INDEX IF NOT EXISTS IX_sidecar_FileId ON sidecar (FileId);",
+        "CREATE INDEX IF NOT EXISTS IX_sidecar_ContentHash ON sidecar (ContentHash);",
+        "CREATE UNIQUE INDEX IF NOT EXISTS IX_pack_SeasonKey ON pack (SeasonKey);",
+        "CREATE INDEX IF NOT EXISTS IX_pack_ImdbId ON pack (ImdbId);",
+    };
 
     /// <summary>
     /// F-M667: die DDL der Marken-Matrix. Sie steht hier, wo die anderen Tabellen entstehen, und wird
@@ -226,13 +353,21 @@ public sealed class ScribeDbContext : IDisposable
         // dieselbe Füllung. Nur die Sicherung entfällt dort — die Datei, aus der sie entstand, bleibt
         // nach F-M638 liegen und ist die Sicherung selbst.
         MatrixOutcome = SourceMatrixMigration.Run(_dbPath, logger, backup: explicitPath == null);
+
+        // F-M671: die Übernahme in das Kennungs-Modell (Schema 22) läuft unmittelbar danach — und wie die
+        // Marken-Übernahme VOR dem Öffnen des Stores, weil sie die Alt-Tabellen liest, die das neue Modell
+        // nicht mehr kennt. EINE Sicherung für den ganzen Aufstieg: hat die Marken-Übernahme eben eine
+        // angelegt, ist sie die Sicherung dieses Starts (der Bestand darin ist der Stand VOR beiden
+        // Schritten); sonst legt dieser Lauf seine eigene an. Ein zweiter Start findet nichts mehr zu tun
+        // und kopiert nichts.
+        IdOutcome = IdModel.Run(_dbPath, logger, backup: explicitPath == null && MatrixOutcome?.BackupPath == null);
         _db = new ScribeSqliteContext(_dbPath);
 
         // F-M514: the context itself warns now (a rejected row, a rebuilt tracker), so it needs the
         // same logger the registries log to — one line, one place.
         _db.Logger = logger;
         _db.Database.EnsureCreated();
-        EnsurePacksTable();
+        IdModel.EnsureTables(_db, logger);
         EnsureTmdbAnswersTable();
         EnsureAiredSeasonsTable();
         EnsurePackSeasonsTable();
@@ -241,26 +376,139 @@ public sealed class ScribeDbContext : IDisposable
         EnsureSourceMatrixTable();
         EnsureReportColumns();
         EnsureStatusColumns();
-        EnsurePackColumns();
-        EnsureMediaColumns();
         NormaliseLanguages();
         _db.ConfigurePragmas();
 
         Meta = new ScribeSet<MetaEntity>(_db, e => e.Id);
         Oshashes = new ScribeSet<OshashEntity>(_db, e => e.Id);
-        Media = new ScribeSet<MediaEntity>(_db, e => e.Id);
-        Embeds = new ScribeSet<EmbedTrackEntity>(_db, e => e.Id);
-        Sidecars = new ScribeSet<SidecarEntity>(_db, e => e.Id);
+        Files = new ScribeSet<FileEntity>(_db, e => e.OsHash ?? string.Empty, onNew: AssignNewFile);
+        Tracks = new ScribeSet<TrackEntity>(_db, e => e.MediaHash + "|" + e.SubPos, onNew: AssignNewTrack);
+        Sidecars = new ScribeSet<SidecarEntity>(_db, e => e.ContentHash ?? string.Empty, onNew: AssignNewSidecar);
         RejectedCandidates = new ScribeSet<RejectedCandidateEntity>(_db, e => e.Id);
         Counters = new ScribeSet<CounterEntity>(_db, e => e.Key);
         Runs = new ScribeSet<PipelineRunEntity>(_db, e => e.Id.ToString(CultureInfo.InvariantCulture));
         StatusStats = new ScribeSet<StatusStatsEntity>(_db, e => e.Id);
         WorkerRuns = new ScribeSet<WorkerRunEntity>(_db, e => e.Id);
-        Packs = new ScribeSet<PackEntity>(_db, e => e.Id);
+        Packs = new ScribeSet<PackEntity>(_db, e => e.SeasonKey, onNew: AssignNewPack);
         Matrix = new ScribeSet<SourceMatrixEntity>(_db, e => e.Id);
 
         CheckSchemaVersion();
     }
+
+    /// <summary>
+    /// F-M671: vergibt einer neuen DATEI ihre Kennung. Der Hash ist die Adresse, unter der die Zeile
+    /// gefunden wird; die Kennung ist die Identität und wird nie wieder angefasst.
+    /// </summary>
+    /// <param name="file">The new row, its <c>OsHash</c> already set by the caller.</param>
+    private void AssignNewFile(FileEntity file)
+    {
+        if (string.IsNullOrEmpty(file.FileId))
+        {
+            file.FileId = ScribeIds.NewFileId(id => Files.FindAll().Any(f => f.FileId == id));
+        }
+
+        if (file.Created == default)
+        {
+            file.Created = DateTime.UtcNow;
+        }
+
+        if (string.IsNullOrEmpty(file.FileName) && !string.IsNullOrEmpty(file.Path))
+        {
+            file.FileName = Path.GetFileName(file.Path);
+        }
+    }
+
+    /// <summary>
+    /// F-M671: vergibt einer neuen eingebetteten SPUR Kennung, Datei, Pack und Spurnummer. Der Nummernkreis
+    /// ist der der DATEI und umfasst eingebettete Spuren UND Seitenwagen — deshalb wird hier über beide
+    /// Areale gezählt. Eine Nummer, die einmal vergeben war, wird nie wiederverwendet.
+    /// </summary>
+    /// <param name="track">The new row, its <c>MediaHash</c> and <c>SubPos</c> already set.</param>
+    private void AssignNewTrack(TrackEntity track)
+    {
+        var datei = string.IsNullOrEmpty(track.FileId)
+            ? Files.FindAll().FirstOrDefault(f => string.Equals(f.OsHash, track.MediaHash, StringComparison.Ordinal))
+            : Files.FindAll().FirstOrDefault(f => string.Equals(f.FileId, track.FileId, StringComparison.Ordinal));
+
+        track.FileId = datei?.FileId ?? track.FileId;
+        track.PackId ??= datei?.PackId;
+
+        if (track.TrackNumber <= 0 || TrackNumbers.IsTaken(TracksOf(track.FileId), SidecarsOf(track.FileId), track.TrackNumber))
+        {
+            track.TrackNumber = TrackNumbers.NextFree(TracksOf(track.FileId), SidecarsOf(track.FileId));
+        }
+
+        if (string.IsNullOrEmpty(track.TrackId))
+        {
+            track.TrackId = ScribeIds.NewTrackId(
+                id => TracksOf(track.FileId).Any(t => t.TrackId == id) || SidecarsOf(track.FileId).Any(s => s.TrackId == id));
+        }
+
+        if (track.Created == default)
+        {
+            track.Created = DateTime.UtcNow;
+        }
+
+        track.LastSeen = DateTime.UtcNow;
+    }
+
+    /// <summary>
+    /// F-M671: vergibt einem neuen SEITENWAGEN Kennung, Datei und Spurnummer aus demselben Kreis wie die
+    /// eingebetteten Spuren seiner Datei. Das Pack bleibt leer — die Anzeige eines Seitenwagens ist
+    /// <c>0000-yyyyy-zzz</c>.
+    /// </summary>
+    /// <param name="sidecar">The new row, its <c>MediaHash</c> and <c>ContentHash</c> already set.</param>
+    private void AssignNewSidecar(SidecarEntity sidecar)
+    {
+        var datei = string.IsNullOrEmpty(sidecar.FileId)
+            ? Files.FindAll().FirstOrDefault(f => string.Equals(f.OsHash, sidecar.MediaHash, StringComparison.Ordinal))
+            : Files.FindAll().FirstOrDefault(f => string.Equals(f.FileId, sidecar.FileId, StringComparison.Ordinal));
+
+        sidecar.FileId = datei?.FileId ?? sidecar.FileId;
+
+        if (sidecar.TrackNumber <= 0 || TrackNumbers.IsTaken(TracksOf(sidecar.FileId), SidecarsOf(sidecar.FileId), sidecar.TrackNumber))
+        {
+            sidecar.TrackNumber = TrackNumbers.NextFree(TracksOf(sidecar.FileId), SidecarsOf(sidecar.FileId));
+        }
+
+        if (string.IsNullOrEmpty(sidecar.TrackId))
+        {
+            sidecar.TrackId = ScribeIds.NewTrackId(
+                id => TracksOf(sidecar.FileId).Any(t => t.TrackId == id) || SidecarsOf(sidecar.FileId).Any(s => s.TrackId == id));
+        }
+
+        if (sidecar.Created == default)
+        {
+            sidecar.Created = DateTime.UtcNow;
+        }
+
+        sidecar.LastSeen = DateTime.UtcNow;
+    }
+
+    /// <summary>F-M671: vergibt einem neuen PACK seine Kennung; der Staffelschlüssel bleibt die Adresse.</summary>
+    /// <param name="pack">The new row, its <c>SeasonKey</c> already set.</param>
+    private void AssignNewPack(PackEntity pack)
+    {
+        if (string.IsNullOrEmpty(pack.PackId))
+        {
+            pack.PackId = ScribeIds.NewPackId(id => Packs.FindAll().Any(p => p.PackId == id));
+        }
+
+        if (pack.Created == default)
+        {
+            pack.Created = DateTime.UtcNow;
+        }
+    }
+
+    private List<TrackEntity> TracksOf(string? fileId)
+        => string.IsNullOrEmpty(fileId)
+            ? new List<TrackEntity>()
+            : Tracks.FindAll().Where(t => string.Equals(t.FileId, fileId, StringComparison.Ordinal)).ToList();
+
+    private List<SidecarEntity> SidecarsOf(string? fileId)
+        => string.IsNullOrEmpty(fileId)
+            ? new List<SidecarEntity>()
+            : Sidecars.FindAll().Where(s => string.Equals(s.FileId, fileId, StringComparison.Ordinal)).ToList();
 
     /// <summary>Area 0: the single compatibility record describing this data file.</summary>
     public ScribeSet<MetaEntity> Meta { get; }
@@ -268,11 +516,11 @@ public sealed class ScribeDbContext : IDisposable
     /// <summary>Area 1: OSHash cache, keyed by media path.</summary>
     public ScribeSet<OshashEntity> Oshashes { get; }
 
-    /// <summary>Area 2: one record per video file, keyed by media hash.</summary>
-    public ScribeSet<MediaEntity> Media { get; }
+    /// <summary>Area 2: one record per video file, addressed by its OSHash and identified by its FileId.</summary>
+    public ScribeSet<FileEntity> Files { get; }
 
-    /// <summary>Area 2, beneath the file: embedded subtitle tracks, keyed by "&lt;media hash&gt;|&lt;position&gt;".</summary>
-    public ScribeSet<EmbedTrackEntity> Embeds { get; }
+    /// <summary>Area 2, beneath the file: embedded subtitle tracks, addressed by "&lt;osHash&gt;|&lt;position&gt;".</summary>
+    public ScribeSet<TrackEntity> Tracks { get; }
 
     /// <summary>Area 3: sidecar subtitle files, keyed by content hash.</summary>
     public ScribeSet<SidecarEntity> Sidecars { get; }
@@ -319,6 +567,13 @@ public sealed class ScribeDbContext : IDisposable
     /// (F-M637) prüft damit, dass die neue Datei die Marken der Vorgängerin wirklich trägt.
     /// </summary>
     public SourceMatrixMigration.Outcome? MatrixOutcome { get; private set; }
+
+    /// <summary>
+    /// F-M671: was die Übernahme in das Kennungs-Modell (Schema 22) bei DIESEM Öffnen getan hat — Zeilen je
+    /// Ebene gelesen und geschrieben, Kennungen vergeben, Spurnummern verteilt, Sicherung angelegt. Null,
+    /// wenn nichts zu übernehmen war (die Datei trägt das Modell schon).
+    /// </summary>
+    public IdModel.Outcome? IdOutcome { get; private set; }
 
     /// <summary>
     /// True when the data file was written by a NEWER plugin build than this one. Callers must not
@@ -378,46 +633,8 @@ public sealed class ScribeDbContext : IDisposable
     }
 
     /// <summary>
-    /// F-M390: creates the <c>packs</c> table on a data file that predates it.
-    /// <para>
-    /// <c>EnsureCreated</c> only builds a schema when the FILE is new, so a store written by an
-    /// earlier build keeps its old tables and every query against the new one would throw. The
-    /// statement is <c>IF NOT EXISTS</c>, so a fresh file (where EnsureCreated already built the
-    /// table) and a second start are both no-ops; a failure is logged and swallowed, because a
-    /// missing pack table must not stop the plugin from starting.
-    /// </para>
-    /// </summary>
-    private void EnsurePacksTable()
-    {
-        try
-        {
-            _db.Database.ExecuteSqlRaw(
-                "CREATE TABLE IF NOT EXISTS packs ("
-                + "Id TEXT NOT NULL PRIMARY KEY, "
-                + "ImdbId TEXT NOT NULL DEFAULT '', "
-                + "Season INTEGER NOT NULL DEFAULT 0, "
-                + "Language TEXT NOT NULL DEFAULT '', "
-                + "HearingImpaired INTEGER NULL, "
-                + "ReleaseName TEXT NULL, "
-                + "Episodes TEXT NOT NULL DEFAULT '', "
-                + "AbsorbedIds TEXT NULL, "
-                // F-M668: die Behälter-Kennung, der Fingerabdruck, die Ablehnung samt Signatur und das
-                // Urteil sind aus dieser Tabelle VERSCHWUNDEN — sie stehen in `source_matrix`
-                // (Kind = pack). Hier bleiben nur die Mitglieder, die kein Urteil einer Quelle sind.
-                + "Created TEXT NOT NULL DEFAULT '', "
-                + "Updated TEXT NOT NULL DEFAULT '');");
-            _db.Database.ExecuteSqlRaw("CREATE INDEX IF NOT EXISTS IX_packs_ImdbId ON packs (ImdbId);");
-            _db.Database.ExecuteSqlRaw("CREATE INDEX IF NOT EXISTS IX_packs_Season ON packs (Season);");
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogWarning("[Sub Scribe] could not create the packs table (continuing): {Msg}", ex.Message);
-        }
-    }
-
-    /// <summary>
     /// F-M542: creates the <c>tmdb_answers</c> table on a data file that predates it. Same reason and
-    /// same shape as <see cref="EnsurePacksTable"/>: <c>EnsureCreated</c> builds a schema only when the
+    /// same shape as <see cref="IdModel.EnsureTables"/>: <c>EnsureCreated</c> builds a schema only when the
     /// FILE is new, and a missing table would throw on the first TMDb answer instead of at startup.
     /// </summary>
     private void EnsureTmdbAnswersTable()
@@ -452,6 +669,63 @@ public sealed class ScribeDbContext : IDisposable
     /// F-M605: the remembered source refusals. Same reasoning as <see cref="EnsurePackSeasonsTable"/>.
     /// </summary>
     /// <summary>
+    /// F-M450: adds the report columns to <c>rejected_candidates</c> on a data file that predates them.
+    /// <para>
+    /// <c>EnsureCreated</c> builds a schema only when the FILE is new and never alters an existing table,
+    /// so an upgraded installation would otherwise keep five columns while every write names ten — and
+    /// the failure would land in the middle of a download run. A failure is logged and swallowed:
+    /// reporting must never stop the plugin from starting.
+    /// </para>
+    /// <para>
+    /// F-M671/F-M672: die Herkunfts-Spalten an <c>embeds</c>/<c>sidecars</c> werden hier NICHT mehr
+    /// nachgezogen — diese Tabellen gibt es nicht mehr. Die Herkunft einer Spur steht als
+    /// Quellen-NAME an <c>track</c>/<c>sidecar</c>, die Id in <c>reference</c>; das Kennungs-Modell legt
+    /// beides von Anfang an an.
+    /// </para>
+    /// </summary>
+    private void EnsureReportColumns()
+    {
+        try
+        {
+            var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            using (var cmd = _db.Database.GetDbConnection().CreateCommand())
+            {
+                if (cmd.Connection!.State != System.Data.ConnectionState.Open)
+                {
+                    cmd.Connection.Open();
+                }
+
+                cmd.CommandText = "PRAGMA table_info(rejected_candidates);";
+                using var reader = cmd.ExecuteReader();
+                while (reader.Read())
+                {
+                    existing.Add(reader.GetString(1));
+                }
+            }
+
+            foreach (var (name, ddl) in new[]
+                     {
+                         ("NId", "ALTER TABLE rejected_candidates ADD COLUMN NId TEXT NOT NULL DEFAULT '';"),
+                         ("ReleaseName", "ALTER TABLE rejected_candidates ADD COLUMN ReleaseName TEXT NOT NULL DEFAULT '';"),
+                         ("Finding", "ALTER TABLE rejected_candidates ADD COLUMN Finding TEXT NOT NULL DEFAULT '';"),
+                         ("Kind", "ALTER TABLE rejected_candidates ADD COLUMN Kind TEXT NOT NULL DEFAULT 'qa';"),
+                         ("ReportedUtc", "ALTER TABLE rejected_candidates ADD COLUMN ReportedUtc TEXT NULL;")
+                     })
+            {
+                if (!existing.Contains(name))
+                {
+                    _db.Database.ExecuteSqlRaw(ddl);
+                    LogUtil.Normal(_logger, "[Sub Scribe] data file: column {Column} added to rejected_candidates.", name);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning("[Sub Scribe] could not add the report columns (continuing): {Msg}", ex.Message);
+        }
+    }
+
+    /// <summary>
     /// F-M608: how often creating and finding a title failed, and whether it is closed for good.
     /// </summary>
     private void EnsureTitleFailuresTable()
@@ -474,7 +748,7 @@ public sealed class ScribeDbContext : IDisposable
 
     /// <summary>
     /// F-M667: legt die Marken-Matrix auf einer Datei an, die sie noch nicht kennt. Dieselbe Begruendung
-    /// wie bei <see cref="EnsurePacksTable"/> — <c>EnsureCreated</c> baut ein Schema nur bei einer NEUEN
+    /// wie bei <see cref="IdModel.EnsureTables"/> — <c>EnsureCreated</c> baut ein Schema nur bei einer NEUEN
     /// Datei. Der Migrationslauf legt die Tabelle bereits VOR dem Oeffnen an; dieser Schritt ist damit
     /// der zweite, harmlose Weg fuer einen Store, der ohne Migration geoeffnet wurde (ausdrueckliche
     /// Datei), und fuer eine Datei, deren Uebernahme abgebrochen ist.
@@ -536,232 +810,6 @@ public sealed class ScribeDbContext : IDisposable
     }
 
     /// <summary>
-    /// F-M450: adds the report columns to <c>rejected_candidates</c> on a data file that predates
-    /// them.
-    /// <para>
-    /// <c>EnsureCreated</c> builds a schema only when the FILE is new and never alters an existing
-    /// table, so an upgraded installation would otherwise keep five columns while every write names
-    /// ten — and the failure would land in the middle of a download run. Each <c>ALTER</c> is
-    /// guarded by the table's own column list, because SQLite has no "ADD COLUMN IF NOT EXISTS".
-    /// A failure is logged and swallowed: reporting must never stop the plugin from starting.
-    /// </para>
-    /// </summary>
-    private void EnsureReportColumns()
-    {
-        try
-        {
-            var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            using (var cmd = _db.Database.GetDbConnection().CreateCommand())
-            {
-                if (cmd.Connection!.State != System.Data.ConnectionState.Open)
-                {
-                    cmd.Connection.Open();
-                }
-
-                cmd.CommandText = "PRAGMA table_info(rejected_candidates);";
-                using var reader = cmd.ExecuteReader();
-                while (reader.Read())
-                {
-                    existing.Add(reader.GetString(1));
-                }
-            }
-
-            foreach (var (name, ddl) in new[]
-                     {
-                         ("NId", "ALTER TABLE rejected_candidates ADD COLUMN NId TEXT NOT NULL DEFAULT '';"),
-                         ("ReleaseName", "ALTER TABLE rejected_candidates ADD COLUMN ReleaseName TEXT NOT NULL DEFAULT '';"),
-                         ("Finding", "ALTER TABLE rejected_candidates ADD COLUMN Finding TEXT NOT NULL DEFAULT '';"),
-                         ("Kind", "ALTER TABLE rejected_candidates ADD COLUMN Kind TEXT NOT NULL DEFAULT 'qa';"),
-                         ("ReportedUtc", "ALTER TABLE rejected_candidates ADD COLUMN ReportedUtc TEXT NULL;")
-                     })
-            {
-                if (!existing.Contains(name))
-                {
-                    _db.Database.ExecuteSqlRaw(ddl);
-                    LogUtil.Normal(_logger, "[Sub Scribe] data file: column {Column} added to rejected_candidates.", name);
-                }
-            }
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogWarning("[Sub Scribe] could not add the report columns (continuing): {Msg}", ex.Message);
-        }
-
-        // F-M486 (schema 10): Herkunft je Untertitel. Ohne sie kann der Upload nicht wissen, ob er
-        // einen tvsubtitles-Fund gerade zu SubDL schickt (F-M487) — die Spalte ist die einzige Stelle,
-        // an der diese Herkunft überlebt.
-        foreach (var (table, column, ddl) in new[]
-                 {
-                     ("sidecars", "Origin", "ALTER TABLE sidecars ADD COLUMN Origin TEXT NULL;"),
-                     ("sidecars", "OriginId", "ALTER TABLE sidecars ADD COLUMN OriginId TEXT NULL;"),
-                     ("embeds", "Origin", "ALTER TABLE embeds ADD COLUMN Origin TEXT NULL;"),
-                     ("embeds", "OriginId", "ALTER TABLE embeds ADD COLUMN OriginId TEXT NULL;"),
-
-                     // F-M668: die neun Marken-Spalten je Quelle und Richtung (F-M488/F-M490/F-M507)
-                     // werden NICHT mehr nachgezogen — sie sind Zeilen der Marken-Matrix
-                     // (`Kind = track`/`track-hi`). Eine Datei, die sie noch trägt, verliert sie beim
-                     // Öffnen (SourceMatrixMigration); eine neue hat sie nie.
-                 })
-        {
-            try
-            {
-                var exists = false;
-                using var cmd = _db.Database.GetDbConnection().CreateCommand();
-                cmd.CommandText = "PRAGMA table_info(" + table + ");";
-                _db.Database.OpenConnection();
-                using var reader = cmd.ExecuteReader();
-                while (reader.Read())
-                {
-                    if (string.Equals(reader.GetString(1), column, StringComparison.OrdinalIgnoreCase))
-                    {
-                        exists = true;
-                    }
-                }
-
-                _db.Database.CloseConnection();
-                if (!exists)
-                {
-                    _db.Database.ExecuteSqlRaw(ddl);
-                    LogUtil.Normal(_logger, "[Sub Scribe] data file: column {Column} added to {Table}.", column, table);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogWarning("[Sub Scribe] could not add {Column} to {Table} (continuing): {Msg}", column, table, ex.Message);
-            }
-        }
-    }
-
-    /// <summary>
-    /// F-M642: zieht die Quellen-Spalte der <c>packs</c>-Zeile nach und schreibt ihren Schlüssel fort.
-    /// <para>
-    /// F-M668: der Fingerabdruck (F-M466) wird hier NICHT mehr nachgezogen — er steht in der
-    /// Marken-Matrix (`Kind = pack`), und eine Spalte, die ein älterer Bestand noch trägt, fällt beim
-    /// Öffnen mit den übrigen Altspalten (SourceMatrixMigration).
-    /// </para>
-    /// </summary>
-    private void EnsurePackColumns()
-    {
-        try
-        {
-            var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            using (var cmd = _db.Database.GetDbConnection().CreateCommand())
-            {
-                if (cmd.Connection!.State != System.Data.ConnectionState.Open)
-                {
-                    cmd.Connection.Open();
-                }
-
-                cmd.CommandText = "PRAGMA table_info(packs);";
-                using var reader = cmd.ExecuteReader();
-                while (reader.Read())
-                {
-                    existing.Add(reader.GetString(1));
-                }
-            }
-
-            // F-M642: die Quelle der Zeile. Der Bestand kennt sie nicht — und sein Schluessel nennt
-            // sie auch nicht. Ohne das Nachtragen waeren alle bisherigen Pack-Zeilen unter ihrem alten
-            // Schluessel unerreichbar ("…|S01|EN|plain" statt "…|S01|EN|plain|subdl"), und der Lauf
-            // haette jeden bereits gebauten Pack als „nie gepackt" gelesen. Beides in einem Schritt:
-            // Spalte setzen UND Schluessel fortschreiben.
-            //
-            // Die Fortschreibung laeuft bei JEDEM Oeffnen, nicht nur beim Anlegen der Spalte: sie ist
-            // billig (ein UPDATE, das im Normalfall keine Zeile trifft) und holt auch eine Zeile nach,
-            // die zwischen ALTER und UPDATE abgebrochen wurde. Zeilen mit Quelle bleiben unberuehrt,
-            // der Schritt ist damit beliebig oft wiederholbar.
-            const string SourceColumn = "Source";
-            if (!existing.Contains(SourceColumn))
-            {
-                _db.Database.ExecuteSqlRaw("ALTER TABLE packs ADD COLUMN Source TEXT NULL;");
-                LogUtil.Normal(_logger, "[Sub Scribe] data file: column {Column} added to packs.", SourceColumn);
-            }
-
-            int umgeschrieben = _db.Database.ExecuteSqlRaw(
-                "UPDATE packs SET Source = 'subdl', Id = Id || '|subdl' WHERE Source IS NULL;");
-            if (umgeschrieben > 0)
-            {
-                LogUtil.Normal(
-                    _logger,
-                    "[Sub Scribe] data file: {Count} pack row(s) keyed to their source (F-M642).",
-                    umgeschrieben);
-            }
-
-            // F-M668: KEINE Spalten fuer Fingerabdruck, Ablehnung, Signatur und Urteil mehr an dieser
-            // Tabelle — sie stehen in `source_matrix` (Kind = pack). Die uralte `Fingerprint`-Spalte aus
-            // F-M466 ist damit ebenfalls Geschichte: ihr Wert wandert beim Öffnen in die Matrix und die
-            // Spalte fällt (siehe SourceMatrixMigration).
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogWarning("[Sub Scribe] could not add the pack columns (continuing): {Msg}", ex.Message);
-        }
-    }
-
-    /// <summary>
-    /// F-M501 (Schema 13) / F-M507 (Schema 14): zieht die Spalten des MEDIUM-Records auf einem Bestand
-    /// nach, der sie noch nicht kennt — heute <c>media.TvstShowId</c> und <c>media.MsubMovieId</c>.
-    /// <para>
-    /// <c>EnsureCreated</c> baut ein Schema nur bei einer NEUEN Datei und ändert eine bestehende Tabelle
-    /// nie — ohne diesen Schritt liefe jede Abfrage auf einem aufgerüsteten Datenbestand gegen eine
-    /// Tabelle ohne die Spalte, und der Fehler landete mitten im Upload-Lauf. SQLite kennt kein
-    /// „ADD COLUMN IF NOT EXISTS", deshalb ist jedes <c>ALTER</c> an die Spaltenliste der Tabelle
-    /// gebunden. Ein Fehlschlag wird protokolliert und geschluckt: eine fehlende Spalte darf den
-    /// Plugin-Start nicht verhindern.
-    /// </para>
-    /// <para>
-    /// Die Liste ist eine Liste, kein Einzelfall: die nächste Spalte am Medium kostet eine Zeile hier
-    /// und keine zweite Methode.
-    /// </para>
-    /// </summary>
-    private void EnsureMediaColumns()
-    {
-        foreach (var (column, ddl) in new[]
-                 {
-                     ("TvstShowId", "ALTER TABLE media ADD COLUMN TvstShowId TEXT NULL;"),
-                     ("MsubMovieId", "ALTER TABLE media ADD COLUMN MsubMovieId TEXT NULL;"),
-
-                     // F-M668: die Zugeh-Stempel je Quelle (F-M557) und die Spursignatur (F-M562) stehen
-                     // NICHT mehr an der Medienzeile — sie sind Zeilen der Marken-Matrix (`Kind = file`,
-                     // Signatur im Feld `Fingerprint`). Ein Nachtragen gibt es deshalb nicht mehr.
-
-                     // F-M661: der Tag, an dem die Suche fuer diese Datei zuletzt LEER ausging —
-                     // ein eigenes Urteil neben dem Such-Stempel, weil es den Takt verlaengert.
-                     ("LastSearchEmptyUtc", "ALTER TABLE media ADD COLUMN LastSearchEmptyUtc TEXT NULL;"),
-                 })
-        {
-            try
-            {
-                var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-                using (var cmd = _db.Database.GetDbConnection().CreateCommand())
-                {
-                    if (cmd.Connection!.State != System.Data.ConnectionState.Open)
-                    {
-                        cmd.Connection.Open();
-                    }
-
-                    cmd.CommandText = "PRAGMA table_info(media);";
-                    using var reader = cmd.ExecuteReader();
-                    while (reader.Read())
-                    {
-                        existing.Add(reader.GetString(1));
-                    }
-                }
-
-                if (!existing.Contains(column))
-                {
-                    _db.Database.ExecuteSqlRaw(ddl);
-                    LogUtil.Normal(_logger, "[Sub Scribe] data file: column {Column} added to media.", column);
-                }
-            }
-            catch (Exception ex)
-            {
-                _logger?.LogWarning("[Sub Scribe] could not add {Column} to media (continuing): {Msg}", column, ex.Message);
-            }
-        }
-    }
-
-    /// <summary>
     /// F-M557 (Operator-Anweisung 17.11.2026: „Ich würde iso nehmen und immer auf die jeweiligen Quellen
     /// umsetzen. Per Software-Routine"): Schema 16 schreibt die Sprache EINMAL in ISO 639-2
     /// (<c>ENG</c>, <c>DEU</c>) in den Store; jede Quelle bekommt ihre Schreibweise erst an der Kante.
@@ -776,13 +824,13 @@ public sealed class ScribeDbContext : IDisposable
         try
         {
             int geaendert = 0;
-            foreach (var row in _db.EmbedRows.ToList())
+            foreach (var row in _db.TrackRows.ToList())
             {
                 string? iso = Language.LanguageMapper.Canonical(row.Language);
                 if (iso != null && !string.Equals(iso, row.Language, StringComparison.Ordinal))
                 {
                     row.Language = iso;
-                    _db.EmbedRows.Update(row);
+                    _db.TrackRows.Update(row);
                     geaendert++;
                 }
             }
@@ -1102,9 +1150,9 @@ public sealed class ScribeDbContext : IDisposable
     /// <param name="mediaHash">Media hash.</param>
     /// <param name="patch">Optional mutation.</param>
     /// <returns>The stored record.</returns>
-    public MediaEntity EnsureMedia(string mediaHash, Action<MediaEntity>? patch = null)
+    public FileEntity EnsureFile(string osHash, Action<FileEntity>? patch = null)
     {
-        return EnsureMedia(mediaHash, null, null, patch);
+        return EnsureFile(osHash, null, null, patch);
     }
 
     /// <summary>
@@ -1116,12 +1164,12 @@ public sealed class ScribeDbContext : IDisposable
     /// <param name="path">Optional file path.</param>
     /// <param name="patch">Optional mutation.</param>
     /// <returns>The stored record.</returns>
-    public MediaEntity EnsureMedia(string? mediaHash, string? jellyfinItemId, string? path, Action<MediaEntity>? patch = null)
+    public FileEntity EnsureFile(string? osHash, string? jellyfinItemId, string? path, Action<FileEntity>? patch = null)
     {
         // F-M514 (Vorfall 16.11.2026, jf-test 02:51): OHNE SCHLUESSEL GIBT ES KEINE ZEILE.
         // Ein leerer Medien-Hash heisst "diese Datei hat noch keine Identitaet" — nicht "eine Zeile
-        // ohne Id". Genau das wurde hier aber gebaut: `new MediaEntity { Id = null }`, und Entity
-        // Framework verweigert das Anhaengen ("Unable to track an entity of type 'MediaEntity'
+        // ohne Id". Genau das wurde hier aber gebaut: `new FileEntity { Id = null }`, und Entity
+        // Framework verweigert das Anhaengen ("Unable to track an entity of type 'FileEntity'
         // because its primary key property 'Id' is null"). Seit EF Core 10 bleibt die abgewiesene
         // Instanz danach als Detached im Change Tracker stehen, und JEDES spaetere SaveChanges
         // dieses Kontexts wirft "Unexpected entry.EntityState: Detached" — der Store war damit fuer
@@ -1131,16 +1179,16 @@ public sealed class ScribeDbContext : IDisposable
         // geschriebene Datei noch keinen OSHash kennt. Also: nichts anlegen, nichts anhaengen, und
         // die Zusage "kein Medium bekannt" durchreichen — der Schreiber bekommt eine leere, nicht
         // gespeicherte Instanz (seine Kopien der Kennungen bleiben dann leer, wie ohne Zeile).
-        if (string.IsNullOrEmpty(mediaHash))
+        if (string.IsNullOrEmpty(osHash))
         {
             LogUtil.Detail(_logger, "[Sub Scribe-DB] media row NOT written: no media hash known (F-M514)");
-            return new MediaEntity();
+            return new FileEntity();
         }
 
-        var entity = Media.FindById(mediaHash);
+        var entity = Files.FindById(osHash);
         if (entity == null)
         {
-            entity = new MediaEntity { Id = mediaHash, LastSeen = DateTime.UtcNow };
+            entity = new FileEntity { OsHash = osHash, Created = DateTime.UtcNow, LastSeen = DateTime.UtcNow };
         }
         else
         {
@@ -1158,8 +1206,8 @@ public sealed class ScribeDbContext : IDisposable
         }
 
         patch?.Invoke(entity);
-        Media.Upsert(entity);
-        LogUtil.Detail(_logger, "[Sub Scribe-DB] media upsert {Hash}", mediaHash);
+        Files.Upsert(entity);
+        LogUtil.Detail(_logger, "[Sub Scribe-DB] file upsert {Hash} -> {FileId}", osHash, entity.FileId);
         return entity;
     }
 
@@ -1459,13 +1507,13 @@ public sealed class ScribeSqliteContext : DbContext
     /// <summary>Area 1: OSHash cache.</summary>
     public DbSet<OshashEntity> OshashRows => Set<OshashEntity>();
 
-    /// <summary>Area 2: video files.</summary>
-    public DbSet<MediaEntity> MediaRows => Set<MediaEntity>();
+    /// <summary>Area 2: video files (`file`).</summary>
+    public DbSet<FileEntity> FileRows => Set<FileEntity>();
 
-    /// <summary>Area 2: embedded subtitle tracks.</summary>
-    public DbSet<EmbedTrackEntity> EmbedRows => Set<EmbedTrackEntity>();
+    /// <summary>Area 2: embedded subtitle tracks (`track`).</summary>
+    public DbSet<TrackEntity> TrackRows => Set<TrackEntity>();
 
-    /// <summary>Area 3: sidecar subtitle files.</summary>
+    /// <summary>Area 3: sidecar subtitle files (`sidecar`).</summary>
     public DbSet<SidecarEntity> SidecarRows => Set<SidecarEntity>();
 
     /// <summary>Area 4: burned download candidates.</summary>
@@ -1553,9 +1601,9 @@ public sealed class ScribeSqliteContext : DbContext
         {
             ("meta", MetaRows.LongCount()),
             ("oshashes", OshashRows.LongCount()),
-            ("media", MediaRows.LongCount()),
-            ("embeds", EmbedRows.LongCount()),
-            ("sidecars", SidecarRows.LongCount()),
+            ("file", FileRows.LongCount()),
+            ("track", TrackRows.LongCount()),
+            ("sidecar", SidecarRows.LongCount()),
             ("rejected_candidates", RejectedRows.LongCount()),
             ("counters", CounterRows.LongCount()),
             ("runs", RunRows.LongCount()),
@@ -1610,20 +1658,26 @@ public sealed class ScribeSqliteContext : DbContext
             e.HasKey(x => x.Id);
         });
 
-        modelBuilder.Entity<MediaEntity>(e =>
+        modelBuilder.Entity<FileEntity>(e =>
         {
-            e.ToTable("media");
-            e.HasKey(x => x.Id);
+            e.ToTable("file");
+            e.HasKey(x => x.FileId);
+            // F-M671: der Hash ist die ADRESSE, unter der die Datei wiedergefunden wird — eindeutig, aber
+            // nicht die Identität. Ein zweiter Datensatz mit demselben Hash wäre dieselbe Datei.
+            e.HasIndex(x => x.OsHash).IsUnique();
+            e.HasIndex(x => x.PackId);
             e.HasIndex(x => x.ImdbId);
             e.HasIndex(x => x.TmdbId);
             e.HasIndex(x => x.Path);
             e.HasIndex(x => x.JellyfinItemId);
         });
 
-        modelBuilder.Entity<EmbedTrackEntity>(e =>
+        modelBuilder.Entity<TrackEntity>(e =>
         {
-            e.ToTable("embeds");
-            e.HasKey(x => x.Id);
+            e.ToTable("track");
+            // F-M671: der Schlüssel ist (Datei, Spur) — die Spur ist je Datei eindeutig, nicht global.
+            e.HasKey(x => new { x.TrackId, x.FileId });
+            e.HasIndex(x => x.FileId);
             e.HasIndex(x => x.MediaHash);
             e.HasIndex(x => x.ContentHash);
             e.HasIndex(x => x.Status);
@@ -1631,8 +1685,9 @@ public sealed class ScribeSqliteContext : DbContext
 
         modelBuilder.Entity<SidecarEntity>(e =>
         {
-            e.ToTable("sidecars");
-            e.HasKey(x => x.Id);
+            e.ToTable("sidecar");
+            e.HasKey(x => new { x.TrackId, x.FileId });
+            e.HasIndex(x => x.FileId);
             e.HasIndex(x => x.ContentHash);
             e.HasIndex(x => x.MediaHash);
             e.HasIndex(x => x.Status);
@@ -1678,8 +1733,12 @@ public sealed class ScribeSqliteContext : DbContext
 
         modelBuilder.Entity<PackEntity>(e =>
         {
-            e.ToTable("packs");
-            e.HasKey(x => x.Id);
+            e.ToTable("pack");
+            // F-M671: der Pack trägt seine eigene Kennung; der Staffelschlüssel bleibt die Adresse, unter
+            // der die Aufrufer ihn fragen — eindeutig, damit „ein Behälter je Staffel/Sprache/Variante/
+            // Quelle" weiter gilt.
+            e.HasKey(x => x.PackId);
+            e.HasIndex(x => x.SeasonKey).IsUnique();
             e.HasIndex(x => x.ImdbId);
             e.HasIndex(x => x.Season);
         });
@@ -1760,11 +1819,19 @@ public sealed class ScribeSet<TEntity>
     /// </summary>
     /// <param name="db">The owning context.</param>
     /// <param name="keyText">Reads the business key as text, for in-memory lookup.</param>
-    public ScribeSet(ScribeSqliteContext db, Func<TEntity, string> keyText)
+    public ScribeSet(ScribeSqliteContext db, Func<TEntity, string> keyText, Action<TEntity>? onNew = null)
     {
         _db = db;
         _keyText = keyText;
+        _onNew = onNew;
     }
+
+    /// <summary>
+    /// F-M671: was eine NEUE Zeile bekommt, bevor sie angehängt wird — die Kennung und, bei einer Spur,
+    /// Datei, Pack und Spurnummer. Der Haken läuft nur beim Anlegen; eine vorhandene Zeile behält ihre
+    /// Kennung, denn eine Kennung ist unveränderlich.
+    /// </summary>
+    private readonly Action<TEntity>? _onNew;
 
     /// <summary>Every row of the area.</summary>
     /// <returns>The rows.</returns>
@@ -1876,6 +1943,10 @@ public sealed class ScribeSet<TEntity>
         var existing = Rows().FirstOrDefault(r => string.Equals(_keyText(r), key, StringComparison.Ordinal));
         if (existing == null)
         {
+            // F-M671: die Kennung wird VOR dem Anhängen vergeben — eine Zeile ohne Kennung ist keine
+            // Zeile, und ein Nachziehen nach dem Anhängen wäre eine zweite Wahrheit über dieselbe Zeile.
+            _onNew?.Invoke(entity);
+
             // Attach FIRST, cache second: a rejected attach that lands in the cache would leave a
             // row behind that no table holds and no key can address.
             _db.Add(entity);
@@ -1883,6 +1954,24 @@ public sealed class ScribeSet<TEntity>
         }
         else if (!ReferenceEquals(existing, entity))
         {
+            // F-M671: die KENNUNG der vorhandenen Zeile überlebt den Schreibvorgang. Ein Aufrufer, der
+            // eine frische Instanz ohne Kennung baut (der Normalfall), darf sie nicht leeren — sonst
+            // wäre „unveränderlich" nur eine Behauptung.
+            string? gehalten = null;
+            foreach (var pk in _db.Model.FindEntityType(typeof(TEntity))!.FindPrimaryKey()!.Properties)
+            {
+                var wert = pk.PropertyInfo?.GetValue(entity) as string;
+                if (string.IsNullOrEmpty(wert))
+                {
+                    var alt = pk.PropertyInfo?.GetValue(existing) as string;
+                    if (!string.IsNullOrEmpty(alt))
+                    {
+                        pk.PropertyInfo!.SetValue(entity, alt);
+                    }
+                }
+            }
+            _ = gehalten;
+
             _db.Entry(existing).CurrentValues.SetValues(entity);
 
             // Keep the cache pointing at the instance that now holds the new values, so a read
@@ -1986,6 +2075,31 @@ public sealed class ScribeSet<TEntity>
             }
 
             _db.RequestSave();
+        }
+    }
+
+    /// <summary>
+    /// F-M671: entfernt genau die übergebene Zeile. Nötig, weil die Spur- und Seitenwagen-Areale über ihre
+    /// ADRESSE (Hash, Position bzw. Inhalt) angesprochen werden, gelöscht aber eine Zeile werden muss, die
+    /// der Aufrufer in der Hand hat — ihre Kennung ist nicht die Adresse.
+    /// </summary>
+    /// <param name="entity">The row to remove.</param>
+    /// <returns>True when the row was in the area.</returns>
+    public bool Remove(TEntity entity)
+    {
+        lock (_db.Gate)
+        {
+            var existing = Rows().FirstOrDefault(r => ReferenceEquals(r, entity))
+                           ?? Rows().FirstOrDefault(r => string.Equals(_keyText(r), _keyText(entity), StringComparison.Ordinal));
+            if (existing == null)
+            {
+                return false;
+            }
+
+            _db.Remove(existing);
+            _db.RequestSave();
+            _rowCache.Remove(existing);
+            return true;
         }
     }
 

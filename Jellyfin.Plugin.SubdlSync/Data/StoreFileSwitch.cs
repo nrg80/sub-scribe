@@ -117,7 +117,7 @@ public static class StoreFileSwitch
                     }
                 }
 
-                long dateien = db.Media.FindAll().LongCount();
+                long dateien = db.Files.FindAll().LongCount();
                 logger?.LogInformation(
                     "[Sub Scribe] format change verified: {Records} record(s), marks per source {Marks} — previous file kept beside it (F-M637/F-M638).",
                     dateien,

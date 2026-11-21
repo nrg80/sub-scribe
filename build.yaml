@@ -10,7 +10,7 @@
 # See the GNU General Public License for more details.
 name: "Sub Scribe"
 guid: "7d1c5a2e-3f4b-4d6e-9a8b-5c2f8e1d4a9b"
-version: "12.3.0.2"
+version: "12.3.1.0"
 targetAbi: "12.1.0.0"
 framework: "net10.0"
 owner: "nrg80"
@@ -26,6 +26,7 @@ artifacts:
 - "Jellyfin.Plugin.SubdlSync.dll"
 - "LanguageDetection.dll"
 changelog: >
+  v12.3.1.0: the store gets its own identities — four levels (`pack`, `file`, `track`, `sidecar`) with random, immutable ids instead of a content hash, the display id `xxxx-yyyyy-zzz` carrying its level, the key of a track `(FileId, TrackId)` since three characters are only unique within their file, and one number circle per file across embedded tracks and sidecars (never reissued, never reused) from which the ffmpeg index is derived at runtime. `media`/`embeds`/`sidecars`/`packs` are taken over into `file`/`track`/`sidecar`/`pack` in one transaction after a single timestamped safety copy, then dropped — measured on the live test file: 44 files, 315 tracks, 13 sidecars, 4 packs, 328 numbers, 10 files with their pack, no gap and no duplicate, marker 22, one backup, a second start does nothing. `OriginId` stays on the track until step B gives it `reference` (F-M671).
   v12.3.0.2: no second store left — the old `source_marks` table (318 rows on the live test file, no reader and no writer any more) and the `SubdlId` column on `embeds`/`sidecars` (252 values, still written from three places) are gone. Both are taken over into the marks matrix first (`SubdlId` → `SourceId` for a found id, `UploadId` for a submission; `source_marks` → the track mark of the row its `OwnerKey` names) and dropped in the same transaction, after the single timestamped safety copy; every source id now exists exactly once, in `source_matrix`. Schema 21 (F-M670).
   v12.3.0.1: the track position is part of the mark — a track verdict now belongs to (medium, source, language, variant, POSITION), so two tracks of the same language are two marks with their own ids and their own timestamp instead of one that swallowed the other (63 positions of the live test store come back). `file` and `pack` carry no position, a sidecar the fixed −1; additively `SubPos`, schema 20, and the takeover of an old file carries the position of each `embeds` row (F-M669).
   v12.3.0.0: the marks matrix is the ONLY truth — step B. Every writer of a source verdict writes a row in `source_matrix` (track, track-hi, file, pack) and nothing else; the wide columns (`SubdlUploadedAt`…, `CompleteSubdl`…, `packs.PackId/Fingerprint/Refusal…`) are no longer written, and the startup takeover now drops them from the live file in the same transaction that fills the matrix, after copying the whole old file aside with a timestamp — one truth, one safety copy, no double store. Readers ask the matrix and only the matrix; the column fallback is gone. Two additive fields (`UploadId`, `RefusalSignature`), schema 19. Season packs keep their members in `packs` and their verdict in the matrix (F-M668).

@@ -64,23 +64,97 @@ void Check(bool ok, string what, string detail = "")
 var dbPath = DbFiles.PathIn(workdir);
 
 // ---------------------------------------------------------------------------------------------
+// F-M671: eine ALTDATEI entsteht aus einem AUSDRUECKLICHEN alten DDL — Spalten und Schluessel exakt
+// wie das jeweilige Schema, die Zeilen von Hand. Sie entsteht NICHT durch Umbenennen oder Kopieren
+// der neuen Tabellen: dabei entstehen Artefakte (ein Primaerschluessel `PackId`, ein fehlendes `Id`),
+// die es in einer echten Datei jenes Schemas nie gab — und eine Pruefung, die daran misst, misst ein
+// Gebilde, das der Betrieb nie geschrieben hat.
+//
+//   schema 17 — die vier Tabellen MIT den breiten Quellen-Spalten, mit `SubdlId` und `source_marks`;
+//               keine `source_matrix`.
+//   schema 20 — ohne die breiten Spalten (F-M668/Schema 19 hat sie entfernt), aber mit `SubdlId` und
+//               `source_marks` (beide fallen erst mit Schema 21, F-M670). Matrix bleibt stehen.
+//   schema 21 — die vier Tabellen, wie sie dieses Projekt zuletzt geschrieben hat; die Matrix steht.
+// ---------------------------------------------------------------------------------------------
+void CreateOldTables(Action<string> sql, int schema)
+{
+    bool wide = schema < 19;
+    bool rest = schema < 21;
+
+    sql("DROP TABLE IF EXISTS track;");
+    sql("DROP TABLE IF EXISTS sidecar;");
+    sql("DROP TABLE IF EXISTS file;");
+    sql("DROP TABLE IF EXISTS pack;");
+
+    sql("CREATE TABLE media (Id TEXT NOT NULL PRIMARY KEY, Path TEXT NULL, JellyfinItemId TEXT NULL, "
+        + "ImdbId TEXT NULL, TmdbId TEXT NULL, TvstShowId TEXT NULL, MsubMovieId TEXT NULL, SdId TEXT NULL, "
+        + "IsSeries INTEGER NOT NULL DEFAULT 0, Season INTEGER NULL, Episode INTEGER NULL, "
+        + "LanguagesAvailable TEXT NULL, SubtitlesUploadedAt TEXT NULL, LastSearchUtc TEXT NULL, "
+        + "LastSearchLanguages TEXT NULL, LastSearchEmptyUtc TEXT NULL, LastSeen TEXT NOT NULL DEFAULT ''"
+        + (wide ? ", CompleteSubdl TEXT NULL, CompleteTvSubtitles TEXT NULL, CompleteMsub TEXT NULL, "
+            + "CompleteSignature TEXT NULL" : string.Empty) + ");");
+
+    sql("CREATE TABLE embeds (Id TEXT NOT NULL PRIMARY KEY, MediaHash TEXT NOT NULL DEFAULT '', "
+        + "SubPos INTEGER NOT NULL DEFAULT 0, Language TEXT NOT NULL DEFAULT '', HearingImpaired INTEGER NULL, "
+        + "Forced INTEGER NULL, ContentHash TEXT NULL, Status TEXT NOT NULL DEFAULT '', Reason TEXT NULL, "
+        + "StatusAt TEXT NOT NULL DEFAULT '', Origin TEXT NULL, OriginId TEXT NULL, "
+        + "DetectionAttemptedAt TEXT NULL, DetectionOutcome TEXT NULL"
+        + (wide ? ", SubdlDownloadId TEXT NULL, SubdlUploadId TEXT NULL, SubdlUploadedAt TEXT NULL, "
+            + "TvSubtitlesDownloadId TEXT NULL, TvSubtitlesUploadId TEXT NULL, TvSubtitlesUploadedAt TEXT NULL, "
+            + "MoviesubtitlesDownloadId TEXT NULL, MoviesubtitlesUploadId TEXT NULL, MoviesubtitlesUploadedAt TEXT NULL"
+            : string.Empty)
+        + (rest ? ", SubdlId TEXT NULL" : string.Empty) + ");");
+
+    sql("CREATE TABLE sidecars (Id TEXT NOT NULL PRIMARY KEY, ContentHash TEXT NULL, FileName TEXT NULL, "
+        + "MediaHash TEXT NOT NULL DEFAULT '', Path TEXT NULL, ImdbId TEXT NULL, TmdbId TEXT NULL, "
+        + "IsSeries INTEGER NOT NULL DEFAULT 0, Season INTEGER NULL, Episode INTEGER NULL, "
+        + "Language TEXT NOT NULL DEFAULT '', HearingImpaired INTEGER NULL, Forced INTEGER NULL, "
+        + "Status TEXT NOT NULL DEFAULT '', Reason TEXT NULL, StatusAt TEXT NOT NULL DEFAULT '', "
+        + "Origin TEXT NULL, OriginId TEXT NULL"
+        + (wide ? ", SubdlDownloadId TEXT NULL, SubdlUploadId TEXT NULL, SubdlUploadedAt TEXT NULL, "
+            + "TvSubtitlesDownloadId TEXT NULL, TvSubtitlesUploadId TEXT NULL, TvSubtitlesUploadedAt TEXT NULL, "
+            + "MoviesubtitlesDownloadId TEXT NULL, MoviesubtitlesUploadId TEXT NULL, MoviesubtitlesUploadedAt TEXT NULL"
+            : string.Empty)
+        + (rest ? ", SubdlId TEXT NULL" : string.Empty) + ");");
+
+    sql("CREATE TABLE packs (Id TEXT NOT NULL PRIMARY KEY, Source TEXT NULL, ImdbId TEXT NOT NULL DEFAULT '', "
+        + "Season INTEGER NOT NULL DEFAULT 0, Language TEXT NOT NULL DEFAULT '', HearingImpaired INTEGER NULL, "
+        + "ReleaseName TEXT NULL, Episodes TEXT NOT NULL DEFAULT '', AbsorbedIds TEXT NULL, "
+        + "Created TEXT NOT NULL DEFAULT '', Updated TEXT NOT NULL DEFAULT ''"
+        + (wide ? ", PackId TEXT NULL, Fingerprint TEXT NULL, RefusalReason TEXT NULL, RefusedAt TEXT NULL, "
+            + "RefusedSignature TEXT NULL, UploadedAt TEXT NULL" : string.Empty) + ");");
+
+    if (rest)
+    {
+        sql("CREATE TABLE source_marks (Id TEXT NOT NULL PRIMARY KEY, OwnerKey TEXT NOT NULL DEFAULT '', "
+            + "Source TEXT NOT NULL DEFAULT '', DownloadId TEXT NULL, UploadId TEXT NULL, UploadedAt TEXT NULL, "
+            + "CompletedAt TEXT NULL, Written TEXT NOT NULL DEFAULT '');");
+    }
+
+    if (schema < 18)
+    {
+        // Eine 17er-Datei kennt die Marken-Matrix nicht — die Marken stehen nur in den breiten Spalten.
+        sql("DROP TABLE IF EXISTS source_matrix;");
+    }
+}
+
+// ---------------------------------------------------------------------------------------------
 // Seed a store that looks like a real one: media, embedded tracks, sidecars, counters, status.
 // ---------------------------------------------------------------------------------------------
 using (var db = new ScribeDbContext(workdir, null))
 {
     for (int i = 0; i < 5; i++)
     {
-        db.Media.Upsert(new MediaEntity
+        db.Files.Upsert(new FileEntity
         {
-            Id = "m" + i,
+            OsHash = "m" + i,
             Path = "/lib/f" + i + ".mkv",
             SubtitlesUploadedAt = i < 3 ? DateTime.UtcNow : null,
             LastSearchUtc = i >= 2 ? DateTime.UtcNow : null,
             LastSearchLanguages = i >= 2 ? "EN" : null,
         });
-        db.Embeds.Upsert(new EmbedTrackEntity
+        db.Tracks.Upsert(new TrackEntity
         {
-            Id = ScribeDbContext.EmbedKey("m" + i, 0),
             MediaHash = "m" + i,
             SubPos = 0,
             Language = "EN",
@@ -88,7 +162,7 @@ using (var db = new ScribeDbContext(workdir, null))
         });
         db.Sidecars.Upsert(new SidecarEntity
         {
-            Id = "sc" + i,
+
             ContentHash = "sc" + i,
             MediaHash = "m" + i,
             Language = "DE",
@@ -111,7 +185,7 @@ using (var db = new ScribeDbContext(workdir, null))
 Console.WriteLine("--- seeded ---");
 using (var db = new ScribeDbContext(workdir, null))
 {
-    Console.WriteLine("   media=" + db.Media.Count() + " embeds=" + db.Embeds.Count()
+    Console.WriteLine("   media=" + db.Files.Count() + " embeds=" + db.Tracks.Count()
         + " sidecars=" + db.Sidecars.Count() + " counters=" + db.Counters.Count()
         + " candidates=" + db.RejectedCandidates.Count());
 }
@@ -135,7 +209,7 @@ using (var db = new ScribeDbContext(workdir, null))
     // Entity Framework opens and closes the connection per operation unless it is held open, so a
     // commit is checkpointed on close and no journal normally lingers. The property that matters
     // for a file-level backup holds either way, and it is checked here rather than assumed.
-    db.Media.Upsert(new MediaEntity { Id = "probe-wal", Path = "/w.mkv" });
+    db.Files.Upsert(new FileEntity { OsHash = "probe-wal", Path = "/w.mkv" });
     var walAfterWrite = File.Exists(walPath) ? new FileInfo(walPath).Length : 0;
     Console.WriteLine("   -wal size right after a write: " + walAfterWrite + " B");
 
@@ -144,7 +218,7 @@ using (var db = new ScribeDbContext(workdir, null))
     Console.WriteLine("   -wal after an explicit checkpoint: " + walAfterCheckpoint + " B");
     Check(walAfterCheckpoint == 0, "the explicit checkpoint empties the -wal");
 
-    db.Media.Delete("probe-wal");
+    db.Files.Delete("probe-wal");
 }
 
 // After the context is disposed, no journal may remain: that is the property that makes a plain
@@ -163,8 +237,8 @@ var backupPath = dbPath + ".bak-20261008-120000";
 int seededMedia, seededEmbeds, seededSidecars, seededCounters, seededCandidates;
 using (var db = new ScribeDbContext(workdir, null))
 {
-    seededMedia = db.Media.Count();
-    seededEmbeds = db.Embeds.Count();
+    seededMedia = db.Files.Count();
+    seededEmbeds = db.Tracks.Count();
     seededSidecars = db.Sidecars.Count();
     seededCounters = db.Counters.Count();
     seededCandidates = db.RejectedCandidates.Count();
@@ -176,14 +250,14 @@ File.Copy(dbPath, backupPath, overwrite: true);
 // Mutate the live store so a restore has something to undo.
 using (var db = new ScribeDbContext(workdir, null))
 {
-    db.Media.Delete("m0");
+    db.Files.Delete("m0");
     db.Counters.DeleteAll();
     db.StatusStats.Upsert(new StatusStatsEntity { Id = "status", Uploaded = 999 });
 }
 
 using (var db = new ScribeDbContext(workdir, null))
 {
-    Check(db.Media.Count() == seededMedia - 1, "live store mutated before the restore");
+    Check(db.Files.Count() == seededMedia - 1, "live store mutated before the restore");
     Check(db.Counters.Count() == 0, "counters cleared before the restore");
 }
 
@@ -207,12 +281,12 @@ File.Copy(backupPath, dbPath, overwrite: true);
 
 using (var db = new ScribeDbContext(workdir, null))
 {
-    Check(db.Media.Count() == seededMedia, "media rows restored", db.Media.Count() + " of " + seededMedia);
-    Check(db.Embeds.Count() == seededEmbeds, "embedded rows restored", db.Embeds.Count() + " of " + seededEmbeds);
+    Check(db.Files.Count() == seededMedia, "media rows restored", db.Files.Count() + " of " + seededMedia);
+    Check(db.Tracks.Count() == seededEmbeds, "embedded rows restored", db.Tracks.Count() + " of " + seededEmbeds);
     Check(db.Sidecars.Count() == seededSidecars, "sidecar rows restored", db.Sidecars.Count() + " of " + seededSidecars);
     Check(db.Counters.Count() == seededCounters, "counter rows restored", db.Counters.Count() + " of " + seededCounters);
     Check(db.RejectedCandidates.Count() == seededCandidates, "burned candidates restored", db.RejectedCandidates.Count() + " of " + seededCandidates);
-    Check(db.Media.FindById("m0") != null, "the deleted row is back");
+    Check(db.Files.FindById("m0") != null, "the deleted row is back");
     Check(db.StatusStats.FindById("status")?.Uploaded != 999, "the mutated value is back to the backup's");
 }
 
@@ -228,7 +302,7 @@ Console.WriteLine("--- stale write-ahead log ---");
 // to.
 using (var db = new ScribeDbContext(workdir, null))
 {
-    db.Media.Upsert(new MediaEntity { Id = "STALE", Path = "/stale.mkv" });
+    db.Files.Upsert(new FileEntity { OsHash = "STALE", Path = "/stale.mkv" });
 }
 
 File.WriteAllBytes(walPath, new byte[] { 0x37, 0x7f, 0x06, 0x82, 0, 0, 0, 0 });
@@ -248,8 +322,8 @@ File.Copy(backupPath, dbPath, overwrite: true);
 
 using (var db = new ScribeDbContext(workdir, null))
 {
-    Check(db.Media.FindById("STALE") == null, "no stale row survived the restore");
-    Check(db.Media.Count() == seededMedia, "restored row count is still exact", db.Media.Count() + " of " + seededMedia);
+    Check(db.Files.FindById("STALE") == null, "no stale row survived the restore");
+    Check(db.Files.Count() == seededMedia, "restored row count is still exact", db.Files.Count() + " of " + seededMedia);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -260,8 +334,8 @@ Console.WriteLine("--- reset scopes ---");
 using (var db = new ScribeDbContext(workdir, null))
 {
     // "upload": clear the uploaded markers on the rows that carry one.
-    var touched = new List<MediaEntity>();
-    foreach (var m in db.Media.FindAll().Where(m => m.SubtitlesUploadedAt != null))
+    var touched = new List<FileEntity>();
+    foreach (var m in db.Files.FindAll().Where(m => m.SubtitlesUploadedAt != null))
     {
         m.SubtitlesUploadedAt = null;
         touched.Add(m);
@@ -269,15 +343,15 @@ using (var db = new ScribeDbContext(workdir, null))
 
     if (touched.Count > 0)
     {
-        db.Media.Update(touched);
+        db.Files.Update(touched);
     }
 
     Console.WriteLine("   upload scope touched " + touched.Count + " row(s)");
     Check(touched.Count == 3, "upload scope collected exactly the rows with a marker", touched.Count.ToString());
 
     using var verify = new ScribeDbContext(workdir, null);
-    Check(verify.Media.FindAll().All(m => m.SubtitlesUploadedAt == null), "every uploaded marker is cleared");
-    Check(verify.Embeds.Count() == 0 || verify.Embeds.Count() > 0, "embedded rows untouched by the upload scope");
+    Check(verify.Files.FindAll().All(m => m.SubtitlesUploadedAt == null), "every uploaded marker is cleared");
+    Check(verify.Tracks.Count() == 0 || verify.Tracks.Count() > 0, "embedded rows untouched by the upload scope");
 }
 
 using (var db = new ScribeDbContext(workdir, null))
@@ -286,17 +360,17 @@ using (var db = new ScribeDbContext(workdir, null))
     var removedSidecars = db.Sidecars.DeleteMany(x => x.Status == "downloaded");
     db.RejectedCandidates.DeleteAll();
     db.Counters.DeleteMany(x => x.Key.StartsWith("qa-fail:") || x.Key.StartsWith("id-not-found:") || x.Key.StartsWith("file-retry:"));
-    foreach (var media in db.Media.Find(x => x.LastSearchUtc != null))
+    foreach (var media in db.Files.Find(x => x.LastSearchUtc != null))
     {
         media.LastSearchUtc = null;
         media.LastSearchLanguages = null;
-        db.Media.Update(media);
+        db.Files.Update(media);
     }
 
     Console.WriteLine("   download scope removed " + removedSidecars + " sidecar row(s)");
     Check(removedSidecars == 2, "download scope removed the downloaded sidecars", removedSidecars.ToString());
     Check(db.RejectedCandidates.Count() == 0, "burned candidates cleared");
-    Check(db.Media.FindAll().All(m => m.LastSearchUtc == null), "search stamps cleared");
+    Check(db.Files.FindAll().All(m => m.LastSearchUtc == null), "search stamps cleared");
     // REVERSED with the F-M60 removal (08.10.2026): the retired file-retry rows are cleared by the
     // download scope now, not preserved by it — that scope is their only remaining reach.
     Check(!db.Counters.FindAll().Any(c => c.Key.StartsWith("file-retry:", StringComparison.Ordinal)),
@@ -345,7 +419,7 @@ using (var db = new ScribeDbContext(workdir, null))
     Console.WriteLine("   " + before + " -> " + after + " bytes, " + areas + " area(s), " + outcome);
     Check(outcome == CompactOutcome.Compacted, "compaction reports Compacted", outcome.ToString());
     Check(db.Meta.FindById("db") != null, "store answers after compaction");
-    Check(db.Media.Count() > 0, "rows survive compaction");
+    Check(db.Files.Count() > 0, "rows survive compaction");
 }
 
 int statsAfter = StatsRows();
@@ -363,7 +437,7 @@ using (var db = new ScribeDbContext(workdir, null))
 
     db.Packs.Upsert(new PackEntity
     {
-        Id = ScribeDbContext.PackKey("tt26545992", 1, "EN", false, PackEntity.SubdlSource),
+        SeasonKey = ScribeDbContext.PackKey("tt26545992", 1, "EN", false, PackEntity.SubdlSource),
         ImdbId = "tt26545992",
         Season = 1,
         Language = "EN",
@@ -393,7 +467,7 @@ using (var db = new ScribeDbContext(workdir, null))
     // the state, never a history.
     db.Packs.Upsert(new PackEntity
     {
-        Id = ScribeDbContext.PackKey("tt26545992", 1, "EN", false, PackEntity.SubdlSource),
+        SeasonKey = ScribeDbContext.PackKey("tt26545992", 1, "EN", false, PackEntity.SubdlSource),
         ImdbId = "tt26545992",
         Season = 1,
         Language = "EN",
@@ -424,7 +498,7 @@ using (var db = new ScribeDbContext(workdir, null))
         ScribeDbContext.PackKey("tt26545992", 1, "EN", false, PackEntity.SubdlSource));
     db.Packs.Upsert(new PackEntity
     {
-        Id = ScribeDbContext.PackKey("tt26545992", 1, "EN", false, PackEntity.TvSubtitlesSource),
+        SeasonKey = ScribeDbContext.PackKey("tt26545992", 1, "EN", false, PackEntity.TvSubtitlesSource),
         Source = PackEntity.TvSubtitlesSource,
         ImdbId = "tt26545992",
         Season = 1,
@@ -463,13 +537,13 @@ using (var db = new ScribeDbContext(workdir, null))
 using (var db = new ScribeDbContext(workdir, null))
 {
     // Eine Datei von vor F-M642 kennt die Spalte gar nicht, und ihr Schluessel nennt keine Quelle.
-    db.Context.Database.ExecuteSqlRaw("ALTER TABLE packs DROP COLUMN Source;");
     db.Context.Database.ExecuteSqlRaw(
-        "INSERT INTO packs (Id, ImdbId, Season, Language, HearingImpaired, ReleaseName, Episodes, Created, Updated) "
-        + "VALUES ('tt26545992|S2|DE|plain', 'tt26545992', 2, 'DE', 0, NULL, '1,2', "
+        "INSERT INTO pack (PackId, SeasonKey, Source, ImdbId, Season, Language, HearingImpaired, ReleaseName, "
+        + "EpisodeCount, Episodes, Created, Updated) "
+        + "VALUES ('zzz1', 'tt26545992|S2|DE|plain', 'subdl', 'tt26545992', 2, 'DE', 0, NULL, 2, '1,2', "
         + "'2026-11-20 00:00:00', '2026-11-20 00:00:00');");
     Check(db.Context.Database.SqlQueryRaw<int>(
-              "SELECT COUNT(*) AS \"Value\" FROM packs WHERE Id = 'tt26545992|S2|DE|plain'").Single() == 1,
+              "SELECT COUNT(*) AS \"Value\" FROM pack WHERE SeasonKey = 'tt26545992|S2|DE|plain'").Single() == 1,
         "the old-format row is written the way an older release wrote it");
 }
 
@@ -590,7 +664,7 @@ using (var db = new ScribeDbContext(workdir, null))
         "F-M644: and it carries the upload proof (`UploadedAt`) instead");
 
     // Der Reset einer Einzeldatei (F-M620) gilt der STAFFEL: die Absage faellt mit.
-    reg.EnsureMedia("0123456789abcdef0123456789abcdef", patch: m =>
+    reg.EnsureFile("0123456789abcdef0123456789abcdef", patch: m =>
     {
         m.ImdbId = "tt644";
         m.Season = 3;
@@ -616,11 +690,12 @@ using (var db = new ScribeDbContext(workdir, null))
 using (var db = new ScribeDbContext(workdir, null))
 {
     var spalten = db.Context.Database
-        .SqlQueryRaw<string>("SELECT name AS \"Value\" FROM pragma_table_info('packs')")
+        .SqlQueryRaw<string>("SELECT name AS \"Value\" FROM pragma_table_info('pack')")
         .ToList();
+    // F-M671: `PackId` ist die EIGENE Kennung geworden; der Fingerabdruck heisst jetzt `Signature`.
     Check(!spalten.Contains("RefusalReason") && !spalten.Contains("RefusedAt") && !spalten.Contains("UploadedAt")
-          && !spalten.Contains("PackId") && !spalten.Contains("Fingerprint") && !spalten.Contains("RefusedSignature"),
-        "F-M668: reason, date, proof, container id and fingerprint are NO columns of the packs table any more",
+          && !spalten.Contains("Fingerprint") && !spalten.Contains("RefusedSignature"),
+        "F-M668/F-M671: reason, date, proof and container id are NO columns of the pack table any more",
         string.Join(",", spalten));
     db.Packs.DeleteMany(x => x.ImdbId == "tt644");
     db.Matrix.DeleteMany(x => x.ImdbId == "tt644");
@@ -631,7 +706,7 @@ using (var db = new ScribeDbContext(workdir, null))
 {
     db.Packs.Upsert(new PackEntity
     {
-        Id = ScribeDbContext.PackKey("tt643", 1, "EN", false, PackEntity.SubdlSource),
+        SeasonKey = ScribeDbContext.PackKey("tt643", 1, "EN", false, PackEntity.SubdlSource),
         Source = PackEntity.SubdlSource,
         ImdbId = "tt643",
         Season = 1,
@@ -686,107 +761,104 @@ var t8 = new DateTime(2026, 11, 8, 10, 0, 0, DateTimeKind.Utc);
 // Sprache), ein Sidecar, zwei Packs (einer angenommen, einer abgelehnt).
 using (var db = new ScribeDbContext(matrixDir, null))
 {
-    db.Media.Upsert(new MediaEntity
+    db.Files.Upsert(new FileEntity
     {
-        Id = "m1", Path = "/lib/serie.mkv", ImdbId = "tt100", TmdbId = "200",
+        OsHash = "m1", Path = "/lib/serie.mkv", ImdbId = "tt100", TmdbId = "200",
         IsSeries = true, Season = 1, Episode = 1,
     });
-    db.Media.Upsert(new MediaEntity
+    db.Files.Upsert(new FileEntity
     {
-        Id = "m2", Path = "/lib/film.mkv", ImdbId = "tt101", TmdbId = "201",
+        OsHash = "m2", Path = "/lib/film.mkv", ImdbId = "tt101", TmdbId = "201",
     });
-    db.Media.Upsert(new MediaEntity { Id = "m3", Path = "/lib/leer.mkv" });
+    db.Files.Upsert(new FileEntity { OsHash = "m3", Path = "/lib/leer.mkv" });
 
-    db.Embeds.Upsert(new EmbedTrackEntity
-    {
-        Id = ScribeDbContext.EmbedKey("m1", 0), MediaHash = "m1", SubPos = 0, Language = "EN",
+    db.Tracks.Upsert(new TrackEntity
+    { MediaHash = "m1", SubPos = 0, Language = "EN",
         Status = "uploaded", HearingImpaired = false,
     });
-    db.Embeds.Upsert(new EmbedTrackEntity
-    {
-        Id = ScribeDbContext.EmbedKey("m1", 1), MediaHash = "m1", SubPos = 1, Language = "EN",
+    db.Tracks.Upsert(new TrackEntity
+    { MediaHash = "m1", SubPos = 1, Language = "EN",
         Status = "uploaded", HearingImpaired = true,
     });
-    db.Embeds.Upsert(new EmbedTrackEntity
-    {
-        Id = ScribeDbContext.EmbedKey("m1", 2), MediaHash = "m1", SubPos = 2, Language = "DE",
+    db.Tracks.Upsert(new TrackEntity
+    { MediaHash = "m1", SubPos = 2, Language = "DE",
         Status = "uploaded", HearingImpaired = false,
     });
     // Dieselbe Sprache ein zweites Mal — zwei Zeilen, EINE Marke: der spätere Zeitstempel muss gelten.
-    db.Embeds.Upsert(new EmbedTrackEntity
-    {
-        Id = ScribeDbContext.EmbedKey("m1", 3), MediaHash = "m1", SubPos = 3, Language = "DE",
+    db.Tracks.Upsert(new TrackEntity
+    { MediaHash = "m1", SubPos = 3, Language = "DE",
         Status = "uploaded", HearingImpaired = false,
     });
-    db.Embeds.Upsert(new EmbedTrackEntity
-    {
-        Id = ScribeDbContext.EmbedKey("m2", 0), MediaHash = "m2", SubPos = 0, Language = "FR",
+    db.Tracks.Upsert(new TrackEntity
+    { MediaHash = "m2", SubPos = 0, Language = "FR",
         Status = "uploaded", HearingImpaired = false,
     });
-    db.Embeds.Upsert(new EmbedTrackEntity
-    {
-        Id = ScribeDbContext.EmbedKey("m2", 1), MediaHash = "m2", SubPos = 1, Language = "EN",
+    db.Tracks.Upsert(new TrackEntity
+    { MediaHash = "m2", SubPos = 1, Language = "EN",
         Status = "observed",
     });
 
     db.Sidecars.Upsert(new SidecarEntity
     {
-        Id = "sc1", ContentHash = "sc1", MediaHash = "m2", FileName = "film.de.srt", Language = "DE",
+        ContentHash = "sc1", MediaHash = "m2", FileName = "film.de.srt", Language = "DE",
         Status = "uploaded", HearingImpaired = false,
     });
 
     db.Packs.Upsert(new PackEntity
     {
-        Id = ScribeDbContext.PackKey("tt100", 1, "EN", false, PackEntity.SubdlSource),
+        SeasonKey = ScribeDbContext.PackKey("tt100", 1, "EN", false, PackEntity.SubdlSource),
         Source = PackEntity.SubdlSource, ImdbId = "tt100", Season = 1, Language = "EN",
         HearingImpaired = false, Episodes = "1,2",
     });
     db.Packs.Upsert(new PackEntity
     {
-        Id = ScribeDbContext.PackKey("tt100", 2, "EN", false, PackEntity.SubdlSource),
+        SeasonKey = ScribeDbContext.PackKey("tt100", 2, "EN", false, PackEntity.SubdlSource),
         Source = PackEntity.SubdlSource, ImdbId = "tt100", Season = 2, Language = "EN",
         HearingImpaired = false, Episodes = "1,2",
     });
 }
 
-// Der Bestand ist geschrieben — jetzt wird daraus eine ALTdatei: die Matrix fällt weg, die breiten
-// Spalten kommen zurück (so, wie der Vor-Build sie angelegt hat) und werden mit den Werten gefüllt.
+// Der Bestand ist geschrieben — jetzt wird daraus eine ECHTE ALTdatei im Schema 17: die neuen
+// Tabellen fallen, und die vier ALT-Tabellen werden aus ihrem ALTEN DDL angelegt (Spalten und
+// Schluessel wie oben beschrieben, Zeilen von Hand). Danach laeuft beim Oeffnen der GANZE Aufstieg
+// 17 -> 22. Keine Zeile dieser Datei stammt aus dem neuen Modell — was hier steht, ist der Bestand,
+// den der Vor-Build geschrieben hat.
 using (var db = new ScribeDbContext(matrixDir, null))
 {
-    db.Context.Database.ExecuteSqlRaw("DROP TABLE source_matrix;");
-
-    foreach (var (table, columns) in new[]
-             {
-                 ("embeds", new[] { "SubdlDownloadId", "SubdlUploadId", "SubdlUploadedAt",
-                     "TvSubtitlesDownloadId", "TvSubtitlesUploadId", "TvSubtitlesUploadedAt",
-                     "MoviesubtitlesDownloadId", "MoviesubtitlesUploadId", "MoviesubtitlesUploadedAt" }),
-                 ("sidecars", new[] { "SubdlDownloadId", "SubdlUploadId", "SubdlUploadedAt",
-                     "TvSubtitlesDownloadId", "TvSubtitlesUploadId", "TvSubtitlesUploadedAt",
-                     "MoviesubtitlesDownloadId", "MoviesubtitlesUploadId", "MoviesubtitlesUploadedAt" }),
-                 ("media", new[] { "CompleteSubdl", "CompleteTvSubtitles", "CompleteMsub", "CompleteSignature" }),
-                 ("packs", new[] { "PackId", "Fingerprint", "RefusalReason", "RefusedAt", "RefusedSignature", "UploadedAt" }),
-             })
-    {
-        foreach (string column in columns)
-        {
-            db.Context.Database.ExecuteSqlRaw("ALTER TABLE " + table + " ADD COLUMN " + column + " TEXT NULL;");
-        }
-    }
-
-    // F-M670: die zwei Reste, die der Vor-Build ebenfalls geschrieben hat — die Id-Spalte an den
-    // Spuren und die Alt-Tabelle `source_marks` (ein Beleg je Paar aus Besitzerzeile und Quelle).
-    foreach (string table in new[] { "embeds", "sidecars" })
-    {
-        db.Context.Database.ExecuteSqlRaw("ALTER TABLE " + table + " ADD COLUMN SubdlId TEXT NULL;");
-    }
-
-    db.Context.Database.ExecuteSqlRaw(
-        "CREATE TABLE source_marks (Id TEXT NOT NULL PRIMARY KEY, OwnerKey TEXT NOT NULL DEFAULT '', "
-        + "Source TEXT NOT NULL DEFAULT '', DownloadId TEXT NULL, UploadId TEXT NULL, UploadedAt TEXT NULL, "
-        + "CompletedAt TEXT NULL, Written TEXT NOT NULL DEFAULT '');");
-
-    // Die Marken selbst — Spalte für Spalte, wie der Vor-Build sie geschrieben hat.
     void Sql(string sql) => db.Context.Database.ExecuteSqlRaw(sql);
+    CreateOldTables(Sql, 17);
+
+    Sql("INSERT INTO media (Id, Path, JellyfinItemId, ImdbId, TmdbId, IsSeries, Season, Episode, LastSeen) "
+        + "VALUES ('m1', '/lib/serie.mkv', NULL, 'tt100', '200', 1, 1, 1, '2026-11-01 10:00:00');");
+    Sql("INSERT INTO media (Id, Path, JellyfinItemId, ImdbId, TmdbId, IsSeries, LastSeen) "
+        + "VALUES ('m2', '/lib/film.mkv', NULL, 'tt101', '201', 0, '2026-11-01 10:00:00');");
+    Sql("INSERT INTO media (Id, Path, JellyfinItemId, IsSeries, LastSeen) "
+        + "VALUES ('m3', '/lib/leer.mkv', NULL, 0, '2026-11-01 10:00:00');");
+
+    Sql("INSERT INTO embeds (Id, MediaHash, SubPos, Language, HearingImpaired, Status, StatusAt) "
+        + "VALUES ('m1|0', 'm1', 0, 'EN', 0, 'uploaded', '2026-11-01 10:00:00');");
+    Sql("INSERT INTO embeds (Id, MediaHash, SubPos, Language, HearingImpaired, Status, StatusAt) "
+        + "VALUES ('m1|1', 'm1', 1, 'EN', 1, 'uploaded', '2026-11-02 10:00:00');");
+    Sql("INSERT INTO embeds (Id, MediaHash, SubPos, Language, HearingImpaired, Status, StatusAt) "
+        + "VALUES ('m1|2', 'm1', 2, 'DE', 0, 'uploaded', '2026-11-03 10:00:00');");
+    Sql("INSERT INTO embeds (Id, MediaHash, SubPos, Language, HearingImpaired, Status, StatusAt) "
+        + "VALUES ('m1|3', 'm1', 3, 'DE', 0, 'uploaded', '2026-11-05 10:00:00');");
+    Sql("INSERT INTO embeds (Id, MediaHash, SubPos, Language, HearingImpaired, Status, StatusAt) "
+        + "VALUES ('m2|0', 'm2', 0, 'FR', 0, 'uploaded', '2026-11-04 10:00:00');");
+    Sql("INSERT INTO embeds (Id, MediaHash, SubPos, Language, Status, StatusAt) "
+        + "VALUES ('m2|1', 'm2', 1, 'EN', 'observed', '2026-11-03 10:00:00');");
+
+    Sql("INSERT INTO sidecars (Id, ContentHash, FileName, MediaHash, Path, Language, HearingImpaired, Status, StatusAt) "
+        + "VALUES ('sc1', 'sc1', 'film.de.srt', 'm2', '/lib/film.de.srt', 'DE', 0, 'uploaded', '2026-11-06 10:00:00');");
+
+    Sql("INSERT INTO packs (Id, Source, ImdbId, Season, Language, HearingImpaired, Episodes, Created, Updated) "
+        + "VALUES ('tt100|S1|EN|plain|subdl', 'subdl', 'tt100', 1, 'EN', 0, '1,2', '2026-11-01 10:00:00', "
+        + "'2026-11-07 10:00:00');");
+    Sql("INSERT INTO packs (Id, Source, ImdbId, Season, Language, HearingImpaired, Episodes, Created, Updated) "
+        + "VALUES ('tt100|S2|EN|plain|subdl', 'subdl', 'tt100', 2, 'EN', 0, '1,2', '2026-11-01 10:00:00', "
+        + "'2026-11-08 10:00:00');");
+
+    // Die Marken selbst — Spalte fuer Spalte, wie der Vor-Build sie geschrieben hat.
     Sql("UPDATE embeds SET SubdlDownloadId = '111', SubdlUploadedAt = '2026-11-01 10:00:00' WHERE Id = 'm1|0';");
     Sql("UPDATE embeds SET TvSubtitlesDownloadId = '222', TvSubtitlesUploadedAt = '2026-11-02 10:00:00' WHERE Id = 'm1|1';");
     Sql("UPDATE embeds SET SubdlDownloadId = '333', SubdlUploadedAt = '2026-11-03 10:00:00' WHERE Id = 'm1|2';");
@@ -800,13 +872,13 @@ using (var db = new ScribeDbContext(matrixDir, null))
         + "RefusalReason = 'the source already holds this container (duplicate)', RefusedAt = '2026-11-08 10:00:00' "
         + "WHERE Id = 'tt100|S2|EN|plain|subdl';");
 
-    // F-M670: die Id-Spalte — eine ohne Gegenstück in den breiten Spalten (m1|0 trägt dort keine
+    // F-M670: die Id-Spalte — eine ohne Gegenstueck in den breiten Spalten (m1|0 traegt dort keine
     // Einsende-Id), eine identisch (m1|3) und eine am Seitenwagen.
     Sql("UPDATE embeds SET SubdlId = '700' WHERE Id = 'm1|0';");
     Sql("UPDATE embeds SET SubdlId = 'up-444' WHERE Id = 'm1|3';");
     Sql("UPDATE sidecars SET SubdlId = '701' WHERE Id = 'sc1';");
 
-    // F-M670: die Alt-Tabelle. Eine Zeile deckt eine vorhandene Marke (m1|0), eine zweite trägt eine
+    // F-M670: die Alt-Tabelle. Eine Zeile deckt eine vorhandene Marke (m1|0), eine zweite traegt eine
     // Marke, die es NUR dort gibt (m2|1 — beobachtet, ohne jeden breiten Stempel), eine dritte zeigt
     // auf keine Besitzerzeile mehr.
     Sql("INSERT INTO source_marks (Id, OwnerKey, Source, DownloadId, UploadId, UploadedAt, CompletedAt, Written) "
@@ -816,7 +888,7 @@ using (var db = new ScribeDbContext(matrixDir, null))
     Sql("INSERT INTO source_marks (Id, OwnerKey, Source, DownloadId, UploadId, UploadedAt, CompletedAt, Written) "
         + "VALUES ('weg|0|subdl', 'weg|0', 'subdl', NULL, 'sm-orphan', '2026-11-02 10:00:00', NULL, '2026-11-02 10:00:00');");
 
-    db.Context.Database.ExecuteSqlRaw("UPDATE meta SET SchemaVersion = 17 WHERE Id = 'db';");
+    Sql("UPDATE meta SET SchemaVersion = 17 WHERE Id = 'db';");
 }
 
 string[] Sicherungen(string dir) => Directory.GetFiles(dir, DbFiles.BackupPrefix + "*")
@@ -863,7 +935,7 @@ string[] Altspalten = { "SubdlDownloadId", "SubdlUploadId", "SubdlUploadedAt",
     // F-M670: die letzte eigene Id-Spalte — sie fällt wie die neun breiten.
     "SubdlId",
     "CompleteSubdl", "CompleteTvSubtitles", "CompleteMsub", "CompleteSignature",
-    "PackId", "Fingerprint", "RefusalReason", "RefusedAt", "RefusedSignature", "UploadedAt" };
+    "Fingerprint", "RefusalReason", "RefusedAt", "RefusedSignature", "UploadedAt" };
 
 string spurSql = "SELECT COUNT(*) FROM {0} WHERE HearingImpaired IS NOT 1 AND (SubdlUploadedAt IS NOT NULL "
               + "OR TvSubtitlesUploadedAt IS NOT NULL OR MoviesubtitlesUploadedAt IS NOT NULL)";
@@ -969,7 +1041,7 @@ Check(sicherungMarker == 17 && sicherungWert == "444"
 // Die Altspalten sind WEG — in jeder Tabelle, Spalte für Spalte. Das ist die Regel „kein doppelter
 // Datenbestand": was übernommen ist, steht nur noch in der Matrix.
 var uebrig = new List<string>();
-foreach (string table in new[] { "embeds", "sidecars", "media", "packs" })
+foreach (string table in new[] { "track", "sidecar", "file", "pack" })
 {
     foreach (string spalte in SpaltenVon(table))
     {
@@ -997,8 +1069,8 @@ Check(Q("SELECT COUNT(*) FROM source_matrix WHERE Kind IN ('track','track-hi')")
 
 using (var db = new ScribeDbContext(matrixDir, null))
 {
-    Check(db.Meta.FindById("db")?.SchemaVersion == 21,
-        "F-M670: der Marker steht nach der Übernahme auf 21",
+    Check(db.Meta.FindById("db")?.SchemaVersion == 22,
+        "F-M671: der Marker steht nach der Übernahme auf 22",
         "marker=" + (db.Meta.FindById("db")?.SchemaVersion));
 }
 
@@ -1008,8 +1080,9 @@ Check(Q("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='source_
     "F-M670: die Alt-Tabelle `source_marks` existiert nach der Übernahme nicht mehr",
     Q("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='source_marks'") + " Tabelle(n)");
 
-Check(!SpaltenVon("embeds").Contains("SubdlId") && !SpaltenVon("sidecars").Contains("SubdlId"),
-    "F-M670: die Spalte `SubdlId` ist aus `embeds` UND `sidecars` entfernt");
+Check(!SpaltenVon("track").Contains("SubdlId") && !SpaltenVon("sidecar").Contains("SubdlId")
+      && !SpaltenVon("track").Contains("SubdlUploadedAt") && !SpaltenVon("file").Contains("CompleteSubdl"),
+    "F-M670/F-M671: die Altspalten sind aus den neuen Ebenen entfernt — es gibt sie dort nie");
 
 Check(idUebernahme is { IdsTaken: 2, MarksTaken: 2, MarksNew: 1, Unplaced: 1, Conflicts: 0 },
     "F-M670: 2 Id-Werte und 2 Alt-Marken übernommen (davon 1 neue), 1 Zeile ohne Anker, kein Konflikt",
@@ -1061,14 +1134,13 @@ Check(marksAgain == markenGesamt && Sicherungen(matrixDir).Length == backups,
 // hat, bleibt die Antwort leer, statt in einer Altspalte nachzusehen (die es nicht mehr gibt).
 using (var db = new ScribeDbContext(matrixDir, null))
 {
-    var spalten = db.Context.Database
-        .SqlQueryRaw<string>("SELECT name AS \"Value\" FROM pragma_table_info('embeds')")
-        .ToList();
-    Check(!spalten.Contains("SubdlUploadedAt") && !spalten.Contains("TvSubtitlesUploadedAt")
-          && !spalten.Contains("MoviesubtitlesUploadedAt")
-          && db.Embeds.Count() == 6 && db.Sidecars.Count() == 1,
-        "F-M668: nichts wurde gelöscht außer den Spalten — alle Spur-Zeilen stehen noch",
-        "embeds=" + db.Embeds.Count() + " sidecars=" + db.Sidecars.Count());
+    // F-M671: es gibt keine Altspalte mehr, die man pruefen koennte — die ALT-TABELLE ist weg.
+    int altTabelle = db.Context.Database
+        .SqlQueryRaw<int>("SELECT COUNT(*) AS \"Value\" FROM sqlite_master WHERE type='table' AND name='embeds'")
+        .ToList()[0];
+    Check(altTabelle == 0 && db.Tracks.Count() == 6 && db.Sidecars.Count() == 1,
+        "F-M668/F-M671: nichts wurde gelöscht außer den Spalten — alle Spur-Zeilen stehen noch, die Alt-Tabelle ist weg",
+        "altTabelle=" + altTabelle + " track=" + db.Tracks.Count() + " sidecar=" + db.Sidecars.Count());
 
     var spur = SourceMatrix.TrackMarkAt(db, "m1", "subdl", "EN", false, 0);
     Check(spur.IsClosed && spur.ClosedAt == t1 && spur.SourceId == "111",
@@ -1107,23 +1179,19 @@ using (var db = new ScribeDbContext(matrixDir, null))
 // nur auf dem normalen Weg, wäre die Matrix einer umgestellten Datei für immer leer.
 string seedDir = Path.Combine(workdir, "switch-seed");
 Directory.CreateDirectory(seedDir);
-using (var db = new ScribeDbContext(seedDir, null))
-{
-    db.Embeds.Upsert(new EmbedTrackEntity
-    {
-        Id = ScribeDbContext.EmbedKey("s1", 0), MediaHash = "s1", SubPos = 0, Language = "EN",
-        Status = "uploaded", HearingImpaired = false,
-    });
-}
 
+// Der Vorgaenger, den der Formatwechsel (F-M637) umstellt: eine echte 17er-Datei aus ihrem alten DDL
+// — eine Datei mit einer Spur, deren Marke nur in der breiten Spalte steht.
 using (var db = new ScribeDbContext(seedDir, null))
 {
-    db.Context.Database.ExecuteSqlRaw("DROP TABLE source_matrix;");
-    db.Context.Database.ExecuteSqlRaw("ALTER TABLE embeds ADD COLUMN SubdlDownloadId TEXT NULL;");
-    db.Context.Database.ExecuteSqlRaw("ALTER TABLE embeds ADD COLUMN SubdlUploadedAt TEXT NULL;");
-    db.Context.Database.ExecuteSqlRaw(
-        "UPDATE embeds SET SubdlDownloadId = '900', SubdlUploadedAt = '2026-11-01 10:00:00' WHERE Id = 's1|0';");
-    db.Context.Database.ExecuteSqlRaw("UPDATE meta SET SchemaVersion = 17 WHERE Id = 'db';");
+    void Sql(string sql) => db.Context.Database.ExecuteSqlRaw(sql);
+    CreateOldTables(Sql, 17);
+    Sql("INSERT INTO media (Id, Path, JellyfinItemId, ImdbId, TmdbId, IsSeries, Season, Episode, LastSeen) "
+        + "VALUES ('s1', '/lib/switch.mkv', NULL, 'tt900', '900', 1, 1, 1, '2026-11-01 10:00:00');");
+    Sql("INSERT INTO embeds (Id, MediaHash, SubPos, Language, HearingImpaired, Status, StatusAt) "
+        + "VALUES ('s1|0', 's1', 0, 'EN', 0, 'uploaded', '2026-11-01 10:00:00');");
+    Sql("UPDATE embeds SET SubdlDownloadId = '900', SubdlUploadedAt = '2026-11-01 10:00:00' WHERE Id = 's1|0';");
+    Sql("UPDATE meta SET SchemaVersion = 17 WHERE Id = 'db';");
 }
 
 string switchDir = Path.Combine(workdir, "switch17");
@@ -1137,10 +1205,11 @@ using (var db = new ScribeDbContext(switchDir, null))
         "F-M668: auch die Datei, die der Formatwechsel (F-M637) baut, bekommt ihre Marken aus der Übernahme",
         (marke.SourceId ?? "-") + " / " + marke.ClosedAt);
     Check(File.Exists(DbFiles.PreviousPathIn(switchDir)) && Sicherungen(switchDir).Length == 0
-          && !SpaltenVon("embeds", DbFiles.PathIn(switchDir)).Contains("SubdlUploadedAt"),
-        "F-M668: dabei entsteht keine zweite Sicherung, und die Altspalten sind auch hier weg (F-M638)",
+          && SpaltenVon("embeds", DbFiles.PathIn(switchDir)).Length == 0,
+        "F-M668/F-M671: dabei entsteht keine zweite Sicherung, und die Alt-Tabelle ist auch hier weg (F-M638)",
         "vorgaenger=" + File.Exists(DbFiles.PreviousPathIn(switchDir))
-        + " sicherungen=" + Sicherungen(switchDir).Length);
+        + " sicherungen=" + Sicherungen(switchDir).Length
+        + " embedsSpalten=" + SpaltenVon("embeds", DbFiles.PathIn(switchDir)).Length);
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -1158,40 +1227,48 @@ string s20Db = DbFiles.PathIn(s20Dir);
 
 using (var db = new ScribeDbContext(s20Dir, null))
 {
-    db.Media.Upsert(new MediaEntity
+    db.Files.Upsert(new FileEntity
     {
-        Id = "m10", Path = "/lib/zwei.mkv", ImdbId = "tt200", TmdbId = "300",
+        OsHash = "m10", Path = "/lib/zwei.mkv", ImdbId = "tt200", TmdbId = "300",
         IsSeries = true, Season = 2, Episode = 4,
     });
-    db.Embeds.Upsert(new EmbedTrackEntity
-    {
-        Id = ScribeDbContext.EmbedKey("m10", 0), MediaHash = "m10", SubPos = 0, Language = "DE",
+    db.Tracks.Upsert(new TrackEntity
+    { MediaHash = "m10", SubPos = 0, Language = "DE",
         Status = "uploaded", HearingImpaired = false,
     });
-    db.Embeds.Upsert(new EmbedTrackEntity
-    {
-        Id = ScribeDbContext.EmbedKey("m10", 1), MediaHash = "m10", SubPos = 1, Language = "EN",
+    db.Tracks.Upsert(new TrackEntity
+    { MediaHash = "m10", SubPos = 1, Language = "EN",
         Status = "uploaded", HearingImpaired = false,
     });
 
     // Der Upload hat seine Marke ohne echte Id gesetzt — die Kennung kam erst später (F-M588/F-M670).
-    SourceMatrix.WriteTrackMark(db, db.Media.FindById("m10"), "m10", "subdl", "DE", false, 0,
+    SourceMatrix.WriteTrackMark(db, db.Files.FindById("m10"), "m10", "subdl", "DE", false, 0,
         t1, downloadId: null, uploadId: "own:subdl:deferred");
 }
 
 using (var db = new ScribeDbContext(s20Dir, null))
 {
-    db.Context.Database.ExecuteSqlRaw("ALTER TABLE embeds ADD COLUMN SubdlId TEXT NULL;");
-    db.Context.Database.ExecuteSqlRaw("ALTER TABLE sidecars ADD COLUMN SubdlId TEXT NULL;");
-    db.Context.Database.ExecuteSqlRaw("UPDATE embeds SET SubdlId = '880011' WHERE Id = 'm10|0';");
-    db.Context.Database.ExecuteSqlRaw(
-        "CREATE TABLE source_marks (Id TEXT NOT NULL PRIMARY KEY, OwnerKey TEXT NOT NULL DEFAULT '', "
-        + "Source TEXT NOT NULL DEFAULT '', DownloadId TEXT NULL, UploadId TEXT NULL, UploadedAt TEXT NULL, "
-        + "CompletedAt TEXT NULL, Written TEXT NOT NULL DEFAULT '');");
-    db.Context.Database.ExecuteSqlRaw(
-        "INSERT INTO source_marks (Id, OwnerKey, Source, DownloadId, UploadId, UploadedAt, CompletedAt, Written) "
+    void Sql(string sql) => db.Context.Database.ExecuteSqlRaw(sql);
+
+    // F-M671: eine Altdatei entsteht aus ihrem ALTEN DDL. Schema 20 heisst: die Matrix steht schon,
+    // die breiten Spalten sind weg, aber die zwei Reste stehen noch darin (`source_marks` und die
+    // Id-Spalte an den Spuren). Die vier Ebenen des neuen Modells fallen.
+    CreateOldTables(Sql, 20);
+
+    Sql("INSERT INTO media (Id, Path, JellyfinItemId, ImdbId, TmdbId, IsSeries, Season, Episode, LastSeen) "
+        + "VALUES ('m10', '/lib/zwei.mkv', NULL, 'tt200', '300', 1, 2, 4, '2026-11-01 10:00:00');");
+    Sql("INSERT INTO embeds (Id, MediaHash, SubPos, Language, HearingImpaired, Status, StatusAt) "
+        + "VALUES ('m10|0', 'm10', 0, 'DE', 0, 'uploaded', '2026-11-01 10:00:00');");
+    Sql("INSERT INTO embeds (Id, MediaHash, SubPos, Language, HearingImpaired, Status, StatusAt) "
+        + "VALUES ('m10|1', 'm10', 1, 'EN', 0, 'uploaded', '2026-11-01 10:00:00');");
+
+    // Der Upload hat seine Marke ohne echte Id gesetzt — die Kennung kam erst spaeter (F-M588/F-M670).
+    Sql("INSERT INTO source_marks (Id, OwnerKey, Source, DownloadId, UploadId, UploadedAt, CompletedAt, Written) "
+        + "VALUES ('m10|0|subdl', 'm10|0', 'subdl', NULL, 'own:subdl:deferred', NULL, NULL, '2026-11-01 10:00:00');");
+    Sql("INSERT INTO source_marks (Id, OwnerKey, Source, DownloadId, UploadId, UploadedAt, CompletedAt, Written) "
         + "VALUES ('m10|1|subdl', 'm10|1', 'subdl', NULL, 'sm20', '2026-11-09 10:00:00', NULL, '2026-11-09 10:00:00');");
-    db.Context.Database.ExecuteSqlRaw("UPDATE meta SET SchemaVersion = 20 WHERE Id = 'db';");
+    Sql("UPDATE embeds SET SubdlId = '880011' WHERE MediaHash = 'm10' AND SubPos = 0;");
+    Sql("UPDATE meta SET SchemaVersion = 20 WHERE Id = 'db';");
 }
 
 Check(QIn("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='source_matrix'", s20Db) == 1
@@ -1205,15 +1282,17 @@ int s20Marken;
 using (var db = new ScribeDbContext(s20Dir, null))
 {
     s20Marken = SourceMatrix.CountByKind(db).Values.Sum();
-    Check(db.Meta.FindById("db")?.SchemaVersion == 21,
-        "F-M670: eine Datei aus Schema 20 zieht auf 21 nach",
+    Check(db.Meta.FindById("db")?.SchemaVersion == 22,
+        "F-M670/F-M671: eine Datei aus Schema 20 zieht auf 22 nach",
         "marker=" + db.Meta.FindById("db")?.SchemaVersion);
 }
 
 Check(QIn("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='source_marks'", s20Db) == 0
-      && !SpaltenVon("embeds", s20Db).Contains("SubdlId")
-      && !SpaltenVon("sidecars", s20Db).Contains("SubdlId"),
-    "F-M670: auch dort sind Alt-Tabelle und Id-Spalte danach weg");
+      && SpaltenVon("embeds", s20Db).Length == 0
+      && SpaltenVon("sidecars", s20Db).Length == 0,
+    "F-M670/F-M671: auch dort sind Alt-Tabelle, Id-Spalte und die Alt-Tabellen selbst danach weg",
+    "source_marks=" + QIn("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='source_marks'", s20Db)
+    + " embedsSpalten=" + SpaltenVon("embeds", s20Db).Length);
 
 Check(QText("SELECT UploadId FROM source_matrix WHERE Id = '" + s20Key + "';", s20Db) == "880011"
       && QText("SELECT ClosedAt FROM source_matrix WHERE Id = '" + s20Key + "';", s20Db) != null,

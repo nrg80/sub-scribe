@@ -78,12 +78,11 @@ using (var db = new ScribeDbContext(workdir, null))
     for (int i = 0; i < Media; i++)
     {
         string hash = "h" + i.ToString("D6", System.Globalization.CultureInfo.InvariantCulture);
-        db.EnsureMedia(hash, "item" + i, "/lib/f" + i + ".mkv");
+        db.EnsureFile(hash, "item" + i, "/lib/f" + i + ".mkv");
         for (int t = 0; t < TracksEach; t++)
         {
-            db.Embeds.Upsert(new EmbedTrackEntity
+            db.Tracks.Upsert(new TrackEntity
             {
-                Id = ScribeDbContext.EmbedKey(hash, t),
                 MediaHash = hash,
                 SubPos = t,
                 Language = "en",
@@ -98,8 +97,8 @@ using (var db = new ScribeDbContext(workdir, null))
 
     Console.WriteLine("--- batched workload ---");
     Console.WriteLine("   " + TotalWrites + " writes (" + Media + " media + " + (Media * TracksEach) + " tracks) in " + batchedMs + " ms");
-    Check(db.Media.Count() == Media, "media rows written", db.Media.Count() + " of " + Media);
-    Check(db.Embeds.Count() == Media * TracksEach, "embedded rows written", db.Embeds.Count() + " of " + (Media * TracksEach));
+    Check(db.Files.Count() == Media, "media rows written", db.Files.Count() + " of " + Media);
+    Check(db.Tracks.Count() == Media * TracksEach, "embedded rows written", db.Tracks.Count() + " of " + (Media * TracksEach));
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -121,12 +120,11 @@ using (var db = new ScribeDbContext(unbatchedDir, null))
     for (int i = 0; i < Media; i++)
     {
         string hash = "h" + i.ToString("D6", System.Globalization.CultureInfo.InvariantCulture);
-        db.EnsureMedia(hash, "item" + i, "/lib/f" + i + ".mkv");
+        db.EnsureFile(hash, "item" + i, "/lib/f" + i + ".mkv");
         for (int t = 0; t < TracksEach; t++)
         {
-            db.Embeds.Upsert(new EmbedTrackEntity
+            db.Tracks.Upsert(new TrackEntity
             {
-                Id = ScribeDbContext.EmbedKey(hash, t),
                 MediaHash = hash,
                 SubPos = t,
                 Language = "en",
@@ -140,8 +138,8 @@ using (var db = new ScribeDbContext(unbatchedDir, null))
 
     Console.WriteLine("--- unbatched workload (the pre-change behaviour) ---");
     Console.WriteLine("   " + TotalWrites + " writes in " + unbatchedMs + " ms");
-    Check(db.Media.Count() == Media, "unbatched media rows written", db.Media.Count() + " of " + Media);
-    Check(db.Embeds.Count() == Media * TracksEach, "unbatched embedded rows written", db.Embeds.Count() + " of " + (Media * TracksEach));
+    Check(db.Files.Count() == Media, "unbatched media rows written", db.Files.Count() + " of " + Media);
+    Check(db.Tracks.Count() == Media * TracksEach, "unbatched embedded rows written", db.Tracks.Count() + " of " + (Media * TracksEach));
 }
 
 if (!quick)
@@ -177,7 +175,7 @@ foreach (var f in Directory.GetFiles(dropDir))
 using (var db = new ScribeDbContext(dropDir, null))
 {
     db.BeginBatch();
-    db.Media.Upsert(new MediaEntity { Id = "survivor", Path = "/lib/s.mkv" });
+    db.Files.Upsert(new FileEntity { OsHash = "survivor", Path = "/lib/s.mkv" });
     // Deliberately NO EndBatch: the close is skipped, as an exception would skip it.
 }
 
@@ -185,7 +183,7 @@ using (var verify = new ScribeDbContext(dropDir, null))
 {
     Console.WriteLine();
     Console.WriteLine("--- an interrupted batch ---");
-    Check(verify.Media.FindById("survivor") != null, "a batch left open still reaches the file on dispose");
+    Check(verify.Files.FindById("survivor") != null, "a batch left open still reaches the file on dispose");
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -195,8 +193,8 @@ using (var verify = new ScribeDbContext(dropDir, null))
 using (var db = new ScribeDbContext(workdir, null))
 {
     db.BeginBatch();
-    db.Media.Upsert(new MediaEntity { Id = "raw", Path = "/lib/raw.mkv" });
-    bool visible = db.Media.FindById("raw") != null;
+    db.Files.Upsert(new FileEntity { OsHash = "raw", Path = "/lib/raw.mkv" });
+    bool visible = db.Files.FindById("raw") != null;
     db.EndBatch();
 
     Console.WriteLine();
@@ -210,7 +208,7 @@ using (var db = new ScribeDbContext(workdir, null))
 // ---------------------------------------------------------------------------------------------
 using (var other = new ScribeDbContext(workdir, null))
 {
-    Check(other.Media.FindById("raw") != null, "an independent context reads the row after the batch closed");
+    Check(other.Files.FindById("raw") != null, "an independent context reads the row after the batch closed");
 }
 
 Console.WriteLine();
@@ -234,7 +232,7 @@ foreach (var f in Directory.GetFiles(stampDir))
 string stampPath = DbFiles.PathIn(stampDir);
 using (var db = new ScribeDbContext(stampDir, null))
 {
-    db.Media.Upsert(new MediaEntity { Id = "seen", Path = "/lib/seen.mkv" });
+    db.Files.Upsert(new FileEntity { OsHash = "seen", Path = "/lib/seen.mkv" });
 }
 
 using (var db = new ScribeDbContext(stampDir, null))
@@ -252,11 +250,11 @@ using (var db = new ScribeDbContext(stampDir, null))
     // the same length, so a size assertion would pass on the slow build too — a check that cannot
     // fail. The observation is what must not restamp the parent.
     var planted = new DateTime(2001, 2, 3, 4, 5, 6, DateTimeKind.Utc);
-    var parent = db.Media.FindById("seen");
+    var parent = db.Files.FindById("seen");
     if (parent != null)
     {
         parent.LastSeen = planted;
-        db.Media.Update(parent);
+        db.Files.Update(parent);
     }
 
     // Second pass: same tracks, same facts. Nothing to record.
@@ -268,7 +266,7 @@ using (var db = new ScribeDbContext(stampDir, null))
 
     db.EndBatch();
 
-    var afterSecond = db.Media.FindById("seen");
+    var afterSecond = db.Files.FindById("seen");
 
     Console.WriteLine();
     Console.WriteLine("--- re-recording tracks that are already recorded ---");
@@ -277,15 +275,15 @@ using (var db = new ScribeDbContext(stampDir, null))
         "re-observing 12 unchanged tracks did not restamp the parent row",
         (afterSecond?.LastSeen.ToString("O", System.Globalization.CultureInfo.InvariantCulture) ?? "gone")
             + " vs planted " + planted.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
-    Check(db.Embeds.Count() == 12, "the 12 track rows are still there", db.Embeds.Count() + " of 12");
-    Check(db.Media.FindById("seen") != null, "the parent row survived");
+    Check(db.Tracks.Count() == 12, "the 12 track rows are still there", db.Tracks.Count() + " of 12");
+    Check(db.Files.FindById("seen") != null, "the parent row survived");
 
     // And a track whose facts DID change must still be written — the guard may not be a mute.
     db.BeginBatch();
     bool changed = registry.ObserveEmbed("seen", 0, "de", false, false);
     db.EndBatch();
     Check(changed, "a track whose language changed is reported as written");
-    Check(string.Equals(db.Embeds.FindById(ScribeDbContext.EmbedKey("seen", 0))?.Language, "de", StringComparison.Ordinal),
+    Check(string.Equals(db.Tracks.FindById(ScribeDbContext.EmbedKey("seen", 0))?.Language, "de", StringComparison.Ordinal),
         "the changed language reached the row");
 }
 
@@ -295,7 +293,7 @@ using (var db = new ScribeDbContext(stampDir, null))
     var registry = new Jellyfin.Plugin.SubScribe.Registry.ContentHashRegistry(db, null);
     registry.ObserveEmbed("brandnew", 0, "de", false, false);
 
-    Check(db.Media.FindById("brandnew") != null, "an absent parent row is created by the observation");
+    Check(db.Files.FindById("brandnew") != null, "an absent parent row is created by the observation");
 }
 
 Console.WriteLine(failures == 0 ? "=== OPTIM OK ===" : "=== OPTIM FAILED: " + failures + " ===");

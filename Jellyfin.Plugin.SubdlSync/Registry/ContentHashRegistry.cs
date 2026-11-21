@@ -293,7 +293,7 @@ public sealed class ContentHashRegistry : IDisposable
     /// F-M512: die Medienart, die der STORE für dieses Medium festhält — wahr = Serie, falsch = Film,
     /// <c>null</c> = die Zeile sagt nichts.
     /// <para>
-    /// WARUM DIESE QUELLE ZULÄSSIG IST: <see cref="MediaEntity.IsSeries"/> ist der einzige Ort, an dem
+    /// WARUM DIESE QUELLE ZULÄSSIG IST: <see cref="FileEntity.IsSeries"/> ist der einzige Ort, an dem
     /// ein früherer Lauf die TMDb-korrigierte Art hinterlegt hat — <see cref="PatchMediaMetadata"/>
     /// schreibt sie zusammen mit den Kennungen, und <c>true</c> kann nur entstehen, wenn Staffel oder
     /// Folge wirklich aufgelöst wurden. Die Datei-Auflösung der Pipelines darf Jellyfins Typ
@@ -325,7 +325,7 @@ public sealed class ContentHashRegistry : IDisposable
             return null;
         }
 
-        var row = _db.Media.FindById(mediaHash);
+        var row = _db.Files.FindById(mediaHash);
         if (row == null)
         {
             return null;
@@ -350,13 +350,13 @@ public sealed class ContentHashRegistry : IDisposable
     /// <param name="path">Optional path.</param>
     /// <param name="patch">Optional mutation.</param>
     /// <returns>The stored record.</returns>
-    public MediaEntity EnsureMedia(string? mediaHash, string? jellyfinItemId = null, string? path = null, Action<MediaEntity>? patch = null)
-        => _db.EnsureMedia(mediaHash, jellyfinItemId, path, patch);
+    public FileEntity EnsureFile(string? mediaHash, string? jellyfinItemId = null, string? path = null, Action<FileEntity>? patch = null)
+        => _db.EnsureFile(mediaHash, jellyfinItemId, path, patch);
 
     /// <summary>Reads a media record.</summary>
     /// <param name="mediaHash">Media hash.</param>
     /// <returns>Record or null.</returns>
-    public MediaEntity? GetMedia(string mediaHash) => _db.Media.FindById(mediaHash);
+    public FileEntity? GetMedia(string mediaHash) => _db.Files.FindById(mediaHash);
 
     // ------------------------------------------------- F-M517: die Zeile über den PFAD
     // Der Medien-Hash ist die Identität einer Zeile — aber er ist nicht immer zu haben: eine Datei,
@@ -374,14 +374,14 @@ public sealed class ContentHashRegistry : IDisposable
     /// </summary>
     /// <param name="mediaPath">Der Pfad der Mediendatei.</param>
     /// <returns>Die Zeilen; leer, wenn keine den Pfad trägt.</returns>
-    public List<MediaEntity> MediaAtPath(string? mediaPath)
+    public List<FileEntity> MediaAtPath(string? mediaPath)
     {
         if (string.IsNullOrWhiteSpace(mediaPath))
         {
-            return new List<MediaEntity>();
+            return new List<FileEntity>();
         }
 
-        return _db.Media.Find(m => string.Equals(m.Path, mediaPath, StringComparison.Ordinal)).ToList();
+        return _db.Files.Find(m => string.Equals(m.Path, mediaPath, StringComparison.Ordinal)).ToList();
     }
 
     /// <summary>
@@ -445,14 +445,14 @@ public sealed class ContentHashRegistry : IDisposable
     /// <param name="mediaPath">Pfad der Mediendatei.</param>
     /// <param name="write">Die Mutation (eine Spalte).</param>
     /// <returns>Wie geschrieben wurde — oder <see cref="MediaNumberWrite.None"/>.</returns>
-    private MediaNumberWrite SetMediaNumber(string? mediaHash, string? mediaPath, Action<MediaEntity> write)
+    private MediaNumberWrite SetMediaNumber(string? mediaHash, string? mediaPath, Action<FileEntity> write)
     {
         ArgumentNullException.ThrowIfNull(write);
 
         if (!string.IsNullOrEmpty(mediaHash))
         {
             // Der Pfad geht mit: eine neu angelegte Zeile ist danach auch über ihn zu finden.
-            EnsureMedia(
+            EnsureFile(
                 mediaHash,
                 path: string.IsNullOrWhiteSpace(mediaPath) ? null : mediaPath,
                 patch: write);
@@ -463,7 +463,7 @@ public sealed class ContentHashRegistry : IDisposable
         if (rows.Count == 1)
         {
             write(rows[0]);
-            _db.Media.Upsert(rows[0]);
+            _db.Files.Upsert(rows[0]);
             LogUtil.Detail(_logger, "[Sub Scribe-DB] media number written by path {Path}", mediaPath);
             return MediaNumberWrite.ByPath;
         }
@@ -482,9 +482,9 @@ public sealed class ContentHashRegistry : IDisposable
     /// <param name="mediaHash">Media hash.</param>
     public void DeleteMediaAndSubtitles(string mediaHash)
     {
-        _db.Embeds.DeleteMany(x => x.MediaHash == mediaHash);
+        _db.Tracks.DeleteMany(x => x.MediaHash == mediaHash);
         _db.Sidecars.DeleteMany(x => x.MediaHash == mediaHash);
-        _db.Media.Delete(mediaHash);
+        _db.Files.Delete(mediaHash);
     }
 
     /// <summary>
@@ -523,81 +523,208 @@ public sealed class ContentHashRegistry : IDisposable
 
         int moved = 0;
 
-        // 1. media — carry the whole state (marks, ids, aggregate language list) to the new key.
-        var oldMedia = _db.Media.FindById(oldHash);
-        if (oldMedia != null)
+        // 1. file — F-M671: die DATEI BEHÄLT IHRE KENNUNG. Ein neuer Hash ist eine neue Eigenschaft
+        // derselben Datei, nicht eine neue Datei; die Zeile wird umgehängt statt ersetzt. Trägt eine
+        // zweite Zeile den neuen Hash schon (ein Lauf hat die umgeschriebene Datei vorher gesehen), ist
+        // das derselbe Fall zweimal — die jüngere Zeile bleibt, ihre Spuren wandern mit.
+        var alt = _db.Files.FindById(oldHash);
+        if (alt == null)
         {
-            var target = _db.EnsureMedia(newHash);
-
-            // The new row keeps whatever it already established only where the old row has nothing
-            // to say; everything the old row carries is the more informed value.
-            target.JellyfinItemId = oldMedia.JellyfinItemId ?? target.JellyfinItemId;
-            target.Path = oldMedia.Path ?? target.Path;
-            target.ImdbId = oldMedia.ImdbId ?? target.ImdbId;
-            target.TmdbId = oldMedia.TmdbId ?? target.TmdbId;
-            target.SdId = oldMedia.SdId ?? target.SdId;
-            target.LanguagesAvailable = oldMedia.LanguagesAvailable ?? target.LanguagesAvailable;
-            target.IsSeries = oldMedia.IsSeries || target.IsSeries;
-            target.Season ??= oldMedia.Season;
-            target.Episode ??= oldMedia.Episode;
-
-            // Completion marks: a file whose rewrite was triggered by its own language gate has
-            // already been worked on, and that verdict belongs to the file, not to a byte count.
-            // F-M283: only the UPLOAD mark is carried now. The download mark is gone — completeness
-            // is derived from the evidence, so there is no stored verdict to move to the new hash.
-            target.SubtitlesUploadedAt ??= oldMedia.SubtitlesUploadedAt;
-            target.LastSearchUtc ??= oldMedia.LastSearchUtc;
-            target.LastSearchLanguages ??= oldMedia.LastSearchLanguages;
-            target.LastSeen = DateTime.UtcNow;
-
-            _db.Media.Upsert(target);
-            _db.Media.Delete(oldHash);
-            moved++;
-
-            LogUtil.Detail(_logger, "[Sub Scribe-DB] media identity {Old} -> {New} ({Path})",
-                oldHash, newHash, target.Path ?? "?");
+            // Keine Zeile unter dem alten Hash: es gibt nichts umzuhängen. Ein neuer Hash ohne alte
+            // Zeile ist ein Neuanfang, keine Umbenennung.
+            return 0;
         }
 
-        // 2. embeds — keyed by "<hash>|<pos>", so the row is rebuilt under the new key. The new
-        // position set is the same, a tag write does not add or remove streams.
-        foreach (var row in _db.Embeds.FindAll().Where(x => x.MediaHash == oldHash).ToList())
-        {
-            string newId = ScribeDbContext.EmbedKey(newHash, row.SubPos);
-            var existing = _db.Embeds.FindById(newId);
+        var kollision = _db.Files.FindById(newHash);
+        bool zusammenlegen = kollision != null && !ReferenceEquals(kollision, alt);
 
-            // An existing row under the new hash is left alone: it was written by a run that
-            // already saw the rewritten file, and it therefore knows the post-write truth.
-            if (existing != null)
+        if (!zusammenlegen)
+        {
+            // DIESELBE ZEILE, neuer Hash. F-M671: die Kennung bleibt — ein neuer Hash ist eine neue
+            // Eigenschaft der Datei, nicht eine neue Datei. Die Spuren und Seitenwagen hängen an der
+            // DATEI; ihr Schlüssel (Datei, Spur) ist von der Adresse unberührt.
+            alt.OsHash = newHash;
+            alt.LastSeen = DateTime.UtcNow;
+            _db.Files.Upsert(alt);
+            moved++;
+
+            foreach (var spur in _db.Tracks.FindAll()
+                         .Where(x => string.Equals(x.FileId, alt.FileId, StringComparison.Ordinal)).ToList())
             {
-                _db.Embeds.Delete(row.Id);
+                spur.MediaHash = newHash;
+                _db.Tracks.Upsert(spur);
                 moved++;
+            }
+
+            foreach (var wagen in _db.Sidecars.FindAll()
+                         .Where(x => string.Equals(x.FileId, alt.FileId, StringComparison.Ordinal)).ToList())
+            {
+                wagen.MediaHash = newHash;
+                _db.Sidecars.Upsert(wagen);
+                moved++;
+            }
+
+            if (moved > 0)
+            {
+                RefreshMediaAggregates(newHash);
+            }
+
+            LogUtil.Detail(_logger, "[Sub Scribe-DB] file {FileId} re-hashed {Old} -> {New} ({Path})",
+                alt.FileId, oldHash, newHash, alt.Path ?? "?");
+            return moved;
+        }
+
+        // ZWEI ZEILEN TRAGEN DANACH DENSELBEN HASH: die alte (der Stand von vor dem Umschreiben) und
+        // die Zeile, die ein Lauf für die umgeschriebene Datei schon angelegt hat. Die jüngere bleibt —
+        // sie kennt die Datei nach dem Schreiben. Die Spuren der alten ziehen unter sie um; ihr
+        // Schlüssel ist (Datei, Spur), und unter einer ANDEREN Datei ist eine Spur eine andere Spur.
+        kollision.JellyfinItemId ??= alt.JellyfinItemId;
+        kollision.Path ??= alt.Path;
+        kollision.FileName ??= alt.FileName;
+        kollision.ImdbId ??= alt.ImdbId;
+        kollision.TmdbId ??= alt.TmdbId;
+        kollision.TvstShowId ??= alt.TvstShowId;
+        kollision.MsubMovieId ??= alt.MsubMovieId;
+        kollision.SdId ??= alt.SdId;
+        kollision.LanguagesAvailable ??= alt.LanguagesAvailable;
+        kollision.IsSeries |= alt.IsSeries;
+        kollision.Season ??= alt.Season;
+        kollision.Episode ??= alt.Episode;
+        kollision.SubtitlesUploadedAt ??= alt.SubtitlesUploadedAt;
+        kollision.LastSearchUtc ??= alt.LastSearchUtc;
+        kollision.LastSearchLanguages ??= alt.LastSearchLanguages;
+        kollision.LastSearchEmptyUtc ??= alt.LastSearchEmptyUtc;
+        kollision.PackId ??= alt.PackId;
+        kollision.LastSeen = DateTime.UtcNow;
+        _db.Files.Upsert(kollision);
+        moved++;
+
+        var zielSpuren = _db.Tracks.FindAll()
+            .Where(t => string.Equals(t.FileId, kollision.FileId, StringComparison.Ordinal)).ToList();
+        var zielWagen = _db.Sidecars.FindAll()
+            .Where(s => string.Equals(s.FileId, kollision.FileId, StringComparison.Ordinal)).ToList();
+
+        foreach (var spur in _db.Tracks.FindAll()
+                     .Where(x => string.Equals(x.FileId, alt.FileId, StringComparison.Ordinal)).ToList())
+        {
+            _db.Tracks.Remove(spur);
+            moved++;
+
+            // Dieselbe Container-Spur ist unter dem neuen Hash schon beschrieben: ein Umschreiben fügt
+            // keine Spuren hinzu, die Position ist die Identität der Spur INNERHALB der Datei. Die
+            // jüngere Zeile gilt, die alte fällt — nichts geht verloren, was nicht schon dort steht.
+            if (zielSpuren.Any(t => t.SubPos == spur.SubPos))
+            {
                 continue;
             }
 
-            _db.Embeds.Delete(row.Id);
-            row.Id = newId;
-            row.MediaHash = newHash;
-            _db.Embeds.Upsert(row);
-            moved++;
+            var kopie = new TrackEntity
+            {
+                TrackId = spur.TrackId,
+                FileId = kollision.FileId,
+                PackId = spur.PackId ?? kollision.PackId,
+                TrackNumber = spur.TrackNumber,
+                MediaHash = newHash,
+                SubPos = spur.SubPos,
+                Language = spur.Language,
+                HearingImpaired = spur.HearingImpaired,
+                Forced = spur.Forced,
+                ContentHash = spur.ContentHash,
+                Status = spur.Status,
+                Reason = spur.Reason,
+                StatusAt = spur.StatusAt,
+                Origin = spur.Origin,
+                OriginId = spur.OriginId,
+                DetectionAttemptedAt = spur.DetectionAttemptedAt,
+                DetectionOutcome = spur.DetectionOutcome,
+                Created = spur.Created,
+                LastSeen = spur.LastSeen,
+            };
+
+            // Die Kennung ist im Nummernkreis der ZIELDATEI nur dann frei, wenn sie dort noch nicht
+            // vergeben ist. Der Nummernkreis ist je Datei; eine Nummer wird nie wiederverwendet.
+            if (zielSpuren.Any(t => string.Equals(t.TrackId, kopie.TrackId, StringComparison.Ordinal))
+                || zielWagen.Any(w => string.Equals(w.TrackId, kopie.TrackId, StringComparison.Ordinal)))
+            {
+                kopie.TrackId = ScribeIds.NewTrackId(id =>
+                    zielSpuren.Any(t => string.Equals(t.TrackId, id, StringComparison.Ordinal))
+                    || zielWagen.Any(w => string.Equals(w.TrackId, id, StringComparison.Ordinal)));
+            }
+
+            if (TrackNumbers.IsTaken(zielSpuren, zielWagen, kopie.TrackNumber))
+            {
+                kopie.TrackNumber = TrackNumbers.NextFree(zielSpuren, zielWagen);
+            }
+
+            _db.Tracks.Upsert(kopie);
+            zielSpuren.Add(kopie);
         }
 
-        // 3. sidecars — the sidecar's own key is its CONTENT hash and does not change; only the
-        // parent pointer moves. A .srt beside the file is not touched by a tag write.
-        foreach (var row in _db.Sidecars.FindAll().Where(x => x.MediaHash == oldHash).ToList())
+        foreach (var wagen in _db.Sidecars.FindAll()
+                     .Where(x => string.Equals(x.FileId, alt.FileId, StringComparison.Ordinal)).ToList())
         {
-            row.MediaHash = newHash;
-            _db.Sidecars.Update(row);
+            _db.Sidecars.Remove(wagen);
             moved++;
+
+            // Derselbe Inhalt liegt unter der Zieldatei schon: ein Seitenwagen ist durch seinen Text
+            // adressiert, und derselbe Text ist derselbe Seitenwagen. Die alte Zeile fällt.
+            if (zielWagen.Any(w => string.Equals(w.ContentHash, wagen.ContentHash, StringComparison.Ordinal)))
+            {
+                continue;
+            }
+
+            var kopie = new SidecarEntity
+            {
+                TrackId = wagen.TrackId,
+                FileId = kollision.FileId,
+                TrackNumber = wagen.TrackNumber,
+                MediaHash = newHash,
+                ContentHash = wagen.ContentHash,
+                FileName = wagen.FileName,
+                Path = wagen.Path,
+                Language = wagen.Language,
+                HearingImpaired = wagen.HearingImpaired,
+                Forced = wagen.Forced,
+                Status = wagen.Status,
+                Reason = wagen.Reason,
+                StatusAt = wagen.StatusAt,
+                Origin = wagen.Origin,
+                OriginId = wagen.OriginId,
+                ImdbId = wagen.ImdbId,
+                TmdbId = wagen.TmdbId,
+                IsSeries = wagen.IsSeries,
+                Season = wagen.Season,
+                Episode = wagen.Episode,
+                Created = wagen.Created,
+                LastSeen = wagen.LastSeen,
+            };
+
+            if (zielSpuren.Any(t => string.Equals(t.TrackId, kopie.TrackId, StringComparison.Ordinal))
+                || zielWagen.Any(w => string.Equals(w.TrackId, kopie.TrackId, StringComparison.Ordinal)))
+            {
+                kopie.TrackId = ScribeIds.NewTrackId(id =>
+                    zielSpuren.Any(t => string.Equals(t.TrackId, id, StringComparison.Ordinal))
+                    || zielWagen.Any(w => string.Equals(w.TrackId, id, StringComparison.Ordinal)));
+            }
+
+            if (TrackNumbers.IsTaken(zielSpuren, zielWagen, kopie.TrackNumber))
+            {
+                kopie.TrackNumber = TrackNumbers.NextFree(zielSpuren, zielWagen);
+            }
+
+            _db.Sidecars.Upsert(kopie);
+            zielWagen.Add(kopie);
         }
+
+        _db.Files.Remove(alt);
 
         if (moved > 0)
         {
             RefreshMediaAggregates(newHash);
-            _db.Embeds.DeleteMany(x => x.MediaHash == oldHash);
-            _db.Sidecars.DeleteMany(x => x.MediaHash == oldHash);
-            _db.Media.Delete(oldHash);
         }
 
+        LogUtil.Detail(_logger, "[Sub Scribe-DB] file identity {Old} -> {New} merged onto {FileId} ({Path})",
+            oldHash, newHash, kollision.FileId, kollision.Path ?? "?");
         return moved;
     }
 
@@ -607,19 +734,19 @@ public sealed class ContentHashRegistry : IDisposable
     public (int subtitles, int media) PruneDeadMediaAndSubtitles(IEnumerable<string> aliveItemIds)
     {
         var alive = aliveItemIds.ToHashSet(StringComparer.OrdinalIgnoreCase);
-        var dead = _db.Media.FindAll()
+        var dead = _db.Files.FindAll()
             .Where(m => !string.IsNullOrEmpty(m.JellyfinItemId) && !alive.Contains(m.JellyfinItemId!))
-            .Select(m => m.Id)
+            .Select(m => m.OsHash ?? string.Empty)
             .ToList();
 
         int embeds = 0, sidecars = 0;
         foreach (var hash in dead)
         {
-            embeds += _db.Embeds.DeleteMany(x => x.MediaHash == hash);
+            embeds += _db.Tracks.DeleteMany(x => x.MediaHash == hash);
             sidecars += _db.Sidecars.DeleteMany(x => x.MediaHash == hash);
         }
 
-        int media = dead.Count == 0 ? 0 : _db.Media.DeleteMany(x => dead.Contains(x.Id));
+        int media = dead.Count == 0 ? 0 : _db.Files.DeleteMany(x => dead.Contains(x.OsHash ?? string.Empty));
         return (embeds + sidecars, media);
     }
 
@@ -627,19 +754,19 @@ public sealed class ContentHashRegistry : IDisposable
     /// <returns>Counts of removed rows.</returns>
     public (int subtitles, int media) PruneMissingPathMediaAndSubtitles()
     {
-        var gone = _db.Media.FindAll()
+        var gone = _db.Files.FindAll()
             .Where(m => !string.IsNullOrEmpty(m.Path) && !File.Exists(m.Path!))
-            .Select(m => m.Id)
+            .Select(m => m.OsHash ?? string.Empty)
             .ToList();
 
         int embeds = 0, sidecars = 0;
         foreach (var hash in gone)
         {
-            embeds += _db.Embeds.DeleteMany(x => x.MediaHash == hash);
+            embeds += _db.Tracks.DeleteMany(x => x.MediaHash == hash);
             sidecars += _db.Sidecars.DeleteMany(x => x.MediaHash == hash);
         }
 
-        int media = gone.Count == 0 ? 0 : _db.Media.DeleteMany(x => gone.Contains(x.Id));
+        int media = gone.Count == 0 ? 0 : _db.Files.DeleteMany(x => gone.Contains(x.OsHash ?? string.Empty));
         return (embeds + sidecars, media);
     }
 
@@ -677,11 +804,10 @@ public sealed class ContentHashRegistry : IDisposable
             return;
         }
 
-        _db.EnsureMedia(mediaHash);
+        _db.EnsureFile(mediaHash);
         var id = ScribeDbContext.EmbedKey(mediaHash, subPos);
-        var existing = _db.Embeds.FindById(id) ?? new EmbedTrackEntity
+        var existing = _db.Tracks.FindById(id) ?? new TrackEntity
         {
-            Id = id,
             MediaHash = mediaHash,
             SubPos = subPos
         };
@@ -702,7 +828,7 @@ public sealed class ContentHashRegistry : IDisposable
         // Medien-Hash). Geschrieben wird ausschließlich dort; ein Doppelschreiben gibt es nicht.
         // Eine Spur-Marke gilt je (Medium, Quelle, Sprache, Variante, POSITION) — zwei Spuren derselben
         // Sprache sind zwei Marken (F-M669, vorher dampfte der Schluessel sie zu einer ein).
-        var media = _db.Media.FindById(mediaHash);
+        var media = _db.Files.FindById(mediaHash);
         // F-M669: die Marke trägt die POSITION dieser Spur. Zwei Spuren derselben Sprache sind zwei
         // Marken; die Position ist die des Aufrufers, nicht eine aus der Zeile abgeleitete.
         SourceMatrix.WriteTrackMark(_db, media, mediaHash, SourceMatrix.Subdl, language, hearingImpaired, subPos,
@@ -712,7 +838,7 @@ public sealed class ContentHashRegistry : IDisposable
         SourceMatrix.WriteTrackMark(_db, media, mediaHash, SourceMatrix.MovieSubtitles, language, hearingImpaired, subPos,
             moviesubtitlesUploadedAt, moviesubtitlesDownloadId, moviesubtitlesUploadId);
 
-        _db.Embeds.Upsert(existing);
+        _db.Tracks.Upsert(existing);
         RefreshMediaAggregates(mediaHash);
         LogUtil.Detail(_logger, "[Sub Scribe-DB] embed {Media}|{Pos} {Status} {Lang}", mediaHash, subPos, status, language);
     }
@@ -752,13 +878,13 @@ public sealed class ContentHashRegistry : IDisposable
         // embedded track, so a file with 44 tracks paid 44 commits to record a fact it had already
         // recorded. Measured live (08.10.2026): 9 644 writes for 1 201 items and a store that ended
         // the pass with exactly the rows it started with (media 1 201 -> 1 201).
-        if (_db.Media.FindById(mediaHash) == null)
+        if (_db.Files.FindById(mediaHash) == null)
         {
-            _db.EnsureMedia(mediaHash);
+            _db.EnsureFile(mediaHash);
         }
 
         var id = ScribeDbContext.EmbedKey(mediaHash, subPos);
-        var existing = _db.Embeds.FindById(id);
+        var existing = _db.Tracks.FindById(id);
 
         // A verdict stands. The observer does not argue with it — that is the difference between
         // recording a fact and re-deciding one.
@@ -775,9 +901,8 @@ public sealed class ContentHashRegistry : IDisposable
             return false; // already recorded, unchanged
         }
 
-        var row = existing ?? new EmbedTrackEntity
+        var row = existing ?? new TrackEntity
         {
-            Id = id,
             MediaHash = mediaHash,
             SubPos = subPos
         };
@@ -789,7 +914,7 @@ public sealed class ContentHashRegistry : IDisposable
         row.Reason = null;
         row.StatusAt = DateTime.UtcNow;
 
-        _db.Embeds.Upsert(row);
+        _db.Tracks.Upsert(row);
         RefreshMediaAggregates(mediaHash);
         LogUtil.Detail(_logger, "[Sub Scribe-DB] embed {Media}|{Pos} observed {Lang} (HI={Hi})",
             mediaHash, subPos, language, hearingImpaired);
@@ -800,8 +925,8 @@ public sealed class ContentHashRegistry : IDisposable
     /// <param name="mediaHash">Parent media hash.</param>
     /// <param name="subPos">ffmpeg stream position.</param>
     /// <returns>Track or null.</returns>
-    public EmbedTrackEntity? GetEmbed(string? mediaHash, int subPos)
-        => string.IsNullOrEmpty(mediaHash) ? null : _db.Embeds.FindById(ScribeDbContext.EmbedKey(mediaHash, subPos));
+    public TrackEntity? GetEmbed(string? mediaHash, int subPos)
+        => string.IsNullOrEmpty(mediaHash) ? null : _db.Tracks.FindById(ScribeDbContext.EmbedKey(mediaHash, subPos));
 
     /// <summary>
     /// Records that language detection ran for this track and how it ended.
@@ -831,13 +956,12 @@ public sealed class ContentHashRegistry : IDisposable
         }
 
         string id = ScribeDbContext.EmbedKey(mediaHash, subPos);
-        var row = _db.Embeds.FindById(id);
+        var row = _db.Tracks.FindById(id);
         if (row == null)
         {
-            _db.EnsureMedia(mediaHash, m => { });
-            row = new EmbedTrackEntity
+            _db.EnsureFile(mediaHash, m => { });
+            row = new TrackEntity
             {
-                Id = id,
                 MediaHash = mediaHash,
                 SubPos = subPos,
                 Status = SubtitleStatus.Observed,
@@ -860,7 +984,7 @@ public sealed class ContentHashRegistry : IDisposable
             row.HearingImpaired = hearingImpaired;
         }
 
-        _db.Embeds.Upsert(row);
+        _db.Tracks.Upsert(row);
         if (changed)
         {
             LogUtil.Detail(_logger, "[Sub Scribe-DB] embed {Media}|{Pos} detection {Outcome} {Lang}",
@@ -893,7 +1017,7 @@ public sealed class ContentHashRegistry : IDisposable
             return found;
         }
 
-        foreach (var row in _db.Embeds.Find(x => x.MediaHash == mediaHash))
+        foreach (var row in _db.Tracks.Find(x => x.MediaHash == mediaHash))
         {
             if (row.DetectionAttemptedAt != null)
             {
@@ -907,10 +1031,10 @@ public sealed class ContentHashRegistry : IDisposable
     /// <summary>All embedded tracks of a file, ordered by position.</summary>
     /// <param name="mediaHash">Parent media hash.</param>
     /// <returns>Tracks.</returns>
-    public List<EmbedTrackEntity> GetEmbeds(string? mediaHash)
+    public List<TrackEntity> GetEmbeds(string? mediaHash)
         => string.IsNullOrEmpty(mediaHash)
-            ? new List<EmbedTrackEntity>()
-            : _db.Embeds.Find(x => x.MediaHash == mediaHash).OrderBy(x => x.SubPos).ToList();
+            ? new List<TrackEntity>()
+            : _db.Tracks.Find(x => x.MediaHash == mediaHash).OrderBy(x => x.SubPos).ToList();
 
     /// <summary>
     /// F-M282: every subtitle datum the registry records for this file — embedded rows and sidecar
@@ -1069,7 +1193,7 @@ public sealed class ContentHashRegistry : IDisposable
             return false;
         }
 
-        var terminal = _db.Embeds
+        var terminal = _db.Tracks
             .Find(x => x.MediaHash == mediaHash
                     && (x.Status == SubtitleStatus.Uploaded || x.Status == SubtitleStatus.Rejected))
             .Select(x => x.SubPos)
@@ -1164,7 +1288,7 @@ public sealed class ContentHashRegistry : IDisposable
             return false;
         }
 
-        return _db.Embeds.Exists(x => x.MediaHash == mediaHash
+        return _db.Tracks.Exists(x => x.MediaHash == mediaHash
             && x.Language == language
             && x.HearingImpaired == hearingImpaired
             && x.Status == SubtitleStatus.Uploaded);
@@ -1334,7 +1458,7 @@ public sealed class ContentHashRegistry : IDisposable
             return 0;
         }
 
-        return _db.Embeds.Find(x => x.MediaHash == mediaHash
+        return _db.Tracks.Find(x => x.MediaHash == mediaHash
                 && (x.Status == SubtitleStatus.Uploaded || x.Status == SubtitleStatus.Rejected))
             .Select(x => x.Language + "|" + x.HearingImpaired)
             .Distinct()
@@ -1357,7 +1481,7 @@ public sealed class ContentHashRegistry : IDisposable
             return 0;
         }
 
-        return _db.Embeds.Find(x => x.MediaHash == mediaHash)
+        return _db.Tracks.Find(x => x.MediaHash == mediaHash)
             .Where(x => x.Status == SubtitleStatus.Rejected
                 || IsUploadedTo(mediaHash, x.Language, x.HearingImpaired ?? false, provider))
             .Select(x => x.Language + "|" + x.HearingImpaired)
@@ -1398,17 +1522,17 @@ public sealed class ContentHashRegistry : IDisposable
     public Dictionary<(string ImdbId, int Season), HashSet<(string Language, bool HearingImpaired)>> LanguagePairsBySeason()
     {
         var staffelVon = new Dictionary<string, (string ImdbId, int Season)>(StringComparer.Ordinal);
-        foreach (var media in _db.Media.Find(m => true))
+        foreach (var media in _db.Files.Find(m => true))
         {
-            if (!string.IsNullOrEmpty(media.Id) && !string.IsNullOrWhiteSpace(media.ImdbId)
+            if (!string.IsNullOrEmpty(media.OsHash) && !string.IsNullOrWhiteSpace(media.ImdbId)
                 && media.Season is { } staffelNr && staffelNr >= 1)
             {
-                staffelVon[media.Id] = (media.ImdbId!, staffelNr);
+                staffelVon[media.OsHash!] = (media.ImdbId!, staffelNr);
             }
         }
 
         var karte = new Dictionary<(string, int), HashSet<(string, bool)>>();
-        foreach (var embed in _db.Embeds.Find(e => true))
+        foreach (var embed in _db.Tracks.Find(e => true))
         {
             if (embed.MediaHash is null || string.IsNullOrEmpty(embed.Language)
                 || !staffelVon.TryGetValue(embed.MediaHash, out var staffel))
@@ -1515,16 +1639,16 @@ public sealed class ContentHashRegistry : IDisposable
         }
 
         var episodes = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var media in _db.Media.Find(m => m.ImdbId == imdbId && m.Season == season))
+        foreach (var media in _db.Files.Find(m => m.ImdbId == imdbId && m.Season == season))
         {
-            if (!string.IsNullOrEmpty(media.Id))
+            if (!string.IsNullOrEmpty(media.OsHash))
             {
-                episodes.Add(media.Id);
+                episodes.Add(media.OsHash!);
             }
         }
 
         var seen = new HashSet<(string, bool)>();
-        foreach (var embed in _db.Embeds.Find(e => true))
+        foreach (var embed in _db.Tracks.Find(e => true))
         {
             if (embed.MediaHash != null && episodes.Contains(embed.MediaHash) && !string.IsNullOrEmpty(embed.Language))
             {
@@ -1545,16 +1669,16 @@ public sealed class ContentHashRegistry : IDisposable
         }
 
         var episodes = new Dictionary<string, int>(StringComparer.Ordinal);
-        foreach (var media in _db.Media.Find(m => m.ImdbId == imdbId && m.Season == season))
+        foreach (var media in _db.Files.Find(m => m.ImdbId == imdbId && m.Season == season))
         {
-            if (media.Episode is int number && number > 0 && !string.IsNullOrEmpty(media.Id))
+            if (media.Episode is int number && number > 0 && !string.IsNullOrEmpty(media.OsHash))
             {
-                episodes[media.Id] = number;
+                episodes[media.OsHash!] = number;
             }
         }
 
         var numbers = new HashSet<int>();
-        foreach (var embed in _db.Embeds.Find(e => e.Language == language && e.HearingImpaired == hearingImpaired))
+        foreach (var embed in _db.Tracks.Find(e => e.Language == language && e.HearingImpaired == hearingImpaired))
         {
             if (embed.MediaHash != null && episodes.TryGetValue(embed.MediaHash, out int episode))
             {
@@ -1565,8 +1689,8 @@ public sealed class ContentHashRegistry : IDisposable
         return numbers.OrderBy(x => x).ToList();
     }
 
-    public List<EmbedTrackEntity> GetUploadedEmbeds()
-        => _db.Embeds.Find(x => x.Status == SubtitleStatus.Uploaded).ToList();
+    public List<TrackEntity> GetUploadedEmbeds()
+        => _db.Tracks.Find(x => x.Status == SubtitleStatus.Uploaded).ToList();
 
     // -------------------------------------------------------- sidecars (area 3)
 
@@ -1616,8 +1740,8 @@ public sealed class ContentHashRegistry : IDisposable
         // Seitenträger ist über seinen INHALT adressiert, nicht über die Datei.
         mediaHash ??= string.Empty;
 
-        var media = _db.EnsureMedia(mediaHash);
-        var existing = _db.Sidecars.FindById(contentHash) ?? new SidecarEntity { Id = contentHash };
+        var media = _db.EnsureFile(mediaHash);
+        var existing = _db.Sidecars.FindById(contentHash) ?? new SidecarEntity { ContentHash = contentHash };
 
         existing.MediaHash = mediaHash;
         existing.Language = language;
@@ -1723,7 +1847,7 @@ public sealed class ContentHashRegistry : IDisposable
             return false;
         }
 
-        _db.EnsureMedia(mediaHash);
+        _db.EnsureFile(mediaHash);
         var existing = _db.Sidecars.FindById(contentHash);
 
         // A verdict stands — recording a fact is not re-deciding one.
@@ -1741,7 +1865,7 @@ public sealed class ContentHashRegistry : IDisposable
             return false; // already recorded, unchanged
         }
 
-        var row = existing ?? new SidecarEntity { Id = contentHash };
+        var row = existing ?? new SidecarEntity { ContentHash = contentHash };
 
         row.MediaHash = mediaHash;
         row.Language = language;
@@ -1945,7 +2069,7 @@ public sealed class ContentHashRegistry : IDisposable
         // nicht mehr.
         _db.Packs.Upsert(new PackEntity
         {
-            Id = id,
+            SeasonKey = id,
             Source = source,
             ImdbId = imdbId,
             Season = season,
@@ -2029,7 +2153,7 @@ public sealed class ContentHashRegistry : IDisposable
         // URTEIL (Ablehnung mit Grund, Datum und Signatur) steht ausschließlich in der Matrix.
         _db.Packs.Upsert(new PackEntity
         {
-            Id = id,
+            SeasonKey = id,
             Source = source,
             ImdbId = imdbId,
             Season = season,
@@ -2077,7 +2201,7 @@ public sealed class ContentHashRegistry : IDisposable
             return 0;
         }
 
-        var media = _db.Media.FindById(mediaHash);
+        var media = _db.Files.FindById(mediaHash);
         if (media == null
             || string.IsNullOrWhiteSpace(media.ImdbId)
             || media.Season is not > 0)
@@ -2104,7 +2228,7 @@ public sealed class ContentHashRegistry : IDisposable
             return 0;
         }
 
-        var media = _db.Media.FindById(mediaHash);
+        var media = _db.Files.FindById(mediaHash);
         if (media == null || string.IsNullOrWhiteSpace(media.ImdbId) || media.Season is not > 0)
         {
             return 0;
@@ -2243,7 +2367,7 @@ public sealed class ContentHashRegistry : IDisposable
                 continue;
             }
 
-            _db.Packs.DeleteMany(p => p.Id == pack.Id);
+            _db.Packs.DeleteMany(p => string.Equals(p.PackId, pack.PackId, StringComparison.Ordinal));
             removed++;
 
             // Die Matrix-Zeile fällt mit: eine Behälter-Kennung ohne Mitglieder ist ein Beleg ohne
@@ -2306,7 +2430,7 @@ public sealed class ContentHashRegistry : IDisposable
 
         return new PackView
         {
-            Id = mitglieder?.Id ?? string.Empty,
+            Id = mitglieder?.SeasonKey ?? string.Empty,
             Source = mitglieder?.Source ?? source,
             ImdbId = imdbId!,
             Season = season,
@@ -2431,7 +2555,7 @@ public sealed class ContentHashRegistry : IDisposable
         // uploader before sending one. An observation only says "a file with this content sits on
         // disk"; counting it would make the downloader skip a write it has not performed, and the
         // run would report a save that never happened.
-        return _db.Embeds.Exists(x => x.ContentHash == contentHash && x.Status != SubtitleStatus.Observed)
+        return _db.Tracks.Exists(x => x.ContentHash == contentHash && x.Status != SubtitleStatus.Observed)
             || _db.Sidecars.Exists(x => x.ContentHash == contentHash && x.Status != SubtitleStatus.Observed);
     }
 
@@ -2472,7 +2596,7 @@ public sealed class ContentHashRegistry : IDisposable
             return false;
         }
 
-        return _db.Embeds.Exists(x => x.ContentHash == contentHash && x.Status == SubtitleStatus.Uploaded)
+        return _db.Tracks.Exists(x => x.ContentHash == contentHash && x.Status == SubtitleStatus.Uploaded)
             || _db.Sidecars.Exists(x => x.ContentHash == contentHash && x.Status == SubtitleStatus.Uploaded);
     }
 
@@ -2520,7 +2644,7 @@ public sealed class ContentHashRegistry : IDisposable
         // Frage bleibt inhaltlich global (derselbe Text kann unter einem anderen Medien-Hash liegen),
         // aber sie liest keinen Spaltenbesitz mehr: die Marke ist die der Quelle, und die Spur-Zeile
         // liefert nur, WELCHES Paar gemeint ist.
-        foreach (var zeile in _db.Embeds.FindAll().Where(x => string.Equals(x.ContentHash, contentHash, StringComparison.Ordinal)))
+        foreach (var zeile in _db.Tracks.FindAll().Where(x => string.Equals(x.ContentHash, contentHash, StringComparison.Ordinal)))
         {
             // F-M669: die Zeile nennt ihre POSITION — gefragt wird genau deren Marke. Der Inhalt bleibt
             // global (derselbe Text kann unter einem anderen Medien-Hash liegen).
@@ -2678,7 +2802,7 @@ public sealed class ContentHashRegistry : IDisposable
             return false;
         }
 
-        return _db.Embeds.Exists(x => x.ContentHash == contentHash
+        return _db.Tracks.Exists(x => x.ContentHash == contentHash
                 && x.Status == SubtitleStatus.Rejected
                 && x.Reason == RejectReason.DuplicateRemote)
             || _db.Sidecars.Exists(x => x.ContentHash == contentHash
@@ -2798,7 +2922,7 @@ public sealed class ContentHashRegistry : IDisposable
         }
 
         var now = DateTime.UtcNow;
-        _db.EnsureMedia(mediaHash, m =>
+        _db.EnsureFile(mediaHash, m =>
         {
             m.SubtitlesUploadedAt = now;
         });
@@ -2809,7 +2933,7 @@ public sealed class ContentHashRegistry : IDisposable
     /// <param name="mediaHash">Media hash.</param>
     /// <returns>True when complete.</returns>
     public bool IsSubtitlesUploaded(string? mediaHash)
-        => !string.IsNullOrEmpty(mediaHash) && _db.Media.FindById(mediaHash)?.SubtitlesUploadedAt != null;
+        => !string.IsNullOrEmpty(mediaHash) && _db.Files.FindById(mediaHash)?.SubtitlesUploadedAt != null;
 
     /// <summary>
     /// F-M499 (gemessen 15.11.2026, 16:17 im scharfen Lauf): dieselbe Frage wie
@@ -2851,12 +2975,12 @@ public sealed class ContentHashRegistry : IDisposable
 
         // Die Marke sagt "diese Datei ist fertig" — ohne sie ist nichts zu ueberspringen, und der
         // teure Weg (Spuren lesen) faellt damit fuer den Normalfall weg.
-        if (_db.Media.FindById(mediaHash)?.SubtitlesUploadedAt == null)
+        if (_db.Files.FindById(mediaHash)?.SubtitlesUploadedAt == null)
         {
             return false;
         }
 
-        var tracks = _db.Embeds.Find(x => x.MediaHash == mediaHash).ToList();
+        var tracks = _db.Tracks.Find(x => x.MediaHash == mediaHash).ToList();
         if (tracks.Count == 0)
         {
             return false; // kein Spurbeleg, an dem sich die Marke auf eine Quelle abbilden liesse
@@ -2957,7 +3081,7 @@ public sealed class ContentHashRegistry : IDisposable
         }
 
         int urteile = verdicts
-            ? _db.Embeds.DeleteMany(x => x.MediaHash == mediaHash && x.Status == SubtitleStatus.Rejected)
+            ? _db.Tracks.DeleteMany(x => x.MediaHash == mediaHash && x.Status == SubtitleStatus.Rejected)
             : 0;
 
         return (stempel, urteile);
@@ -3009,7 +3133,7 @@ public sealed class ContentHashRegistry : IDisposable
             return false;
         }
 
-        var zeile = _db.Embeds.FindById(ScribeDbContext.EmbedKey(mediaHash, subPos));
+        var zeile = _db.Tracks.FindById(ScribeDbContext.EmbedKey(mediaHash, subPos));
         return zeile is { Reason: RejectReason.ExtractionFailed }
             && zeile.StatusAt is { } urteilAm
             && DateTime.UtcNow - urteilAm >= ttl;
@@ -3028,7 +3152,7 @@ public sealed class ContentHashRegistry : IDisposable
 
         // F-M668: das Zugeh-Urteil ist eine `file`-Zeile der Matrix, je Quelle eine, mit der Spursignatur
         // als Fingerabdruck (F-M557/F-M562). Geschrieben wird ausschließlich dort.
-        SourceMatrix.WriteFileMark(_db, _db.Media.FindById(mediaHash), mediaHash, Quelle(provider), DateTime.UtcNow, signature);
+        SourceMatrix.WriteFileMark(_db, _db.Files.FindById(mediaHash), mediaHash, Quelle(provider), DateTime.UtcNow, signature);
     }
 
     /// <summary>
@@ -3133,7 +3257,7 @@ public sealed class ContentHashRegistry : IDisposable
             return IsSubtitlesUploadedFor(mediaHash, provider);
         }
 
-        if (_db.Media.FindById(mediaHash)?.SubtitlesUploadedAt == null)
+        if (_db.Files.FindById(mediaHash)?.SubtitlesUploadedAt == null)
         {
             return false;
         }
@@ -3206,7 +3330,7 @@ public sealed class ContentHashRegistry : IDisposable
     {
         return _db.Sidecars.FindAll()
             .Where(s => !string.IsNullOrEmpty(s.Path) && !System.IO.File.Exists(s.Path!))
-            .Select(s => s.Id)
+            .Select(s => s.ContentHash ?? string.Empty)
             .ToList();
     }
 
@@ -3305,7 +3429,7 @@ public sealed class ContentHashRegistry : IDisposable
             // The position is gone: the row describes a stream the file no longer has.
             if (!live.Contains(row.SubPos))
             {
-                _db.Embeds.Delete(row.Id);
+                _db.Tracks.Remove(row);
                 removed++;
                 LogUtil.Detail(_logger, "[Sub Scribe-DB] forgot stale embed {Media}|{Pos} {Lang} (HI={Hi}, position gone)",
                     mediaHash, row.SubPos, row.Language, row.HearingImpaired);
@@ -3326,7 +3450,7 @@ public sealed class ContentHashRegistry : IDisposable
                 continue;
             }
 
-            _db.Embeds.Delete(row.Id);
+            _db.Tracks.Remove(row);
             removed++;
             LogUtil.Detail(_logger, "[Sub Scribe-DB] forgot stale embed {Media}|{Pos} {Lang} (HI={Hi})",
                 mediaHash, row.SubPos, row.Language, row.HearingImpaired);
@@ -3382,7 +3506,7 @@ public sealed class ContentHashRegistry : IDisposable
 
         var normalized = string.Join(",", languages.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
         var now = DateTime.UtcNow;
-        _db.EnsureMedia(mediaHash, m =>
+        _db.EnsureFile(mediaHash, m =>
         {
             m.LastSearchUtc = now;
             m.LastSearchLanguages = normalized;
@@ -3411,7 +3535,7 @@ public sealed class ContentHashRegistry : IDisposable
             return;
         }
 
-        _db.EnsureMedia(mediaHash, m =>
+        _db.EnsureFile(mediaHash, m =>
         {
             if (!string.IsNullOrEmpty(imdbId))
             {
@@ -3468,7 +3592,7 @@ public sealed class ContentHashRegistry : IDisposable
             .Distinct(StringComparer.OrdinalIgnoreCase)
             .OrderBy(l => l, StringComparer.OrdinalIgnoreCase));
 
-        _db.EnsureMedia(mediaHash, m =>
+        _db.EnsureFile(mediaHash, m =>
         {
             m.LanguagesAvailable = languages;
         });
@@ -3600,12 +3724,12 @@ public sealed class ContentHashRegistry : IDisposable
         }
 
         int entfernt = 0;
-        foreach (var zeile in _db.Embeds.FindAll().ToList())
+        foreach (var zeile in _db.Tracks.FindAll().ToList())
         {
             if (OhneBeleg(zeile.MediaHash, zeile.Language, zeile.HearingImpaired, zeile.Status, zeile.Reason,
                     GetOrigin(zeile.ContentHash)))
             {
-                _db.Embeds.Delete(zeile.Id);
+                _db.Tracks.Remove(zeile);
                 entfernt++;
             }
         }
@@ -3615,7 +3739,7 @@ public sealed class ContentHashRegistry : IDisposable
             if (OhneBeleg(zeile.MediaHash, zeile.Language, zeile.HearingImpaired, zeile.Status, zeile.Reason,
                     (zeile.Origin, zeile.OriginId)))
             {
-                _db.Sidecars.Delete(zeile.Id);
+                _db.Sidecars.Remove(zeile);
                 entfernt++;
             }
         }

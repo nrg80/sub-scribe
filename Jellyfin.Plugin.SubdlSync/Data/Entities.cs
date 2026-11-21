@@ -168,19 +168,47 @@ public class MetaEntity
 /// <summary>
 /// Area 2: one row per video file, keyed by the stable OSHash/media hash.
 /// <para>
-/// The embedded subtitle streams of this file live in <see cref="EmbedTrackEntity"/> with this
+/// The embedded subtitle streams of this file live in <see cref="TrackEntity"/> with this
 /// hash as their parent — they have no existence of their own, which is why they are stored
 /// beneath the file rather than beside it.
 /// </para>
 /// </summary>
-/// F-M196: one record per video file, keyed by the media hash (OSHash). For a series episode
+/// F-M196: one record per video file, keyed by a random, immutable FileId (F-M671). For a series episode
 /// the stored ids are the SHOW ids, never episode or season ids.
-/// F-M38: state is split by the kind of thing described - embeds live under their video file,
+/// F-M38: state is split by the kind of thing described - tracks live under their video file,
 /// sidecars carry their own record, and the file record holds path, ids and the derived aggregates.
-public class MediaEntity
+/// F-M671: bis Schema 21 war der OSHash der Schlüssel. Ein Hash beschreibt den INHALT; ein neu getaggter
+/// Container bekam damit eine neue Identität samt neuer Spurkennungen, obwohl Datei und Spuren dieselben
+/// waren. Seit Schema 22 ist die Kennung zufällig und unveränderlich, der Hash eine Eigenschaft daneben.
+public class FileEntity
 {
-    /// <summary>Primary key: OSHash/media content hash (16 hex chars).</summary>
-    public string Id { get; set; } = string.Empty;
+    /// <summary>Primary key: random 5-character FileId (<c>yyyyy</c> of the display id), immutable.</summary>
+    public string FileId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// F-M671: das Pack, zu dem diese Datei gehört — 4 Zeichen, leer für eine Datei ohne Pack. Trägt die
+    /// Datei eines Packs dessen Kennung, trägt sie ihre Ebene selbst (<c>xxxx-yyyyy-000</c>).
+    /// </summary>
+    public string? PackId { get; set; }
+
+    /// <summary>
+    /// F-M671: der OSHash (Größe plus erste und letzte 64 KB). Er ist die Eigenschaft, an der die Datei
+    /// WIEDERERKANNT wird — nicht ihre Identität: bleibt der Hash gleich, ist es dieselbe Datei; ändert
+    /// er sich, behält die Zeile ihre Kennung und bekommt einen neuen Hash.
+    /// </summary>
+    public string? OsHash { get; set; }
+
+    /// <summary>Date name (not the full path), for the osHash check against name and path.</summary>
+    public string? FileName { get; set; }
+
+    /// <summary>File size in bytes at the last sighting.</summary>
+    public long? Size { get; set; }
+
+    /// <summary>File mtime in unix seconds at the last sighting.</summary>
+    public long? MtimeUnix { get; set; }
+
+    /// <summary>When the row was first written (UTC).</summary>
+    public DateTime Created { get; set; } = DateTime.UtcNow;
 
     /// <summary>Latest known absolute path to the media file.</summary>
     public string? Path { get; set; }
@@ -376,22 +404,45 @@ public abstract class SubtitleState
 /// row; conflating them is what made one rejected stream block all its siblings.
 /// </para>
 /// </summary>
-/// F-M197: one record per embedded subtitle stream, keyed by media hash + stream position.
-/// The position is the identity of a track: it has no name of its own, and two streams of one
-/// file can share a language (a normal and an SDH variant).
-public class EmbedTrackEntity : SubtitleState
+/// F-M197: one record per embedded subtitle stream, keyed by a random TrackId that is unique within its
+/// file (F-M671). Two streams of one file can share a language (a normal and an SDH variant); the
+/// position stays a column because it is how a caller addresses the stream today.
+public class TrackEntity : SubtitleState
 {
     /// <summary>
-    /// Primary key: "&lt;media hash&gt;|&lt;sub position&gt;". A stable business key rather than a
-    /// database-assigned id, so an upsert always updates the row it means to update.
+    /// F-M671: Spurkennung — 3 Zeichen, innerhalb der Datei eindeutig und unveränderlich. Sie ist die
+    /// <c>zzz</c> des Anzeige-Strings. Zusammen mit <see cref="FileId"/> ist sie der Schlüssel der Zeile.
     /// </summary>
-    public string Id { get; set; } = string.Empty;
+    public string TrackId { get; set; } = string.Empty;
 
-    /// <summary>Parent media hash.</summary>
+    /// <summary>F-M671: die Datei, zu der die Spur gehört (5 Zeichen). Der zweite Teil des Schlüssels.</summary>
+    public string FileId { get; set; } = string.Empty;
+
+    /// <summary>F-M671: das Pack der Datei, leer wenn die Datei in keinem Pack liegt.</summary>
+    public string? PackId { get; set; }
+
+    /// <summary>
+    /// F-M671: die SPURNUMMER je Datei — aus EINEM Nummernkreis für eingebettete Spuren und Seitenwagen,
+    /// beim ersten Sehen vergeben, nie neu vergeben und nie wiederverwendet. Sie ist NICHT der
+    /// ffmpeg-Index: ffmpeg zählt nur, was gerade im Container liegt, und Seitenwagen stehen dazwischen.
+    /// Der Index wird zur Laufzeit abgeleitet (<see cref="TrackNumbers.FfmpegIndex"/>).
+    /// </summary>
+    public int TrackNumber { get; set; }
+
+    /// <summary>
+    /// Der OSHash der Datei, zu der die Spur gehört — die Adresse, unter der die Aufrufer sie heute
+    /// führen (F-M256). Er ist eine Eigenschaft der Datei und wird beim Neu-Hashen mitgezogen.
+    /// </summary>
     public string MediaHash { get; set; } = string.Empty;
 
-    /// <summary>ffmpeg stream position (0:s:N).</summary>
+    /// <summary>ffmpeg stream position (0:s:N) as last observed — a property, never the identity.</summary>
     public int SubPos { get; set; }
+
+    /// <summary>F-M671: when the row was first written (UTC).</summary>
+    public DateTime Created { get; set; }
+
+    /// <summary>F-M671: when the track was last seen in its file (UTC).</summary>
+    public DateTime LastSeen { get; set; }
 
     /// <summary>
     /// When language DETECTION last ran for this position, or null when it never did.
@@ -417,7 +468,7 @@ public class EmbedTrackEntity : SubtitleState
 
 /// <summary>
 /// How a per-track language detection attempt ended. Stored on the embedded track row alongside
-/// <see cref="EmbedTrackEntity.DetectionAttemptedAt"/>.
+/// <see cref="TrackEntity.DetectionAttemptedAt"/>.
 /// </summary>
 public static class DetectionOutcome
 {
@@ -444,17 +495,36 @@ public static class DetectionOutcome
 /// in the identity.
 /// </para>
 /// </summary>
-/// F-M199: one record per loose .srt file, keyed by the normalized content hash (F-M186), so a
+/// F-M199: one record per loose .srt file, addressed by the normalized content hash (F-M186), so a
 /// sidecar stays known after a rename or a move, and two sidecars differing in text stay two rows.
+/// F-M671: die IDENTITÄT ist die Spurkennung, nicht der Inhalt: ein Seitenwagen ist „diese Untertitelspur
+/// dieser Datei", seine Anzeige ist <c>0000-yyyyy-zzz</c> — er trägt bewusst KEIN Pack (aus Seitenwagen
+/// werden keine Packs gebaut), teilt aber den Nummernkreis seiner Datei mit den eingebetteten Spuren.
 public class SidecarEntity : SubtitleState
 {
-    /// <summary>Primary key: MD5 of the normalized content.</summary>
-    public string Id { get; set; } = string.Empty;
+    /// <summary>F-M671: Spurkennung — 3 Zeichen, im Nummernkreis der Datei eindeutig und unveränderlich.</summary>
+    public string TrackId { get; set; } = string.Empty;
+
+    /// <summary>F-M671: die Hostdatei, neben der der Seitenwagen liegt (5 Zeichen).</summary>
+    public string FileId { get; set; } = string.Empty;
+
+    // F-M671: ein Seitenwagen trägt KEIN Pack. Seine Anzeige ist `0000-yyyyy-zzz` — ein gesetztes
+    // Pack-Segment würde eine Zugehörigkeit behaupten, die die Kennung nicht hergibt, und aus
+    // Seitenwagen werden keine Packs gebaut. Die Spalte gibt es hier deshalb gar nicht.
+
+    /// <summary>F-M671: die Spurnummer aus dem gemeinsamen Nummernkreis der Hostdatei.</summary>
+    public int TrackNumber { get; set; }
+
+    /// <summary>When the row was first written (UTC).</summary>
+    public DateTime Created { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Last time this sidecar was seen on disk (UTC).</summary>
+    public DateTime LastSeen { get; set; } = DateTime.UtcNow;
 
     /// <summary>File name (not the full path) of the sidecar, for diagnostics.</summary>
     public string? FileName { get; set; }
 
-    /// <summary>Media hash of the file this sidecar sits next to.</summary>
+    /// <summary>Media hash of the file this sidecar sits next to (address, not identity).</summary>
     public string MediaHash { get; set; } = string.Empty;
 
     /// <summary>Full path of the sidecar as last seen, for diagnostics.</summary>
@@ -776,16 +846,23 @@ public class PackEntity
     public const string TvSubtitlesSource = "tvsubtitles";
 
     /// <summary>
-    /// Primary key: "&lt;imdb&gt;|S&lt;season&gt;|&lt;lang&gt;|&lt;hi|plain&gt;|&lt;source&gt;" — one pack
-    /// per season, language, variant and SOURCE.
+    /// F-M671: die Kennung des Behälters — 4 Zeichen, zufällig, einmalig, unveränderlich. Sie ist die
+    /// <c>xxxx</c> des Anzeige-Strings <c>xxxx-00000-000</c> und der Primärschlüssel dieser Tabelle.
+    /// </summary>
+    public string PackId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// F-M390/F-M642: der STAFFEL-SCHLÜSSEL — „&lt;imdb&gt;|S&lt;season&gt;|&lt;lang&gt;|&lt;hi|plain&gt;|&lt;source&gt;".
+    /// Er ist ab F-M671 NICHT mehr die Identität, sondern die Adresse, unter der die Aufrufer den Behälter
+    /// fragen („gibt es zu dieser Staffel, Sprache, Variante und Quelle eine Zeile?"). Er bleibt eindeutig
+    /// indiziert, damit „ein Behälter je Staffel/Sprache/Variante/Quelle" weiter gilt.
     /// <para>
-    /// F-M642: die Quelle steht seit dem 20.11.2026 im Schluessel. Vorher war der Pack je (Staffel,
-    /// Sprache, Variante) genau einer, weil nur SubDL Container baute; zwei Quellen teilten sich also
-    /// eine Zeile, und der zweite Pack haette den ersten ueberschrieben — die Zeile haette danach eine
-    /// Staffel als „gepackt" gefuehrt, die es bei dieser Quelle nie gab.
+    /// F-M642: die Quelle steht im Schlüssel. Vorher war der Pack je (Staffel, Sprache, Variante) genau
+    /// einer, weil nur SubDL Container baute; zwei Quellen teilten sich also eine Zeile, und der zweite
+    /// Pack hätte den ersten überschrieben.
     /// </para>
     /// </summary>
-    public string Id { get; set; } = string.Empty;
+    public string SeasonKey { get; set; } = string.Empty;
 
     /// <summary>
     /// F-M642: die Quelle, zu der die Zeile gehoert (<see cref="SubdlSource"/> oder
@@ -811,6 +888,22 @@ public class PackEntity
 
     /// <summary>Release name the pack carries — one release for the whole season, never a mixture.</summary>
     public string? ReleaseName { get; set; }
+
+    /// <summary>F-M671: TMDb id of the series, the same level as the IMDb id.</summary>
+    public string? TmdbId { get; set; }
+
+    /// <summary>
+    /// F-M671: Signatur der Mitglieder (F-M466/F-M650) — „ist das noch dieselbe Staffel?". Sie steht am
+    /// Behälter, weil sie eine Eigenschaft seiner Mitglieder ist; das URTEIL der Quelle steht in
+    /// <c>upload</c> (F-M672).
+    /// </summary>
+    public string? Signature { get; set; }
+
+    /// <summary>F-M671: mtime of the newest member file in unix seconds, to which <see cref="Signature"/> belongs.</summary>
+    public long? MtimeUnix { get; set; }
+
+    /// <summary>F-M671: how many episodes the pack carries (the count behind <see cref="Episodes"/>).</summary>
+    public int EpisodeCount { get; set; }
 
     /// <summary>Episode numbers the pack carries, comma separated and ascending ("1,2,3").</summary>
     public string Episodes { get; set; } = string.Empty;

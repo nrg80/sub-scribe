@@ -514,15 +514,19 @@ internal static class Program
         Check("the store schema carries the two columns and a migration step",
             ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/Entities.cs"))
                 .Contains("public string? OriginId { get; set; }", StringComparison.Ordinal)
+            // F-M671: die Spalte steht nicht mehr in einem ALTER-Nachzug, sondern in der DDL der
+            // Entity-Tabelle — ein Bestand wird beim Öffnen vollständig übernommen, nicht Spalte für
+            // Spalte nachgezogen.
             && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/ScribeDbContext.cs"))
-                .Contains("ALTER TABLE sidecars ADD COLUMN Origin TEXT NULL;", StringComparison.Ordinal)
+                .Contains("+ \"Origin TEXT NULL, \"", StringComparison.Ordinal)
             // F-M501: der Marker steht auf 13 (media.TvstShowId kam dazu); die Pruefung fragt den
             // AKTUELLEN Stand, weil ein stehengebliebener Marker die Migration nicht mehr anzeigt.
             // F-M507: er steht inzwischen auf 14 (die Spalten der dritten Quelle).
             // F-M669: 20 — die Spur-Position gehoert in den Schluessel der Matrix.
             // F-M670: 21 — die Alt-Tabelle `source_marks` und die Id-Spalte `SubdlId` sind entfallen.
+            // F-M671: 22 — die eigenen Kennungen der vier Ebenen.
             && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/ScribeDbContext.cs"))
-                .Contains("CurrentSchemaVersion = 21", StringComparison.Ordinal));
+                .Contains("CurrentSchemaVersion = 22", StringComparison.Ordinal));
 
         // ---- 10. eigene Kennzeichen je Quelle und Richtung (F-M488) ---------------------------
         var entities = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/Entities.cs"));
@@ -537,7 +541,8 @@ internal static class Program
         Check("schema 11 adds them to sidecars AND embeds",
             // F-M668: Statt neun Spalten je Tabelle trägt die Matrix die Quelle im WERT — Schema 19
             // zieht die zwei Felder der Matrix nach und legt die Altspalten nieder.
-            dbc.Contains("CurrentSchemaVersion = 21", StringComparison.Ordinal)
+            // F-M671: der Marker steht auf 22.
+            dbc.Contains("CurrentSchemaVersion = 22", StringComparison.Ordinal)
             && dbc.Contains("+ \"UploadId TEXT NULL, \"", StringComparison.Ordinal)
             && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/SourceMatrix.cs"))
                 .Contains("ALTER TABLE source_matrix ADD COLUMN UploadId TEXT NULL;", StringComparison.Ordinal)
@@ -644,7 +649,7 @@ internal static class Program
             // Zeile, statt einer Spalte je Quelle an jeder Untertitel-Zeile.
             entities.Contains("public DateTime? ClosedAt { get; set; }", StringComparison.Ordinal)
             && !entities.Contains("public DateTime? SubdlUploadedAt { get; set; }", StringComparison.Ordinal)
-            && dbc.Contains("CurrentSchemaVersion = 21", StringComparison.Ordinal)
+            && dbc.Contains("CurrentSchemaVersion = 22", StringComparison.Ordinal)
             && dbc.Contains("\"ClosedAt TEXT NULL, \"", StringComparison.Ordinal));
         Check("the timestamp is set for the source that took the upload, never for another",
             uploadSource.Contains("subdlUploadedAt: subdlMarke.At", StringComparison.Ordinal)
@@ -927,7 +932,7 @@ internal static class Program
         Check("F-M557: der Zugeh-Stempel steht JE QUELLE auf der Medienzeile (Schema 16)",
             // F-M668: der Stempel ist eine `file`-Zeile je (Medium, Quelle); die vier Medien-Spalten
             // gibt es nicht mehr, und die Signatur steht als `Fingerprint` daneben.
-            db557.Contains("CurrentSchemaVersion = 21", StringComparison.Ordinal)
+            db557.Contains("CurrentSchemaVersion = 22", StringComparison.Ordinal)
             && !db557.Contains("ADD COLUMN CompleteSubdl TEXT NULL", StringComparison.Ordinal)
             && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Data/SourceMatrix.cs"))
                 .Contains("public static void WriteFileMark(", StringComparison.Ordinal)
@@ -1176,8 +1181,9 @@ internal static class Program
         Check("F-M661: der Leer-Merker ist eine eigene spaete Spalte an media",
             ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/Entities.cs"))
                 .Contains("public DateTime? LastSearchEmptyUtc { get; set; }", StringComparison.Ordinal)
+            // F-M671: die Spalte steht in der DDL der Datei-Ebene, nicht mehr in einem ALTER-Nachzug.
             && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/ScribeDbContext.cs"))
-                .Contains("(\"LastSearchEmptyUtc\", \"ALTER TABLE media ADD COLUMN LastSearchEmptyUtc TEXT NULL;\")", StringComparison.Ordinal));
+                .Contains("+ \"LastSearchEmptyUtc TEXT NULL, \"", StringComparison.Ordinal));
         Check("F-M661: der Takt waechst nur bei leerer Antwort — Faktor sieben, gedeckelt bei 30 Tagen",
             tracker661.Contains("public const int EmptySearchFactor = 7;", StringComparison.Ordinal)
             && tracker661.Contains("Math.Min(30d, gap.TotalDays * EmptySearchFactor)", StringComparison.Ordinal)
@@ -1717,8 +1723,10 @@ internal static class Program
             // F-M668: „Marke" heißt jetzt „irgendeine Quelle hat das Paar in der Matrix geschlossen".
             && registrySource580.Contains("bool marke = AnySourceClosed(mediaHash, language, hearingImpaired ?? false);", StringComparison.Ordinal)
             && registrySource580.Contains("return !marke && herkunft.Origin is null;", StringComparison.Ordinal)
-            && registrySource580.Contains("_db.Embeds.Delete(zeile.Id);", StringComparison.Ordinal)
-            && registrySource580.Contains("_db.Sidecars.Delete(zeile.Id);", StringComparison.Ordinal));
+            // F-M671: eine Spur hat keinen Einzelschluessel mehr (er ist (FileId, TrackId)) — das
+            // Urteil faellt ueber das Objekt, nicht ueber eine Id.
+            && registrySource580.Contains("_db.Tracks.Remove(zeile);", StringComparison.Ordinal)
+            && registrySource580.Contains("_db.Sidecars.Remove(zeile);", StringComparison.Ordinal));
         Check("F-M583: der Database Refresh setzt zurueck und meldet die Zahl",
             refreshSource.Contains("removedUnbackedVerdicts = registry.ClearVerdictsWithoutEvidence();", StringComparison.Ordinal)
             && refreshSource.Contains("{Unbacked} verdict(s) without evidence (F-M583)", StringComparison.Ordinal)
@@ -1901,10 +1909,10 @@ internal static class Program
                 string hashDe = Jellyfin.Plugin.SubScribe.Registry.ContentHashRegistry.ComputeHash(textDe);
 
                 // Der Inhalt liegt bei SubDL (Marke der Quelle, F-M490), unter ANDERER Dateiidentitaet.
-                settleReg.EnsureMedia(fileB, "tt7654321", "/data/movies2/film.mkv");
+                settleReg.EnsureFile(fileB, "tt7654321", "/data/movies2/film.mkv");
                 settleReg.MarkEmbed(fileB, 0, de, false, Jellyfin.Plugin.SubScribe.Data.SubtitleStatus.Uploaded,
                     contentHash: hashDe, subdlUploadedAt: DateTime.UtcNow);
-                settleReg.EnsureMedia(fileA, "tt1234567", "/data/movies2/folge.mkv");
+                settleReg.EnsureFile(fileA, "tt1234567", "/data/movies2/folge.mkv");
 
                 Check("derselbe Inhalt bei SubDL erledigt tvsubtitles NICHT (F-M500)",
                     settleReg.IsContentUploadedFor(hashDe, SubtitleProvider.Subdl)
@@ -1952,7 +1960,7 @@ internal static class Program
                 var torUnbekannt = UploadGate.Decide(true, true, origin: null, false, false, false, false);
                 var markenText = "1\n00:00:20,000 --> 00:00:22,000\nZwei Marken.\n\n";
                 string markenHash = Jellyfin.Plugin.SubScribe.Registry.ContentHashRegistry.ComputeHash(markenText);
-                settleReg.EnsureMedia("eeee5555ffff6666", "tt9999999", "/data/movies2/beide.mkv");
+                settleReg.EnsureFile("eeee5555ffff6666", "tt9999999", "/data/movies2/beide.mkv");
                 settleReg.MarkEmbed("eeee5555ffff6666", 0, de, false,
                     Jellyfin.Plugin.SubScribe.Data.SubtitleStatus.Uploaded, contentHash: markenHash,
                     subdlUploadId: "sd-1", subdlUploadedAt: DateTime.UtcNow);
@@ -2119,7 +2127,7 @@ internal static class Program
                 var mitte = new TmdbSeriesInfo("The Middle", "The Middle", 2009, 9);
 
                 // (a) Die gespeicherte Nummer fuehrt: kein Netz, kein Vergleich, keine Anlage.
-                tvstReg.EnsureMedia("aaaa000000000001", patch: m => m.TvstShowId = "512");
+                tvstReg.EnsureFile("aaaa000000000001", patch: m => m.TvstShowId = "512");
                 var handlerGespeichert = new TvstSiteHandler(512, "The Middle");
                 var aufloeserGespeichert = new TvstShowResolver(
                     new TvSubtitlesClient(new HttpClient(handlerGespeichert)));
@@ -2496,19 +2504,19 @@ internal static class Program
 
             using (var legacyDb = new Jellyfin.Plugin.SubScribe.Data.ScribeDbContext(legacyDir, null))
             {
-                var bestand = legacyDb.Media.FindById("aaaa000000000009");
+                var bestand = legacyDb.Files.FindById("aaaa000000000009");
                 // Der Wert wird VOR dem Schreiben festgehalten: EF haelt eine Zeile im Kontext und
                 // liefert beim zweiten Lesen DIESELBE Instanz — die nach dem Patch "512" traegt.
                 string? vorherTvst = bestand?.TvstShowId;
-                legacyDb.EnsureMedia("aaaa000000000009", patch: m => m.TvstShowId = "512");
-                var nachher = legacyDb.Media.FindById("aaaa000000000009");
+                legacyDb.EnsureFile("aaaa000000000009", patch: m => m.TvstShowId = "512");
+                var nachher = legacyDb.Files.FindById("aaaa000000000009");
                 Check("Schema 12 -> 14: die Spalte wird beim Start nachgezogen, der Bestand bleibt gueltig (F-M501)",
                     bestand is { ImdbId: "tt1442464", TmdbId: "1422" }
                     && vorherTvst is null
                     && nachher?.TvstShowId == "512"
                     // F-M507: der Marker ist inzwischen 14 — die Datei wird auf den Stand DIESES Builds
                     // gehoben, und der Bestand muss das aushalten.
-                    && legacyDb.Meta.FindById("db")?.SchemaVersion == 21,
+                    && legacyDb.Meta.FindById("db")?.SchemaVersion == 22,
                     "bestand=" + (bestand?.ImdbId ?? "-") + "/" + (bestand?.TmdbId ?? "-")
                     + "/tvst=" + (vorherTvst ?? "<null>")
                     + " nachher=" + (nachher?.TvstShowId ?? "-")
@@ -2865,7 +2873,7 @@ internal static class Program
                         dryRun: false,
                         CancellationToken.None)
                     .ConfigureAwait(false);
-                var gespeichert = msubStore.Media.FindById("bbbb000000000001")?.MsubMovieId;
+                var gespeichert = msubStore.Files.FindById("bbbb000000000001")?.MsubMovieId;
                 var zweiteRunde = await msubAufloeser
                     .ResolveForMediaAsync(
                         new Jellyfin.Plugin.SubScribe.Registry.ContentHashRegistry(msubStore, null, null),
@@ -2879,7 +2887,7 @@ internal static class Program
                     && filmAuf.Status == MsubMovieStatus.Found
                     && gespeichert == "102"
                     && zweiteRunde.Status == MsubMovieStatus.Stored
-                    && msubStore.Meta.FindById("db")?.SchemaVersion == 21,
+                    && msubStore.Meta.FindById("db")?.SchemaVersion == 22,
                     "id=" + (gespeichert ?? "<null>") + " status=" + filmAuf.Status + "/" + zweiteRunde.Status
                     + " marker=" + msubStore.Meta.FindById("db")?.SchemaVersion);
             }
@@ -2911,10 +2919,27 @@ internal static class Program
                     + "Season, Episode, LanguagesAvailable, SubtitlesUploadedAt, LastSearchUtc, LastSearchLanguages, "
                     + "LastSeen) VALUES ('cccc000000000001', '/data/filme/dune.mkv', 'jf-2', 'tt1160419', "
                     + "'438631', NULL, NULL, 0, 0, 0, 'EN', NULL, NULL, NULL, '2026-11-15T00:00:00');"
-                    + "CREATE TABLE sidecars (Id TEXT PRIMARY KEY);"
-                    + "CREATE TABLE embeds (Id TEXT PRIMARY KEY);"
-                    + "INSERT INTO sidecars (Id) VALUES ('dddd000000000001');"
-                    + "INSERT INTO embeds (Id) VALUES ('cccc000000000001|2');";
+                    // F-M671: eine Altdatei traegt die ALTEN Tabellen mit ihren ALTEN Schluesseln und
+                    // Spalten — angelegt aus diesem DDL, nicht aus dem neuen Modell abgeleitet. Die
+                    // Spalten der dritten Quelle (Moviesubtitles*) gibt es hier noch nicht.
+                    + "CREATE TABLE sidecars (Id TEXT PRIMARY KEY, ContentHash TEXT, FileName TEXT, "
+                    + "MediaHash TEXT NOT NULL DEFAULT '', Path TEXT, ImdbId TEXT, TmdbId TEXT, IsSeries INTEGER, "
+                    + "Season INTEGER, Episode INTEGER, Language TEXT, HearingImpaired INTEGER, Forced INTEGER, "
+                    + "Status TEXT, Reason TEXT, StatusAt TEXT, Origin TEXT, OriginId TEXT, "
+                    + "SubdlDownloadId TEXT, SubdlUploadId TEXT, SubdlUploadedAt TEXT, "
+                    + "TvSubtitlesDownloadId TEXT, TvSubtitlesUploadId TEXT, TvSubtitlesUploadedAt TEXT);"
+                    + "CREATE TABLE embeds (Id TEXT PRIMARY KEY, MediaHash TEXT NOT NULL DEFAULT '', "
+                    + "SubPos INTEGER NOT NULL DEFAULT 0, Language TEXT, HearingImpaired INTEGER, Forced INTEGER, "
+                    + "ContentHash TEXT, Status TEXT, Reason TEXT, StatusAt TEXT, Origin TEXT, OriginId TEXT, "
+                    + "DetectionAttemptedAt TEXT, DetectionOutcome TEXT, "
+                    + "SubdlDownloadId TEXT, SubdlUploadId TEXT, SubdlUploadedAt TEXT, "
+                    + "TvSubtitlesDownloadId TEXT, TvSubtitlesUploadId TEXT, TvSubtitlesUploadedAt TEXT);"
+                    + "INSERT INTO sidecars (Id, ContentHash, FileName, MediaHash, Language, Status, StatusAt) "
+                    + "VALUES ('dddd000000000001', 'dddd000000000001', 'dune.de.srt', 'cccc000000000001', "
+                    + "'DE', 'downloaded', '2026-11-15T00:00:00');"
+                    + "INSERT INTO embeds (Id, MediaHash, SubPos, Language, Status, StatusAt) "
+                    + "VALUES ('cccc000000000001|2', 'cccc000000000001', 2, 'EN', 'observed', "
+                    + "'2026-11-15T00:00:00');";
                 await cmd.ExecuteNonQueryAsync().ConfigureAwait(false);
             }
 
@@ -2924,30 +2949,36 @@ internal static class Program
             int? marker;
             using (var legacy = new Jellyfin.Plugin.SubScribe.Data.ScribeDbContext(msubLegacyDir.Path, null))
             {
-                var bestand = legacy.Media.FindById("cccc000000000001");
+                var bestand = legacy.Files.FindById("cccc000000000001");
                 bestandImdb = bestand?.ImdbId;
                 bestandTmdb = bestand?.TmdbId;
                 bestandMsub = bestand?.MsubMovieId;
                 marker = legacy.Meta.FindById("db")?.SchemaVersion;
             }
 
-            var medienSpalten = Spalten(legacyFile, "media");
-            var seitenSpalten = Spalten(legacyFile, "sidecars");
-            var spurSpalten = Spalten(legacyFile, "embeds");
+            var medienSpalten = Spalten(legacyFile, "file");
+            var seitenSpalten = Spalten(legacyFile, "sidecar");
+            var spurSpalten = Spalten(legacyFile, "track");
+            var alteTabellen = Spalten(legacyFile, "media").Count + Spalten(legacyFile, "sidecars").Count
+                + Spalten(legacyFile, "embeds").Count;
             Check("Schema 13 -> 14: die Spalten der dritten Quelle werden beim Start nachgezogen (F-M507)",
                 // F-M668: die neun Marken-Spalten werden NICHT mehr nachgezogen — die Quelle ist ein WERT
                 // in `source_matrix`. Was bleibt, ist die Nummer am Medium (MsubMovieId, keine Marke).
+                // F-M671: sie steht in der DDL der DATEI-Ebene; die vier Alt-Tabellen sind danach weg.
                 medienSpalten.Contains("MsubMovieId")
                 && !seitenSpalten.Contains("MoviesubtitlesDownloadId")
                 && !seitenSpalten.Contains("MoviesubtitlesUploadId")
                 && !spurSpalten.Contains("MoviesubtitlesDownloadId")
+                && alteTabellen == 0
                 // F-M670: der Marker steht auf 21 (Alt-Tabelle und Id-Spalte sind entfallen).
-                && marker == 21
+                // F-M671: 22 — die eigenen Kennungen.
+                && marker == 22
                 && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Data/ScribeDbContext.cs"))
                     .Contains("\"RefusalSignature TEXT NULL, \"", StringComparison.Ordinal),
-                "media=" + string.Join(",", medienSpalten.Where(x => x.StartsWith("Msub", StringComparison.Ordinal)))
-                + " sidecars=" + string.Join(",", seitenSpalten.Where(x => x.StartsWith("Moviesub", StringComparison.Ordinal)))
-                + " embeds=" + string.Join(",", spurSpalten.Where(x => x.StartsWith("Moviesub", StringComparison.Ordinal)))
+                "file=" + string.Join(",", medienSpalten.Where(x => x.StartsWith("Msub", StringComparison.Ordinal)))
+                + " sidecar=" + string.Join(",", seitenSpalten.Where(x => x.StartsWith("Moviesub", StringComparison.Ordinal)))
+                + " track=" + string.Join(",", spurSpalten.Where(x => x.StartsWith("Moviesub", StringComparison.Ordinal)))
+                + " alteTabellen=" + alteTabellen
                 + " marker=" + marker);
             Check("die Bestandszeile bleibt unangetastet und liest die neuen Felder als null (F-M507)",
                 bestandImdb == "tt1160419" && bestandTmdb == "438631" && bestandMsub is null,
@@ -2961,10 +2992,11 @@ internal static class Program
                 // F-M668: Schema 19. Die Marken-Spalten der dritten Quelle stehen NICHT mehr in den
                 // Nachzieh-Listen; die Matrix führt die Quelle als Wert, und der Quellenname ist derselbe
                 // wie in der API (eine Schreibweise, zwei Schichten).
-                dbSource.Contains("public const int CurrentSchemaVersion = 21;", StringComparison.Ordinal)
+                // F-M671: der Marker steht auf 22; die Nummer am Medium steht in der DDL der Datei.
+                dbSource.Contains("public const int CurrentSchemaVersion = 22;", StringComparison.Ordinal)
                 && !dbSource.Contains("ALTER TABLE sidecars ADD COLUMN MoviesubtitlesDownloadId", StringComparison.Ordinal)
                 && !dbSource.Contains("ALTER TABLE embeds ADD COLUMN MoviesubtitlesUploadedAt", StringComparison.Ordinal)
-                && dbSource.Contains("(\"MsubMovieId\", \"ALTER TABLE media ADD COLUMN MsubMovieId TEXT NULL;\")", StringComparison.Ordinal)
+                && dbSource.Contains("+ \"MsubMovieId TEXT NULL, \"", StringComparison.Ordinal)
                 && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Data/SourceMatrix.cs"))
                     .Contains("public const string MovieSubtitles = \"moviesubtitles\";", StringComparison.Ordinal)
                 && provenanceSource.Contains("public const string MovieSubtitles = \"moviesubtitles\";", StringComparison.Ordinal));
@@ -3017,7 +3049,7 @@ internal static class Program
                 const string film = "ffff000011112222";
                 string text = "1\n00:00:01,000 --> 00:00:02,000\nEin Satz.\n\n";
                 string hash = Jellyfin.Plugin.SubScribe.Registry.ContentHashRegistry.ComputeHash(text);
-                markReg.EnsureMedia(film, null, "/data/movies2/film.mkv");
+                markReg.EnsureFile(film, null, "/data/movies2/film.mkv");
                 markReg.MarkEmbed(film, 0, "DE", false, Jellyfin.Plugin.SubScribe.Data.SubtitleStatus.Uploaded,
                     contentHash: hash, moviesubtitlesUploadId: "own:moviesubtitles:20261115T180405Z:abcd1234",
                     moviesubtitlesUploadedAt: DateTime.UtcNow);
@@ -3032,7 +3064,7 @@ internal static class Program
                     + " tvst=" + markReg.IsUploadedTo(film, "DE", false, SubtitleProvider.TvSubtitles));
 
                 // Und das Settle schreibt dieselbe Marke, wenn NUR die Film-Adresse den Inhalt haelt.
-                markReg.EnsureMedia("eeee000033334444", null, "/data/movies2/zweiter.mkv");
+                markReg.EnsureFile("eeee000033334444", null, "/data/movies2/zweiter.mkv");
                 bool gesetzt = markReg.RecordSkippedContent("eeee000033334444", false, 1, "DE", false, false, hash,
                     Jellyfin.Plugin.SubScribe.Data.RejectReason.DuplicateContent,
                     new[] { SubtitleProvider.MovieSubtitles });
@@ -3153,7 +3185,7 @@ internal static class Program
 
                 // Die Zeile, die ein Lauf fuer eine SERIE schreibt: Kennungen, Staffel/Folge, IsSeries.
                 const string serieHash = "a1a1a1a1b2b2b2b2";
-                kindReg.EnsureMedia(serieHash, patch: media =>
+                kindReg.EnsureFile(serieHash, patch: media =>
                 {
                     media.ImdbId = "tt0903747";
                     media.TmdbId = "1396";
@@ -3164,7 +3196,7 @@ internal static class Program
 
                 // Die Zeile eines AUFGELOESTEN Films: Kennungen, keine Serie.
                 const string filmHash = "c3c3c3c3d4d4d4d4";
-                kindReg.EnsureMedia(filmHash, patch: media =>
+                kindReg.EnsureFile(filmHash, patch: media =>
                 {
                     media.ImdbId = "tt15398776";
                     media.TmdbId = "872585";
@@ -3172,7 +3204,7 @@ internal static class Program
 
                 // Die Zeile, die JEDER Lauf anlegt (Beobachtung, MarkSearched) — sie sagt NICHTS ueber die Art.
                 const string stummHash = "e5e5e5e5f6f6f6f6";
-                kindReg.EnsureMedia(stummHash, "0123456789abcdef0123456789abcdef", "/data/movies2/stumm.mkv");
+                kindReg.EnsureFile(stummHash, "0123456789abcdef0123456789abcdef", "/data/movies2/stumm.mkv");
 
                 bool? artSerie = kindReg.MediaKindIsSeries(serieHash);
                 bool? artFilm = kindReg.MediaKindIsSeries(filmHash);
@@ -3249,7 +3281,7 @@ internal static class Program
 
         Check("die Store-Frage ist EINE Abfrage ueber den Primaerschluessel — kein Netz, kein TMDb im Scan (F-M512)",
             registrySource.Contains("public bool? MediaKindIsSeries(string? mediaHash)", StringComparison.Ordinal)
-            && registrySource.Contains("var row = _db.Media.FindById(mediaHash);", StringComparison.Ordinal)
+            && registrySource.Contains("var row = _db.Files.FindById(mediaHash);", StringComparison.Ordinal)
             // der Einreiher-Block selbst traegt keinen Aufruf, der hinausgeht
             && !artBlock.Contains("Async(", StringComparison.Ordinal)
             && !artBlock.Contains("HttpClient", StringComparison.Ordinal)
@@ -3257,7 +3289,7 @@ internal static class Program
 
         // ---- F-M514: ein abgewiesenes Anhaengen darf den Store nicht vergiften ---------------------
         // Vorfall 16.11.2026 (jf-test 02:51:48): Der Download schrieb eine Seitentraeger-Zeile fuer
-        // eine Datei, deren OSHash noch nicht bekannt war. `EnsureMedia(null)` baute daraus eine
+        // eine Datei, deren OSHash noch nicht bekannt war. `EnsureFile(null)` baute daraus eine
         // Medienzeile OHNE Schluessel; Entity Framework wies das Anhaengen ab ("primary key property
         // 'Id' is null") und liess die Instanz seit EF Core 10 als Detached im Change Tracker stehen.
         // Von da an warf JEDES SaveChanges dieses Kontexts "Unexpected entry.EntityState: Detached",
@@ -3281,7 +3313,7 @@ internal static class Program
             {
                 var ghostReg = new Jellyfin.Plugin.SubScribe.Registry.ContentHashRegistry(ghostDb, null, null);
                 var ghostWorker = new Jellyfin.Plugin.SubScribe.Registry.WorkerRunRegistry(ghostDb, null);
-                medienVorher = ghostDb.Media.Count();
+                medienVorher = ghostDb.Files.Count();
 
                 // (a) GENAU der Aufruf des Vorfalls: Seitentraeger ohne bekannten Medien-Hash.
                 try
@@ -3298,11 +3330,11 @@ internal static class Program
                 var geisterZeile = ghostDb.Sidecars.FindById(geisterHash);
                 Check("ein Seitentraeger ohne bekannten Medien-Hash wirft nicht und legt keine Medienzeile ohne Schluessel an (F-M514)",
                     !warfSeitentraeger
-                    && ghostDb.Media.Count() == medienVorher
-                    && ghostDb.Media.FindAll().All(m => !string.IsNullOrEmpty(m.Id))
+                    && ghostDb.Files.Count() == medienVorher
+                    && ghostDb.Files.FindAll().All(m => !string.IsNullOrEmpty(m.OsHash))
                     && geisterZeile != null
                     && string.IsNullOrEmpty(geisterZeile.MediaHash),
-                    "warf=" + warfSeitentraeger + " medien=" + ghostDb.Media.Count() + "/" + medienVorher
+                    "warf=" + warfSeitentraeger + " medien=" + ghostDb.Files.Count() + "/" + medienVorher
                     + " randzeile=" + (geisterZeile == null ? "<fehlt>" : "'" + geisterZeile.MediaHash + "'"));
 
                 // (b) Die Aufzeichnung, die im Vorfall zuerst warnte, schreibt weiter eine Zeile.
@@ -3314,14 +3346,14 @@ internal static class Program
                 bool warfOhneSchluessel = false;
                 try
                 {
-                    ghostDb.Media.Upsert(new Jellyfin.Plugin.SubScribe.Data.MediaEntity
+                    ghostDb.Files.Upsert(new Jellyfin.Plugin.SubScribe.Data.FileEntity
                     {
-                        Id = null!,
+                        OsHash = null!,
                         Path = "/data/movies2/ohne-schluessel.mkv",
                     });
-                    ghostDb.Media.Upsert(new Jellyfin.Plugin.SubScribe.Data.MediaEntity
+                    ghostDb.Files.Upsert(new Jellyfin.Plugin.SubScribe.Data.FileEntity
                     {
-                        Id = string.Empty,
+                        OsHash = string.Empty,
                         Path = "/data/movies2/leerer-schluessel.mkv",
                     });
                 }
@@ -3332,9 +3364,9 @@ internal static class Program
 
                 Check("eine Zeile ohne Geschaeftsschluessel wird nicht geschrieben und wirft nicht (F-M514)",
                     !warfOhneSchluessel
-                    && ghostDb.Media.Count() == medienVorher
-                    && ghostDb.Media.FindAll().All(m => !string.IsNullOrEmpty(m.Id)),
-                    "warf=" + warfOhneSchluessel + " medien=" + ghostDb.Media.Count());
+                    && ghostDb.Files.Count() == medienVorher
+                    && ghostDb.Files.FindAll().All(m => !string.IsNullOrEmpty(m.OsHash)),
+                    "warf=" + warfOhneSchluessel + " medien=" + ghostDb.Files.Count());
 
                 // (d) Und der Store bleibt danach schreibfaehig — das ist der Punkt, an dem der
                 //     Vorfall den ganzen Upload-Zyklus beendet hat.
@@ -3386,7 +3418,7 @@ internal static class Program
                 // Der einzige Weg, den Geist heute noch zu erzeugen: am Set vorbei anhaengen.
                 try
                 {
-                    gift.Add(new Jellyfin.Plugin.SubScribe.Data.MediaEntity { Id = null!, Path = "/x.mkv" });
+                    gift.Add(new Jellyfin.Plugin.SubScribe.Data.FileEntity { FileId = null!, Path = "/x.mkv" });
                 }
                 catch (InvalidOperationException)
                 {
@@ -3440,7 +3472,8 @@ internal static class Program
         var msubQuelle = ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/Endpoints/MsubMovieResolver.cs"));
 
         Check("EnsureMedia baut ohne Medien-Hash gar keine Zeile — warnen statt anhaengen (F-M514)",
-            dbQuelle.Contains("public MediaEntity EnsureMedia(string? mediaHash", StringComparison.Ordinal)
+            // F-M671: die Datei-Ebene heisst `file`, die Methode `EnsureFile`; der Hash bleibt die Adresse.
+            dbQuelle.Contains("public FileEntity EnsureFile(string? osHash", StringComparison.Ordinal)
             && dbQuelle.Contains("media row NOT written: no media hash known", StringComparison.Ordinal));
 
         Check("das gemeinsame Set weist Schluessellose Zeilen ab — fuer JEDE Area und damit jeden Worker (F-M514)",

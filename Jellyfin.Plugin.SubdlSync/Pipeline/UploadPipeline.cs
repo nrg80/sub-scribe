@@ -1398,7 +1398,7 @@ public sealed class UploadPipeline : IPackFiller
             // candidate path needs it either way.
             if (!string.IsNullOrEmpty(mediaHash) && !_config.DryRun)
             {
-                Registry.MarkAndFlush(() => Registry.EnsureMedia(mediaHash, item.Id.ToString("D"), mediaPath));
+                Registry.MarkAndFlush(() => Registry.EnsureFile(mediaHash, item.Id.ToString("D"), mediaPath));
             }
 
             // Per-item outcome flags for the file-level counters on the status card.

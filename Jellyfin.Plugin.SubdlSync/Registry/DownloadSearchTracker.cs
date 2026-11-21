@@ -22,7 +22,7 @@ namespace Jellyfin.Plugin.SubScribe.Registry;
 /// Per-file download search tracker.
 /// <para>
 /// The search timestamp and the language list it belongs to live on the file record itself
-/// (area 2, <see cref="MediaEntity.LastSearchUtc"/> / <see cref="MediaEntity.LastSearchLanguages"/>),
+/// (area 2, <see cref="FileEntity.LastSearchUtc"/> / <see cref="FileEntity.LastSearchLanguages"/>),
 /// because that is what they describe: this file was searched, for these languages. The previous
 /// separate table kept them next to a duplicated global "last languages" row and needed an explicit
 /// reset whenever the configured languages changed.
@@ -66,7 +66,7 @@ public sealed class DownloadSearchTracker
     }
 
     /// <summary>Number of files that carry a search timestamp.</summary>
-    public int Count => _db.Media.Count(x => x.LastSearchUtc != null);
+    public int Count => _db.Files.Count(x => x.LastSearchUtc != null);
 
     /// <summary>
     /// True when this Jellyfin item is due for a (re-)search: never searched, searched under a
@@ -125,7 +125,7 @@ public sealed class DownloadSearchTracker
         media.LastSearchUtc = null;
         media.LastSearchLanguages = null;
         media.LastSearchEmptyUtc = null; // F-M661: der Leer-Merker haengt am Such-Stempel
-        _db.Media.Update(media);
+        _db.Files.Update(media);
         LogUtil.Detail(_logger, "[Sub Scribe-DB] search stamp cleared for {Item} — rework due now", itemId);
         return true;
     }
@@ -147,7 +147,7 @@ public sealed class DownloadSearchTracker
 
         // F-M661: dieser Stempel heisst "gefragt, und es kam etwas" — ein alter Leer-Merker faellt.
         media.LastSearchEmptyUtc = null;
-        _db.Media.Update(media);
+        _db.Files.Update(media);
         LogUtil.Detail(_logger, "[Sub Scribe-DB] search stamp {Item} langs={Langs}", itemId, media.LastSearchLanguages);
     }
 
@@ -158,7 +158,7 @@ public sealed class DownloadSearchTracker
     /// <summary>
     /// F-M661: notes that the search for this item came back EMPTY — no candidate from any asked
     /// source. The stamp only rides on a search that really ran (there must be a
-    /// <see cref="MediaEntity.LastSearchUtc"/>), so an item that was never asked is not deferred.
+    /// <see cref="FileEntity.LastSearchUtc"/>), so an item that was never asked is not deferred.
     /// </summary>
     /// <param name="itemId">Jellyfin item id.</param>
     /// <returns>True when the mark was stored.</returns>
@@ -171,7 +171,7 @@ public sealed class DownloadSearchTracker
         }
 
         media.LastSearchEmptyUtc = DateTime.UtcNow;
-        _db.Media.Update(media);
+        _db.Files.Update(media);
         LogUtil.Detail(_logger, "[Sub Scribe-DB] empty search noted for {Item} — the next ask waits for the longer clock (F-M661)", itemId);
         return true;
     }
@@ -186,13 +186,13 @@ public sealed class DownloadSearchTracker
     /// <returns>Number of stamps cleared.</returns>
     public int ResetAll()
     {
-        var stamped = _db.Media.Find(x => x.LastSearchUtc != null).ToList();
+        var stamped = _db.Files.Find(x => x.LastSearchUtc != null).ToList();
         foreach (var media in stamped)
         {
             media.LastSearchUtc = null;
             media.LastSearchLanguages = null;
             media.LastSearchEmptyUtc = null; // F-M661
-            _db.Media.Update(media);
+            _db.Files.Update(media);
         }
 
         LogUtil.Detail(_logger, "[Sub Scribe-DB] search stamps cleared: {Count}", stamped.Count);
@@ -204,7 +204,7 @@ public sealed class DownloadSearchTracker
     /// <returns>Number of stamps cleared.</returns>
     public int PruneDeadItems(Func<string, bool> itemExists)
     {
-        var dead = _db.Media.Find(x => x.LastSearchUtc != null)
+        var dead = _db.Files.Find(x => x.LastSearchUtc != null)
             .Where(m => !string.IsNullOrEmpty(m.JellyfinItemId) && !itemExists(m.JellyfinItemId!))
             .ToList();
 
@@ -213,7 +213,7 @@ public sealed class DownloadSearchTracker
             media.LastSearchUtc = null;
             media.LastSearchLanguages = null;
             media.LastSearchEmptyUtc = null; // F-M661
-            _db.Media.Update(media);
+            _db.Files.Update(media);
         }
 
         if (dead.Count > 0)
@@ -229,8 +229,8 @@ public sealed class DownloadSearchTracker
     {
     }
 
-    private MediaEntity? FindByItemId(string itemId)
-        => _db.Media.FindOne(x => x.JellyfinItemId == itemId);
+    private FileEntity? FindByItemId(string itemId)
+        => _db.Files.FindOne(x => x.JellyfinItemId == itemId);
 
     private static string Normalize(IReadOnlyList<string> languages)
         => string.Join(",", languages.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));

@@ -63,7 +63,7 @@ internal static class RunOnce
 
         string h0 = reg.GetMediaHash(work);
         var st0 = Stat(work);
-        reg.EnsureMedia(h0, "aa11bb22cc33dd44aa11bb22cc33dd44", work);
+        reg.EnsureFile(h0, "aa11bb22cc33dd44aa11bb22cc33dd44", work);
         Console.WriteLine("Start: hash=" + h0 + " size=" + st0.Size + " mtime=" + st0.MTime);
 
         // ---- Seed 1 (download): darf schreiben ----
@@ -73,7 +73,7 @@ internal static class RunOnce
         // Wie der Seeder: erst den Identitaets-Umzug (der ALLE Zeilen mitzieht, auch die
         // Versuchs-Vermerke), dann die aufgeloesten Spuren unter dem neuen Hash festhalten.
         if (r1.OldHash != null && r1.NewHash != null) reg.ReplaceMediaIdentity(r1.OldHash, r1.NewHash);
-        reg.EnsureMedia(h1, "aa11bb22cc33dd44aa11bb22cc33dd44", work);
+        reg.EnsureFile(h1, "aa11bb22cc33dd44aa11bb22cc33dd44", work);
         foreach (var (pos, lang, hi) in r1.Tracks) reg.ObserveEmbed(h1, pos, lang, hi);
         var st1 = Stat(work);
         Console.WriteLine();
@@ -116,7 +116,7 @@ internal static class RunOnce
 
         string u0 = reg.GetMediaHash(work2);
         var ust0 = Stat(work2);
-        reg.EnsureMedia(u0, "cc33dd44ee55ff66cc33dd44ee55ff66", work2);
+        reg.EnsureFile(u0, "cc33dd44ee55ff66cc33dd44ee55ff66", work2);
         var uStreams = Probe(work2);
 
         var ugate1 = new LanguageTagGate(log, cfg, reg);

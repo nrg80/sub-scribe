@@ -66,7 +66,7 @@ internal static class DupSkip
         string contentHash = ContentHashRegistry.ComputeHash(text);
 
         // ---- Zustand vor dem Tag-Schreiben: die Sprache ist oben und als uploaded vermerkt.
-        reg.EnsureMedia(oldHash, "tt1234567", "/data/movies2/Lanterns/S01/Lanterns.S01E08.mkv");
+        reg.EnsureFile(oldHash, "tt1234567", "/data/movies2/Lanterns/S01/Lanterns.S01E08.mkv");
         reg.MarkEmbed(oldHash, 0, lang, false, SubtitleStatus.Uploaded, contentHash: contentHash);
         Console.WriteLine("Schritt 1  alt=" + oldHash + " uploaded-Zeilen=" + UploadedRows(db, contentHash));
 
@@ -123,7 +123,7 @@ internal static class DupSkip
     /// <summary>Zaehlt die uploaded-Zeilen zu diesem Inhalt im ganzen Bestand.</summary>
     private static int UploadedRows(ScribeDbContext db, string contentHash)
     {
-        int n = db.Embeds.FindAll().Count(x => x.ContentHash == contentHash && x.Status == SubtitleStatus.Uploaded);
+        int n = db.Tracks.FindAll().Count(x => x.ContentHash == contentHash && x.Status == SubtitleStatus.Uploaded);
         return n + db.Sidecars.FindAll().Count(x => x.ContentHash == contentHash && x.Status == SubtitleStatus.Uploaded);
     }
 }

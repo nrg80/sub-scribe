@@ -1210,7 +1210,7 @@ public sealed class ScribeSeeder
             string? newHash = resolved.NewHash ?? registry.GetMediaHash(mediaPath);
             if (!string.IsNullOrEmpty(newHash))
             {
-                registry.EnsureMedia(newHash, item.Id.ToString("D"), mediaPath);
+                registry.EnsureFile(newHash, item.Id.ToString("D"), mediaPath);
                 foreach (var (subPos, lang, hi) in resolved.Tracks)
                 {
                     registry.ObserveEmbed(newHash, subPos, lang, hi);
@@ -1286,7 +1286,7 @@ public sealed class ScribeSeeder
             // The parent row's "last seen" belongs to the ITEM, so it is refreshed here — once per
             // item — rather than from ObserveEmbed, which runs once per embedded track (measured: 87
             // calls for one file). The observation loop below therefore only records track facts.
-            registry.EnsureMedia(mediaHash, item.Id.ToString("D"), mediaPath);
+            registry.EnsureFile(mediaHash, item.Id.ToString("D"), mediaPath);
 
             var tracks = Jellyfin.Plugin.SubScribe.Registry.SidecarNaming
                 .EmbeddedTracks(_mediaSourceManager.GetMediaStreams(item.Id));

@@ -1376,7 +1376,7 @@ internal static class Program
 
                     // (d) Der GUI-Reset (F-M620) raeumt die Signatur mit weg — sonst bliebe der Pack fuer
                     // immer geschlossen.
-                    reg.EnsureMedia("ffffffffffffffffffffffffffffffff", patch: m =>
+                    reg.EnsureFile("ffffffffffffffffffffffffffffffff", patch: m =>
                     {
                         m.ImdbId = "tt650";
                         m.Season = 2;
