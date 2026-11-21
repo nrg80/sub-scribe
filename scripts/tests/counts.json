@@ -695,7 +695,7 @@
     },
     "T334": {
       "suite": "storex",
-      "checks": 24
+      "checks": 39
     }
   }
 }

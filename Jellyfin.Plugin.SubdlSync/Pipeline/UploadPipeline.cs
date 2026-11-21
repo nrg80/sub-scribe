@@ -3933,7 +3933,7 @@ public sealed class UploadPipeline : IPackFiller
                 if (loosePath != null)
                 {
                     Registry.MarkSidecar(contentHashEarly, mediaHash ?? contentHashEarly, lang, hearingImpaired, forced,
-                        SubtitleStatus.Uploaded, subdlId: uploadId?.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                        SubtitleStatus.Uploaded,
                         fileName: Path.GetFileName(loosePath), path: loosePath,
                         // F-M488: eigenes Feld je Quelle und Richtung. Liefert die Quelle keine Id,
                         // vergeben wir eine eigene (Präfix own:) — ein Upload ohne Kennzeichen wäre von
@@ -3951,9 +3951,10 @@ public sealed class UploadPipeline : IPackFiller
                 }
                 else
                 {
+                    // F-M670: die Kennung des Uploads steht als `subdlUploadId` an der Marke (Matrix
+                    // `UploadId`) — einen zweiten Schreibweg in eine Spalte gibt es nicht mehr.
                     Registry.MarkEmbed(mediaHash, subPos, lang, hearingImpaired,
                         SubtitleStatus.Uploaded, contentHash: contentHashEarly,
-                        subdlId: uploadId?.ToString(System.Globalization.CultureInfo.InvariantCulture),
                         // F-M495/F-M508: je Quelle ihre eigene Marke — mehrere Felder können gesetzt sein.
                         subdlUploadId: subdlMarke.Id,
                         tvSubtitlesUploadId: tvstMarke.Id,
@@ -5481,16 +5482,10 @@ public sealed class UploadPipeline : IPackFiller
         // F-M391: the id of the single upload this member replaces travels with the candidate, so the
         // coordinator can delete it BEFORE the pack goes up. Empty means "no single to remove" — the
         // row may be a download, or an upload whose answer carried no id.
-        // F-M391/F-M653: der Einzelupload schreibt seine Kennung in ZWEI Felder — `SubdlId` an der Zeile
-        // und `SubdlUploadId`; seit F-M668 steht letztere als `UploadId` an der Spur-Marke der Matrix.
-        // Gelesen wurde bisher nur das erste. Unter F-M429 (Pack zuerst, Einzeluploads danach) ist zum
-        // Zeitpunkt des Packbaus ohnehin keine Zeile da — die Kennung ist dann ehrlich leer, und die
-        // Zeile sagt das jetzt auch.
-        string? absorbed = uploadedRow?.SubdlId;
-        if (string.IsNullOrWhiteSpace(absorbed))
-        {
-            absorbed = Registry.UploadIdFor(proofMediaHash, lang, hearingImpaired, SubtitleProvider.Subdl);
-        }
+        // F-M670: die Kennung stand in ZWEI Feldern (`SubdlId` an der Zeile und `SubdlUploadId`); die
+        // Spalte ist entfallen, `UploadId` an der Spur-Marke der Matrix ist der einzige Ort — und der,
+        // den `UploadIdFor` ohnehin schon las.
+        string? absorbed = Registry.UploadIdFor(proofMediaHash, lang, hearingImpaired, SubtitleProvider.Subdl);
         return PackCandidate(
             item, mediaHash, imdbId, TmdbOfEpisode(item), season, episode, lang, hearingImpaired,
             forced: false, subPos, srt, mediaPath, GetFramerateCode(item), width, height, codec,
@@ -6663,9 +6658,12 @@ public sealed class UploadPipeline : IPackFiller
                                 {
                                     registry.PatchMediaMetadata(up.MediaHash, upMedia?.ImdbId,
                                         upMedia?.Season ?? 0, upMedia?.Episode, rejected.NId, upMedia?.TmdbId);
+                                    // F-M670: `rejected.NId` ist die Id des FREMDEN Eintrags, den dieser
+                                    // Upload dupliziert — ein Fund, keine Einsendung; er gehört als
+                                    // `subdlDownloadId` (Matrix `SourceId`) an die Marke.
                                     registry.MarkEmbed(up.MediaHash, up.SubPos, up.Language, up.HearingImpaired ?? false,
                                         SubtitleStatus.Rejected, contentHash: up.ContentHash,
-                                        reason: RejectReason.DuplicateRemote, subdlId: rejected.NId);
+                                        reason: RejectReason.DuplicateRemote, subdlDownloadId: rejected.NId);
                                 });
                                 break;
                             }

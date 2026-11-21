@@ -751,11 +751,12 @@ internal static class Program
         var registrySrc = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Registry/ContentHashRegistry.cs"));
         Check(registrySrc.Contains("public int RemapSubdlId(string uploadId, string entryId)"),
             "F-M435: the registry can rewrite a stored handle");
-        // F-M668: die Pack-Kennung steht in der Matrix (SourceId der `pack`-Zeile), die Untertitel-Kennung
-        // weiter an der Zeile (`SubdlId`) — beide werden umgeschrieben, nur an ihrem neuen Ort.
-        Check(registrySrc.Contains("SourceMatrix.PackMark(") && registrySrc.Contains("SourceMatrix.RemapId(_db, uploadId, entryId)")
-              && registrySrc.Contains("x.SubdlId, uploadId"),
-            "F-M435: subtitle rows AND pack rows are rewritten");
+        // F-M668/F-M670: BEIDE Kennungen stehen in der Matrix — die Behälter-Kennung an der `pack`-Zeile,
+        // die Untertitel-Kennung an der Spur-Marke. `RemapId` schreibt beide Zellen EINER Marke um
+        // (`SourceId` und `UploadId`), also braucht es keinen zweiten Schreibweg und keine Id-Spalte mehr.
+        Check(registrySrc.Contains("return SourceMatrix.RemapId(_db, uploadId, entryId);")
+              && !registrySrc.Contains("x.SubdlId, uploadId"),
+            "F-M435: subtitle rows AND pack rows are rewritten — one call, both cells of the mark");
         var coordinatorSrc = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Pipeline/SeasonPackCoordinator.cs"));
         Check(coordinatorSrc.Contains("pack entry id {Id} taken from myPublishedSubtitles"),
             "F-M435: a pack stores the entry id when the published list names it");

@@ -461,9 +461,9 @@ public class Plugin : BasePlugin<Configuration.PluginConfiguration>, IHasWebPage
         // F-M605: and the refusals the sources have already given for a track.
         Jellyfin.Plugin.SubScribe.Registry.SourceRefusalStore.Attach(db);
 
-        // F-M628: die Quellenbelege liegen jetzt in einer eigenen Tabelle — eine Quelle ist ein Wert,
-        // kein Spaltenpaar. Angehängt wird sie neben den übrigen Stores.
-        Jellyfin.Plugin.SubScribe.Data.SourceMarkStore.Attach(db);
+        // F-M670 (21.11.2026): `SourceMarkStore` ist entfallen. Die Alt-Tabelle `source_marks` hatte
+        // keinen Leser und keinen Schreiber mehr; ihre Belege stehen in der Marken-Matrix (F-M668), und
+        // die Übernahme hat sie beim Öffnen dorthin gebracht und die Tabelle entfernt.
 
         // F-M608: and the ladder that closes a title after four failed creations.
         Jellyfin.Plugin.SubScribe.Registry.TitleFailureStore.Attach(db);

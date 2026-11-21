@@ -436,7 +436,9 @@ internal static class Program
         var adopt = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/ScribeAdoptController.cs"));
         Check(adopt.Contains("AdoptUploads", StringComparison.Ordinal)
               && adopt.Contains("SubtitleStatus.Uploaded", StringComparison.Ordinal)
-              && adopt.Contains("subdlId: entry.SubdlId", StringComparison.Ordinal),
+              // F-M670: die Kennung geht als Einsende-Id an die Marke (Matrix `UploadId`) — die Spalte
+              // `embeds.SubdlId`, in die sie frueher zusaetzlich ging, gibt es nicht mehr.
+              && adopt.Contains("subdlUploadId: entry.SubdlId", StringComparison.Ordinal),
             "F-M423: the adoption endpoint writes an uploaded row that carries its SubDL id");
         Check(adopt.Contains("ComputeMediaHash", StringComparison.Ordinal)
               && adopt.Contains("File.Exists", StringComparison.Ordinal),

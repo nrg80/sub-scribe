@@ -108,8 +108,10 @@ public class ScribeDiagnosticsController : ControllerBase
                     .Concat(sidecars.Where(s => s.Reason != null).Select(s => s.Reason!))
                     .GroupBy(r => r)
                     .ToDictionary(g => g.Key, g => g.Count()),
-                WithSubdlId = embeds.Count(s => !string.IsNullOrWhiteSpace(s.SubdlId))
-                            + sidecars.Count(s => !string.IsNullOrWhiteSpace(s.SubdlId))
+                // F-M670: die Zahl kommt aus der Marken-Matrix — es gibt keine Id-Spalte an `embeds`/
+                // `sidecars` mehr, aus der sie gezählt werden könnte. „Mit Id" heißt: die Marke führt eine
+                // Eintrags- oder Einsende-Id bei SubDL.
+                WithSubdlId = SourceMatrix.CountWithId(db, SourceMatrix.Subdl)
             };
 
             var result = new

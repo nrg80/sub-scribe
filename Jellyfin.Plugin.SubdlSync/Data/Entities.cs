@@ -337,8 +337,9 @@ public abstract class SubtitleState
     /// <summary>When <see cref="Status"/> was last set.</summary>
     public DateTime StatusAt { get; set; } = DateTime.UtcNow;
 
-    /// <summary>SubDL upload or download id this verdict refers to, when known.</summary>
-    public string? SubdlId { get; set; }
+    // F-M670 (21.11.2026): `SubdlId` stand hier als „SubDL upload or download id this verdict refers
+    // to". Genau das führt die Marken-Matrix als `SourceId` (Eintrag/Fund) und `UploadId` (Einsendung);
+    // die Spalte war der zweite Bestand derselben Aussage und ist entfernt (F-M668/F-M670).
 
     /// <summary>
     /// F-M486 (operator order 15.11.2026): where this subtitle CAME FROM — <c>subdl</c> or
@@ -359,8 +360,11 @@ public abstract class SubtitleState
     // `SubdlUploadId`, `SubdlUploadedAt`, dasselbe für tvsubtitles und moviesubtitles) standen hier und
     // an den Sidecars. Sie sind in die Marken-Matrix gewandert (Anker = Medien-Hash, Art = `track` bzw.
     // `track-hi`, `SourceId` = Abruf-Id, `UploadId` = Einsende-Id, `ClosedAt` = Einsende-Zeitpunkt) und
-    // werden hier NICHT mehr geführt: ein Urteil hat genau einen Ort (F-M668). Was bleibt, ist die
-    // Herkunft (`Origin`/`OriginId`) und `SubdlId` — beides sind Eigenschaften der Zeile, keine Marken.
+    // werden hier NICHT mehr geführt: ein Urteil hat genau einen Ort (F-M668).
+    // F-M670 (21.11.2026): dasselbe gilt für `SubdlId`. Die Spalte stand hier und an den Sidecars und
+    // wiederholte, was die Matrix als `SourceId`/`UploadId` führt — sie ist samt Feld entfernt. Was
+    // bleibt, ist allein die Herkunft (`Origin`/`OriginId`); sie sagt, WOHER der Text kam, nicht was
+    // die Quelle über ihn geurteilt hat.
 }
 
 /// <summary>

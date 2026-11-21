@@ -773,6 +773,18 @@ using (var db = new ScribeDbContext(matrixDir, null))
         }
     }
 
+    // F-M670: die zwei Reste, die der Vor-Build ebenfalls geschrieben hat — die Id-Spalte an den
+    // Spuren und die Alt-Tabelle `source_marks` (ein Beleg je Paar aus Besitzerzeile und Quelle).
+    foreach (string table in new[] { "embeds", "sidecars" })
+    {
+        db.Context.Database.ExecuteSqlRaw("ALTER TABLE " + table + " ADD COLUMN SubdlId TEXT NULL;");
+    }
+
+    db.Context.Database.ExecuteSqlRaw(
+        "CREATE TABLE source_marks (Id TEXT NOT NULL PRIMARY KEY, OwnerKey TEXT NOT NULL DEFAULT '', "
+        + "Source TEXT NOT NULL DEFAULT '', DownloadId TEXT NULL, UploadId TEXT NULL, UploadedAt TEXT NULL, "
+        + "CompletedAt TEXT NULL, Written TEXT NOT NULL DEFAULT '');");
+
     // Die Marken selbst — Spalte für Spalte, wie der Vor-Build sie geschrieben hat.
     void Sql(string sql) => db.Context.Database.ExecuteSqlRaw(sql);
     Sql("UPDATE embeds SET SubdlDownloadId = '111', SubdlUploadedAt = '2026-11-01 10:00:00' WHERE Id = 'm1|0';");
@@ -787,6 +799,22 @@ using (var db = new ScribeDbContext(matrixDir, null))
     Sql("UPDATE packs SET PackId = 'pid-b', Fingerprint = 'fp-b', "
         + "RefusalReason = 'the source already holds this container (duplicate)', RefusedAt = '2026-11-08 10:00:00' "
         + "WHERE Id = 'tt100|S2|EN|plain|subdl';");
+
+    // F-M670: die Id-Spalte — eine ohne Gegenstück in den breiten Spalten (m1|0 trägt dort keine
+    // Einsende-Id), eine identisch (m1|3) und eine am Seitenwagen.
+    Sql("UPDATE embeds SET SubdlId = '700' WHERE Id = 'm1|0';");
+    Sql("UPDATE embeds SET SubdlId = 'up-444' WHERE Id = 'm1|3';");
+    Sql("UPDATE sidecars SET SubdlId = '701' WHERE Id = 'sc1';");
+
+    // F-M670: die Alt-Tabelle. Eine Zeile deckt eine vorhandene Marke (m1|0), eine zweite trägt eine
+    // Marke, die es NUR dort gibt (m2|1 — beobachtet, ohne jeden breiten Stempel), eine dritte zeigt
+    // auf keine Besitzerzeile mehr.
+    Sql("INSERT INTO source_marks (Id, OwnerKey, Source, DownloadId, UploadId, UploadedAt, CompletedAt, Written) "
+        + "VALUES ('m1|0|subdl', 'm1|0', 'subdl', NULL, 'up-111', '2026-11-03 10:00:00', NULL, '2026-11-03 10:00:00');");
+    Sql("INSERT INTO source_marks (Id, OwnerKey, Source, DownloadId, UploadId, UploadedAt, CompletedAt, Written) "
+        + "VALUES ('m2|1|subdl', 'm2|1', 'subdl', NULL, 'sm-only', NULL, NULL, '2026-11-03 10:00:00');");
+    Sql("INSERT INTO source_marks (Id, OwnerKey, Source, DownloadId, UploadId, UploadedAt, CompletedAt, Written) "
+        + "VALUES ('weg|0|subdl', 'weg|0', 'subdl', NULL, 'sm-orphan', '2026-11-02 10:00:00', NULL, '2026-11-02 10:00:00');");
 
     db.Context.Database.ExecuteSqlRaw("UPDATE meta SET SchemaVersion = 17 WHERE Id = 'db';");
 }
@@ -807,6 +835,8 @@ string? QText(string sql, string file = "")
 }
 
 int Q(string sql) => Convert.ToInt32(QText(sql) ?? "0", System.Globalization.CultureInfo.InvariantCulture);
+
+int QIn(string sql, string file) => Convert.ToInt32(QText(sql, file) ?? "0", System.Globalization.CultureInfo.InvariantCulture);
 
 int Beleg(Dictionary<string, int> map, string key) => map.TryGetValue(key, out int n) ? n : 0;
 
@@ -830,6 +860,8 @@ string[] SpaltenVon(string table, string file = "")
 string[] Altspalten = { "SubdlDownloadId", "SubdlUploadId", "SubdlUploadedAt",
     "TvSubtitlesDownloadId", "TvSubtitlesUploadId", "TvSubtitlesUploadedAt",
     "MoviesubtitlesDownloadId", "MoviesubtitlesUploadId", "MoviesubtitlesUploadedAt",
+    // F-M670: die letzte eigene Id-Spalte — sie fällt wie die neun breiten.
+    "SubdlId",
     "CompleteSubdl", "CompleteTvSubtitles", "CompleteMsub", "CompleteSignature",
     "PackId", "Fingerprint", "RefusalReason", "RefusedAt", "RefusedSignature", "UploadedAt" };
 
@@ -859,21 +891,24 @@ var belege = new Dictionary<string, int>(StringComparer.Ordinal);
 bool sicherungDa;
 int markenGesamt;
 string sicherungPfad;
+SourceMatrixMigration.Outcome? idUebernahme = null;
 using (var db = new ScribeDbContext(matrixDir, null))
 {
     belege = SourceMatrix.CountByKind(db);
     markenGesamt = belege.Values.Sum();
+    // F-M670: die zwei Reste sind beim Öffnen übernommen UND niedergelegt — sonst gäbe es sie noch.
+    idUebernahme = db.MatrixOutcome;
     var dateien = Sicherungen(matrixDir);
     sicherungDa = dateien.Length == 1;
     sicherungPfad = dateien.FirstOrDefault() ?? string.Empty;
     Console.WriteLine("   Matrix: " + string.Join(", ", belege.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => x.Key + "=" + x.Value)));
 
-    Check(markenGesamt == 11 && belege.Count == 7
-          && Beleg(belege, "subdl|track") == 4 && Beleg(belege, "tvsubtitles|track-hi") == 1
+    Check(markenGesamt == 12 && belege.Count == 7
+          && Beleg(belege, "subdl|track") == 5 && Beleg(belege, "tvsubtitles|track-hi") == 1
           && Beleg(belege, "moviesubtitles|track") == 1
           && Beleg(belege, "subdl|file") == 1 && Beleg(belege, "tvsubtitles|file") == 1
           && Beleg(belege, "moviesubtitles|file") == 1 && Beleg(belege, "subdl|pack") == 2,
-        "F-M668/F-M669: die Matrix ist aus den breiten Spalten gefüllt — 11 Marken in 7 Paaren aus Quelle und Art",
+        "F-M668/F-M669: die Matrix ist aus den breiten Spalten gefüllt — 12 Marken in 7 Paaren aus Quelle und Art (die zwölfte kommt aus der Alt-Tabelle, F-M670)",
         markenGesamt + " Marke(n): " + string.Join(",", belege.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => x.Key + "=" + x.Value)));
 
     // Die Zuordnung selbst: die Id bei der Quelle — und seit F-M669 je POSITION eine eigene Marke.
@@ -952,20 +987,64 @@ Check(uebrig.Count == 0,
 // Jede Marke existiert genau einmal: die Zahl der Zeilen ist die Zahl der verschiedenen Schlüssel.
 int matrixZeilen = Q("SELECT COUNT(*) FROM source_matrix;");
 int matrixSchluessel = Q("SELECT COUNT(DISTINCT Id) FROM source_matrix;");
-Check(matrixZeilen == matrixSchluessel && matrixZeilen == 11,
+Check(matrixZeilen == matrixSchluessel && matrixZeilen == 12,
     "F-M668: jede Marke existiert genau einmal — keine Dubletten, keine zwei Zeilen für dasselbe Urteil",
     matrixZeilen + " Zeile(n), " + matrixSchluessel + " Schlüssel");
 
-Check(Q("SELECT COUNT(*) FROM source_matrix WHERE Kind IN ('track','track-hi')") == 6,
+Check(Q("SELECT COUNT(*) FROM source_matrix WHERE Kind IN ('track','track-hi')") == 7,
     "F-M669: je Spur-Zeile eine Marke — die doppelte DE-Spur ist ZWEI Marken, keine eingedampfte",
     Q("SELECT COUNT(*) FROM source_matrix WHERE Kind IN ('track','track-hi')") + " Marke(n)");
 
 using (var db = new ScribeDbContext(matrixDir, null))
 {
-    Check(db.Meta.FindById("db")?.SchemaVersion == 20,
-        "F-M669: der Marker steht nach der Übernahme auf 20",
+    Check(db.Meta.FindById("db")?.SchemaVersion == 21,
+        "F-M670: der Marker steht nach der Übernahme auf 21",
         "marker=" + (db.Meta.FindById("db")?.SchemaVersion));
 }
+
+// F-M670: die Alt-Tabelle `source_marks` und die Id-Spalte `SubdlId` sind WEG — und ihre Werte stehen
+// jetzt in der Matrix, jede Kennung genau einmal.
+Check(Q("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='source_marks'") == 0,
+    "F-M670: die Alt-Tabelle `source_marks` existiert nach der Übernahme nicht mehr",
+    Q("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='source_marks'") + " Tabelle(n)");
+
+Check(!SpaltenVon("embeds").Contains("SubdlId") && !SpaltenVon("sidecars").Contains("SubdlId"),
+    "F-M670: die Spalte `SubdlId` ist aus `embeds` UND `sidecars` entfernt");
+
+Check(idUebernahme is { IdsTaken: 2, MarksTaken: 2, MarksNew: 1, Unplaced: 1, Conflicts: 0 },
+    "F-M670: 2 Id-Werte und 2 Alt-Marken übernommen (davon 1 neue), 1 Zeile ohne Anker, kein Konflikt",
+    idUebernahme == null
+        ? "(kein Lauf)"
+        : "ids=" + idUebernahme.IdsTaken + " marks=" + idUebernahme.MarksTaken + " neu=" + idUebernahme.MarksNew
+          + " unplaced=" + idUebernahme.Unplaced + " conflicts=" + idUebernahme.Conflicts);
+
+string keyM10 = SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m1", null), "subdl", MarkKind.Track, "EN", false, 0);
+string keySc1 = SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m2", null), "subdl", MarkKind.Track, "DE", false,
+    SourceMatrix.SidecarPosition);
+string keyM21 = SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m2", null), "subdl", MarkKind.Track, "EN", false, 1);
+
+// Die Id ohne Gegenstück in den breiten Spalten ist als Einsende-Id an ihrer Marke gelandet; die
+// identische Id hat nichts doppelt geschrieben, und die Marke, die es NUR in der Alt-Tabelle gab,
+// steht jetzt in der Matrix.
+Check(QText("SELECT UploadId FROM source_matrix WHERE Id = '" + keyM10 + "';") == "700"
+      && QText("SELECT SourceId FROM source_matrix WHERE Id = '" + keyM10 + "';") == "111",
+    "F-M670: die SubdlId einer eingesendeten Spur steht als UploadId an ihrer Marke (`SourceId` bleibt)",
+    QText("SELECT SourceId || '/' || UploadId FROM source_matrix WHERE Id = '" + keyM10 + "';") ?? "-");
+
+Check(QText("SELECT UploadId FROM source_matrix WHERE Id = '" + keySc1 + "';") == "701",
+    "F-M670: die SubdlId eines Seitenwagens steht als UploadId an der Marke mit der festen Position -1",
+    QText("SELECT UploadId FROM source_matrix WHERE Id = '" + keySc1 + "';") ?? "-");
+
+Check(QText("SELECT UploadId FROM source_matrix WHERE Id = '" + keyM21 + "';") == "sm-only",
+    "F-M670: eine Marke, die NUR in der Alt-Tabelle stand, ist in die Matrix übernommen (Id belegt die Einsendung)",
+    QText("SELECT UploadId FROM source_matrix WHERE Id = '" + keyM21 + "';") ?? "-");
+
+Check(Q("SELECT COUNT(*) FROM source_matrix WHERE SourceId = '700' OR UploadId = '700'") == 1
+      && Q("SELECT COUNT(*) FROM source_matrix WHERE SourceId = '701' OR UploadId = '701'") == 1,
+    "F-M670: jede Quellen-Id steht genau einmal in der Matrix");
+
+Check(Q("SELECT COUNT(*) FROM source_matrix WHERE SourceId = 'sm-orphan' OR UploadId = 'sm-orphan'") == 0,
+    "F-M670: eine Alt-Marke ohne Besitzerzeile bekommt KEINE Matrix-Zeile (sie lebt in der Sicherung, der Lauf meldet sie)");
 
 // Zweiter Start: dieselbe Datei, dieselbe Matrix — kein zweiter Lauf, keine zweite Sicherung.
 int backups = Sicherungen(matrixDir).Length;
@@ -1063,6 +1142,103 @@ using (var db = new ScribeDbContext(switchDir, null))
         "vorgaenger=" + File.Exists(DbFiles.PreviousPathIn(switchDir))
         + " sicherungen=" + Sicherungen(switchDir).Length);
 }
+
+// ---------------------------------------------------------------------------------------------
+// F-M670: der Weg 20 -> 21. Eine Datei aus Schema 20 trägt die Matrix bereits und hat KEINE breite
+// Spalte mehr — aber die zwei Reste stehen noch darin (die Alt-Tabelle und die Id-Spalte). Sie müssen
+// beim Öffnen genauso übernommen und niedergelegt werden; sonst bliebe der Bestand der schon
+// migrierten Dateien für immer ein zweiter Bestand.
+// ---------------------------------------------------------------------------------------------
+Console.WriteLine();
+Console.WriteLine("--- second store: schema 20 -> 21 (F-M670) ---");
+
+string s20Dir = Path.Combine(workdir, "matrix20");
+Directory.CreateDirectory(s20Dir);
+string s20Db = DbFiles.PathIn(s20Dir);
+
+using (var db = new ScribeDbContext(s20Dir, null))
+{
+    db.Media.Upsert(new MediaEntity
+    {
+        Id = "m10", Path = "/lib/zwei.mkv", ImdbId = "tt200", TmdbId = "300",
+        IsSeries = true, Season = 2, Episode = 4,
+    });
+    db.Embeds.Upsert(new EmbedTrackEntity
+    {
+        Id = ScribeDbContext.EmbedKey("m10", 0), MediaHash = "m10", SubPos = 0, Language = "DE",
+        Status = "uploaded", HearingImpaired = false,
+    });
+    db.Embeds.Upsert(new EmbedTrackEntity
+    {
+        Id = ScribeDbContext.EmbedKey("m10", 1), MediaHash = "m10", SubPos = 1, Language = "EN",
+        Status = "uploaded", HearingImpaired = false,
+    });
+
+    // Der Upload hat seine Marke ohne echte Id gesetzt — die Kennung kam erst später (F-M588/F-M670).
+    SourceMatrix.WriteTrackMark(db, db.Media.FindById("m10"), "m10", "subdl", "DE", false, 0,
+        t1, downloadId: null, uploadId: "own:subdl:deferred");
+}
+
+using (var db = new ScribeDbContext(s20Dir, null))
+{
+    db.Context.Database.ExecuteSqlRaw("ALTER TABLE embeds ADD COLUMN SubdlId TEXT NULL;");
+    db.Context.Database.ExecuteSqlRaw("ALTER TABLE sidecars ADD COLUMN SubdlId TEXT NULL;");
+    db.Context.Database.ExecuteSqlRaw("UPDATE embeds SET SubdlId = '880011' WHERE Id = 'm10|0';");
+    db.Context.Database.ExecuteSqlRaw(
+        "CREATE TABLE source_marks (Id TEXT NOT NULL PRIMARY KEY, OwnerKey TEXT NOT NULL DEFAULT '', "
+        + "Source TEXT NOT NULL DEFAULT '', DownloadId TEXT NULL, UploadId TEXT NULL, UploadedAt TEXT NULL, "
+        + "CompletedAt TEXT NULL, Written TEXT NOT NULL DEFAULT '');");
+    db.Context.Database.ExecuteSqlRaw(
+        "INSERT INTO source_marks (Id, OwnerKey, Source, DownloadId, UploadId, UploadedAt, CompletedAt, Written) "
+        + "VALUES ('m10|1|subdl', 'm10|1', 'subdl', NULL, 'sm20', '2026-11-09 10:00:00', NULL, '2026-11-09 10:00:00');");
+    db.Context.Database.ExecuteSqlRaw("UPDATE meta SET SchemaVersion = 20 WHERE Id = 'db';");
+}
+
+Check(QIn("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='source_matrix'", s20Db) == 1
+      && SpaltenVon("embeds", s20Db).Contains("SubdlId")
+      && QIn("SELECT SchemaVersion FROM meta WHERE Id='db'", s20Db) == 20,
+    "die 20er-Datei trägt die Matrix UND die zwei Reste (Marker 20)");
+
+string s20Key = SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m10", null), "subdl", MarkKind.Track, "DE", false, 0);
+string s20Key2 = SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m10", null), "subdl", MarkKind.Track, "EN", false, 1);
+int s20Marken;
+using (var db = new ScribeDbContext(s20Dir, null))
+{
+    s20Marken = SourceMatrix.CountByKind(db).Values.Sum();
+    Check(db.Meta.FindById("db")?.SchemaVersion == 21,
+        "F-M670: eine Datei aus Schema 20 zieht auf 21 nach",
+        "marker=" + db.Meta.FindById("db")?.SchemaVersion);
+}
+
+Check(QIn("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='source_marks'", s20Db) == 0
+      && !SpaltenVon("embeds", s20Db).Contains("SubdlId")
+      && !SpaltenVon("sidecars", s20Db).Contains("SubdlId"),
+    "F-M670: auch dort sind Alt-Tabelle und Id-Spalte danach weg");
+
+Check(QText("SELECT UploadId FROM source_matrix WHERE Id = '" + s20Key + "';", s20Db) == "880011"
+      && QText("SELECT ClosedAt FROM source_matrix WHERE Id = '" + s20Key + "';", s20Db) != null,
+    "F-M670: die echte Kennung ersetzt die selbst vergebene Marke, der Zeitstempel bleibt",
+    QText("SELECT UploadId FROM source_matrix WHERE Id = '" + s20Key + "';", s20Db) ?? "-");
+
+Check(QText("SELECT UploadId FROM source_matrix WHERE Id = '" + s20Key2 + "';", s20Db) == "sm20"
+      && QText("SELECT ClosedAt FROM source_matrix WHERE Id = '" + s20Key2 + "';", s20Db) != null,
+    "F-M670: die Marke aus der Alt-Tabelle steht mit Id und Zeitpunkt in der Matrix",
+    QText("SELECT UploadId FROM source_matrix WHERE Id = '" + s20Key2 + "';", s20Db) ?? "-");
+
+Check(Sicherungen(s20Dir).Length == 1 && s20Marken == 2,
+    "F-M670: genau EINE Sicherung für den Lauf, 2 Marken danach",
+    Sicherungen(s20Dir).Length + " Sicherung(en), " + s20Marken + " Marke(n)");
+
+int s20Backups = Sicherungen(s20Dir).Length;
+int s20Marken2;
+using (var db = new ScribeDbContext(s20Dir, null))
+{
+    s20Marken2 = SourceMatrix.CountByKind(db).Values.Sum();
+}
+
+Check(s20Marken2 == s20Marken && Sicherungen(s20Dir).Length == s20Backups,
+    "F-M670: ein zweiter Start auf der 21er-Datei tut nichts — keine zweite Sicherung",
+    s20Marken2 + " Marke(n), " + Sicherungen(s20Dir).Length + " Sicherung(en)");
 
 Console.WriteLine();
 Console.WriteLine("=== " + (failures == 0 ? "STORE OK" : failures + " FAILURE(S)") + " ===");

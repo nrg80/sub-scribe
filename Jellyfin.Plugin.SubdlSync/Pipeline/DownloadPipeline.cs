@@ -2592,7 +2592,7 @@ public sealed class DownloadPipeline : IDisposable
                                         }
 
                                         Registry.MarkAndFlush(() => Registry.MarkDownloaded(
-                                            hiHash, mediaHash, lang, true, hi.SubdlId,
+                                            hiHash, mediaHash, lang, true,
                                             Path.GetFileName(hiPath), hiPath,
                                             // F-M493: jede Ablage traegt ihre Herkunft, auch die HI-Fassung.
                                             origin: Api.Endpoints.Provenance.Name(hi.Provider),
@@ -3533,8 +3533,10 @@ public sealed class DownloadPipeline : IDisposable
                     // F-M260: the real flag, not the hard-coded false it used to be. A
                     // hearing-impaired file recorded as hi=false made the HI reader (F-M254) ask
                     // for a variant that was already on disk, run after run.
+                    // F-M670: die Kennung des Funds steht als `subdlDownloadId` an der Marke (Matrix
+                    // `SourceId`) — der zweite Ort (`embeds.SubdlId`/`sidecars.SubdlId`) ist entfallen.
                     Registry.MarkAndFlush(() => Registry.MarkDownloaded(
-                        contentHash, mediaHash, lang, effectiveHi, cand.SubdlId,
+                        contentHash, mediaHash, lang, effectiveHi,
                         Path.GetFileName(targetPath), targetPath,
                         // F-M486: die Herkunft wandert in den Store — Quelle und deren eigene Id.
                         // Ohne sie wüsste ein späterer Upload nicht, wohin dieser Fund gehört (F-M487).

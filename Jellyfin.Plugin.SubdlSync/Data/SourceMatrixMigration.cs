@@ -53,12 +53,22 @@ public static class SourceMatrixMigration
     /// <param name="Read">"source|kind" → number of OLD rows read for that kind.</param>
     /// <param name="Written">"source|kind" → number of matrix rows written for that kind.</param>
     /// <param name="Merged">How many old rows collapsed into an existing key (coarser grain).</param>
+    /// <param name="IdsTaken">F-M670: how many values of the old <c>SubdlId</c> column went into the matrix.</param>
+    /// <param name="MarksTaken">F-M670: how many rows of the old <c>source_marks</c> table went into the matrix.</param>
+    /// <param name="MarksNew">F-M670: how many of those needed a NEW matrix row (the rest were already covered).</param>
+    /// <param name="Unplaced">F-M670: old rows that had no anchor (no media hash / no owner row) — they live on in the backup only.</param>
+    /// <param name="Conflicts">F-M670: values whose cell was already taken by a different id — kept, both reported.</param>
     public sealed record Outcome(
         bool Ran,
         string? BackupPath,
         IReadOnlyDictionary<string, int> Read,
         IReadOnlyDictionary<string, int> Written,
-        int Merged);
+        int Merged,
+        int IdsTaken = 0,
+        int MarksTaken = 0,
+        int Unplaced = 0,
+        int Conflicts = 0,
+        int MarksNew = 0);
 
     /// <summary>
     /// Führt die Übernahme aus. Läuft VOR dem Öffnen des Stores und ist der einzige Pfad, der das alte
@@ -101,8 +111,12 @@ public static class SourceMatrixMigration
             // Marken-Spalte steht, ist etwas zu übernehmen; sind alle weg, ist der Lauf erledigt und ein
             // zweiter Start tut nichts (idempotent). Damit wird auch ein abgebrochener Lauf beim nächsten
             // Start nachgeholt, statt für immer als „erledigt" zu gelten.
+            // F-M670: dasselbe gilt für die zwei letzten Reste eines zweiten Bestands — die Alt-Tabelle
+            // `source_marks` und die Id-Spalte `SubdlId` an `embeds`/`sidecars`. Steht einer davon noch da,
+            // ist etwas zu übernehmen, auch wenn alle breiten Spalten längst gefallen sind (der Weg 20 → 21).
             var altspalten = LegacyColumns(conn);
-            if (altspalten.Count == 0)
+            bool markenTabelle = TableExists(conn, "source_marks");
+            if (altspalten.Count == 0 && !markenTabelle)
             {
                 return new Outcome(false, null, leer, leer, 0);
             }
@@ -116,6 +130,14 @@ public static class SourceMatrixMigration
             alteZeilen += LeseSpuren(conn, "sidecars", true, zeilen, gelesen);
             alteZeilen += LeseDateien(conn, zeilen, gelesen);
             alteZeilen += LesePacks(conn, zeilen, gelesen);
+
+            // F-M670: die zwei Reste, die NICHT aus den breiten Spalten stammen. Gelesen wird VOR der
+            // Transaktion (wie alles andere), geschrieben wird drin — nach dem Füllen, damit eine
+            // Zielzeile schon steht und nur noch ihre Zelle besetzt wird.
+            var idWerte = altspalten.Any(a => a.Column == SubdlIdColumn)
+                ? LeseSubdlIds(conn)
+                : new List<LegacyIdValue>();
+            var altMarken = markenTabelle ? LeseSourceMarks(conn) : new List<LegacyMark>();
 
             // SICHERUNG ZUERST — vor der ersten Änderung an der Datei, und mit dem VOLLSTÄNDIGEN
             // Altbestand darin (Betreiber-Vorgabe 21.11.2026: „Kein doppelter Datenbestand … der
@@ -159,7 +181,9 @@ public static class SourceMatrixMigration
             // Altspalten ab; die paarweite Kopie muss fallen, sonst stünde jedes Urteil zweimal da
             // (einmal breit, einmal je Position) — der doppelte Datenbestand, den F-M668 verbietet.
             // Nur wenn Spur-Altspalten da sind: sonst gäbe es nichts, woraus die Positionen entstehen.
-            if (altspalten.Any(a => a.Table is "embeds" or "sidecars"))
+            // F-M670: die Bedingung nennt jetzt die MARKEN-Spalten ausdrücklich — `SubdlId` allein sagt
+            // nichts über eine Position und darf eine paarweite Brücke aus Schema 19 nicht wegräumen.
+            if (altspalten.Any(a => a.Table is "embeds" or "sidecars" && MarkColumns.Contains(a.Column)))
             {
                 using var weg = conn.CreateCommand();
                 weg.Transaction = tx;
@@ -169,6 +193,13 @@ public static class SourceMatrixMigration
 
             int marken = zeilen.Count;
             int geschrieben = Schreibe(conn, tx, zeilen.Values);
+
+            // F-M670: die zwei Reste des zweiten Bestands wandern ZUERST in die Matrix — die Id-Spalte
+            // und die Alt-Tabelle —, und erst danach fallen sie. Reihenfolge und Transaktion sind die
+            // ganze Regel: was nicht angekommen ist, wird nicht gelöscht.
+            var (idsUebernommen, idKonflikte) = UebernimmSubdlIds(conn, tx, idWerte);
+            var (markenUebernommen, markenNeu) = UebernimmSourceMarks(conn, tx, altMarken);
+            int unplatziert = idWerte.Count(w => w.Unplaced) + altMarken.Count(m => m.Unplaced);
 
             // F-M668: die Altspalten FALLEN — in derselben Transaktion, die die Marken geschrieben hat.
             // Danach existiert jedes Urteil genau einmal: in `source_matrix`.
@@ -180,6 +211,16 @@ public static class SourceMatrixMigration
                 drop.CommandText = "ALTER TABLE " + table + " DROP COLUMN " + column + ";";
                 drop.ExecuteNonQuery();
                 gefallen.Add(table + "." + column);
+            }
+
+            // F-M670: die Alt-Tabelle fällt genauso — eine Marken-Tabelle neben der Matrix wäre der
+            // doppelte Bestand, den die Betreiber-Vorgabe verbietet.
+            if (markenTabelle)
+            {
+                using var wegTabelle = conn.CreateCommand();
+                wegTabelle.Transaction = tx;
+                wegTabelle.CommandText = "DROP TABLE IF EXISTS source_marks;";
+                wegTabelle.ExecuteNonQuery();
             }
 
             var nachher = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -206,6 +247,19 @@ public static class SourceMatrixMigration
                 gefallen.Count,
                 sicherung == null ? "none" : Path.GetFileName(sicherung));
 
+            if (idsUebernommen > 0 || markenUebernommen > 0 || unplatziert > 0)
+            {
+                logger?.LogInformation(
+                    "[Sub Scribe] second store folded in (F-M670): {Ids} id value(s) of the SubdlId column, "
+                    + "{Marks} row(s) of the old source_marks table ({New} of them needed a new mark) — {Unplaced} "
+                    + "without an anchor (kept in the backup), {Conflicts} id(s) whose cell was already taken by another.",
+                    idsUebernommen,
+                    markenUebernommen,
+                    markenNeu,
+                    unplatziert,
+                    idKonflikte);
+            }
+
             foreach (string quelle in SourceMatrix.Sources)
             {
                 foreach (string art in MarkKind.All)
@@ -225,7 +279,8 @@ public static class SourceMatrixMigration
                 }
             }
 
-            return new Outcome(true, sicherung, gelesen, nachher, zusammengelegt);
+            return new Outcome(true, sicherung, gelesen, nachher, zusammengelegt,
+                idsUebernommen, markenUebernommen, unplatziert, idKonflikte, markenNeu);
         }
         catch (Exception ex)
         {
@@ -537,6 +592,422 @@ public static class SourceMatrixMigration
         return n;
     }
 
+    // ---------------------------------------------------------------------------------------------
+    // F-M670: die zwei Reste des zweiten Bestands — die Id-Spalte `SubdlId` und die Alt-Tabelle
+    // `source_marks`. Beide werden gelesen, in die Matrix übernommen und dann niedergelegt.
+    // ---------------------------------------------------------------------------------------------
+
+    /// <summary>F-M670: der Spaltenname des zweiten Bestands an <c>embeds</c> und <c>sidecars</c>.</summary>
+    private const string SubdlIdColumn = "SubdlId";
+
+    /// <summary>
+    /// F-M670: die Marken-Spalten der Spur-Arten. Der paarweite DELETE (F-M669) hängt an IHNEN — die
+    /// Id-Spalte allein sagt nichts über eine Position.
+    /// </summary>
+    private static readonly string[] MarkColumns =
+    {
+        "SubdlUploadedAt", "TvSubtitlesUploadedAt", "MoviesubtitlesUploadedAt",
+    };
+
+    /// <summary>
+    /// F-M670: ein Wert der alten Id-Spalte, samt allem, was seine Marke braucht. <see cref="SubPos"/>
+    /// ist die Videospur-Position einer eingebetteten Zeile, bei einem Seitenwagen die feste −1.
+    /// </summary>
+    private sealed record LegacyIdValue(
+        string MediaHash,
+        int SubPos,
+        string Language,
+        bool? HearingImpaired,
+        string Status,
+        string Value,
+        string ImdbId,
+        string TmdbId,
+        int? Season,
+        int? Episode)
+    {
+        /// <summary>Wahr, wenn der Wert leer ist oder der Anker fehlt — dann gibt es keine Zeile dafür.</summary>
+        public bool Unplaced => string.IsNullOrWhiteSpace(Value) || string.IsNullOrWhiteSpace(MediaHash);
+    }
+
+    /// <summary>
+    /// F-M670: eine Zeile der Alt-Tabelle <c>source_marks</c>, samt Sprache und Position ihrer Besitzerzeile.
+    /// <c>OwnerKey</c> war <c>embeds.Id</c> (Medien-Hash|Position) bzw. <c>sidecars.Id</c> (Inhalts-Hash).
+    /// </summary>
+    private sealed record LegacyMark(
+        string Source,
+        string? DownloadId,
+        string? UploadId,
+        DateTime? UploadedAt,
+        DateTime? CompletedAt,
+        string MediaHash,
+        int SubPos,
+        string Language,
+        bool? HearingImpaired,
+        string ImdbId,
+        string TmdbId,
+        int? Season,
+        int? Episode)
+    {
+        /// <summary>Wahr, wenn die Besitzerzeile fehlt oder keinen Medien-Hash trägt — kein Anker, keine Marke.</summary>
+        public bool Unplaced => string.IsNullOrWhiteSpace(MediaHash);
+    }
+
+    /// <summary>
+    /// F-M670: liest die Id-Spalte an <c>embeds</c> und <c>sidecars</c> — je Zeile mit Sprache, Variante,
+    /// Position und Status, weil erst der Status sagt, ob die Id eine Einsendung (<c>uploaded</c>) oder
+    /// ein Fund ist.
+    /// </summary>
+    private static List<LegacyIdValue> LeseSubdlIds(SqliteConnection conn)
+    {
+        var werte = new List<LegacyIdValue>();
+        bool hatMedia = TableExists(conn, "media");
+
+        foreach (var (table, sidecar) in new[] { ("embeds", false), ("sidecars", true) })
+        {
+            if (!TableExists(conn, table) || !ColumnExists(conn, table, SubdlIdColumn))
+            {
+                continue;
+            }
+
+            string S(string column) => ColumnExists(conn, table, column) ? "e." + column : "NULL";
+            string join = hatMedia ? " LEFT JOIN media m ON m.Id = e.MediaHash" : string.Empty;
+            string sql =
+                "SELECT e.MediaHash, " + (sidecar ? "-1" : S("SubPos")) + ", " + S("Language") + ", "
+                + S("HearingImpaired") + ", " + S("Status") + ", e." + SubdlIdColumn + ", "
+                + (sidecar ? S("ImdbId") : (hatMedia ? "m.ImdbId" : "NULL")) + ", "
+                + (sidecar ? S("TmdbId") : (hatMedia ? "m.TmdbId" : "NULL")) + ", "
+                + (sidecar ? S("Season") : (hatMedia ? "m.Season" : "NULL")) + ", "
+                + (sidecar ? S("Episode") : (hatMedia ? "m.Episode" : "NULL"))
+                + " FROM " + table + " e" + join
+                + " WHERE e." + SubdlIdColumn + " IS NOT NULL AND e." + SubdlIdColumn + " <> '';";
+
+            using var cmd = conn.CreateCommand();
+            cmd.CommandText = sql;
+            using var r = cmd.ExecuteReader();
+            while (r.Read())
+            {
+                werte.Add(new LegacyIdValue(
+                    r.IsDBNull(0) ? string.Empty : r.GetString(0),
+                    AsInt(ReadValue(r, 1)) ?? SourceMatrix.SidecarPosition,
+                    r.IsDBNull(2) ? string.Empty : Convert.ToString(r.GetValue(2), CultureInfo.InvariantCulture) ?? string.Empty,
+                    AsHi(ReadValue(r, 3)),
+                    r.IsDBNull(4) ? string.Empty : Convert.ToString(r.GetValue(4), CultureInfo.InvariantCulture) ?? string.Empty,
+                    r.IsDBNull(5) ? string.Empty : Convert.ToString(r.GetValue(5), CultureInfo.InvariantCulture) ?? string.Empty,
+                    AlsText(ReadValue(r, 6)),
+                    AlsText(ReadValue(r, 7)),
+                    AsInt(ReadValue(r, 8)),
+                    AsInt(ReadValue(r, 9))));
+            }
+        }
+
+        return werte;
+    }
+
+    /// <summary>
+    /// F-M670: liest die Alt-Tabelle <c>source_marks</c> und holt Sprache, Variante und Position aus der
+    /// Zeile, auf die ihr <c>OwnerKey</c> zeigt. Fehlt die Besitzerzeile, bleibt der Anker leer und die
+    /// Zeile wird als „nicht platzierbar" gezählt — sie lebt dann nur in der Sicherung.
+    /// </summary>
+    private static List<LegacyMark> LeseSourceMarks(SqliteConnection conn)
+    {
+        var marken = new List<LegacyMark>();
+        if (!TableExists(conn, "source_marks"))
+        {
+            return marken;
+        }
+
+        bool hatEmbeds = TableExists(conn, "embeds");
+        bool hatSidecars = TableExists(conn, "sidecars");
+        bool hatMedia = TableExists(conn, "media");
+
+        var spalten = new List<(string Name, string Expr)>
+        {
+            ("Source", "s.Source"),
+            ("DownloadId", ColumnExists(conn, "source_marks", "DownloadId") ? "s.DownloadId" : "NULL"),
+            ("UploadId", ColumnExists(conn, "source_marks", "UploadId") ? "s.UploadId" : "NULL"),
+            ("UploadedAt", ColumnExists(conn, "source_marks", "UploadedAt") ? "s.UploadedAt" : "NULL"),
+            ("CompletedAt", ColumnExists(conn, "source_marks", "CompletedAt") ? "s.CompletedAt" : "NULL"),
+            ("EmbedHash", hatEmbeds ? "e.MediaHash" : "NULL"),
+            ("EmbedPos", hatEmbeds ? "e.SubPos" : "NULL"),
+            ("EmbedLang", hatEmbeds ? "e.Language" : "NULL"),
+            ("EmbedHi", hatEmbeds ? "e.HearingImpaired" : "NULL"),
+            ("SideHash", hatSidecars ? "c.MediaHash" : "NULL"),
+            ("SideLang", hatSidecars ? "c.Language" : "NULL"),
+            ("SideHi", hatSidecars ? "c.HearingImpaired" : "NULL"),
+            ("ImdbId", hatMedia ? "m.ImdbId" : "NULL"),
+            ("TmdbId", hatMedia ? "m.TmdbId" : "NULL"),
+            ("Season", hatMedia ? "m.Season" : "NULL"),
+            ("Episode", hatMedia ? "m.Episode" : "NULL"),
+        };
+
+        string sql = "SELECT " + string.Join(", ", spalten.Select(s => s.Expr)) + " FROM source_marks s"
+                     + (hatEmbeds ? " LEFT JOIN embeds e ON e.Id = s.OwnerKey" : string.Empty)
+                     + (hatSidecars ? " LEFT JOIN sidecars c ON c.Id = s.OwnerKey" : string.Empty)
+                     + (hatMedia ? " LEFT JOIN media m ON m.Id = COALESCE(e.MediaHash, c.MediaHash)" : string.Empty)
+                     + ";";
+
+        using var cmd = conn.CreateCommand();
+        cmd.CommandText = sql;
+        using var r = cmd.ExecuteReader();
+        while (r.Read())
+        {
+            var werte = new Dictionary<string, object?>(StringComparer.Ordinal);
+            for (int i = 0; i < spalten.Count; i++)
+            {
+                werte[spalten[i].Name] = ReadValue(r, i);
+            }
+
+            string embedHash = werte["EmbedHash"] as string ?? string.Empty;
+            string sideHash = werte["SideHash"] as string ?? string.Empty;
+            bool aufSpur = !string.IsNullOrEmpty(embedHash);
+
+            marken.Add(new LegacyMark(
+                werte["Source"] as string ?? string.Empty,
+                werte["DownloadId"] as string,
+                werte["UploadId"] as string,
+                werte["UploadedAt"] as DateTime?,
+                werte["CompletedAt"] as DateTime?,
+                aufSpur ? embedHash : sideHash,
+                aufSpur ? AsInt(werte["EmbedPos"]) ?? SourceMatrix.SidecarPosition : SourceMatrix.SidecarPosition,
+                (aufSpur ? werte["EmbedLang"] as string : werte["SideLang"] as string) ?? string.Empty,
+                AsHi(aufSpur ? werte["EmbedHi"] : werte["SideHi"]),
+                AlsText(werte["ImdbId"]),
+                AlsText(werte["TmdbId"]),
+                AsInt(werte["Season"]),
+                AsInt(werte["Episode"])));
+        }
+
+        return marken;
+    }
+
+    private static (int Taken, int Conflicts) UebernimmSubdlIds(
+        SqliteConnection conn, SqliteTransaction tx, List<LegacyIdValue> werte)
+    {
+        int genommen = 0, konflikte = 0;
+        foreach (var wert in werte)
+        {
+            if (wert.Unplaced)
+            {
+                continue;
+            }
+
+            bool hi = wert.HearingImpaired == true;
+            string key = SourceMatrix.KeyOf(
+                SourceMatrix.AnchorOf(wert.MediaHash, null), SourceMatrix.Subdl,
+                MarkKind.ForTrack(hi), wert.Language, hi, wert.SubPos);
+            if (string.IsNullOrEmpty(key))
+            {
+                continue;
+            }
+
+            // F-M670: der STATUS entscheidet, welches Feld die Id führt. `uploaded` heißt: das ist die
+            // Einsendung (F-M435/UploadId). Alles andere ist ein FUND (Download, abgelehnter Kandidat)
+            // und gehört als Eintrags-Id nach `SourceId` — die Richtung, in der die alte Spalte
+            // beschrieben wurde, ist damit erhalten.
+            bool eingesendet = string.Equals(wert.Status, "uploaded", StringComparison.Ordinal);
+            string primaer = eingesendet ? "UploadId" : "SourceId";
+            string sekundaer = eingesendet ? "SourceId" : "UploadId";
+
+            var (existiert, sourceId, uploadId) = LadeZellen(conn, tx, key);
+            if (!existiert)
+            {
+                // Keine Marke vorhanden: die Id selbst ist der Beleg. Der Zeitstempel bleibt leer —
+                // erfunden wird nichts; bei `uploaded` schließt die Einsende-Id die Marke (Mark.IsClosed).
+                FuegeZeileEin(conn, tx, key, wert, primaer);
+                genommen++;
+                continue;
+            }
+
+            string? belegt = primaer == "UploadId" ? uploadId : sourceId;
+            if (string.IsNullOrEmpty(belegt) || IstEigeneMarke(belegt))
+            {
+                // Leer oder nur eine selbst vergebene Marke (`own:…`): die echte Kennung gewinnt — sie
+                // ist die einzige, mit der sich der Eintrag bei der Quelle adressieren lässt.
+                SetzeZelle(conn, tx, key, primaer, wert.Value);
+                genommen++;
+                continue;
+            }
+
+            if (string.Equals(belegt, wert.Value, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            string? frei = sekundaer == "UploadId" ? uploadId : sourceId;
+            if (string.IsNullOrEmpty(frei))
+            {
+                // Die andere Zelle derselben Marke ist frei: zwei Kennungen derselben Einsendung sind
+                // kein Widerspruch (F-M435: Upload- und Eintrags-Id liegen in verschiedenen Bereichen).
+                SetzeZelle(conn, tx, key, sekundaer, wert.Value);
+                genommen++;
+                continue;
+            }
+
+            if (string.Equals(frei, wert.Value, StringComparison.Ordinal))
+            {
+                continue;
+            }
+
+            // Beide Zellen tragen schon etwas anderes. Nichts wird überschrieben; der Wert lebt in der
+            // Sicherung weiter und der Lauf meldet ihn.
+            konflikte++;
+        }
+
+        return (genommen, konflikte);
+    }
+
+    private static (int Taken, int New) UebernimmSourceMarks(
+        SqliteConnection conn, SqliteTransaction tx, List<LegacyMark> marken)
+    {
+        int genommen = 0, neu = 0;
+        foreach (var marke in marken)
+        {
+            if (marke.Unplaced || string.IsNullOrEmpty(marke.Source))
+            {
+                continue;
+            }
+
+            bool hi = marke.HearingImpaired == true;
+            string key = SourceMatrix.KeyOf(
+                SourceMatrix.AnchorOf(marke.MediaHash, null), marke.Source,
+                MarkKind.ForTrack(hi), marke.Language, hi, marke.SubPos);
+            if (string.IsNullOrEmpty(key))
+            {
+                continue;
+            }
+
+            // Der Abschluss-Zeitpunkt der Alt-Tabelle ist die Einsendung; `CompletedAt` ist der zweite
+            // Beleg derselben Quelle und springt nur ein, wenn kein Einsende-Zeitpunkt steht.
+            DateTime? geschlossen = marke.UploadedAt ?? marke.CompletedAt;
+
+            bool hatteZeile = LadeZellen(conn, tx, key).Existiert;
+
+            using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText =
+                "INSERT INTO source_matrix (Id, MediaHash, ImdbId, TmdbId, Source, Kind, Language, Season, Episode, "
+                + "SubPos, HearingImpaired, ClosedAt, SourceId, UploadId, Written) "
+                + "VALUES ($Id, $MediaHash, $ImdbId, $TmdbId, $Source, $Kind, $Language, $Season, $Episode, "
+                + "$SubPos, $HearingImpaired, $ClosedAt, $SourceId, $UploadId, $Written) "
+                + "ON CONFLICT(Id) DO UPDATE SET "
+                + "ClosedAt = COALESCE(source_matrix.ClosedAt, excluded.ClosedAt), "
+                + "SourceId = COALESCE(NULLIF(source_matrix.SourceId, ''), excluded.SourceId), "
+                + "UploadId = COALESCE(NULLIF(source_matrix.UploadId, ''), excluded.UploadId);";
+            cmd.Parameters.AddWithValue("$Id", key);
+            cmd.Parameters.AddWithValue("$MediaHash", marke.MediaHash);
+            cmd.Parameters.AddWithValue("$ImdbId", marke.ImdbId ?? string.Empty);
+            cmd.Parameters.AddWithValue("$TmdbId", marke.TmdbId ?? string.Empty);
+            cmd.Parameters.AddWithValue("$Source", marke.Source);
+            cmd.Parameters.AddWithValue("$Kind", MarkKind.ForTrack(hi));
+            cmd.Parameters.AddWithValue("$Language", SourceMatrix.Normalise(marke.Language));
+            cmd.Parameters.AddWithValue("$Season", (object?)marke.Season ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$Episode", (object?)marke.Episode ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("$SubPos", marke.SubPos);
+            cmd.Parameters.AddWithValue("$HearingImpaired", hi ? 1 : 0);
+            cmd.Parameters.AddWithValue("$ClosedAt", MomentOderNull(geschlossen));
+            cmd.Parameters.AddWithValue("$SourceId", LeerOderWert(marke.DownloadId));
+            cmd.Parameters.AddWithValue("$UploadId", LeerOderWert(marke.UploadId));
+            cmd.Parameters.AddWithValue("$Written", DateTime.UtcNow);
+            cmd.ExecuteNonQuery();
+            genommen++;
+            if (!hatteZeile)
+            {
+                neu++;
+            }
+        }
+
+        return (genommen, neu);
+    }
+
+    /// <summary>Liest die zwei Id-Zellen einer Matrix-Zeile; <c>Existiert</c> unterscheidet „keine Zeile" von „leere Zelle".</summary>
+    private static (bool Existiert, string? SourceId, string? UploadId) LadeZellen(
+        SqliteConnection conn, SqliteTransaction tx, string id)
+    {
+        using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = "SELECT SourceId, UploadId FROM source_matrix WHERE Id = $id;";
+        cmd.Parameters.AddWithValue("$id", id);
+        using var r = cmd.ExecuteReader();
+        if (!r.Read())
+        {
+            return (false, null, null);
+        }
+
+        return (true,
+            r.IsDBNull(0) ? null : r.GetString(0),
+            r.IsDBNull(1) ? null : r.GetString(1));
+    }
+
+    private static void SetzeZelle(SqliteConnection conn, SqliteTransaction tx, string id, string spalte, string wert)
+    {
+        // `spalte` ist eine der zwei Konstanten aus diesem Aufrufer — kein Text aus fremder Hand.
+        using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText = "UPDATE source_matrix SET " + spalte + " = $wert, Written = $written WHERE Id = $id;";
+        cmd.Parameters.AddWithValue("$wert", wert);
+        cmd.Parameters.AddWithValue("$written", DateTime.UtcNow);
+        cmd.Parameters.AddWithValue("$id", id);
+        cmd.ExecuteNonQuery();
+    }
+
+    private static void FuegeZeileEin(
+        SqliteConnection conn, SqliteTransaction tx, string id, LegacyIdValue wert, string spalte)
+    {
+        bool hi = wert.HearingImpaired == true;
+        using var cmd = conn.CreateCommand();
+        cmd.Transaction = tx;
+        cmd.CommandText =
+            "INSERT OR IGNORE INTO source_matrix (Id, MediaHash, ImdbId, TmdbId, Source, Kind, Language, Season, "
+            + "Episode, SubPos, HearingImpaired, SourceId, UploadId, Written) "
+            + "VALUES ($Id, $MediaHash, $ImdbId, $TmdbId, $Source, $Kind, $Language, $Season, $Episode, $SubPos, "
+            + "$HearingImpaired, $SourceId, $UploadId, $Written);";
+        cmd.Parameters.AddWithValue("$Id", id);
+        cmd.Parameters.AddWithValue("$MediaHash", wert.MediaHash);
+        cmd.Parameters.AddWithValue("$ImdbId", wert.ImdbId ?? string.Empty);
+        cmd.Parameters.AddWithValue("$TmdbId", wert.TmdbId ?? string.Empty);
+        cmd.Parameters.AddWithValue("$Source", SourceMatrix.Subdl);
+        cmd.Parameters.AddWithValue("$Kind", MarkKind.ForTrack(hi));
+        cmd.Parameters.AddWithValue("$Language", SourceMatrix.Normalise(wert.Language));
+        cmd.Parameters.AddWithValue("$Season", (object?)wert.Season ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$Episode", (object?)wert.Episode ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("$SubPos", wert.SubPos);
+        cmd.Parameters.AddWithValue("$HearingImpaired", hi ? 1 : 0);
+        cmd.Parameters.AddWithValue("$SourceId", spalte == "SourceId" ? wert.Value : DBNull.Value);
+        cmd.Parameters.AddWithValue("$UploadId", spalte == "UploadId" ? wert.Value : DBNull.Value);
+        cmd.Parameters.AddWithValue("$Written", DateTime.UtcNow);
+        cmd.ExecuteNonQuery();
+    }
+
+    /// <summary>Eine selbst vergebene Marke (<c>own:…</c>) ist ein Platzhalter, keine Kennung der Quelle.</summary>
+    private static bool IstEigeneMarke(string? id)
+        => id != null && id.StartsWith("own:", StringComparison.Ordinal);
+
+    private static object LeerOderWert(string? wert)
+        => string.IsNullOrEmpty(wert) ? DBNull.Value : wert;
+
+    private static string? AlsText(object? wert)
+        => wert switch
+        {
+            null => null,
+            string s => s.Length == 0 ? null : s,
+            long l => l.ToString(CultureInfo.InvariantCulture),
+            int i => i.ToString(CultureInfo.InvariantCulture),
+            _ => Convert.ToString(wert, CultureInfo.InvariantCulture),
+        };
+
+    private static bool? AsHi(object? wert)
+        => wert switch
+        {
+            null => null,
+            long l => l != 0,
+            int i => i != 0,
+            bool b => b,
+            string s when bool.TryParse(s, out bool v) => v,
+            string s when s == "1" => true,
+            string s when s == "0" => false,
+            _ => null,
+        };
+
     /// <summary>
     /// Legt eine Zeile in die Sammlung. Zwei alte Zeilen können auf denselben Schlüssel fallen (zwei
     /// Spuren einer Sprache, zwei Zeilen derselben Datei) — dann gewinnt der spätere Zeitstempel und
@@ -704,12 +1175,16 @@ public static class SourceMatrixMigration
             "SubdlDownloadId", "SubdlUploadId", "SubdlUploadedAt",
             "TvSubtitlesDownloadId", "TvSubtitlesUploadId", "TvSubtitlesUploadedAt",
             "MoviesubtitlesDownloadId", "MoviesubtitlesUploadId", "MoviesubtitlesUploadedAt",
+            // F-M670: die letzte eigene Id-Spalte. Sie führt „die Id, auf die sich dieses Urteil
+            // bezieht" — genau das, was die Matrix als `SourceId`/`UploadId` führt.
+            SubdlIdColumn,
         }),
         ("sidecars", new[]
         {
             "SubdlDownloadId", "SubdlUploadId", "SubdlUploadedAt",
             "TvSubtitlesDownloadId", "TvSubtitlesUploadId", "TvSubtitlesUploadedAt",
             "MoviesubtitlesDownloadId", "MoviesubtitlesUploadId", "MoviesubtitlesUploadedAt",
+            SubdlIdColumn,
         }),
         ("media", new[] { "CompleteSubdl", "CompleteTvSubtitles", "CompleteMsub", "CompleteSignature" }),
         ("packs", new[] { "PackId", "Fingerprint", "RefusalReason", "RefusedAt", "RefusedSignature", "UploadedAt" }),
@@ -768,11 +1243,15 @@ public static class SourceMatrixMigration
 
     /// <summary>
     /// F-M668: was in einer Datei steht — je Quelle und Art die Zahl der Marken in der Matrix und die
-    /// Zahl der Altspalten, die noch auf eine Übernahme warten. Der Formatwechsel (F-M637) prüft damit,
+    /// Zahl der Reste, die noch auf eine Übernahme warten. Der Formatwechsel (F-M637) prüft damit,
     /// dass die neue Datei die Marken der Vorgängerin wirklich trägt.
+    /// <para>
+    /// F-M670: „Reste" heißt seit 21.11.2026 auch die Alt-Tabelle <c>source_marks</c> — eine zweite
+    /// Marken-Tabelle in der neuen Datei wäre derselbe doppelte Bestand wie eine breite Spalte.
+    /// </para>
     /// </summary>
     /// <param name="path">Path of a data file.</param>
-    /// <returns>Marks per "source|kind" and the number of legacy columns still present.</returns>
+    /// <returns>Marks per "source|kind" and the number of legacy columns and tables still present.</returns>
     public static (Dictionary<string, int> Marks, int LegacyColumns) Inspect(string path)
     {
         var marken = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -789,9 +1268,11 @@ public static class SourceMatrixMigration
         }.ToString());
         conn.Open();
 
+        int reste = LegacyColumns(conn).Count + (TableExists(conn, "source_marks") ? 1 : 0);
+
         if (!TableExists(conn, "source_matrix"))
         {
-            return (marken, LegacyColumns(conn).Count);
+            return (marken, reste);
         }
 
         using var cmd = conn.CreateCommand();
@@ -802,7 +1283,7 @@ public static class SourceMatrixMigration
             marken[r.GetString(0) + "|" + r.GetString(1)] = r.GetInt32(2);
         }
 
-        return (marken, LegacyColumns(conn).Count);
+        return (marken, reste);
     }
 
     /// <summary>Der Spalten-Präfix einer Quelle in den breiten Spalten.</summary>

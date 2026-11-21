@@ -520,8 +520,9 @@ internal static class Program
             // AKTUELLEN Stand, weil ein stehengebliebener Marker die Migration nicht mehr anzeigt.
             // F-M507: er steht inzwischen auf 14 (die Spalten der dritten Quelle).
             // F-M669: 20 — die Spur-Position gehoert in den Schluessel der Matrix.
+            // F-M670: 21 — die Alt-Tabelle `source_marks` und die Id-Spalte `SubdlId` sind entfallen.
             && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/ScribeDbContext.cs"))
-                .Contains("CurrentSchemaVersion = 20", StringComparison.Ordinal));
+                .Contains("CurrentSchemaVersion = 21", StringComparison.Ordinal));
 
         // ---- 10. eigene Kennzeichen je Quelle und Richtung (F-M488) ---------------------------
         var entities = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/Entities.cs"));
@@ -536,7 +537,7 @@ internal static class Program
         Check("schema 11 adds them to sidecars AND embeds",
             // F-M668: Statt neun Spalten je Tabelle trägt die Matrix die Quelle im WERT — Schema 19
             // zieht die zwei Felder der Matrix nach und legt die Altspalten nieder.
-            dbc.Contains("CurrentSchemaVersion = 20", StringComparison.Ordinal)
+            dbc.Contains("CurrentSchemaVersion = 21", StringComparison.Ordinal)
             && dbc.Contains("+ \"UploadId TEXT NULL, \"", StringComparison.Ordinal)
             && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/SourceMatrix.cs"))
                 .Contains("ALTER TABLE source_matrix ADD COLUMN UploadId TEXT NULL;", StringComparison.Ordinal)
@@ -546,8 +547,10 @@ internal static class Program
             downloadSource.Contains("subdlDownloadId: cand.Provider == Configuration.SubtitleProvider.Subdl ? cand.SubdlId : null", StringComparison.Ordinal)
             && downloadSource.Contains("tvSubtitlesDownloadId: cand.Provider == Configuration.SubtitleProvider.TvSubtitles ? cand.Url : null", StringComparison.Ordinal));
         Check("the upload writes SubDL's id into SubDL's field",
+            // F-M670: die zweite Schreibstelle (`subdlId: uploadId?.ToString(…)` in die Spalte
+            // `embeds.SubdlId`) ist entfallen — die Einsende-Id steht ausschliesslich an der Marke.
             uploadSource.Contains("subdlUploadId: subdlMarke.Id", StringComparison.Ordinal)
-            && uploadSource.Contains("subdlId: uploadId?.ToString(System.Globalization.CultureInfo.InvariantCulture)", StringComparison.Ordinal));
+            && !uploadSource.Contains("subdlId: uploadId?.ToString(System.Globalization.CultureInfo.InvariantCulture)", StringComparison.Ordinal));
         Check("each family address carries its upload id in its OWN field (F-M508)",
             uploadSource.Contains("tvSubtitlesUploadId: tvstMarke.Id", StringComparison.Ordinal)
             && uploadSource.Contains("moviesubtitlesUploadId: msubMarke.Id", StringComparison.Ordinal)
@@ -641,7 +644,7 @@ internal static class Program
             // Zeile, statt einer Spalte je Quelle an jeder Untertitel-Zeile.
             entities.Contains("public DateTime? ClosedAt { get; set; }", StringComparison.Ordinal)
             && !entities.Contains("public DateTime? SubdlUploadedAt { get; set; }", StringComparison.Ordinal)
-            && dbc.Contains("CurrentSchemaVersion = 20", StringComparison.Ordinal)
+            && dbc.Contains("CurrentSchemaVersion = 21", StringComparison.Ordinal)
             && dbc.Contains("\"ClosedAt TEXT NULL, \"", StringComparison.Ordinal));
         Check("the timestamp is set for the source that took the upload, never for another",
             uploadSource.Contains("subdlUploadedAt: subdlMarke.At", StringComparison.Ordinal)
@@ -924,7 +927,7 @@ internal static class Program
         Check("F-M557: der Zugeh-Stempel steht JE QUELLE auf der Medienzeile (Schema 16)",
             // F-M668: der Stempel ist eine `file`-Zeile je (Medium, Quelle); die vier Medien-Spalten
             // gibt es nicht mehr, und die Signatur steht als `Fingerprint` daneben.
-            db557.Contains("CurrentSchemaVersion = 20", StringComparison.Ordinal)
+            db557.Contains("CurrentSchemaVersion = 21", StringComparison.Ordinal)
             && !db557.Contains("ADD COLUMN CompleteSubdl TEXT NULL", StringComparison.Ordinal)
             && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Data/SourceMatrix.cs"))
                 .Contains("public static void WriteFileMark(", StringComparison.Ordinal)
@@ -1630,8 +1633,10 @@ internal static class Program
             && uploadSource588.Contains(".OrderBy(e => e.CreatedAt)", StringComparison.Ordinal)
             && uploadSource588.Contains("deferred upload ids: {Hit} of {Open} assigned with one list fetch (F-M588)", StringComparison.Ordinal));
         Check("F-M588: die Id landet ueber den Marken-Schluessel in der Zeile, und Freigegebenes kommt aus der veroeffentlichten Liste",
+            // F-M670: nachgetragen wird sie an der MARKEN-Zeile (`SetDeferredUploadId`), nicht mehr an
+            // einer Id-Spalte der Spur — der Schluessel ist derselbe wie beim Upload.
             registrySource588.Contains("public int SetDeferredSubdlId(", StringComparison.Ordinal)
-            && registrySource588.Contains("x.SubPos == subPos", StringComparison.Ordinal)
+            && registrySource588.Contains("SourceMatrix.SetDeferredUploadId(", StringComparison.Ordinal)
             && uploadSource588.Contains("Registry.SetDeferredSubdlId(", StringComparison.Ordinal)
             && uploadSource588.Contains("ListMyPublishedSubtitlesAsync(ct, maxPages: 2)", StringComparison.Ordinal)
             && uploadSource588.Contains("their singles stay beside a pack that replaces them", StringComparison.Ordinal));
@@ -1870,7 +1875,9 @@ internal static class Program
             // fuer tvsubtitles NUR seine eigene Marke: die markenlose Alt-/Pack-Zeile zaehlt nur bei SubDL
             // — F-M668: dieselbe Regel, jetzt in EINER Prüfstelle für Zeilen und Paar.
             && registrySource.Contains("if (provider != SubtitleProvider.Subdl || !string.Equals(status, SubtitleStatus.Uploaded, StringComparison.Ordinal))", StringComparison.Ordinal)
-            && registrySource.Contains("return !string.IsNullOrEmpty(subdlId) || !AnySourceClosed(mediaHash, language, hearingImpaired);", StringComparison.Ordinal));
+            // F-M670: der Altbeleg aus der Id-Spalte ist entfallen — die Uebernahme hat ihn in die
+            // Matrix gehoben; geblieben ist die markenlose `uploaded`-Zeile (F-M500).
+            && registrySource.Contains("return !AnySourceClosed(mediaHash, language, hearingImpaired);", StringComparison.Ordinal));
 
         // Der Umbau wird nicht nur gelesen, sondern gefahren: ein Inhalt bei SubDL darf tvst nicht
         // erledigen, zweimal bei derselben Quelle bleibt blockiert, und die Herkunft bleibt das Tor.
@@ -2501,7 +2508,7 @@ internal static class Program
                     && nachher?.TvstShowId == "512"
                     // F-M507: der Marker ist inzwischen 14 — die Datei wird auf den Stand DIESES Builds
                     // gehoben, und der Bestand muss das aushalten.
-                    && legacyDb.Meta.FindById("db")?.SchemaVersion == 20,
+                    && legacyDb.Meta.FindById("db")?.SchemaVersion == 21,
                     "bestand=" + (bestand?.ImdbId ?? "-") + "/" + (bestand?.TmdbId ?? "-")
                     + "/tvst=" + (vorherTvst ?? "<null>")
                     + " nachher=" + (nachher?.TvstShowId ?? "-")
@@ -2872,7 +2879,7 @@ internal static class Program
                     && filmAuf.Status == MsubMovieStatus.Found
                     && gespeichert == "102"
                     && zweiteRunde.Status == MsubMovieStatus.Stored
-                    && msubStore.Meta.FindById("db")?.SchemaVersion == 20,
+                    && msubStore.Meta.FindById("db")?.SchemaVersion == 21,
                     "id=" + (gespeichert ?? "<null>") + " status=" + filmAuf.Status + "/" + zweiteRunde.Status
                     + " marker=" + msubStore.Meta.FindById("db")?.SchemaVersion);
             }
@@ -2934,7 +2941,8 @@ internal static class Program
                 && !seitenSpalten.Contains("MoviesubtitlesDownloadId")
                 && !seitenSpalten.Contains("MoviesubtitlesUploadId")
                 && !spurSpalten.Contains("MoviesubtitlesDownloadId")
-                && marker == 20
+                // F-M670: der Marker steht auf 21 (Alt-Tabelle und Id-Spalte sind entfallen).
+                && marker == 21
                 && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Data/ScribeDbContext.cs"))
                     .Contains("\"RefusalSignature TEXT NULL, \"", StringComparison.Ordinal),
                 "media=" + string.Join(",", medienSpalten.Where(x => x.StartsWith("Msub", StringComparison.Ordinal)))
@@ -2953,7 +2961,7 @@ internal static class Program
                 // F-M668: Schema 19. Die Marken-Spalten der dritten Quelle stehen NICHT mehr in den
                 // Nachzieh-Listen; die Matrix führt die Quelle als Wert, und der Quellenname ist derselbe
                 // wie in der API (eine Schreibweise, zwei Schichten).
-                dbSource.Contains("public const int CurrentSchemaVersion = 20;", StringComparison.Ordinal)
+                dbSource.Contains("public const int CurrentSchemaVersion = 21;", StringComparison.Ordinal)
                 && !dbSource.Contains("ALTER TABLE sidecars ADD COLUMN MoviesubtitlesDownloadId", StringComparison.Ordinal)
                 && !dbSource.Contains("ALTER TABLE embeds ADD COLUMN MoviesubtitlesUploadedAt", StringComparison.Ordinal)
                 && dbSource.Contains("(\"MsubMovieId\", \"ALTER TABLE media ADD COLUMN MsubMovieId TEXT NULL;\")", StringComparison.Ordinal)

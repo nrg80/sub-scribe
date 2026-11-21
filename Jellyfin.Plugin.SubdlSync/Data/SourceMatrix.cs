@@ -603,6 +603,72 @@ public static class SourceMatrix
         db.Matrix.Upsert(row);
     }
 
+    /// <summary>
+    /// F-M670 (21.11.2026): trägt eine später bekannt gewordene Id der EINSENDUNG an die Marke dieser
+    /// Spur nach — der Weg, den vorher die Spalte <c>embeds.SubdlId</c>/<c>sidecars.SubdlId</c> ging.
+    /// <para>
+    /// Der Upload setzt die Marke ohne Id (die Antwort nennt keine, F-M588); am Laufende holt EIN
+    /// Listenabruf die Ids und schreibt sie hierher. Es gibt keinen zweiten Ort mehr, an dem sie stehen
+    /// könnte: keine Marke → die Zeile wird angelegt (die Id allein belegt die Einsendung), eine
+    /// vorhandene Marke behält ihren Zeitstempel und bekommt nur die Id.
+    /// </para>
+    /// </summary>
+    /// <param name="db">The plugin's data context.</param>
+    /// <param name="mediaHash">Media hash of the row.</param>
+    /// <param name="subPos">Stream position (a sidecar passes <see cref="SidecarPosition"/>).</param>
+    /// <param name="language">Language of the row.</param>
+    /// <param name="hearingImpaired">HI flag of the row.</param>
+    /// <param name="source">The source.</param>
+    /// <param name="uploadId">The submission id at that source.</param>
+    /// <returns>Number of rows that received the id (0 = nothing to patch).</returns>
+    public static int SetDeferredUploadId(
+        ScribeDbContext db,
+        string? mediaHash,
+        int subPos,
+        string? language,
+        bool hearingImpaired,
+        string source,
+        string? uploadId)
+    {
+        if (db == null || string.IsNullOrWhiteSpace(uploadId) || string.IsNullOrWhiteSpace(mediaHash)
+            || subPos < SidecarPosition)
+        {
+            return 0;
+        }
+
+        WriteTrackMark(db, db.Media.FindById(mediaHash), mediaHash, source, language, hearingImpaired, subPos,
+            closedAt: null, downloadId: null, uploadId: uploadId);
+        return 1;
+    }
+
+    /// <summary>
+    /// F-M670: alle Kennungen, die eine Spur-Marke dieser Quelle trägt (Eintrag und Einsendung) — die
+    /// Frage „welche Einzel-Uploads hängen an diesen Zeilen noch?". Vorher las sie
+    /// <c>embeds.SubdlId</c>; die Spalte gibt es nicht mehr.
+    /// </summary>
+    /// <param name="db">The plugin's data context.</param>
+    /// <param name="source">The source, or null for all.</param>
+    /// <returns>The ids, non-empty only.</returns>
+    public static HashSet<string> TrackIds(ScribeDbContext db, string? source)
+        => Rows(db, source, null)
+            .Where(r => string.Equals(r.Kind, MarkKind.Track, StringComparison.Ordinal)
+                        || string.Equals(r.Kind, MarkKind.TrackHi, StringComparison.Ordinal))
+            .SelectMany(r => new[] { r.SourceId, r.UploadId })
+            .Where(id => !string.IsNullOrEmpty(id))
+            .Select(id => id!)
+            .ToHashSet(StringComparer.Ordinal);
+
+    /// <summary>
+    /// F-M670: wie viele Marken überhaupt eine Kennung bei der Quelle führen — die Zahl, die die
+    /// Diagnose früher aus <c>embeds.SubdlId</c>/<c>sidecars.SubdlId</c> gezählt hat.
+    /// </summary>
+    /// <param name="db">The plugin's data context.</param>
+    /// <param name="source">The source, or null for all.</param>
+    /// <returns>Number of marks carrying a source id or an upload id.</returns>
+    public static int CountWithId(ScribeDbContext db, string? source)
+        => Rows(db, source, null)
+            .Count(r => !string.IsNullOrEmpty(r.SourceId) || !string.IsNullOrEmpty(r.UploadId));
+
     /// <summary>Nimmt die Zugeh-Stempel einer Datei für ALLE Quellen zurück (Datei-Reset, F-M620).</summary>
     /// <param name="db">The plugin's data context.</param>
     /// <param name="mediaHash">Der Medien-Hash der Datei.</param>

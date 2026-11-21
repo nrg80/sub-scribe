@@ -656,10 +656,14 @@ public sealed class ContentHashRegistry : IDisposable
     /// <param name="status">One of <see cref="SubtitleStatus"/>.</param>
     /// <param name="contentHash">Content hash when the content was read.</param>
     /// <param name="reason">Rejection reason when rejected.</param>
-    /// <param name="subdlId">SubDL id when known.</param>
     /// <param name="forced">F-M284: true when the track is forced (never counts as coverage).</param>
+    /// <remarks>
+    /// F-M670: der Parameter <c>subdlId</c> ist entfallen. Die Id, auf die sich das Urteil bezieht,
+    /// steht als <c>SourceId</c>/<c>UploadId</c> an der Spur-Marke der Matrix — dafür sind die
+    /// Parameter <paramref name="subdlDownloadId"/> und <paramref name="subdlUploadId"/> da.
+    /// </remarks>
     public void MarkEmbed(string? mediaHash, int subPos, string language, bool hearingImpaired,
-                          string status, string? contentHash = null, string? reason = null, string? subdlId = null,
+                          string status, string? contentHash = null, string? reason = null,
                           bool forced = false, string? subdlUploadId = null, string? tvSubtitlesUploadId = null,
                           string? subdlDownloadId = null, string? tvSubtitlesDownloadId = null,
                           DateTime? subdlUploadedAt = null, DateTime? tvSubtitlesUploadedAt = null,
@@ -691,11 +695,6 @@ public sealed class ContentHashRegistry : IDisposable
         if (!string.IsNullOrEmpty(contentHash))
         {
             existing.ContentHash = contentHash;
-        }
-
-        if (!string.IsNullOrEmpty(subdlId))
-        {
-            existing.SubdlId = subdlId;
         }
 
         // F-M488/F-M490/F-M507 — F-M668: die Marken je Quelle und Richtung stehen NICHT mehr als Spalten
@@ -1176,9 +1175,9 @@ public sealed class ContentHashRegistry : IDisposable
     /// (F-M488) — not from <see cref="SubtitleStatus.Uploaded"/>, which says "uploaded somewhere" and
     /// would let one source's upload block the other.
     /// <para>
-    /// A row from before schema 11 has no own mark; for SubDL its <c>SubdlId</c> plus the uploaded status
-    /// is the only trace there is, so it counts as uploaded — otherwise every old upload would be sent a
-    /// second time after the upgrade. <c>SubdlId</c> ALONE is not enough: downloads write it too.
+    /// A row from before schema 11 had no own mark; its SubDL id (the old <c>SubdlId</c> column) plus the
+    /// uploaded status was the only trace. F-M670: that id now lives in the matrix — the takeover put it
+    /// into <c>UploadId</c>, which closes the mark — so the column branch is gone and nothing needs it.
     /// </para>
     /// </summary>
     /// <param name="mediaHash">Parent media hash.</param>
@@ -1214,24 +1213,11 @@ public sealed class ContentHashRegistry : IDisposable
             return true;
         }
 
-        // Altbestand OHNE jede Quellenmarke (Schema 11): `Status=uploaded` plus `SubdlId` ist der einzige
-        // Beleg, den solche Zeilen tragen (F-M489). Er zaehlt nur fuer SubDL — vor der Zwei-Quellen-Kette
-        // war SubDL das einzige Ziel, und fuer tvst waere dieselbe Zeile der Fehler selbst (F-M500).
-        if (provider != SubtitleProvider.Subdl)
-        {
-            return false;
-        }
-
-        return _db.Embeds.Exists(x => x.MediaHash == mediaHash
-                && x.Language == language
-                && x.HearingImpaired == hearingImpaired
-                && x.Status == SubtitleStatus.Uploaded
-                && !string.IsNullOrEmpty(x.SubdlId))
-            || _db.Sidecars.Exists(x => x.MediaHash == mediaHash
-                && x.Language == language
-                && x.HearingImpaired == hearingImpaired
-                && x.Status == SubtitleStatus.Uploaded
-                && !string.IsNullOrEmpty(x.SubdlId));
+        // F-M670: der Altbeleg „Status=uploaded plus SubdlId" (Schema 11, F-M489) braucht keinen eigenen
+        // Zweig mehr — die Übernahme hat jede solche Id in die Matrix gebracht (`UploadId`, also
+        // geschlossen). Bliebe hier eine Spaltenlesung, wäre sie ein zweiter Lesepfad auf eine Spalte,
+        // die es nicht mehr gibt.
+        return false;
     }
 
     /// <summary>
@@ -1267,23 +1253,9 @@ public sealed class ContentHashRegistry : IDisposable
             return true;
         }
 
-        // Altbestand OHNE jede Quellenmarke (Schema 11) — nur fuer SubDL, wie in IsUploadedTo.
-        if (provider != SubtitleProvider.Subdl)
-        {
-            return false;
-        }
-
-        return _db.Embeds.Exists(x => x.MediaHash == mediaHash
-                && x.SubPos == subPos
-                && x.Language == language
-                && x.HearingImpaired == hearingImpaired
-                && x.Status == SubtitleStatus.Uploaded
-                && !string.IsNullOrEmpty(x.SubdlId))
-            || _db.Sidecars.Exists(x => x.MediaHash == mediaHash
-                && x.Language == language
-                && x.HearingImpaired == hearingImpaired
-                && x.Status == SubtitleStatus.Uploaded
-                && !string.IsNullOrEmpty(x.SubdlId));
+        // F-M670: kein Altbeleg aus einer Id-Spalte mehr — die Übernahme hat ihn in die Matrix gehoben
+        // (siehe IsUploadedTo).
+        return false;
     }
 
     /// <summary>F-M668: der Quellenname einer Marke — dieselben Werte, die die Matrix im Feld <c>Source</c> führt.</summary>
@@ -1615,14 +1587,13 @@ public sealed class ContentHashRegistry : IDisposable
     /// gap this row shape exists to close.</param>
     /// <param name="status">One of <see cref="SubtitleStatus"/>.</param>
     /// <param name="reason">Rejection reason when rejected.</param>
-    /// <param name="subdlId">SubDL id when known.</param>
     /// <param name="fileName">File name for diagnostics.</param>
     /// <param name="path">Full path for diagnostics.</param>
     /// <param name="origin">F-M486: the source this subtitle came from (<c>subdl</c>/<c>tvsubtitles</c>),
     /// or null when nobody said. Written only when non-empty — a null must never overwrite a fact.</param>
     /// <param name="originId">F-M486: the source's own id for this subtitle, written under the same rule.</param>
     public void MarkSidecar(string? contentHash, string? mediaHash, string language, bool hearingImpaired,
-                            bool forced, string status, string? reason = null, string? subdlId = null,
+                            bool forced, string status, string? reason = null,
                             string? fileName = null, string? path = null, string? origin = null,
                             string? originId = null, string? subdlDownloadId = null,
                             string? subdlUploadId = null, string? tvSubtitlesDownloadId = null,
@@ -1660,11 +1631,6 @@ public sealed class ContentHashRegistry : IDisposable
         existing.Status = status;
         existing.Reason = reason;
         existing.StatusAt = DateTime.UtcNow;
-        if (!string.IsNullOrEmpty(subdlId))
-        {
-            existing.SubdlId = subdlId;
-        }
-
         // F-M486: nur schreiben, wenn jemand die Herkunft kennt. Ein leerer Wert darf keine Angabe
         // löschen — sonst machte ein späterer Schreiber aus „tvsubtitles" wieder „unbekannt".
         if (!string.IsNullOrEmpty(origin))
@@ -1865,8 +1831,9 @@ public sealed class ContentHashRegistry : IDisposable
     /// Schluessel der Content-Hash. Die quellenblinde <see cref="IsSidecarUploaded"/> liest
     /// <c>Status=Uploaded</c> und haelt damit die zweite Quelle aus der Queue.
     /// <para>
-    /// Fuer SubDL zaehlt zusaetzlich die Altzeile: <c>SubdlId</c> plus <c>Uploaded</c> ist der einzige
-    /// Beleg aus Schema 11 (F-M489) — <c>SubdlId</c> allein genuegt nicht, weil der Download es auch schreibt.
+    /// Fuer SubDL zaehlt zusaetzlich die Altzeile „<c>Uploaded</c> ohne jede Quellenmarke" (F-M500). Der
+    /// frueher noetige Beleg „<c>SubdlId</c> plus <c>Uploaded</c>" (F-M489) steckt seit F-M670 in der
+    /// Matrix: die Uebernahme hat jede solche Id als <c>UploadId</c> eingetragen.
     /// </para>
     /// </summary>
     /// <param name="contentHash">Content hash of the sidecar.</param>
@@ -2183,34 +2150,13 @@ public sealed class ContentHashRegistry : IDisposable
             return 0;
         }
 
-        int changed = 0;
-        if (loose)
-        {
-            foreach (var row in _db.Sidecars.FindAll()
-                         .Where(x => string.Equals(x.FileName, fileName, StringComparison.Ordinal)
-                                     && string.Equals(x.Language, language, StringComparison.OrdinalIgnoreCase)
-                                     && (x.HearingImpaired ?? false) == hearingImpaired).ToList())
-            {
-                row.SubdlId = subdlId;
-                _db.Sidecars.Upsert(row);
-                changed++;
-            }
-        }
-        else
-        {
-            foreach (var row in _db.Embeds.FindAll()
-                         .Where(x => string.Equals(x.MediaHash, mediaHash, StringComparison.Ordinal)
-                                     && x.SubPos == subPos
-                                     && string.Equals(x.Language, language, StringComparison.OrdinalIgnoreCase)
-                                     && (x.HearingImpaired ?? false) == hearingImpaired).ToList())
-            {
-                row.SubdlId = subdlId;
-                _db.Embeds.Upsert(row);
-                changed++;
-            }
-        }
-
-        return changed;
+        // F-M670: die Id steht an der Spur-Marke der Matrix (`UploadId`) — es gibt keine Spalte mehr, in
+        // die sie nachgetragen werden könnte, und keinen zweiten Ort, an dem sie stehen dürfte. Getroffen
+        // wird dieselbe Marke, die der Upload geschrieben hat: (Medium, Sprache, HI, Position); ein
+        // Seitenwagen trägt die feste Position −1.
+        int position = loose ? SourceMatrix.SidecarPosition : subPos;
+        return SourceMatrix.SetDeferredUploadId(
+            _db, mediaHash, position, language, hearingImpaired, SourceMatrix.Subdl, subdlId);
     }
 
     public int RemapSubdlId(string uploadId, string entryId)
@@ -2221,44 +2167,11 @@ public sealed class ContentHashRegistry : IDisposable
             return 0;
         }
 
-        int changed = 0;
-
-        foreach (var row in _db.Embeds.FindAll().Where(x => string.Equals(x.SubdlId, uploadId, StringComparison.Ordinal)).ToList())
-        {
-            row.SubdlId = entryId;
-            _db.Embeds.Upsert(row);
-            changed++;
-        }
-
-        foreach (var row in _db.Sidecars.FindAll().Where(x => string.Equals(x.SubdlId, uploadId, StringComparison.Ordinal)).ToList())
-        {
-            row.SubdlId = entryId;
-            _db.Sidecars.Upsert(row);
-            changed++;
-        }
-
-        foreach (var row in _db.Packs.FindAll()
-                     .Where(x => string.Equals(
-                         string.IsNullOrWhiteSpace(x.Source) ? PackEntity.SubdlSource : x.Source,
-                         PackEntity.SubdlSource,
-                         StringComparison.Ordinal))
-                     .ToList())
-        {
-            // F-M668: die Behälter-Kennung steht in der Matrix (Kind = pack, SourceId) — nur SubDL-Zeilen
-            // können eine SubDL-Upload-Id tragen (F-M642). Ohne Matrix-Zeile gibt es keine Kennung und
-            // damit nichts nachzutragen.
-            if (SourceMatrix.PackMark(_db, row.ImdbId, row.Season, row.Language, row.HearingImpaired ?? false,
-                    PackEntity.SubdlSource).SourceId is not { } alt
-                || !string.Equals(alt, uploadId, StringComparison.Ordinal))
-            {
-                continue;
-            }
-
-            SourceMatrix.RemapId(_db, uploadId, entryId);
-            changed++;
-        }
-
-        return changed;
+        // F-M670: die Kennung steht nur noch in der Matrix — dort schreibt `RemapId` BEIDE Zellen einer
+        // Marke um (`SourceId` und `UploadId`), weil die zwei Nummernkreise derselben Einsendung
+        // (F-M435) beide von der Upload- auf die Eintrags-Id wandern. Die zwei Schleifen über
+        // `embeds.SubdlId`/`sidecars.SubdlId` sind mit der Spalte entfallen.
+        return SourceMatrix.RemapId(_db, uploadId, entryId);
     }
 
     /// <summary>
@@ -2302,14 +2215,9 @@ public sealed class ContentHashRegistry : IDisposable
             return 0;
         }
 
-        var carried = new HashSet<string>(StringComparer.Ordinal);
-        foreach (var embed in _db.Embeds.FindAll())
-        {
-            if (!string.IsNullOrEmpty(embed.SubdlId))
-            {
-                carried.Add(embed.SubdlId!);
-            }
-        }
+        // F-M670: „getragen" heißt: irgendeine Spur-Marke dieser Quelle führt die Kennung als Eintrags-
+        // oder Einsende-Id. Vorher las das die Spalte `embeds.SubdlId`, die es nicht mehr gibt.
+        var carried = SourceMatrix.TrackIds(_db, PackEntity.SubdlSource);
 
         int removed = 0;
         foreach (var pack in packs)
@@ -2581,7 +2489,7 @@ public sealed class ContentHashRegistry : IDisposable
     /// </para>
     /// <para>
     /// Fuer SubDL werden dieselben drei Belege gelesen wie in <see cref="IsUploadedTo"/> (F-M488/F-M490):
-    /// Zeitstempel, eigene Id, und die Altzeile aus Schema 11 (<c>Uploaded</c> plus <c>SubdlId</c>). Dazu
+    /// Zeitstempel, eigene Id, und die Altzeile aus Schema 11 (<c>Uploaded</c> ohne Quellenmarke). Dazu
     /// kommt die <c>Uploaded</c>-Zeile OHNE jede Quellenmarke: so sehen die Settles von vor F-M500 und die
     /// Pack-Zeilen aus, und vor der Zwei-Quellen-Kette (F-M495) war SubDL das einzige Ziel — sie zaehlt
     /// deshalb als SubDL-Beleg, damit dieser Inhalt nicht ein zweites Mal zu SubDL geht. Fuer tvsubtitles
@@ -2617,7 +2525,7 @@ public sealed class ContentHashRegistry : IDisposable
             // F-M669: die Zeile nennt ihre POSITION — gefragt wird genau deren Marke. Der Inhalt bleibt
             // global (derselbe Text kann unter einem anderen Medien-Hash liegen).
             if (ZeileIstFuerQuelleBelegt(zeile.MediaHash, zeile.SubPos, zeile.Language, zeile.HearingImpaired ?? false,
-                    zeile.Status, zeile.SubdlId, provider))
+                    zeile.Status, provider))
             {
                 return true;
             }
@@ -2628,7 +2536,7 @@ public sealed class ContentHashRegistry : IDisposable
             // Ein Seitenwagen traegt keine Videospur-Position; seine Marke steht unter
             // `SidecarPosition`, die Frage bleibt hier die des Paares (F-M669).
             if (ZeileIstFuerQuelleBelegt(zeile.MediaHash, null, zeile.Language, zeile.HearingImpaired ?? false,
-                    zeile.Status, zeile.SubdlId, provider))
+                    zeile.Status, provider))
             {
                 return true;
             }
@@ -2640,18 +2548,17 @@ public sealed class ContentHashRegistry : IDisposable
     /// <summary>
     /// F-M668: ist dieser Text für DIESE Quelle schon oben? Die Antwort kommt aus der Marke des Paares;
     /// dazu die zwei Altregeln, die eine Zeile ohne Marke braucht (Schema 11: <c>Uploaded</c> plus
-    /// <c>SubdlId</c>; F-M500: <c>Uploaded</c> ohne jede Quellenmarke zählt für SubDL).
+    /// F-M500: <c>Uploaded</c> ohne jede Quellenmarke zählt für SubDL).
     /// </summary>
     /// <param name="mediaHash">Medien-Hash der Zeile.</param>
     /// <param name="subPos">Position der Zeile (F-M669), oder null fuer eine Sidecar-Zeile.</param>
     /// <param name="language">Sprache der Zeile.</param>
     /// <param name="hearingImpaired">HI-Variante der Zeile.</param>
     /// <param name="status">Status der Zeile.</param>
-    /// <param name="subdlId">SubDL-Kennung der Zeile, falls vorhanden.</param>
     /// <param name="provider">Die fragende Quelle.</param>
     /// <returns>Wahr, wenn diese Quelle den Text hält.</returns>
     private bool ZeileIstFuerQuelleBelegt(
-        string? mediaHash, int? subPos, string language, bool hearingImpaired, string status, string? subdlId,
+        string? mediaHash, int? subPos, string language, bool hearingImpaired, string status,
         SubtitleProvider provider)
     {
         bool belegt = subPos is { } position
@@ -2662,12 +2569,16 @@ public sealed class ContentHashRegistry : IDisposable
             return true;
         }
 
+        // F-M670: die Hälfte „oder eine SubdlId steht an der Zeile" ist entfallen — eine solche Id hat
+        // die Übernahme in die Matrix gehoben, wo sie die Marke oben schon schließt. Was bleibt, ist die
+        // F-M500-Regel: eine `uploaded`-Zeile ohne jede Quellenmarke zählt für SubDL (vor der
+        // Zwei-Quellen-Kette war SubDL das einzige Ziel).
         if (provider != SubtitleProvider.Subdl || !string.Equals(status, SubtitleStatus.Uploaded, StringComparison.Ordinal))
         {
             return false;
         }
 
-        return !string.IsNullOrEmpty(subdlId) || !AnySourceClosed(mediaHash, language, hearingImpaired);
+        return !AnySourceClosed(mediaHash, language, hearingImpaired);
     }
 
     /// <summary>
@@ -2785,16 +2696,19 @@ public sealed class ContentHashRegistry : IDisposable
     /// <param name="mediaHash">Media hash it was downloaded for.</param>
     /// <param name="language">Language code.</param>
     /// <param name="hearingImpaired">HI variant.</param>
-    /// <param name="subdlId">SubDL release id.</param>
     /// <param name="fileName">Written file name.</param>
     /// <param name="path">Written path.</param>
+    /// <remarks>
+    /// F-M670: der Parameter <c>subdlId</c> ist entfallen — die Kennung des Funds geht als
+    /// <c>subdlDownloadId</c> in die Marke (Matrix <c>SourceId</c>), nicht mehr in eine eigene Spalte.
+    /// </remarks>
     public void MarkDownloaded(string contentHash, string mediaHash, string language, bool hearingImpaired = false,
-                               string? subdlId = null, string? fileName = null, string? path = null,
+                               string? fileName = null, string? path = null,
                                string? origin = null, string? originId = null,
                                string? subdlDownloadId = null, string? tvSubtitlesDownloadId = null,
                                string? moviesubtitlesDownloadId = null)
         => MarkSidecar(contentHash, mediaHash, language, hearingImpaired, forced: false,
-                       SubtitleStatus.Downloaded, reason: null, subdlId: subdlId, fileName: fileName, path: path,
+                       SubtitleStatus.Downloaded, reason: null, fileName: fileName, path: path,
                        origin: origin, originId: originId, subdlDownloadId: subdlDownloadId,
                        tvSubtitlesDownloadId: tvSubtitlesDownloadId,
                        moviesubtitlesDownloadId: moviesubtitlesDownloadId);

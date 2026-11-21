@@ -185,7 +185,7 @@ internal static class ReportingRun
         // F-M668: Schema 19 — die Marken-Spalten von damals sind entfallen (Quelle ist ein WERT in
         // `source_matrix`); die Herkunft (F-M486) steht weiter an der Zeile und wird nachgezogen.
         // F-M669: 20 — die Spur-Position gehört in den Schlüssel der Spur-Arten.
-        Check(db.Contains("CurrentSchemaVersion = 20", StringComparison.Ordinal)
+        Check(db.Contains("CurrentSchemaVersion = 21", StringComparison.Ordinal)
               && db.Contains("ALTER TABLE sidecars ADD COLUMN Origin", StringComparison.Ordinal)
               && !db.Contains("ALTER TABLE sidecars ADD COLUMN TvSubtitlesUploadId", StringComparison.Ordinal)
               && db.Contains("+ \"UploadId TEXT NULL, \"", StringComparison.Ordinal),

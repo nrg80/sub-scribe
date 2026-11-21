@@ -126,7 +126,14 @@ public sealed class ScribeDbContext : IDisposable
     // (Medium, Quelle, Sprache, HI, Position) eine Zeile statt einer je Paar. Die Spalte `SubPos` ist
     // additiv (null bei `file`/`pack`, -1 bei einem Seitenwagen); eine Datei aus Schema 19 behält ihre
     // paarweiten Zeilen als Brücke (SubPos null), bis die nächste Marke die Position nachträgt.
-    public const int CurrentSchemaVersion = 20;
+    // F-M670 (21.11.2026): raised to 21. Die zwei letzten Reste eines zweiten Bestands fallen — die
+    // Alt-Tabelle `source_marks` (ein Beleg je Paar aus Spur und Quelle, ohne Leser und Schreiber) und
+    // die Id-Spalte `SubdlId` an `embeds`/`sidecars` („SubDL upload or download id this verdict refers
+    // to"). Beide werden in DERSELBEN Transaktion in die Matrix übernommen und danach entfernt: jede
+    // Quellen-Id steht danach GENAU EINMAL in `source_matrix` (`SourceId` = Eintrag/Fund, `UploadId` =
+    // Einsendung). Der Marker steigt, weil die Datei danach eine Tabelle und zwei Spalten NICHT mehr hat,
+    // die ein älterer Build liest bzw. schreibt.
+    public const int CurrentSchemaVersion = 21;
 
     /// <summary>
     /// F-M667: die DDL der Marken-Matrix. Sie steht hier, wo die anderen Tabellen entstehen, und wird
@@ -232,7 +239,6 @@ public sealed class ScribeDbContext : IDisposable
         EnsureSourceRefusalsTable();
         EnsureTitleFailuresTable();
         EnsureSourceMatrixTable();
-        SourceMarkStore.EnsureTable(_db, logger);
         EnsureReportColumns();
         EnsureStatusColumns();
         EnsurePackColumns();
@@ -1495,9 +1501,6 @@ public sealed class ScribeSqliteContext : DbContext
     /// <summary>F-M608: the titles whose creation keeps failing, and the ones closed for good.</summary>
     public DbSet<TitleFailureEntity> TitleFailureRows => Set<TitleFailureEntity>();
 
-    /// <summary>F-M628/F-M631: one mark per pair of record and source — a source is a value, not a column.</summary>
-    public DbSet<SourceMarkEntity> SourceMarkRows => Set<SourceMarkEntity>();
-
     /// <summary>
     /// Sets the pragmas this store runs with. Called once per context, right after the schema exists.
     /// <para>
@@ -1700,13 +1703,6 @@ public sealed class ScribeSqliteContext : DbContext
         {
             e.ToTable("source_refusals");
             e.HasKey(x => x.Id);
-        });
-
-        modelBuilder.Entity<SourceMarkEntity>(e =>
-        {
-            e.ToTable("source_marks");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => new { x.OwnerKey, x.Source }).IsUnique();
         });
 
         // F-M667: die Marken-Matrix. Der Tabellenname ist derselbe, den EnsureSourceMatrixTable (und

@@ -116,13 +116,15 @@ public class ScribeAdoptController : ControllerBase
 
             // The id is the whole point of the row: without it the single could never be deleted when a
             // pack replaces it, and a pack would leave a duplicate behind.
+            // F-M670: die Kennung ist eine EINSENDUNG — sie gehört als `UploadId` an die Spur-Marke der
+            // Matrix. Die Spalte, in die sie früher zusätzlich ging (`embeds.SubdlId`), gibt es nicht mehr.
             registry.MarkEmbed(
                 mediaHash,
                 entry.SubPos,
                 entry.Language,
                 entry.HearingImpaired,
                 SubtitleStatus.Uploaded,
-                subdlId: entry.SubdlId);
+                subdlUploadId: entry.SubdlId);
             adopted++;
             files.Add(entry.Path);
         }
