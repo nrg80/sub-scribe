@@ -632,6 +632,321 @@ using (var db = new ScribeDbContext(workdir, null))
     db.Packs.DeleteMany(x => x.ImdbId == "tt643");
 }
 
+// ---------------------------------------------------------------------------------------------
+// F-M667: die Marken-Matrix — Aufbau, einmalige Übernahme aus den breiten Spalten, Rückfall.
+//
+// Der Aufbau ist eine NACHRGEBAUTE Schema-17-Datei: ein vollständiger Store mit Marken in den breiten
+// Spalten, danach die Matrix-Tabelle entfernt und der Marker auf 17 zurückgesetzt — genau so sieht
+// die Datei aus, die der Betrieb vor diesem Build geschrieben hat. Gefahren wird gegen die echte
+// Datei, nicht gegen den Quelltext: vorher und nachher werden die Zeilen je Art GEZÄHLT.
+// ---------------------------------------------------------------------------------------------
+Console.WriteLine();
+Console.WriteLine("--- source matrix (F-M667) ---");
+
+string matrixDir = Path.Combine(workdir, "matrix17");
+Directory.CreateDirectory(matrixDir);
+string matrixDb = DbFiles.PathIn(matrixDir);
+
+var t1 = new DateTime(2026, 11, 1, 10, 0, 0, DateTimeKind.Utc);
+var t2 = new DateTime(2026, 11, 2, 10, 0, 0, DateTimeKind.Utc);
+var t3 = new DateTime(2026, 11, 3, 10, 0, 0, DateTimeKind.Utc);
+var t4 = new DateTime(2026, 11, 4, 10, 0, 0, DateTimeKind.Utc);
+var t5 = new DateTime(2026, 11, 5, 10, 0, 0, DateTimeKind.Utc);
+var t6 = new DateTime(2026, 11, 6, 10, 0, 0, DateTimeKind.Utc);
+var t7 = new DateTime(2026, 11, 7, 10, 0, 0, DateTimeKind.Utc);
+var t8 = new DateTime(2026, 11, 8, 10, 0, 0, DateTimeKind.Utc);
+
+// Der Bestand: zwei Medien mit Zugeh-Stempeln, sechs Spuren (davon eine HI, zwei in derselben
+// Sprache), ein Sidecar, zwei Packs (einer angenommen, einer abgelehnt).
+using (var db = new ScribeDbContext(matrixDir, null))
+{
+    db.Media.Upsert(new MediaEntity
+    {
+        Id = "m1", Path = "/lib/serie.mkv", ImdbId = "tt100", TmdbId = "200",
+        IsSeries = true, Season = 1, Episode = 1,
+        CompleteSubdl = t3, CompleteTvSubtitles = t4,
+    });
+    db.Media.Upsert(new MediaEntity
+    {
+        Id = "m2", Path = "/lib/film.mkv", ImdbId = "tt101", TmdbId = "201",
+        CompleteMsub = t5,
+    });
+    db.Media.Upsert(new MediaEntity { Id = "m3", Path = "/lib/leer.mkv" });
+
+    db.Embeds.Upsert(new EmbedTrackEntity
+    {
+        Id = ScribeDbContext.EmbedKey("m1", 0), MediaHash = "m1", SubPos = 0, Language = "EN",
+        Status = "uploaded", HearingImpaired = false, SubdlDownloadId = "111", SubdlUploadedAt = t1,
+    });
+    db.Embeds.Upsert(new EmbedTrackEntity
+    {
+        Id = ScribeDbContext.EmbedKey("m1", 1), MediaHash = "m1", SubPos = 1, Language = "EN",
+        Status = "uploaded", HearingImpaired = true, TvSubtitlesDownloadId = "222", TvSubtitlesUploadedAt = t2,
+    });
+    db.Embeds.Upsert(new EmbedTrackEntity
+    {
+        Id = ScribeDbContext.EmbedKey("m1", 2), MediaHash = "m1", SubPos = 2, Language = "DE",
+        Status = "uploaded", HearingImpaired = false, SubdlDownloadId = "333", SubdlUploadedAt = t3,
+    });
+    // Dieselbe Sprache ein zweites Mal — zwei Zeilen, EINE Marke: der spätere Zeitstempel muss gelten.
+    db.Embeds.Upsert(new EmbedTrackEntity
+    {
+        Id = ScribeDbContext.EmbedKey("m1", 3), MediaHash = "m1", SubPos = 3, Language = "DE",
+        Status = "uploaded", HearingImpaired = false, SubdlDownloadId = "444", SubdlUploadedAt = t5,
+    });
+    db.Embeds.Upsert(new EmbedTrackEntity
+    {
+        Id = ScribeDbContext.EmbedKey("m2", 0), MediaHash = "m2", SubPos = 0, Language = "FR",
+        Status = "uploaded", HearingImpaired = false, MoviesubtitlesDownloadId = "555", MoviesubtitlesUploadedAt = t4,
+    });
+    db.Embeds.Upsert(new EmbedTrackEntity
+    {
+        Id = ScribeDbContext.EmbedKey("m2", 1), MediaHash = "m2", SubPos = 1, Language = "EN",
+        Status = "observed",
+    });
+
+    db.Sidecars.Upsert(new SidecarEntity
+    {
+        Id = "sc1", ContentHash = "sc1", MediaHash = "m2", FileName = "film.de.srt", Language = "DE",
+        Status = "uploaded", HearingImpaired = false, SubdlDownloadId = "666", SubdlUploadedAt = t6,
+    });
+
+    db.Packs.Upsert(new PackEntity
+    {
+        Id = ScribeDbContext.PackKey("tt100", 1, "EN", false, PackEntity.SubdlSource),
+        Source = PackEntity.SubdlSource, ImdbId = "tt100", Season = 1, Language = "EN",
+        HearingImpaired = false, PackId = "pid-a", Fingerprint = "fp-a", Episodes = "1,2",
+        UploadedAt = t7,
+    });
+    db.Packs.Upsert(new PackEntity
+    {
+        Id = ScribeDbContext.PackKey("tt100", 2, "EN", false, PackEntity.SubdlSource),
+        Source = PackEntity.SubdlSource, ImdbId = "tt100", Season = 2, Language = "EN",
+        HearingImpaired = false, PackId = "pid-b", Fingerprint = "fp-b", Episodes = "1,2",
+        RefusalReason = "the source already holds this container (duplicate)", RefusedAt = t8,
+    });
+}
+
+// Der Bestand ist geschrieben — jetzt wird daraus eine Schema-17-Datei: die Matrix-Tabelle fällt weg,
+// der Marker geht zurück. Das ist der Zustand, den dieser Build beim Kunden antrifft.
+using (var db = new ScribeDbContext(matrixDir, null))
+{
+    db.Context.Database.ExecuteSqlRaw("DROP TABLE source_matrix;");
+    db.Context.Database.ExecuteSqlRaw("UPDATE meta SET SchemaVersion = 17 WHERE Id = 'db';");
+    // Die Zugeh-Stempel setzt dieser Build beim Oeffnen zurueck (Schema-16-Wanderung, F-M557). Die
+    // nachgebaute Datei traegt sie deshalb ERST jetzt — so, wie der letzte Lauf sie hinterlaesst.
+    db.Context.Database.ExecuteSqlRaw(
+        "UPDATE media SET CompleteSubdl = '2026-11-03 10:00:00', CompleteTvSubtitles = '2026-11-04 10:00:00' WHERE Id = 'm1';");
+    db.Context.Database.ExecuteSqlRaw(
+        "UPDATE media SET CompleteMsub = '2026-11-05 10:00:00' WHERE Id = 'm2';");
+}
+
+string[] Sicherungen(string dir) => Directory.GetFiles(dir, DbFiles.BackupPrefix + "*")
+    .Where(f => !DbFiles.SideSuffixes.Any(sfx => f.EndsWith(sfx, StringComparison.Ordinal)))
+    .ToArray();
+
+int Q(string sql)
+{
+    using var conn = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=" + matrixDb);
+    conn.Open();
+    using var cmd = conn.CreateCommand();
+    cmd.CommandText = sql;
+    return Convert.ToInt32(cmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
+}
+
+int Beleg(Dictionary<string, int> map, string key) => map.TryGetValue(key, out int n) ? n : 0;
+
+string spurSql = "SELECT COUNT(*) FROM {0} WHERE HearingImpaired IS NOT 1 AND (SubdlUploadedAt IS NOT NULL "
+              + "OR TvSubtitlesUploadedAt IS NOT NULL OR MoviesubtitlesUploadedAt IS NOT NULL)";
+string spurHiSql = "SELECT COUNT(*) FROM {0} WHERE HearingImpaired = 1 AND (SubdlUploadedAt IS NOT NULL "
+                + "OR TvSubtitlesUploadedAt IS NOT NULL OR MoviesubtitlesUploadedAt IS NOT NULL)";
+
+// VORHER: die alten Spalten, unabhängig gezählt (SQL, nicht die Zahlen des Migrationslaufs).
+int altTrack = Q(string.Format(System.Globalization.CultureInfo.InvariantCulture, spurSql, "embeds"))
+               + Q(string.Format(System.Globalization.CultureInfo.InvariantCulture, spurSql, "sidecars"));
+int altTrackHi = Q(string.Format(System.Globalization.CultureInfo.InvariantCulture, spurHiSql, "embeds"))
+                 + Q(string.Format(System.Globalization.CultureInfo.InvariantCulture, spurHiSql, "sidecars"));
+int altFile = Q("SELECT COUNT(*) FROM media WHERE CompleteSubdl IS NOT NULL "
+                + "OR CompleteTvSubtitles IS NOT NULL OR CompleteMsub IS NOT NULL");
+int altPack = Q("SELECT COUNT(*) FROM packs;");
+Console.WriteLine("   alte Spalten: track=" + altTrack + " track-hi=" + altTrackHi + " file=" + altFile + " pack=" + altPack);
+Check(altTrack == 5 && altTrackHi == 1 && altFile == 2 && altPack == 2,
+    "die nachgebaute Schema-17-Datei trägt die Marken nur in den breiten Spalten (Matrix-Tabelle fehlt)",
+    altTrack + "/" + altTrackHi + "/" + altFile + "/" + altPack);
+Check(Q("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='source_matrix'") == 0
+      && Q("SELECT SchemaVersion FROM meta WHERE Id='db'") == 17,
+    "und die Matrix-Tabelle gibt es darin nicht (Marker 17)");
+
+// NACHHER: die Übernahme läuft beim Öffnen — vor dem Store, mit Sicherung der alten Datei.
+var belege = new Dictionary<string, int>(StringComparer.Ordinal);
+bool sicherungDa;
+int markenGesamt;
+string sicherungPfad;
+using (var db = new ScribeDbContext(matrixDir, null))
+{
+    belege = SourceMatrix.CountByKind(db.Context);
+    markenGesamt = belege.Values.Sum();
+    var dateien = Sicherungen(matrixDir);
+    sicherungDa = dateien.Length == 1;
+    sicherungPfad = dateien.FirstOrDefault() ?? string.Empty;
+    Console.WriteLine("   Matrix: " + string.Join(", ", belege.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => x.Key + "=" + x.Value)));
+
+    Check(markenGesamt == 10 && belege.Count == 7
+          && Beleg(belege, "subdl|track") == 3 && Beleg(belege, "tvsubtitles|track-hi") == 1
+          && Beleg(belege, "moviesubtitles|track") == 1
+          && Beleg(belege, "subdl|file") == 1 && Beleg(belege, "tvsubtitles|file") == 1
+          && Beleg(belege, "moviesubtitles|file") == 1 && Beleg(belege, "subdl|pack") == 2,
+        "F-M667: die Matrix ist aus den breiten Spalten gefüllt — 10 Marken in 7 Paaren aus Quelle und Art",
+        markenGesamt + " Marke(n): " + string.Join(",", belege.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => x.Key + "=" + x.Value)));
+
+    // Die Zuordnung selbst: die Id bei der Quelle, der spätere Zeitstempel der beiden DE-Spuren.
+    var de = db.Matrix.FindById(SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m1", null), "subdl", MarkKind.Track, "DE", false));
+    Check(de != null && de.ClosedAt == t5 && de.SourceId == "444",
+        "F-M667: zwei Spuren einer Sprache werden EINE Marke — der spätere Zeitstempel und seine Id gelten",
+        de == null ? "(keine Zeile)" : de.ClosedAt + " / " + (de.SourceId ?? "-"));
+
+    var hi = db.Matrix.FindById(SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m1", null), "tvsubtitles", MarkKind.TrackHi, "EN", true));
+    Check(hi != null && hi.ClosedAt == t2 && hi.SourceId == "222" && hi.HearingImpaired == true,
+        "F-M667: die HI-Spur ist eine eigene Zeile derselben Datei, mit eigener Quelle und eigener Id",
+        hi == null ? "(keine Zeile)" : hi.Kind + " " + hi.ClosedAt);
+
+    var dateiMarke = db.Matrix.FindById(SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m1", null), "moviesubtitles", MarkKind.File, null, false));
+    Check(dateiMarke == null,
+        "F-M667: eine Datei ohne Stempel ihrer Quelle bekommt KEINE file-Marke — fehlend heißt offen");
+
+    var pack = db.Matrix.FindById(SourceMatrix.KeyOf(SourceMatrix.AnchorOf(null, "tt100", 2), "subdl", MarkKind.Pack, "EN", false));
+    Check(pack != null && pack.RefusalReason != null && pack.RefusedAt == t8 && pack.Fingerprint == "fp-b" && pack.ClosedAt == null
+          && pack.SourceId == "pid-b",
+        "F-M667: der abgelehnte Pack steht mit Grund, Datum, Fingerabdruck und Pack-Id da — und ohne Urteil",
+        pack == null ? "(keine Zeile)" : (pack.RefusalReason ?? "-"));
+
+    var angenommen = db.Matrix.FindById(SourceMatrix.KeyOf(SourceMatrix.AnchorOf(null, "tt100", 1), "subdl", MarkKind.Pack, "EN", false));
+    Check(angenommen != null && angenommen.ClosedAt == t7 && angenommen.Fingerprint == "fp-a",
+        "F-M667: der angenommene Pack trägt sein Urteil und den Fingerabdruck seiner Mitglieder",
+        angenommen == null ? "(keine Zeile)" : angenommen.ClosedAt + " / " + (angenommen.Fingerprint ?? "-"));
+}
+
+Check(sicherungDa, "F-M667: vor der Übernahme liegt eine Sicherung der alten Datei daneben (Zeitstempel im Namen)",
+    Path.GetFileName(sicherungPfad));
+
+int sicherungMarker = -1;
+if (File.Exists(sicherungPfad))
+{
+    using var conn = new Microsoft.Data.Sqlite.SqliteConnection("Data Source=" + sicherungPfad + ";Mode=ReadOnly");
+    conn.Open();
+    using var cmd = conn.CreateCommand();
+    cmd.CommandText = "SELECT SchemaVersion FROM meta WHERE Id = 'db';";
+    sicherungMarker = Convert.ToInt32(cmd.ExecuteScalar(), System.Globalization.CultureInfo.InvariantCulture);
+}
+
+Check(sicherungMarker == 17,
+    "F-M667: die Sicherung ist die Datei VOR der Übernahme (Marker 17, Matrix noch nicht darin)",
+    "marker=" + sicherungMarker);
+
+// Zweiter Start: dieselbe Datei, dieselbe Matrix — kein zweiter Lauf, keine zweite Sicherung.
+int backups = Sicherungen(matrixDir).Length;
+int marksAgain;
+using (var db = new ScribeDbContext(matrixDir, null))
+{
+    marksAgain = SourceMatrix.CountByKind(db.Context).Values.Sum();
+    Check(db.Meta.FindById("db")?.SchemaVersion == 18,
+        "F-M667: der Marker steht nach der Übernahme auf 18",
+        "marker=" + (db.Meta.FindById("db")?.SchemaVersion));
+}
+Check(marksAgain == markenGesamt && Sicherungen(matrixDir).Length == backups,
+    "F-M667: der zweite Start migriert nicht erneut — gleiche Zeilenzahl, gleiche Zahl Sicherungen",
+    marksAgain + " Marke(n), " + backups + " Sicherung(en)");
+
+// Nichts gelöscht: die breiten Spalten und die Spur-Zeilen stehen unverändert daneben (F-M327).
+using (var db = new ScribeDbContext(matrixDir, null))
+{
+    var spalten = db.Context.Database
+        .SqlQueryRaw<string>("SELECT name AS \"Value\" FROM pragma_table_info('embeds')")
+        .ToList();
+    Check(spalten.Contains("SubdlUploadedAt") && spalten.Contains("TvSubtitlesUploadedAt")
+          && spalten.Contains("MoviesubtitlesUploadedAt")
+          && db.Embeds.Count() == 6 && db.Sidecars.Count() == 1,
+        "F-M667: die Übernahme löscht nichts — die breiten Spalten und alle Spur-Zeilen bleiben stehen",
+        "embeds=" + db.Embeds.Count() + " sidecars=" + db.Sidecars.Count());
+
+    // ---- Der Rückfall: die Matrix antwortet, und wenn dort keine Zeile steht, die alte Spalte ----
+    var spur = SourceMatrix.TrackMark(db.Context, "m1", "subdl", "EN", false);
+    Check(spur.FromMatrix && spur.ClosedAt == t1 && spur.SourceId == "111",
+        "F-M667: die Spur-Marke kommt aus der Matrix (geschlossen, mit der Id bei der Quelle)",
+        "aus Matrix=" + spur.FromMatrix + " " + spur.ClosedAt + " / " + (spur.SourceId ?? "-"));
+
+    // Die Matrix ist maßgeblich: eine geänderte alte Spalte ändert die Antwort NICHT, solange die
+    // Zeile steht.
+    db.Context.Database.ExecuteSqlRaw("UPDATE media SET CompleteMsub = '2027-02-03 04:05:06' WHERE Id = 'm2';");
+    var dateiAusMatrix = SourceMatrix.FileMark(db.Context, "m2", "moviesubtitles");
+    Check(dateiAusMatrix.FromMatrix && dateiAusMatrix.ClosedAt == t5,
+        "F-M667: solange die Zeile steht, gilt die Matrix — auch gegen eine geänderte alte Spalte",
+        "aus Matrix=" + dateiAusMatrix.FromMatrix + " " + dateiAusMatrix.ClosedAt);
+
+    // Jetzt die Zeile wegnehmen: die alte Spalte antwortet — mit dem Wert, der dort steht.
+    db.Context.Database.ExecuteSqlRaw(
+        "DELETE FROM source_matrix WHERE Id = '" 
+        + SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m2", null), "moviesubtitles", MarkKind.File, null, false) + "';");
+    db.Context.Database.ExecuteSqlRaw(
+        "DELETE FROM source_matrix WHERE Id = '"
+        + SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m1", null), "subdl", MarkKind.Track, "EN", false) + "';");
+    db.Context.Database.ExecuteSqlRaw(
+        "DELETE FROM source_matrix WHERE Id = '"
+        + SourceMatrix.KeyOf(SourceMatrix.AnchorOf(null, "tt100", 2), "subdl", MarkKind.Pack, "EN", false) + "';");
+
+    var spurRueckfall = SourceMatrix.TrackMark(db.Context, "m1", "subdl", "EN", false);
+    Check(!spurRueckfall.FromMatrix && spurRueckfall.ClosedAt == t1 && spurRueckfall.SourceId == "111",
+        "F-M667: fehlt die Matrix-Zeile, antwortet die alte Spalte der Spur (derselbe Wert, dieselbe Id)",
+        "aus Matrix=" + spurRueckfall.FromMatrix + " " + spurRueckfall.ClosedAt + " / " + (spurRueckfall.SourceId ?? "-"));
+
+    var dateiRueckfall = SourceMatrix.FileMark(db.Context, "m2", "moviesubtitles");
+    Check(!dateiRueckfall.FromMatrix && dateiRueckfall.ClosedAt == new DateTime(2027, 2, 3, 4, 5, 6),
+        "F-M667: fehlt die file-Zeile, gilt der Zugeh-Stempel der Medienzeile",
+        "aus Matrix=" + dateiRueckfall.FromMatrix + " " + dateiRueckfall.ClosedAt);
+
+    var packRueckfall = SourceMatrix.PackMark(db.Context, "tt100", 2, "EN", false, "subdl");
+    Check(!packRueckfall.FromMatrix && packRueckfall.RefusalReason != null && packRueckfall.Fingerprint == "fp-b",
+        "F-M667: fehlt die pack-Zeile, antwortet die packs-Zeile mit Grund und Fingerabdruck",
+        "aus Matrix=" + packRueckfall.FromMatrix + " " + (packRueckfall.RefusalReason ?? "-"));
+}
+
+
+// ---- Der Formatwechsel (F-M637) baut seine neue Datei selbst — auch DORT muss die Matrix gefüllt
+// werden. Er öffnet die Kopie über denselben Kontext, der die Tabelle dabei anlegt; stünde die
+// Übernahme nur auf dem normalen Weg, wäre die Matrix einer umgestellten Datei für immer leer.
+string seedDir = Path.Combine(workdir, "switch-seed");
+Directory.CreateDirectory(seedDir);
+using (var db = new ScribeDbContext(seedDir, null))
+{
+    db.Embeds.Upsert(new EmbedTrackEntity
+    {
+        Id = ScribeDbContext.EmbedKey("s1", 0), MediaHash = "s1", SubPos = 0, Language = "EN",
+        Status = "uploaded", HearingImpaired = false, SubdlDownloadId = "900", SubdlUploadedAt = t1,
+    });
+}
+
+using (var db = new ScribeDbContext(seedDir, null))
+{
+    db.Context.Database.ExecuteSqlRaw("DROP TABLE source_matrix;");
+    db.Context.Database.ExecuteSqlRaw("UPDATE meta SET SchemaVersion = 17 WHERE Id = 'db';");
+}
+
+string switchDir = Path.Combine(workdir, "switch17");
+Directory.CreateDirectory(switchDir);
+File.Copy(DbFiles.PathIn(seedDir), DbFiles.PreviousPathIn(switchDir), overwrite: true);
+
+using (var db = new ScribeDbContext(switchDir, null))
+{
+    var marke = SourceMatrix.TrackMark(db.Context, "s1", "subdl", "EN", false);
+    Check(marke.FromMatrix && marke.SourceId == "900" && marke.ClosedAt == t1,
+        "F-M667: auch die Datei, die der Formatwechsel (F-M637) baut, wird in die Matrix übernommen",
+        "aus Matrix=" + marke.FromMatrix + " " + (marke.SourceId ?? "-"));
+    Check(File.Exists(DbFiles.PreviousPathIn(switchDir)) && Sicherungen(switchDir).Length == 0,
+        "F-M667: dabei entsteht keine zweite Sicherung — die Vorgängerdatei bleibt liegen (F-M638)",
+        "vorgaenger=" + File.Exists(DbFiles.PreviousPathIn(switchDir))
+        + " sicherungen=" + Sicherungen(switchDir).Length);
+}
+
 Console.WriteLine();
 Console.WriteLine("=== " + (failures == 0 ? "STORE OK" : failures + " FAILURE(S)") + " ===");
 return failures == 0 ? 0 : 1;

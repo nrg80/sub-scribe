@@ -692,6 +692,10 @@
     "T333": {
       "suite": "seasonpack",
       "checks": 9
+    },
+    "T334": {
+      "suite": "storex",
+      "checks": 20
     }
   }
 }

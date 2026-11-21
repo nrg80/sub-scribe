@@ -959,3 +959,112 @@ public class PackEntity
     /// <summary>When the row last changed (UTC).</summary>
     public DateTime Updated { get; set; } = DateTime.UtcNow;
 }
+
+/// <summary>
+/// F-M667 (Betreiber-Vorgabe 21.11.2026): EINE Marke je (Medium, Quelle, Art) — die Matrix, die die
+/// breiten Quellen-Spalten an <c>embeds</c>, <c>sidecars</c>, <c>media</c> und <c>packs</c> ablösen soll.
+/// <para>
+/// WARUM EINE TABELLE UND KEINE SPALTEN: heute trägt jede Untertitelzeile je Quelle und Richtung ein
+/// eigenes Feld (<c>SubdlDownloadId</c>, <c>SubdlUploadId</c>, <c>SubdlUploadedAt</c>, dasselbe für
+/// tvsubtitles und moviesubtitles — vierzehn Spalten), und die Datei trägt je Quelle einen eigenen
+/// Zugeh-Stempel (<c>CompleteSubdl</c>, <c>CompleteTvSubtitles</c>, <c>CompleteMsub</c>). Eine vierte
+/// Quelle hieße: vier neue Spalten je Tabelle und jeder Lesepfad mitgezogen. Hier ist eine Quelle ein
+/// WERT im Feld <see cref="Source"/> und eine Art ein WERT im Feld <see cref="Kind"/> — N Quellen
+/// erzeugen N Zeilen, nicht N Spalten.
+/// </para>
+/// <para>
+/// DIE VIER ARTEN sind die vier Dinge, für die es ein Urteil gibt: <c>track</c> (Spur normal),
+/// <c>track-hi</c> (Spur HI — die Variante ist eine eigene Art, nicht ein Feld, weil ein Urteil über
+/// die normale Spur nichts über die HI-Spur sagt), <c>file</c> (die Datei ist für diese Quelle
+/// zugegangen) und <c>pack</c> (der Staffelpack). <see cref="HearingImpaired"/> bleibt trotzdem eine
+/// Spalte: der Pack hat keine eigene HI-Art, und zwei Packs einer Staffel (normal und SDH) sind zwei
+/// Zeilen derselben Art.
+/// </para>
+/// <para>
+/// WAS „KEINE ZEILE" HEISST: für eine Spur ist die Quelle offen. Für <c>file</c> und <c>pack</c> heißt
+/// eine Zeile ohne <see cref="ClosedAt"/> „gesehen, nicht geschlossen"; ein Ablehnungsgrund
+/// (<see cref="RefusalReason"/>) ohne Urteil heißt „bei gleichem Fingerabdruck nicht erneut versuchen".
+/// </para>
+/// <para>
+/// SCHEMA 18 legt die Tabelle an; der Bestand wird beim ersten Start EINMAL aus den alten Spalten
+/// gefüllt (<c>SourceMatrixMigration</c>), die alten Spalten bleiben lesbar (Rückfallebene, F-M327).
+/// Bis Schritt B (12.3.0.0) schreibt der normale Lauf weiter in die alten Spalten — die Matrix ist in
+/// diesem Schritt Ziel-Struktur und Rücklesepfad, nicht der Schreibpfad.
+/// </para>
+/// </summary>
+public class SourceMatrixEntity
+{
+    /// <summary>
+    /// Primärschlüssel, gebaut von <see cref="SourceMatrix.KeyOf"/>:
+    /// <c>&lt;Anker&gt;|&lt;Quelle&gt;|&lt;Art&gt;|&lt;Sprache&gt;|&lt;hi|plain&gt;</c>.
+    /// <para>
+    /// Der Anker ist der Medien-Hash (<c>h:…</c>), bei einem Pack die Serie samt Staffel
+    /// (<c>i:tt…|S01</c>). Die Sprache und die HI-Variante gehören dazu, weil eine Datei mehrere
+    /// Spuren je Quelle haben kann — ohne sie überschriebe die zweite Spur die erste.
+    /// </para>
+    /// </summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>Medien-Hash des Mediums, zu dem die Marke gehört (leer bei einer Pack-Zeile ohne Datei).</summary>
+    public string MediaHash { get; set; } = string.Empty;
+
+    /// <summary>IMDb-Kennung des Mediums (bei einer Serie die Serien-Kennung, F-M191).</summary>
+    public string ImdbId { get; set; } = string.Empty;
+
+    /// <summary>TMDb-Kennung des Mediums (bei einer Serie die Serien-Kennung, F-M191).</summary>
+    public string TmdbId { get; set; } = string.Empty;
+
+    /// <summary>Die Quelle der Marke — <c>subdl</c>, <c>tvsubtitles</c> oder <c>moviesubtitles</c>.</summary>
+    public string Source { get; set; } = string.Empty;
+
+    /// <summary>Die Art der Marke — eine der Konstanten aus <see cref="MarkKind"/>.</summary>
+    public string Kind { get; set; } = string.Empty;
+
+    /// <summary>Sprache der Spur beziehungsweise des Packs, ISO 639-2 wie im übrigen Store (F-M557). Leer bei <c>file</c>.</summary>
+    public string Language { get; set; } = string.Empty;
+
+    /// <summary>Staffel (Serie; bei <c>file</c> die Staffel der Datei, sonst null).</summary>
+    public int? Season { get; set; }
+
+    /// <summary>Folge (Serie; bei <c>file</c> die Folge der Datei, sonst null).</summary>
+    public int? Episode { get; set; }
+
+    /// <summary>
+    /// HI-Variante der Zeile, dreiwertig wie überall im Store (F-M285): <c>true</c>/<c>false</c> sind
+    /// Aussagen, <c>null</c> heißt „diese Zeile sagt es nicht". Für <c>track</c> und <c>track-hi</c>
+    /// steht die Variante schon in <see cref="Kind"/> und wird hier nur mitgeschrieben; für <c>pack</c>
+    /// ist sie das einzige Feld, das den normalen vom SDH-Behälter trennt.
+    /// </summary>
+    public bool? HearingImpaired { get; set; }
+
+    /// <summary>
+    /// Das Urteil „geschlossen" für diese Quelle und Art: „Spur geschlossen (normal/HI)", „Datei
+    /// geschlossen", „Pack geschlossen". Null heißt offen; die Zeile kann trotzdem existieren, weil
+    /// sie eine Ablehnung trägt.
+    /// </summary>
+    public DateTime? ClosedAt { get; set; }
+
+    /// <summary>
+    /// Inhaltssignatur für <c>file</c> und <c>pack</c> — bei der Datei der Hash ihres Inhalts, beim Pack
+    /// der Hash seiner Mitglieder (F-M466). Sie macht „ist das noch dasselbe?" zu einem Vergleich.
+    /// </summary>
+    public string? Fingerprint { get; set; }
+
+    /// <summary>Änderungszeit der Datei in Unix-Sekunden, zu der <see cref="Fingerprint"/> gehört (nur <c>file</c> und <c>pack</c>).</summary>
+    public long? MtimeUnix { get; set; }
+
+    /// <summary>
+    /// Die Id BEI DER QUELLE — der Eintrag, aus dem der Untertitel kam (SubDL-Eintrags-Id,
+    /// tvsubtitles-Untertitel-Id, Film-Eintrag). Beim Pack die Kennung des Behälters.
+    /// </summary>
+    public string? SourceId { get; set; }
+
+    /// <summary>Grund einer Ablehnung durch die Quelle (nur <c>pack</c> belegt); null, solange nichts abgelehnt wurde.</summary>
+    public string? RefusalReason { get; set; }
+
+    /// <summary>Wann abgelehnt wurde (UTC) — die Zeile nennt den Grund mit seinem Datum.</summary>
+    public DateTime? RefusedAt { get; set; }
+
+    /// <summary>Wann die Zeile zuletzt geschrieben wurde (UTC).</summary>
+    public DateTime Written { get; set; } = DateTime.UtcNow;
+}

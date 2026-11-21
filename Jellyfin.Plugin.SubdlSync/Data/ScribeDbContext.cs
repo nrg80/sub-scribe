@@ -115,7 +115,48 @@ public sealed class ScribeDbContext : IDisposable
     // bekommt die Tabelle der Quellenbelege (source_marks), aber das ist additiv — der alte Bestand bleibt
     // vollständig lesbar, und ein Marker-Sprung würde die Bestandsprüfungen der Testharnisse auf einen
     // Stand ziehen, der noch nicht gebaut ist.
-    public const int CurrentSchemaVersion = 17;
+    // F-M667 (21.11.2026): raised to 18. Die Marken-Matrix (`source_matrix`) kommt als EINE Tabelle je
+    // (Medium, Quelle, Art) hinzu; der Bestand wird beim ersten Start einmalig aus den breiten Spalten
+    // übernommen, und die breiten Spalten bleiben lesbar (Rückfallebene). Der Marker wandert mit, weil die
+    // Datei danach eine Tabelle trägt, die ein älterer Build nicht kennt — und weil ohne ihn ein zweiter
+    // Start den Übernahmelauf wiederholen müsste. Die Übernahme selbst hängt NICHT am Marker: sie läuft,
+    // wenn die Tabelle fehlt (siehe SourceMatrixMigration), damit ein abgebrochener Lauf beim nächsten
+    // Start nachgeholt wird statt für immer als „erledigt" zu gelten.
+    public const int CurrentSchemaVersion = 18;
+
+    /// <summary>
+    /// F-M667: die DDL der Marken-Matrix. Sie steht hier, wo die anderen Tabellen entstehen, und wird
+    /// von <see cref="SourceMatrix.EnsureTable"/> ausgeführt — der Migrationslauf braucht sie schon
+    /// VOR dem Öffnen des Stores, also bevor es einen Kontext gibt, der sie anlegen könnte.
+    /// </summary>
+    public const string SourceMatrixDdl =
+        "CREATE TABLE IF NOT EXISTS source_matrix ("
+        + "Id TEXT NOT NULL PRIMARY KEY, "
+        + "MediaHash TEXT NOT NULL DEFAULT '', "
+        + "ImdbId TEXT NOT NULL DEFAULT '', "
+        + "TmdbId TEXT NOT NULL DEFAULT '', "
+        + "Source TEXT NOT NULL DEFAULT '', "
+        + "Kind TEXT NOT NULL DEFAULT '', "
+        + "Language TEXT NOT NULL DEFAULT '', "
+        + "Season INTEGER NULL, "
+        + "Episode INTEGER NULL, "
+        + "HearingImpaired INTEGER NULL, "
+        + "ClosedAt TEXT NULL, "
+        + "Fingerprint TEXT NULL, "
+        + "MtimeUnix INTEGER NULL, "
+        + "SourceId TEXT NULL, "
+        + "RefusalReason TEXT NULL, "
+        + "RefusedAt TEXT NULL, "
+        + "Written TEXT NOT NULL DEFAULT '');";
+
+    /// <summary>F-M667: die Indizes der Marken-Matrix — dieselbe Begründung wie <see cref="SourceMatrixDdl"/>.</summary>
+    public static readonly string[] SourceMatrixIndexDdl =
+    {
+        "CREATE INDEX IF NOT EXISTS IX_source_matrix_MediaHash ON source_matrix (MediaHash);",
+        "CREATE INDEX IF NOT EXISTS IX_source_matrix_ImdbId ON source_matrix (ImdbId);",
+        "CREATE INDEX IF NOT EXISTS IX_source_matrix_TmdbId ON source_matrix (TmdbId);",
+        "CREATE INDEX IF NOT EXISTS IX_source_matrix_SourceKind ON source_matrix (Source, Kind);",
+    };
 
     private readonly string _dbPath;
     private readonly ILogger? _logger;
@@ -158,6 +199,17 @@ public sealed class ScribeDbContext : IDisposable
             _dbPath = wechsel.LivePath;
         }
 
+        // F-M667: die Übernahme in die Marken-Matrix läuft VOR dem Öffnen des Stores — sie sichert
+        // zuerst die alte Datei (Zeitstempel im Namen) und füllt dann die Matrix aus den breiten
+        // Spalten, die danach unangetastet weiterlesbar bleiben. Sie ist damit der einzige Pfad, der
+        // das alte Format SCHREIBEND übernimmt; der Rückfall in `SourceMatrix` liest es weiter, bis
+        // Schritt B die Spalten stilllegt.
+        //
+        // Sie läuft auf BEIDEN Wegen: die Datei, die der Formatwechsel gerade gebaut hat, braucht
+        // dieselbe Füllung. Nur die Sicherung entfällt dort — die Datei, aus der sie entstand, bleibt
+        // nach F-M638 liegen und ist die Sicherung selbst.
+        SourceMatrixMigration.Run(_dbPath, logger, backup: explicitPath == null);
+
         _db = new ScribeSqliteContext(_dbPath);
 
         // F-M514: the context itself warns now (a rejected row, a rebuilt tracker), so it needs the
@@ -170,6 +222,7 @@ public sealed class ScribeDbContext : IDisposable
         EnsurePackSeasonsTable();
         EnsureSourceRefusalsTable();
         EnsureTitleFailuresTable();
+        EnsureSourceMatrixTable();
         SourceMarkStore.EnsureTable(_db, logger);
         EnsureReportColumns();
         EnsureStatusColumns();
@@ -189,6 +242,7 @@ public sealed class ScribeDbContext : IDisposable
         StatusStats = new ScribeSet<StatusStatsEntity>(_db, e => e.Id);
         WorkerRuns = new ScribeSet<WorkerRunEntity>(_db, e => e.Id);
         Packs = new ScribeSet<PackEntity>(_db, e => e.Id);
+        Matrix = new ScribeSet<SourceMatrixEntity>(_db, e => e.Id);
 
         CheckSchemaVersion();
     }
@@ -235,6 +289,14 @@ public sealed class ScribeDbContext : IDisposable
     /// language, and with which members" — see <see cref="PackEntity"/>.
     /// </summary>
     public ScribeSet<PackEntity> Packs { get; }
+
+    /// <summary>
+    /// F-M667: die Marken-Matrix — eine Zeile je (Medium, Quelle, Art). Ziel-Struktur fuer Schritt B
+    /// (12.3.0.0); in diesem Schritt fuellt sie nur der Migrationslauf, und jeder Leser kommt ueber
+    /// <see cref="SourceMatrix"/> herein, damit der Rueckfall auf die breiten Spalten an EINER Stelle
+    /// steht.
+    /// </summary>
+    public ScribeSet<SourceMatrixEntity> Matrix { get; }
 
     /// <summary>
     /// True when the data file was written by a NEWER plugin build than this one. Callers must not
@@ -391,6 +453,18 @@ public sealed class ScribeDbContext : IDisposable
         {
             _logger?.LogWarning("[Sub Scribe] could not create the title_failures table (continuing): {Msg}", ex.Message);
         }
+    }
+
+    /// <summary>
+    /// F-M667: legt die Marken-Matrix auf einer Datei an, die sie noch nicht kennt. Dieselbe Begruendung
+    /// wie bei <see cref="EnsurePacksTable"/> — <c>EnsureCreated</c> baut ein Schema nur bei einer NEUEN
+    /// Datei. Der Migrationslauf legt die Tabelle bereits VOR dem Oeffnen an; dieser Schritt ist damit
+    /// der zweite, harmlose Weg fuer einen Store, der ohne Migration geoeffnet wurde (ausdrueckliche
+    /// Datei), und fuer eine Datei, deren Uebernahme abgebrochen ist.
+    /// </summary>
+    private void EnsureSourceMatrixTable()
+    {
+        SourceMatrix.EnsureTable(_db, _logger);
     }
 
     private void EnsureSourceRefusalsTable()
@@ -1547,6 +1621,9 @@ public sealed class ScribeSqliteContext : DbContext
         optionsBuilder.EnableSensitiveDataLogging(false);
     }
 
+    /// <summary>F-M667: das Modell der Marken-Matrix.</summary>
+    public DbSet<SourceMatrixEntity> SourceMatrixRows => Set<SourceMatrixEntity>();
+
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
     {
@@ -1662,6 +1739,19 @@ public sealed class ScribeSqliteContext : DbContext
             e.ToTable("source_marks");
             e.HasKey(x => x.Id);
             e.HasIndex(x => new { x.OwnerKey, x.Source }).IsUnique();
+        });
+
+        // F-M667: die Marken-Matrix. Der Tabellenname ist derselbe, den EnsureSourceMatrixTable (und
+        // der Migrationslauf davor) anlegt — sonst schriebe der eine Teil in eine Tabelle, die der
+        // andere nie liest.
+        modelBuilder.Entity<SourceMatrixEntity>(e =>
+        {
+            e.ToTable("source_matrix");
+            e.HasKey(x => x.Id);
+            e.HasIndex(x => x.MediaHash);
+            e.HasIndex(x => x.ImdbId);
+            e.HasIndex(x => x.TmdbId);
+            e.HasIndex(x => new { x.Source, x.Kind });
         });
 
         // F-M604: same contract for the pack verdicts.
