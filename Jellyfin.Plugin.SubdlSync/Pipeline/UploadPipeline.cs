@@ -1857,9 +1857,9 @@ public sealed class UploadPipeline : IPackFiller
                 // F-M4/F-M61: dedup — (media content hash, language) pair already uploaded?
                 // F-M71: HI variants have their own key space — a normal upload never blocks an SDH variant.
                 bool streamHi = Jellyfin.Plugin.SubScribe.Registry.SidecarNaming.IsHearingImpairedStream(stream);
-                if (!AnyUploadSourceStillWants(mediaHash, lang, streamHi, isSeries))
+                if (!AnyUploadSourceStillWants(mediaHash, lang, streamHi, isSeries, subPos))
                 {
-                    if (IrgendeineQuelleHat(mediaHash, lang, streamHi, isSeries))
+                    if (IrgendeineQuelleHat(mediaHash, lang, streamHi, isSeries, subPos))
                     {
                         // Pair already up. This position is NOT uploaded by itself, so it does not get
                         // an uploaded verdict of its own; it is recorded as rejected-by-self-echo, which
@@ -2393,10 +2393,12 @@ public sealed class UploadPipeline : IPackFiller
                     SourceAllowed(Configuration.SubtitleProvider.Subdl),
                     SourceAllowed(Configuration.SubtitleProvider.TvSubtitles),
                     dryHerkunft,
-                    Registry.IsUploadedTo(mediaHash!, cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.Subdl),
-                    Registry.IsUploadedTo(mediaHash!, cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.TvSubtitles),
+                    // F-M669: das Tor fragt die Marke DIESER Position, nicht die irgendeiner Spur
+                    // derselben Sprache — sonst gälte die zweite Spur als erledigt.
+                    Registry.IsUploadedToPosition(mediaHash!, SourceMatrix.PositionOf(cand.IsLoose, cand.SubPos), cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.Subdl),
+                    Registry.IsUploadedToPosition(mediaHash!, SourceMatrix.PositionOf(cand.IsLoose, cand.SubPos), cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.TvSubtitles),
                     SourceAllowed(Configuration.SubtitleProvider.MovieSubtitles),
-                    Registry.IsUploadedTo(mediaHash!, cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.MovieSubtitles));
+                    Registry.IsUploadedToPosition(mediaHash!, SourceMatrix.PositionOf(cand.IsLoose, cand.SubPos), cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.MovieSubtitles));
                 foreach (var quelle in UploadSourceOrder(isSeries))
                 {
                     // F-M496: der Toggle JE QUELLE, vor ihrer Zeile — dieselbe Frage, die die Kette
@@ -2505,20 +2507,22 @@ public sealed class UploadPipeline : IPackFiller
                     SourceAllowed(Configuration.SubtitleProvider.Subdl),
                     SourceAllowed(Configuration.SubtitleProvider.TvSubtitles),
                     Registry.GetOrigin(contentHash).Origin,
-                    Registry.IsUploadedTo(mediaHash, cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.Subdl),
-                    Registry.IsUploadedTo(mediaHash, cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.TvSubtitles),
+                    // F-M669: je POSITION — zwei Spuren derselben Sprache sind zwei Marken.
+                    Registry.IsUploadedToPosition(mediaHash, SourceMatrix.PositionOf(cand.IsLoose, cand.SubPos), cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.Subdl),
+                    Registry.IsUploadedToPosition(mediaHash, SourceMatrix.PositionOf(cand.IsLoose, cand.SubPos), cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.TvSubtitles),
                     // F-M656: die Filmquelle fehlte hier. Das fruehe Tor antwortete damit fuer einen FILM
                     // "nichts zu tun", sobald SubDL und tvst nichts wollten — moviesubtitles wurde still
                     // uebergangen, obwohl es die Sprache nicht hatte (F-M489, F-M509).
                     SourceAllowed(Configuration.SubtitleProvider.MovieSubtitles) && !isSeries,
-                    !isSeries && Registry.IsUploadedTo(mediaHash, cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.MovieSubtitles));
+                    !isSeries && Registry.IsUploadedToPosition(mediaHash, SourceMatrix.PositionOf(cand.IsLoose, cand.SubPos), cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.MovieSubtitles));
                 if (gateFrueh.SkipReason is not null)
                 {
                     // F-M581: das Tor kann aus drei Gruenden schweigen — Schalter aus, Herkunft bekannt,
                     // oder eine Quelle hat das Paar schon. Nur der letzte Fall ist ein Urteil ueber den
                     // INHALT und darf als `duplicate-self-echo` im Store stehen; die anderen beiden sind
                     // Umstaende des Laufs und bekommen keine Zeile, sonst waere das Paar fuer immer zu.
-                    if (IrgendeineQuelleHat(mediaHash, cand.Lang, cand.HearingImpaired, isSeries))
+                    if (IrgendeineQuelleHat(mediaHash, cand.Lang, cand.HearingImpaired, isSeries,
+                            SourceMatrix.PositionOf(cand.IsLoose, cand.SubPos)))
                     {
                         summary.RejectedCandidates++; // F-M286
                         if (cand.IsLoose)
@@ -3539,10 +3543,12 @@ public sealed class UploadPipeline : IPackFiller
             SourceAllowed(Configuration.SubtitleProvider.Subdl),
             SourceAllowed(Configuration.SubtitleProvider.TvSubtitles),
             herkunft,
-            Registry.IsUploadedTo(mediaHash, lang, hearingImpaired, Configuration.SubtitleProvider.Subdl),
-            Registry.IsUploadedTo(mediaHash, lang, hearingImpaired, Configuration.SubtitleProvider.TvSubtitles),
+            // F-M669: die Marke dieser Spur-Position — ein Seitenwagen fragt unter seiner festen
+            // Position, eine eingebettete Spur unter ihrer Stream-Position.
+            Registry.IsUploadedToPosition(mediaHash, SourceMatrix.PositionOf(loosePath != null, subPos), lang, hearingImpaired, Configuration.SubtitleProvider.Subdl),
+            Registry.IsUploadedToPosition(mediaHash, SourceMatrix.PositionOf(loosePath != null, subPos), lang, hearingImpaired, Configuration.SubtitleProvider.TvSubtitles),
             SourceAllowed(Configuration.SubtitleProvider.MovieSubtitles),
-            Registry.IsUploadedTo(mediaHash, lang, hearingImpaired, Configuration.SubtitleProvider.MovieSubtitles));
+            Registry.IsUploadedToPosition(mediaHash, SourceMatrix.PositionOf(loosePath != null, subPos), lang, hearingImpaired, Configuration.SubtitleProvider.MovieSubtitles));
         if (gate.SkipReason is not null)
         {
             LogUtil.PerItem(_config.LogMode, _logger, "[Sub Scribe] {Name} [{Lang}] — skipped: {Reason}",
@@ -7728,7 +7734,8 @@ public sealed class UploadPipeline : IPackFiller
         _ => true,
     };
 
-    private bool AnyUploadSourceStillWants(string? mediaHash, string language, bool hearingImpaired, bool isSeries) =>
+    private bool AnyUploadSourceStillWants(
+        string? mediaHash, string language, bool hearingImpaired, bool isSeries, int? subPos = null) =>
         // F-M580 (Operator-Anweisung 17.11.2026: „Es ist ein verdict, paar schließen."): ein gespeichertes
         // Urteil ist ein Endzustand — auch fuer eine SIDECAR-Datei, deren Spruch am Inhalt haengt und
         // nicht an einer Position. Ohne diese Zeile blieb eine Datei, deren einziger Kandidat laengst als
@@ -7751,11 +7758,13 @@ public sealed class UploadPipeline : IPackFiller
             SourceAllowed(Configuration.SubtitleProvider.TvSubtitles) && isSeries
                 && NimmtSprache(Configuration.SubtitleProvider.TvSubtitles, language, isSeries),
             origin: null,
-            Registry.IsUploadedTo(mediaHash, language, hearingImpaired, Configuration.SubtitleProvider.Subdl),
-            isSeries && Registry.IsUploadedTo(mediaHash, language, hearingImpaired, Configuration.SubtitleProvider.TvSubtitles),
+            // F-M669: mit Position fragt sie DIESE Spur; ohne (Seitenwagen, Paar-Kopf) bleibt es die
+            // Paar-Frage.
+            Marke(Configuration.SubtitleProvider.Subdl, mediaHash, language, hearingImpaired, subPos),
+            isSeries && Marke(Configuration.SubtitleProvider.TvSubtitles, mediaHash, language, hearingImpaired, subPos),
             SourceAllowed(Configuration.SubtitleProvider.MovieSubtitles) && !isSeries
                 && NimmtSprache(Configuration.SubtitleProvider.MovieSubtitles, language, isSeries),
-            !isSeries && Registry.IsUploadedTo(mediaHash, language, hearingImpaired, Configuration.SubtitleProvider.MovieSubtitles))
+            !isSeries && Marke(Configuration.SubtitleProvider.MovieSubtitles, mediaHash, language, hearingImpaired, subPos))
         .SkipReason is null;
 
     /// <summary>
@@ -7794,7 +7803,7 @@ public sealed class UploadPipeline : IPackFiller
         }
 
         if (reason == RejectReason.SelfEcho
-            && AnyUploadSourceStillWants(mediaHash, language, hearingImpaired, isSeries))
+            && AnyUploadSourceStillWants(mediaHash, language, hearingImpaired, isSeries, position))
         {
             return false;
         }
@@ -7839,10 +7848,21 @@ public sealed class UploadPipeline : IPackFiller
     /// F-M581: hat IRGENDEINE Quelle dieses Paar nachweislich? Nur dann ist „schon oben" eine wahre
     /// Aussage und darf als <c>duplicate-self-echo</c> im Store stehen.
     /// </summary>
-    private bool IrgendeineQuelleHat(string? mediaHash, string language, bool hearingImpaired, bool isSeries) =>
-        Registry.IsUploadedTo(mediaHash, language, hearingImpaired, Configuration.SubtitleProvider.Subdl)
-        || (isSeries && Registry.IsUploadedTo(mediaHash, language, hearingImpaired, Configuration.SubtitleProvider.TvSubtitles))
-        || (!isSeries && Registry.IsUploadedTo(mediaHash, language, hearingImpaired, Configuration.SubtitleProvider.MovieSubtitles));
+    private bool IrgendeineQuelleHat(
+        string? mediaHash, string language, bool hearingImpaired, bool isSeries, int? subPos = null) =>
+        Marke(Configuration.SubtitleProvider.Subdl, mediaHash, language, hearingImpaired, subPos)
+        || (isSeries && Marke(Configuration.SubtitleProvider.TvSubtitles, mediaHash, language, hearingImpaired, subPos))
+        || (!isSeries && Marke(Configuration.SubtitleProvider.MovieSubtitles, mediaHash, language, hearingImpaired, subPos));
+
+    /// <summary>
+    /// F-M669: EINE Stelle, die die Marke einer Quelle mit oder ohne Position fragt — der Aufrufer, der
+    /// eine Position hat, fragt sie; der ohne (Seitenwagen, Paar-Kopf) fragt das Paar.
+    /// </summary>
+    private bool Marke(
+        Configuration.SubtitleProvider provider, string? mediaHash, string language, bool hearingImpaired, int? subPos)
+        => subPos is { } position
+            ? Registry.IsUploadedToPosition(mediaHash, position, language, hearingImpaired, provider)
+            : Registry.IsUploadedTo(mediaHash, language, hearingImpaired, provider);
 
     /// <summary>
     /// F-M500: was ein Settle-Urteil fuer den Kandidaten bedeutet.

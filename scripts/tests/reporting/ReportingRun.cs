@@ -184,11 +184,12 @@ internal static class ReportingRun
         // F-M507: der Marker steht auf 14 — die Spalten der dritten Quelle (Filme) kamen dazu.
         // F-M668: Schema 19 — die Marken-Spalten von damals sind entfallen (Quelle ist ein WERT in
         // `source_matrix`); die Herkunft (F-M486) steht weiter an der Zeile und wird nachgezogen.
-        Check(db.Contains("CurrentSchemaVersion = 19", StringComparison.Ordinal)
+        // F-M669: 20 — die Spur-Position gehört in den Schlüssel der Spur-Arten.
+        Check(db.Contains("CurrentSchemaVersion = 20", StringComparison.Ordinal)
               && db.Contains("ALTER TABLE sidecars ADD COLUMN Origin", StringComparison.Ordinal)
               && !db.Contains("ALTER TABLE sidecars ADD COLUMN TvSubtitlesUploadId", StringComparison.Ordinal)
               && db.Contains("+ \"UploadId TEXT NULL, \"", StringComparison.Ordinal),
-            "the schema version is bumped with the columns (19 carries the matrix, the marks are rows)");
+            "the schema version is bumped with the columns (20 carries the matrix, the marks are rows per position)");
 
         string api = Read(plugin, "Api/ScribeApiClient.cs");
         Check(api.Contains("\"subtitlePage\"", StringComparison.Ordinal) && api.Contains("c.NId = page[(slash + 1)..]", StringComparison.Ordinal),

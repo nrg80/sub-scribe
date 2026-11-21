@@ -932,11 +932,14 @@ public class SourceMatrixEntity
 {
     /// <summary>
     /// Primärschlüssel, gebaut von <see cref="SourceMatrix.KeyOf"/>:
-    /// <c>&lt;Anker&gt;|&lt;Quelle&gt;|&lt;Art&gt;|&lt;Sprache&gt;|&lt;hi|plain&gt;</c>.
+    /// <c>&lt;Anker&gt;|&lt;Quelle&gt;|&lt;Art&gt;|&lt;Sprache&gt;|&lt;hi|plain&gt;</c> — und bei
+    /// <c>track</c>/<c>track-hi</c> zusätzlich <c>|&lt;position&gt;</c> (F-M669).
     /// <para>
     /// Der Anker ist der Medien-Hash (<c>h:…</c>), bei einem Pack die Serie samt Staffel
     /// (<c>i:tt…|S01</c>). Die Sprache und die HI-Variante gehören dazu, weil eine Datei mehrere
-    /// Spuren je Quelle haben kann — ohne sie überschriebe die zweite Spur die erste.
+    /// Spuren je Quelle haben kann — ohne sie überschriebe die zweite Spur die erste. Die Position
+    /// trennt seit Schema 20 auch zwei Spuren DERSELBEN Sprache: <c>file</c> und <c>pack</c> tragen
+    /// keine Position, damit Datei- und Pack-Urteile nicht in Positionen zerfallen.
     /// </para>
     /// </summary>
     public string Id { get; set; } = string.Empty;
@@ -994,6 +997,22 @@ public class SourceMatrixEntity
     /// tvsubtitles-Untertitel-Id, Film-Eintrag). Beim Pack die Kennung des Behälters.
     /// </summary>
     public string? SourceId { get; set; }
+
+    /// <summary>
+    /// F-M669 (21.11.2026, Bediener-Vorgabe „Position mit rein"): die POSITION der Spur im Video —
+    /// nur bei <c>track</c> und <c>track-hi</c> belegt, bei <c>file</c> und <c>pack</c> null.
+    /// <para>
+    /// Sie ist Teil des Schlüssels, nicht bloß eine Eigenschaft: eine Datei kann dieselbe Sprache
+    /// zweimal führen (gemessen an „His &amp; Hers" S01E06: 38 Textspuren, vier Sprachen doppelt), und
+    /// ein Urteil über die eine Position sagt nichts über die andere. Bis Schema 19 dampfte der Schlüssel
+    /// solche Spuren zu EINER Marke ein; seit Schema 20 hat jede Position ihre eigene.
+    /// </para>
+    /// <para>
+    /// Ein Seitenwagen hat keine Videospur-Position und trägt deshalb den festen Wert
+    /// <see cref="SourceMatrix.SidecarPosition"/> (−1) — siehe dort, warum.
+    /// </para>
+    /// </summary>
+    public int? SubPos { get; set; }
 
     /// <summary>
     /// F-M668 (21.11.2026): die Id der EINSENDUNG bei dieser Quelle — getrennt von

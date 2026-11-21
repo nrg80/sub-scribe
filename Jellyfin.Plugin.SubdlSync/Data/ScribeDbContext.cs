@@ -122,7 +122,11 @@ public sealed class ScribeDbContext : IDisposable
     // steigt, weil die Datei danach eine Tabelle trägt und Spalten NICHT mehr hat, die ein älterer Build
     // erwartet. Die Übernahme selbst hängt NICHT am Marker: sie läuft, solange Altspalten in der Datei
     // stehen, damit ein abgebrochener Lauf beim nächsten Start nachgeholt wird.
-    public const int CurrentSchemaVersion = 19;
+    // F-M669 (21.11.2026): raised to 20. Die Spur-Position gehört in den Schlüssel der Spur-Arten — je
+    // (Medium, Quelle, Sprache, HI, Position) eine Zeile statt einer je Paar. Die Spalte `SubPos` ist
+    // additiv (null bei `file`/`pack`, -1 bei einem Seitenwagen); eine Datei aus Schema 19 behält ihre
+    // paarweiten Zeilen als Brücke (SubPos null), bis die nächste Marke die Position nachträgt.
+    public const int CurrentSchemaVersion = 20;
 
     /// <summary>
     /// F-M667: die DDL der Marken-Matrix. Sie steht hier, wo die anderen Tabellen entstehen, und wird
@@ -140,6 +144,8 @@ public sealed class ScribeDbContext : IDisposable
         + "Language TEXT NOT NULL DEFAULT '', "
         + "Season INTEGER NULL, "
         + "Episode INTEGER NULL, "
+        // F-M669: die Spur-Position im Video — Teil des Schlüssels der Spur-Arten, null bei file/pack.
+        + "SubPos INTEGER NULL, "
         + "HearingImpaired INTEGER NULL, "
         + "ClosedAt TEXT NULL, "
         + "Fingerprint TEXT NULL, "

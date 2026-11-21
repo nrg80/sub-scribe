@@ -60,11 +60,12 @@ public static class MarkKind
 /// Matrix.
 /// </para>
 /// <para>
-/// WAS EINE ZEILE BEDEUTET: sie steht für ein Urteil der Quelle über (Medium, Sprache, Variante) —
-/// <c>track</c>/<c>track-hi</c> für die Spur, <c>file</c> für „diese Datei ist für die Quelle zu",
-/// <c>pack</c> für den Staffelbehälter. Fehlt die Zeile, ist die Quelle offen. Eine Spur-Marke gilt je
-/// Paar, nicht je Position: zwei Spuren derselben Sprache sind EINE Marke (der spätere Zeitstempel
-/// gewinnt) — dieselbe Regel, die die alte Spalten-Fassung über „irgendeine Zeile dieses Paares" hatte.
+/// WAS EINE ZEILE BEDEUTET: sie steht für ein Urteil der Quelle über (Medium, Sprache, Variante,
+/// Position) — <c>track</c>/<c>track-hi</c> für die Spur, <c>file</c> für „diese Datei ist für die
+/// Quelle zu", <c>pack</c> für den Staffelbehälter. Fehlt die Zeile, ist die Quelle offen. Seit
+/// F-M669 gilt die Spur-Marke JE POSITION: zwei Spuren derselben Sprache sind zwei Marken, denn ein
+/// Urteil über die eine sagt nichts über die andere. <c>file</c> und <c>pack</c> tragen keine Position
+/// (ihr Urteil gilt der Datei bzw. dem Behälter), ein Seitenwagen die feste <see cref="SidecarPosition"/>.
 /// </para>
 /// </summary>
 public static class SourceMatrix
@@ -111,6 +112,25 @@ public static class SourceMatrix
     }
 
     /// <summary>
+    /// Der feste Positionswert eines SEITENWAGENS (−1). Ein Seitenwagen ist eine Datei neben dem Video,
+    /// keine Spur IM Video — er hat keine ffmpeg-Position. Damit seine Marke trotzdem einen vollständigen
+    /// Schlüssel hat und nicht mit der Spur 0 oder einer unbekannten Position kollidiert, trägt sie −1:
+    /// ein Wert, den keine echte Spur haben kann (`ffmpeg` zählt ab 0). Zwei Seitenwagen derselben
+    /// Sprache an derselben Datei teilen sich diese Marke — sie sind inhaltlich derselbe Fall, und der
+    /// Inhalt selbst hängt ohnehin am Content-Hash der Zeile.
+    /// </summary>
+    public const int SidecarPosition = -1;
+
+    /// <summary>
+    /// Die Position, unter der ein Kandidat seine Marke führt: die Videospur-Position einer eingebetteten
+    /// Spur, <see cref="SidecarPosition"/> für einen Seitenwagen.
+    /// </summary>
+    /// <param name="isLoose">True for a sidecar file.</param>
+    /// <param name="subPos">Embedded stream position (ignored for a sidecar).</param>
+    /// <returns>The position that belongs in the mark's key.</returns>
+    public static int PositionOf(bool isLoose, int subPos) => isLoose ? SidecarPosition : subPos;
+
+    /// <summary>
     /// Der Schlüssel einer Marke. EINE Stelle, die ihn baut — ein Schlüssel, den ein Leser anders
     /// baut als ein Schreiber, ist eine Zeile, die niemand findet (F-M194).
     /// </summary>
@@ -119,8 +139,13 @@ public static class SourceMatrix
     /// <param name="kind">One of <see cref="MarkKind"/>.</param>
     /// <param name="language">ISO 639-2 language, empty for <see cref="MarkKind.File"/>.</param>
     /// <param name="hearingImpaired">True for the SDH variant.</param>
+    /// <param name="subPos">
+    /// F-M669: the stream position for <c>track</c>/<c>track-hi</c> (see <see cref="PositionOf"/>);
+    /// null for <c>file</c> and <c>pack</c>, whose verdict is not per position.
+    /// </param>
     /// <returns>The composite key, or an empty string when the anchor is unknown.</returns>
-    public static string KeyOf(string anchor, string source, string kind, string? language, bool hearingImpaired)
+    public static string KeyOf(
+        string anchor, string source, string kind, string? language, bool hearingImpaired, int? subPos = null)
     {
         if (string.IsNullOrEmpty(anchor) || string.IsNullOrEmpty(source) || string.IsNullOrEmpty(kind))
         {
@@ -130,13 +155,19 @@ public static class SourceMatrix
         // Die Sprache wird HIER normiert, nicht beim Aufrufer: ein Aufrufer mit "EN" und ein Aufrufer
         // mit "ENG" meinen dieselbe Marke, und ein Schlüssel, den der eine baut und der andere nicht
         // findet, ist eine Zeile, die niemand liest (F-M194).
-        return string.Join(
+        string kopf = string.Join(
             "|",
             anchor,
             source,
             kind,
             Normalise(language),
             hearingImpaired ? "hi" : "plain");
+
+        // F-M669: die Position hängt NUR an den Spur-Arten. Eine `file`- oder `pack`-Marke zerfällt
+        // nicht in Positionen — sie gilt für die Datei bzw. den Behälter.
+        return subPos.HasValue
+            ? kopf + "|" + subPos.Value.ToString(System.Globalization.CultureInfo.InvariantCulture)
+            : kopf;
     }
 
     /// <summary>
@@ -183,6 +214,8 @@ public static class SourceMatrix
                      {
                          ("UploadId", "ALTER TABLE source_matrix ADD COLUMN UploadId TEXT NULL;"),
                          ("RefusalSignature", "ALTER TABLE source_matrix ADD COLUMN RefusalSignature TEXT NULL;"),
+                         // F-M669: die Spur-Position — additiv, null bei file/pack.
+                         ("SubPos", "ALTER TABLE source_matrix ADD COLUMN SubPos INTEGER NULL;"),
                      })
             {
                 if (!vorhanden.Contains(column))
@@ -234,8 +267,42 @@ public static class SourceMatrix
             .ToList();
 
     /// <summary>
-    /// Die Marke einer SPUR: geschlossen heißt „für diese Quelle hochgeladen" (der Upload-Zeitstempel
-    /// der Quelle), <c>SourceId</c> ist der Eintrag, aus dem sie kam, <c>UploadId</c> die Einsendung.
+    /// Die Marke einer SPUR an EINER POSITION: geschlossen heißt „für diese Quelle hochgeladen" (der
+    /// Upload-Zeitstempel der Quelle), <c>SourceId</c> ist der Eintrag, aus dem sie kam, <c>UploadId</c>
+    /// die Einsendung (F-M669).
+    /// <para>
+    /// Für einen Seitenwagen ist <paramref name="subPos"/> <see cref="SidecarPosition"/>; die Frage ist
+    /// dann die des Seitenwagens, nicht die der Spur 0.
+    /// </para>
+    /// </summary>
+    /// <param name="db">The plugin's data context.</param>
+    /// <param name="mediaHash">Media hash of the file.</param>
+    /// <param name="source">The source.</param>
+    /// <param name="language">ISO 639-2 language.</param>
+    /// <param name="hearingImpaired">True for the SDH variant.</param>
+    /// <param name="subPos">Stream position (see <see cref="PositionOf"/>).</param>
+    /// <returns>The mark; a mark without a timestamp is „open" but may carry an id.</returns>
+    public static Mark TrackMarkAt(
+        ScribeDbContext db, string? mediaHash, string source, string? language, bool hearingImpaired, int subPos)
+    {
+        string kind = MarkKind.ForTrack(hearingImpaired);
+        string anchor = AnchorOf(mediaHash, null);
+        var row = Find(db, KeyOf(anchor, source, kind, language, hearingImpaired, subPos))
+            // Brücke für eine Datei aus Schema 19: dort stand EINE Marke je (Medium, Quelle, Sprache,
+            // Variante) ohne Position. Sie gilt weiter, bis die nächste Marke die Position nachträgt —
+            // sonst wären alle Urteile einer 19er-Datei nach dem Wechsel unsichtbar.
+            ?? Find(db, KeyOf(anchor, source, kind, language, hearingImpaired));
+        return FromRow(row, source, kind);
+    }
+
+    /// <summary>
+    /// Die Marke einer SPUR, POSITIONSÜBERGREIFEND: geschlossen, wenn irgendeine Position dieses Paares
+    /// geschlossen ist; bei mehreren gewinnt die jüngste (F-M669).
+    /// <para>
+    /// Diese Fassung ist die PAAR-FRAGE — sie gehört den Aufrufern, die keine Position in der Hand haben
+    /// (Seitenwagen-Listen, Inhaltsfragen). Wer eine Position hat, fragt <see cref="TrackMarkAt"/>; sonst
+    /// schlösse die Marke einer hochgeladenen Spur die zweite, nie gesendete derselben Sprache mit.
+    /// </para>
     /// </summary>
     /// <param name="db">The plugin's data context.</param>
     /// <param name="mediaHash">Media hash of the file.</param>
@@ -245,8 +312,40 @@ public static class SourceMatrix
     /// <returns>The mark; a mark without a timestamp is „open" but may carry an id.</returns>
     public static Mark TrackMark(
         ScribeDbContext db, string? mediaHash, string source, string? language, bool hearingImpaired)
-        => TrackMarkOf(Find(db, KeyOf(AnchorOf(mediaHash, null), source, MarkKind.ForTrack(hearingImpaired), language, hearingImpaired)),
-            source, MarkKind.ForTrack(hearingImpaired));
+    {
+        string kind = MarkKind.ForTrack(hearingImpaired);
+        string anchor = AnchorOf(mediaHash, null);
+
+        // Eine paarweite Zeile aus Schema 19 (ohne Position) hat Vorrang: sie ist die ältere, breitere
+        // Aussage und gilt für jede Position.
+        var legacy = Find(db, KeyOf(anchor, source, kind, language, hearingImpaired));
+        if (legacy != null)
+        {
+            return FromRow(legacy, source, kind);
+        }
+
+        string prefix = KeyOf(anchor, source, kind, language, hearingImpaired);
+        if (db == null || string.IsNullOrEmpty(prefix))
+        {
+            return FromRow(null, source, kind);
+        }
+
+        prefix += "|";
+        var zeilen = db.Matrix.FindAll()
+            .Where(r => r.Id.StartsWith(prefix, StringComparison.Ordinal))
+            .ToList();
+        if (zeilen.Count == 0)
+        {
+            return FromRow(null, source, kind);
+        }
+
+        var beste = zeilen
+            .Where(r => r.ClosedAt != null)
+            .OrderByDescending(r => r.ClosedAt)
+            .FirstOrDefault()
+            ?? zeilen[0];
+        return FromRow(beste, source, kind);
+    }
 
     /// <summary>
     /// Die Marke einer DATEI: geschlossen heißt „jede vorhandene Dialogspur dieser Datei ist für diese
@@ -292,6 +391,10 @@ public static class SourceMatrix
     /// <param name="source">Die Quelle der Marke.</param>
     /// <param name="language">Sprache der Spur.</param>
     /// <param name="hearingImpaired">HI-Variante der Spur.</param>
+    /// <param name="subPos">
+    /// F-M669: die Position der Spur (bei einem Seitenwagen <see cref="SidecarPosition"/>). Sie steht im
+    /// Schlüssel — zwei Spuren derselben Sprache sind zwei Marken, nicht eine.
+    /// </param>
     /// <param name="closedAt">Zeitpunkt der Einsendung, oder null.</param>
     /// <param name="downloadId">Id des Abrufs bei dieser Quelle, oder null.</param>
     /// <param name="uploadId">Id der Einsendung bei dieser Quelle, oder null.</param>
@@ -302,18 +405,19 @@ public static class SourceMatrix
         string source,
         string? language,
         bool hearingImpaired,
+        int subPos,
         DateTime? closedAt,
         string? downloadId,
         string? uploadId)
     {
-        if (string.IsNullOrWhiteSpace(mediaHash)
+        if (subPos < SidecarPosition || string.IsNullOrWhiteSpace(mediaHash)
             || (closedAt == null && string.IsNullOrEmpty(downloadId) && string.IsNullOrEmpty(uploadId)))
         {
             return;
         }
 
         string kind = MarkKind.ForTrack(hearingImpaired);
-        string key = KeyOf(AnchorOf(mediaHash, null), source, kind, language, hearingImpaired);
+        string key = KeyOf(AnchorOf(mediaHash, null), source, kind, language, hearingImpaired, subPos);
         if (string.IsNullOrEmpty(key))
         {
             return;
@@ -327,6 +431,8 @@ public static class SourceMatrix
             Kind = kind,
             Language = Normalise(language),
         };
+
+        row.SubPos = subPos;
 
         row.MediaHash = mediaHash!;
         row.ImdbId = media?.ImdbId ?? row.ImdbId;
@@ -601,9 +707,6 @@ public static class SourceMatrix
     /// <returns>The normalised code, empty for null/blank.</returns>
     public static string Normalise(string? language)
         => Language.LanguageMapper.Canonical(language) ?? (language ?? string.Empty).Trim().ToUpperInvariant();
-
-    private static Mark TrackMarkOf(SourceMatrixEntity? row, string source, string kind)
-        => FromRow(row, source, kind);
 
     private static Mark FromRow(SourceMatrixEntity? row, string source, string kind)
         => row == null

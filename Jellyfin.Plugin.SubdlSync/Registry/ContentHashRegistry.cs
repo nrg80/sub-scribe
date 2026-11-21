@@ -701,14 +701,16 @@ public sealed class ContentHashRegistry : IDisposable
         // F-M488/F-M490/F-M507 — F-M668: die Marken je Quelle und Richtung stehen NICHT mehr als Spalten
         // an dieser Zeile, sondern als Zeilen der Marken-Matrix (`Kind = track`/`track-hi`, Anker =
         // Medien-Hash). Geschrieben wird ausschließlich dort; ein Doppelschreiben gibt es nicht.
-        // Eine Spur-Marke gilt je (Medium, Quelle, Sprache, Variante) — zwei Spuren derselben Sprache
-        // sind EINE Marke, und der spätere Zeitstempel gewinnt.
+        // Eine Spur-Marke gilt je (Medium, Quelle, Sprache, Variante, POSITION) — zwei Spuren derselben
+        // Sprache sind zwei Marken (F-M669, vorher dampfte der Schluessel sie zu einer ein).
         var media = _db.Media.FindById(mediaHash);
-        SourceMatrix.WriteTrackMark(_db, media, mediaHash, SourceMatrix.Subdl, language, hearingImpaired,
+        // F-M669: die Marke trägt die POSITION dieser Spur. Zwei Spuren derselben Sprache sind zwei
+        // Marken; die Position ist die des Aufrufers, nicht eine aus der Zeile abgeleitete.
+        SourceMatrix.WriteTrackMark(_db, media, mediaHash, SourceMatrix.Subdl, language, hearingImpaired, subPos,
             subdlUploadedAt, subdlDownloadId, subdlUploadId);
-        SourceMatrix.WriteTrackMark(_db, media, mediaHash, SourceMatrix.TvSubtitles, language, hearingImpaired,
+        SourceMatrix.WriteTrackMark(_db, media, mediaHash, SourceMatrix.TvSubtitles, language, hearingImpaired, subPos,
             tvSubtitlesUploadedAt, tvSubtitlesDownloadId, tvSubtitlesUploadId);
-        SourceMatrix.WriteTrackMark(_db, media, mediaHash, SourceMatrix.MovieSubtitles, language, hearingImpaired,
+        SourceMatrix.WriteTrackMark(_db, media, mediaHash, SourceMatrix.MovieSubtitles, language, hearingImpaired, subPos,
             moviesubtitlesUploadedAt, moviesubtitlesDownloadId, moviesubtitlesUploadId);
 
         _db.Embeds.Upsert(existing);
@@ -1140,7 +1142,9 @@ public sealed class ContentHashRegistry : IDisposable
             return true;
         }
 
-        return IsUploadedTo(mediaHash, track.Language, track.HearingImpaired ?? false, provider);
+        // F-M669: die Spur IST eine Position — gefragt wird IHRE Marke, nicht die irgendeiner anderen
+        // Spur derselben Sprache.
+        return IsUploadedToPosition(mediaHash, track.SubPos, track.Language, track.HearingImpaired ?? false, provider);
     }
 
     /// <summary>
@@ -1203,6 +1207,8 @@ public sealed class ContentHashRegistry : IDisposable
         // F-M668: DIE Marke dieser Quelle ist eine Zeile der Matrix (`track` bzw. `track-hi`), keine
         // Spalte an der Zeile. Sie ist geschlossen, sobald ein Zeitpunkt ODER eine Einsende-Id daran
         // haengt — eine bloße Abruf-Id belegt einen Fund, keine Einsendung.
+        // F-M669: das ist die PAAR-Frage (irgendeine Position dieses Paares). Sie bleibt für Aufrufer
+        // ohne Position — Seitenwagen-Listen, Inhaltsfragen. Eine Spur fragt `IsUploadedToPosition`.
         if (SourceMatrix.TrackMark(_db, mediaHash, Quelle(provider), language, hearingImpaired).IsClosed)
         {
             return true;
@@ -1217,6 +1223,58 @@ public sealed class ContentHashRegistry : IDisposable
         }
 
         return _db.Embeds.Exists(x => x.MediaHash == mediaHash
+                && x.Language == language
+                && x.HearingImpaired == hearingImpaired
+                && x.Status == SubtitleStatus.Uploaded
+                && !string.IsNullOrEmpty(x.SubdlId))
+            || _db.Sidecars.Exists(x => x.MediaHash == mediaHash
+                && x.Language == language
+                && x.HearingImpaired == hearingImpaired
+                && x.Status == SubtitleStatus.Uploaded
+                && !string.IsNullOrEmpty(x.SubdlId));
+    }
+
+    /// <summary>
+    /// F-M669: hat DIESE Quelle die Spur an DIESER POSITION schon? Dieselbe Regel wie
+    /// <see cref="IsUploadedTo"/> — geschlossen, sobald ein Zeitpunkt oder eine Einsende-Id an der Marke
+    /// haengt —, aber mit der Position im Schluessel. Zwei Spuren derselben Sprache sind zwei Marken;
+    /// die eine hochzuladen sagt nichts ueber die andere.
+    /// </summary>
+    /// <param name="mediaHash">Parent media hash.</param>
+    /// <param name="subPos">Stream position (see <see cref="SourceMatrix.PositionOf"/>).</param>
+    /// <param name="language">Language code.</param>
+    /// <param name="hearingImpaired">HI flag of the track.</param>
+    /// <param name="provider">The source in question.</param>
+    /// <returns>True when that source already has this position.</returns>
+    public bool IsUploadedToPosition(
+        string? mediaHash, int subPos, string language, bool hearingImpaired, SubtitleProvider provider)
+    {
+        // F-M557: der Store fuehrt ISO (ENG), nicht den Code der Quelle (EN).
+        language = Language.LanguageMapper.Canonical(language) ?? language;
+        if (string.IsNullOrEmpty(mediaHash) || subPos < SourceMatrix.SidecarPosition)
+        {
+            return false;
+        }
+
+        // F-M507: eine Quelle ohne UPLOAD-Weg haelt nie etwas — dieselbe Zeile wie in IsUploadedTo.
+        if (!Api.Endpoints.SubtitleEndpointCatalog.HasUploadPath(provider))
+        {
+            return false;
+        }
+
+        if (SourceMatrix.TrackMarkAt(_db, mediaHash, Quelle(provider), language, hearingImpaired, subPos).IsClosed)
+        {
+            return true;
+        }
+
+        // Altbestand OHNE jede Quellenmarke (Schema 11) — nur fuer SubDL, wie in IsUploadedTo.
+        if (provider != SubtitleProvider.Subdl)
+        {
+            return false;
+        }
+
+        return _db.Embeds.Exists(x => x.MediaHash == mediaHash
+                && x.SubPos == subPos
                 && x.Language == language
                 && x.HearingImpaired == hearingImpaired
                 && x.Status == SubtitleStatus.Uploaded
@@ -1621,14 +1679,15 @@ public sealed class ContentHashRegistry : IDisposable
 
         // F-M488/F-M490/F-M507 — F-M668: die Marken je Quelle und Richtung stehen nicht mehr als Spalten
         // an dieser Zeile, sondern als Zeilen der Marken-Matrix (Anker = Medien-Hash, Art = `track` bzw.
-        // `track-hi`). Geschrieben wird ausschließlich dort — dieselbe Regel wie bei den eingebetteten
-        // Spuren, damit ein Seitenwagen und eine Spur derselben Sprache DIESELBE Marke tragen.
+        // `track-hi`). Geschrieben wird ausschließlich dort.
+        // F-M669: ein Seitenwagen hat KEINE Videospur-Position; seine Marke trägt die feste
+        // `SidecarPosition` (−1), damit sie nicht mit der Spur 0 kollidiert (siehe SourceMatrix).
         SourceMatrix.WriteTrackMark(_db, media, mediaHash, SourceMatrix.Subdl, language, hearingImpaired,
-            subdlUploadedAt, subdlDownloadId, subdlUploadId);
+            SourceMatrix.SidecarPosition, subdlUploadedAt, subdlDownloadId, subdlUploadId);
         SourceMatrix.WriteTrackMark(_db, media, mediaHash, SourceMatrix.TvSubtitles, language, hearingImpaired,
-            tvSubtitlesUploadedAt, tvSubtitlesDownloadId, tvSubtitlesUploadId);
+            SourceMatrix.SidecarPosition, tvSubtitlesUploadedAt, tvSubtitlesDownloadId, tvSubtitlesUploadId);
         SourceMatrix.WriteTrackMark(_db, media, mediaHash, SourceMatrix.MovieSubtitles, language, hearingImpaired,
-            moviesubtitlesUploadedAt, moviesubtitlesDownloadId, moviesubtitlesUploadId);
+            SourceMatrix.SidecarPosition, moviesubtitlesUploadedAt, moviesubtitlesDownloadId, moviesubtitlesUploadId);
 
         if (!string.IsNullOrEmpty(fileName))
         {
@@ -1824,6 +1883,10 @@ public sealed class ContentHashRegistry : IDisposable
         // F-M668: die Antwort kommt aus der Marke des Paares, zu dem die Zeile gehört — eine Sidecar
         // trägt keine eigenen Marken-Spalten mehr. Eine Sidecar ohne Medienbezug hat kein Paar und
         // damit keine Marke; sie ist dann für jede Quelle offen.
+        // F-M669: bewusst die PAAR-Frage (irgendeine Position). Ein Seitenwagen hat keine Videospur-
+        // Position; seine eigene Marke steht unter `SidecarPosition`, und die Frage „hat diese Datei
+        // diese Sprache bei dieser Quelle schon" soll eine hochgeladene Spur derselben Sprache
+        // weiterhin mitzählen — genau das war die Antwort vor der Positions-Trennung.
         if (IsUploadedTo(row.MediaHash, row.Language, row.HearingImpaired ?? false, provider))
         {
             return true;
@@ -2551,7 +2614,9 @@ public sealed class ContentHashRegistry : IDisposable
         // liefert nur, WELCHES Paar gemeint ist.
         foreach (var zeile in _db.Embeds.FindAll().Where(x => string.Equals(x.ContentHash, contentHash, StringComparison.Ordinal)))
         {
-            if (ZeileIstFuerQuelleBelegt(zeile.MediaHash, zeile.Language, zeile.HearingImpaired ?? false,
+            // F-M669: die Zeile nennt ihre POSITION — gefragt wird genau deren Marke. Der Inhalt bleibt
+            // global (derselbe Text kann unter einem anderen Medien-Hash liegen).
+            if (ZeileIstFuerQuelleBelegt(zeile.MediaHash, zeile.SubPos, zeile.Language, zeile.HearingImpaired ?? false,
                     zeile.Status, zeile.SubdlId, provider))
             {
                 return true;
@@ -2560,7 +2625,9 @@ public sealed class ContentHashRegistry : IDisposable
 
         foreach (var zeile in _db.Sidecars.FindAll().Where(x => string.Equals(x.ContentHash, contentHash, StringComparison.Ordinal)))
         {
-            if (ZeileIstFuerQuelleBelegt(zeile.MediaHash, zeile.Language, zeile.HearingImpaired ?? false,
+            // Ein Seitenwagen traegt keine Videospur-Position; seine Marke steht unter
+            // `SidecarPosition`, die Frage bleibt hier die des Paares (F-M669).
+            if (ZeileIstFuerQuelleBelegt(zeile.MediaHash, null, zeile.Language, zeile.HearingImpaired ?? false,
                     zeile.Status, zeile.SubdlId, provider))
             {
                 return true;
@@ -2576,6 +2643,7 @@ public sealed class ContentHashRegistry : IDisposable
     /// <c>SubdlId</c>; F-M500: <c>Uploaded</c> ohne jede Quellenmarke zählt für SubDL).
     /// </summary>
     /// <param name="mediaHash">Medien-Hash der Zeile.</param>
+    /// <param name="subPos">Position der Zeile (F-M669), oder null fuer eine Sidecar-Zeile.</param>
     /// <param name="language">Sprache der Zeile.</param>
     /// <param name="hearingImpaired">HI-Variante der Zeile.</param>
     /// <param name="status">Status der Zeile.</param>
@@ -2583,9 +2651,13 @@ public sealed class ContentHashRegistry : IDisposable
     /// <param name="provider">Die fragende Quelle.</param>
     /// <returns>Wahr, wenn diese Quelle den Text hält.</returns>
     private bool ZeileIstFuerQuelleBelegt(
-        string? mediaHash, string language, bool hearingImpaired, string status, string? subdlId, SubtitleProvider provider)
+        string? mediaHash, int? subPos, string language, bool hearingImpaired, string status, string? subdlId,
+        SubtitleProvider provider)
     {
-        if (IsUploadedTo(mediaHash, language, hearingImpaired, provider))
+        bool belegt = subPos is { } position
+            ? IsUploadedToPosition(mediaHash, position, language, hearingImpaired, provider)
+            : IsUploadedTo(mediaHash, language, hearingImpaired, provider);
+        if (belegt)
         {
             return true;
         }

@@ -519,8 +519,9 @@ internal static class Program
             // F-M501: der Marker steht auf 13 (media.TvstShowId kam dazu); die Pruefung fragt den
             // AKTUELLEN Stand, weil ein stehengebliebener Marker die Migration nicht mehr anzeigt.
             // F-M507: er steht inzwischen auf 14 (die Spalten der dritten Quelle).
+            // F-M669: 20 — die Spur-Position gehoert in den Schluessel der Matrix.
             && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/ScribeDbContext.cs"))
-                .Contains("CurrentSchemaVersion = 19", StringComparison.Ordinal));
+                .Contains("CurrentSchemaVersion = 20", StringComparison.Ordinal));
 
         // ---- 10. eigene Kennzeichen je Quelle und Richtung (F-M488) ---------------------------
         var entities = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/Entities.cs"));
@@ -535,7 +536,7 @@ internal static class Program
         Check("schema 11 adds them to sidecars AND embeds",
             // F-M668: Statt neun Spalten je Tabelle trägt die Matrix die Quelle im WERT — Schema 19
             // zieht die zwei Felder der Matrix nach und legt die Altspalten nieder.
-            dbc.Contains("CurrentSchemaVersion = 19", StringComparison.Ordinal)
+            dbc.Contains("CurrentSchemaVersion = 20", StringComparison.Ordinal)
             && dbc.Contains("+ \"UploadId TEXT NULL, \"", StringComparison.Ordinal)
             && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/SourceMatrix.cs"))
                 .Contains("ALTER TABLE source_matrix ADD COLUMN UploadId TEXT NULL;", StringComparison.Ordinal)
@@ -629,7 +630,8 @@ internal static class Program
         Check("the pipeline asks per source, through the one gate — twice, never inline",
             uploadSource.Contains("UploadGate.Decide(", StringComparison.Ordinal)
             && uploadSource.Split("UploadGate.Decide(").Length - 1 >= 2
-            && uploadSource.Contains("Registry.IsUploadedTo(mediaHash, lang, hearingImpaired, Configuration.SubtitleProvider.TvSubtitles)", StringComparison.Ordinal)
+            // F-M669: das Tor fragt die Marke DIESER POSITION, nicht die des Paares.
+            && uploadSource.Contains("Registry.IsUploadedToPosition(mediaHash, SourceMatrix.PositionOf(loosePath != null, subPos), lang, hearingImpaired, Configuration.SubtitleProvider.TvSubtitles)", StringComparison.Ordinal)
             && !uploadSource.Contains("Registry.IsUploaded(mediaHash, cand.Lang", StringComparison.Ordinal));
 
         // ---- 12. "hochgeladen" je Quelle (F-M490) ---------------------------------------------
@@ -639,7 +641,7 @@ internal static class Program
             // Zeile, statt einer Spalte je Quelle an jeder Untertitel-Zeile.
             entities.Contains("public DateTime? ClosedAt { get; set; }", StringComparison.Ordinal)
             && !entities.Contains("public DateTime? SubdlUploadedAt { get; set; }", StringComparison.Ordinal)
-            && dbc.Contains("CurrentSchemaVersion = 19", StringComparison.Ordinal)
+            && dbc.Contains("CurrentSchemaVersion = 20", StringComparison.Ordinal)
             && dbc.Contains("\"ClosedAt TEXT NULL, \"", StringComparison.Ordinal));
         Check("the timestamp is set for the source that took the upload, never for another",
             uploadSource.Contains("subdlUploadedAt: subdlMarke.At", StringComparison.Ordinal)
@@ -864,8 +866,9 @@ internal static class Program
             && registrySource.Contains(
                 "public bool IsSidecarUploadedTo(string? contentHash, SubtitleProvider provider)",
                 StringComparison.Ordinal)
+            // F-M669: die Spur fragt IHRE Position — eine Marke je Position, nicht je Paar.
             && registrySource.Contains(
-                "return IsUploadedTo(mediaHash, track.Language, track.HearingImpaired ?? false, provider);",
+                "return IsUploadedToPosition(mediaHash, track.SubPos, track.Language, track.HearingImpaired ?? false, provider);",
                 StringComparison.Ordinal));
 
         // --- Abschnitt 18: auch der KOPF des Laufs fragt je Quelle (F-M499) ---------------------
@@ -921,7 +924,7 @@ internal static class Program
         Check("F-M557: der Zugeh-Stempel steht JE QUELLE auf der Medienzeile (Schema 16)",
             // F-M668: der Stempel ist eine `file`-Zeile je (Medium, Quelle); die vier Medien-Spalten
             // gibt es nicht mehr, und die Signatur steht als `Fingerprint` daneben.
-            db557.Contains("CurrentSchemaVersion = 19", StringComparison.Ordinal)
+            db557.Contains("CurrentSchemaVersion = 20", StringComparison.Ordinal)
             && !db557.Contains("ADD COLUMN CompleteSubdl TEXT NULL", StringComparison.Ordinal)
             && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Data/SourceMatrix.cs"))
                 .Contains("public static void WriteFileMark(", StringComparison.Ordinal)
@@ -1694,7 +1697,7 @@ internal static class Program
         Check("F-M584: ein Selbst-Echo sperrt die Spur nur, solange keine Quelle das Paar mehr verlangt",
             uploadSource584.Contains("private bool SpurIstGesperrt(string? mediaHash, int position, string language, bool hearingImpaired, bool isSeries)", StringComparison.Ordinal)
             && uploadSource584.Contains("if (reason == RejectReason.SelfEcho", StringComparison.Ordinal)
-            && uploadSource584.Contains("&& AnyUploadSourceStillWants(mediaHash, language, hearingImpaired, isSeries))", StringComparison.Ordinal)
+            && uploadSource584.Contains("&& AnyUploadSourceStillWants(mediaHash, language, hearingImpaired, isSeries, position))", StringComparison.Ordinal)
             && uploadSource584.Contains("return true;", StringComparison.Ordinal));
         Check("F-M584: der Pack-Fueller und der Kopf-Ausstieg fragen je Quelle",
             uploadSource584.Contains(".Where(position => SpurIstGesperrt(fillMediaHash, position, lang, hearingImpaired, isSeries: true))", StringComparison.Ordinal)
@@ -1738,12 +1741,14 @@ internal static class Program
             paarFrage.Length > 0
             && !paarFrage.Contains("QueuedForSource(", StringComparison.Ordinal)
             && !paarFrage.Contains("SiteLanguage(", StringComparison.Ordinal)
-            && paarFrage.Contains("Registry.IsUploadedTo(mediaHash, language, hearingImpaired", StringComparison.Ordinal));
+            // F-M669: die Paar-Frage reicht eine (optionale) Position durch und liest die Marke ueber
+            // EINE Stelle — mit Position die Position, ohne die des Paares.
+            && paarFrage.Contains("Marke(Configuration.SubtitleProvider.Subdl, mediaHash, language, hearingImpaired, subPos)", StringComparison.Ordinal));
         Check("F-M581: ein Selbst-Echo-Urteil braucht einen Beleg — sonst bleibt die Spur ohne Urteil offen",
-            uploadSource.Contains("private bool IrgendeineQuelleHat(string? mediaHash, string language, bool hearingImpaired, bool isSeries) =>", StringComparison.Ordinal)
-            && uploadSource.Contains("if (IrgendeineQuelleHat(mediaHash, lang, streamHi, isSeries))", StringComparison.Ordinal)
+            uploadSource.Contains("private bool IrgendeineQuelleHat(", StringComparison.Ordinal)
+            && uploadSource.Contains("if (IrgendeineQuelleHat(mediaHash, lang, streamHi, isSeries, subPos))", StringComparison.Ordinal)
             && uploadSource.Contains("no source asks for this pair right now, no verdict written (F-M581)", StringComparison.Ordinal)
-            && uploadSource.Contains("if (IrgendeineQuelleHat(mediaHash, cand.Lang, cand.HearingImpaired, isSeries))", StringComparison.Ordinal));
+            && uploadSource.Contains("if (IrgendeineQuelleHat(mediaHash, cand.Lang, cand.HearingImpaired, isSeries,", StringComparison.Ordinal));
 
         // --- F-M580: ein gespeichertes Urteil schliesst das Paar ------------------------------
         Check("F-M580: ein gespeichertes Inhalts-Urteil schliesst das Paar — eingebettet und als Sidecar",
@@ -1839,8 +1844,9 @@ internal static class Program
                 "tracks.All(track => IsEmbedTerminalFor(mediaHash, track.SubPos, provider))",
                 StringComparison.Ordinal)
             // dieselbe Leseregel wie im Upload selbst: eigene Marke der Quelle, Ablehnung quellenneutral
+            // F-M669: die Spur fragt IHRE Position — eine Marke je Position, nicht je Paar.
             && registrySource.Contains(
-                "return IsUploadedTo(mediaHash, track.Language, track.HearingImpaired ?? false, provider);",
+                "return IsUploadedToPosition(mediaHash, track.SubPos, track.Language, track.HearingImpaired ?? false, provider);",
                 StringComparison.Ordinal));
 
         // --- Abschnitt 19: auch das SETTLE-Urteil fragt je Quelle (F-M500) ----------------------
@@ -2495,7 +2501,7 @@ internal static class Program
                     && nachher?.TvstShowId == "512"
                     // F-M507: der Marker ist inzwischen 14 — die Datei wird auf den Stand DIESES Builds
                     // gehoben, und der Bestand muss das aushalten.
-                    && legacyDb.Meta.FindById("db")?.SchemaVersion == 19,
+                    && legacyDb.Meta.FindById("db")?.SchemaVersion == 20,
                     "bestand=" + (bestand?.ImdbId ?? "-") + "/" + (bestand?.TmdbId ?? "-")
                     + "/tvst=" + (vorherTvst ?? "<null>")
                     + " nachher=" + (nachher?.TvstShowId ?? "-")
@@ -2866,7 +2872,7 @@ internal static class Program
                     && filmAuf.Status == MsubMovieStatus.Found
                     && gespeichert == "102"
                     && zweiteRunde.Status == MsubMovieStatus.Stored
-                    && msubStore.Meta.FindById("db")?.SchemaVersion == 19,
+                    && msubStore.Meta.FindById("db")?.SchemaVersion == 20,
                     "id=" + (gespeichert ?? "<null>") + " status=" + filmAuf.Status + "/" + zweiteRunde.Status
                     + " marker=" + msubStore.Meta.FindById("db")?.SchemaVersion);
             }
@@ -2928,7 +2934,7 @@ internal static class Program
                 && !seitenSpalten.Contains("MoviesubtitlesDownloadId")
                 && !seitenSpalten.Contains("MoviesubtitlesUploadId")
                 && !spurSpalten.Contains("MoviesubtitlesDownloadId")
-                && marker == 19
+                && marker == 20
                 && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Data/ScribeDbContext.cs"))
                     .Contains("\"RefusalSignature TEXT NULL, \"", StringComparison.Ordinal),
                 "media=" + string.Join(",", medienSpalten.Where(x => x.StartsWith("Msub", StringComparison.Ordinal)))
@@ -2947,7 +2953,7 @@ internal static class Program
                 // F-M668: Schema 19. Die Marken-Spalten der dritten Quelle stehen NICHT mehr in den
                 // Nachzieh-Listen; die Matrix führt die Quelle als Wert, und der Quellenname ist derselbe
                 // wie in der API (eine Schreibweise, zwei Schichten).
-                dbSource.Contains("public const int CurrentSchemaVersion = 19;", StringComparison.Ordinal)
+                dbSource.Contains("public const int CurrentSchemaVersion = 20;", StringComparison.Ordinal)
                 && !dbSource.Contains("ALTER TABLE sidecars ADD COLUMN MoviesubtitlesDownloadId", StringComparison.Ordinal)
                 && !dbSource.Contains("ALTER TABLE embeds ADD COLUMN MoviesubtitlesUploadedAt", StringComparison.Ordinal)
                 && dbSource.Contains("(\"MsubMovieId\", \"ALTER TABLE media ADD COLUMN MsubMovieId TEXT NULL;\")", StringComparison.Ordinal)

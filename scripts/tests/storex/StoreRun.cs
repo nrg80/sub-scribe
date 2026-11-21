@@ -868,24 +868,33 @@ using (var db = new ScribeDbContext(matrixDir, null))
     sicherungPfad = dateien.FirstOrDefault() ?? string.Empty;
     Console.WriteLine("   Matrix: " + string.Join(", ", belege.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => x.Key + "=" + x.Value)));
 
-    Check(markenGesamt == 10 && belege.Count == 7
-          && Beleg(belege, "subdl|track") == 3 && Beleg(belege, "tvsubtitles|track-hi") == 1
+    Check(markenGesamt == 11 && belege.Count == 7
+          && Beleg(belege, "subdl|track") == 4 && Beleg(belege, "tvsubtitles|track-hi") == 1
           && Beleg(belege, "moviesubtitles|track") == 1
           && Beleg(belege, "subdl|file") == 1 && Beleg(belege, "tvsubtitles|file") == 1
           && Beleg(belege, "moviesubtitles|file") == 1 && Beleg(belege, "subdl|pack") == 2,
-        "F-M668: die Matrix ist aus den breiten Spalten gefüllt — 10 Marken in 7 Paaren aus Quelle und Art",
+        "F-M668/F-M669: die Matrix ist aus den breiten Spalten gefüllt — 11 Marken in 7 Paaren aus Quelle und Art",
         markenGesamt + " Marke(n): " + string.Join(",", belege.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => x.Key + "=" + x.Value)));
 
-    // Die Zuordnung selbst: die Id bei der Quelle, der spätere Zeitstempel der beiden DE-Spuren.
-    var de = db.Matrix.FindById(SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m1", null), "subdl", MarkKind.Track, "DE", false));
-    Check(de != null && de.ClosedAt == t5 && de.SourceId == "444" && de.UploadId == "up-444",
-        "F-M668: zwei Spuren einer Sprache werden EINE Marke — der spätere Zeitstempel und seine Ids gelten",
-        de == null ? "(keine Zeile)" : de.ClosedAt + " / " + (de.SourceId ?? "-") + " / " + (de.UploadId ?? "-"));
+    // Die Zuordnung selbst: die Id bei der Quelle — und seit F-M669 je POSITION eine eigene Marke.
+    var de2 = db.Matrix.FindById(SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m1", null), "subdl", MarkKind.Track, "DE", false, 2));
+    var de3 = db.Matrix.FindById(SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m1", null), "subdl", MarkKind.Track, "DE", false, 3));
+    Check(de2 != null && de2.ClosedAt == t3 && de2.SourceId == "333" && de2.SubPos == 2
+          && de3 != null && de3.ClosedAt == t5 && de3.SourceId == "444" && de3.UploadId == "up-444" && de3.SubPos == 3,
+        "F-M669: zwei Spuren derselben Sprache sind ZWEI Marken — jede mit ihrem Zeitstempel und ihren Ids",
+        (de2 == null ? "(keine)" : de2.SubPos + "=" + de2.ClosedAt + "/" + (de2.SourceId ?? "-"))
+        + " " + (de3 == null ? "(keine)" : de3.SubPos + "=" + de3.ClosedAt + "/" + (de3.SourceId ?? "-")));
 
-    var hi = db.Matrix.FindById(SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m1", null), "tvsubtitles", MarkKind.TrackHi, "EN", true));
+    var hi = db.Matrix.FindById(SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m1", null), "tvsubtitles", MarkKind.TrackHi, "EN", true, 1));
     Check(hi != null && hi.ClosedAt == t2 && hi.SourceId == "222" && hi.HearingImpaired == true,
         "F-M668: die HI-Spur ist eine eigene Zeile derselben Datei, mit eigener Quelle und eigener Id",
         hi == null ? "(keine Zeile)" : hi.Kind + " " + hi.ClosedAt);
+
+    var sidecarMarke = db.Matrix.FindById(
+        SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m2", null), "subdl", MarkKind.Track, "DE", false, SourceMatrix.SidecarPosition));
+    Check(sidecarMarke != null && sidecarMarke.SubPos == SourceMatrix.SidecarPosition && sidecarMarke.SourceId == "666",
+        "F-M669: ein Seitenwagen traegt die feste Position -1 — keine Videospur-Position, keine Kollision mit Spur 0",
+        sidecarMarke == null ? "(keine Zeile)" : sidecarMarke.SubPos + " / " + (sidecarMarke.SourceId ?? "-"));
 
     var dateiMarke = db.Matrix.FindById(SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m1", null), "moviesubtitles", MarkKind.File, null, false));
     Check(dateiMarke == null,
@@ -943,18 +952,18 @@ Check(uebrig.Count == 0,
 // Jede Marke existiert genau einmal: die Zahl der Zeilen ist die Zahl der verschiedenen Schlüssel.
 int matrixZeilen = Q("SELECT COUNT(*) FROM source_matrix;");
 int matrixSchluessel = Q("SELECT COUNT(DISTINCT Id) FROM source_matrix;");
-Check(matrixZeilen == matrixSchluessel && matrixZeilen == 10,
+Check(matrixZeilen == matrixSchluessel && matrixZeilen == 11,
     "F-M668: jede Marke existiert genau einmal — keine Dubletten, keine zwei Zeilen für dasselbe Urteil",
     matrixZeilen + " Zeile(n), " + matrixSchluessel + " Schlüssel");
 
-Check(Q("SELECT COUNT(*) FROM source_matrix WHERE Kind IN ('track','track-hi')") == 5,
-    "F-M668: die Zahl der Spur-Marken entspricht den alten Spalten (die doppelte DE-Spur ist EINE Marke)",
+Check(Q("SELECT COUNT(*) FROM source_matrix WHERE Kind IN ('track','track-hi')") == 6,
+    "F-M669: je Spur-Zeile eine Marke — die doppelte DE-Spur ist ZWEI Marken, keine eingedampfte",
     Q("SELECT COUNT(*) FROM source_matrix WHERE Kind IN ('track','track-hi')") + " Marke(n)");
 
 using (var db = new ScribeDbContext(matrixDir, null))
 {
-    Check(db.Meta.FindById("db")?.SchemaVersion == 19,
-        "F-M668: der Marker steht nach der Übernahme auf 19",
+    Check(db.Meta.FindById("db")?.SchemaVersion == 20,
+        "F-M669: der Marker steht nach der Übernahme auf 20",
         "marker=" + (db.Meta.FindById("db")?.SchemaVersion));
 }
 
@@ -982,19 +991,25 @@ using (var db = new ScribeDbContext(matrixDir, null))
         "F-M668: nichts wurde gelöscht außer den Spalten — alle Spur-Zeilen stehen noch",
         "embeds=" + db.Embeds.Count() + " sidecars=" + db.Sidecars.Count());
 
-    var spur = SourceMatrix.TrackMark(db, "m1", "subdl", "EN", false);
+    var spur = SourceMatrix.TrackMarkAt(db, "m1", "subdl", "EN", false, 0);
     Check(spur.IsClosed && spur.ClosedAt == t1 && spur.SourceId == "111",
         "F-M668: die Spur-Marke kommt aus der Matrix (geschlossen, mit der Id bei der Quelle)",
         spur.ClosedAt + " / " + (spur.SourceId ?? "-"));
 
+    // F-M669: dieselbe Sprache an einer anderen Position ist NICHT damit geschlossen — sonst gälte eine
+    // hochgeladene Spur als Beleg für eine nie gesendete.
+    var nachbar = SourceMatrix.TrackMarkAt(db, "m1", "subdl", "DE", false, 7);
+    Check(!nachbar.IsClosed && nachbar.ClosedAt == null,
+        "F-M669: eine Marke je Position — die Nachbarposition derselben Sprache bleibt offen");
+
     // Die Matrix ist die EINZIGE Antwort: nimmt man die Zeile weg, ist die Quelle offen — es gibt
     // keine Altspalte, die einspringen könnte. (Über den Store gelöscht, damit auch sein Zeilencache
     // die Zeile nicht mehr führt — ein rohes DELETE ließe sie dort stehen.)
-    db.Matrix.DeleteMany(x => x.Id == SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m1", null), "subdl", MarkKind.Track, "EN", false));
+    db.Matrix.DeleteMany(x => x.Id == SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m1", null), "subdl", MarkKind.Track, "EN", false, 0));
     db.Matrix.DeleteMany(x => x.Id == SourceMatrix.KeyOf(SourceMatrix.AnchorOf(null, "tt100", 2), "subdl", MarkKind.Pack, "EN", false));
     db.Matrix.DeleteMany(x => x.Id == SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m2", null), "moviesubtitles", MarkKind.File, null, false));
 
-    var spurWeg = SourceMatrix.TrackMark(db, "m1", "subdl", "EN", false);
+    var spurWeg = SourceMatrix.TrackMarkAt(db, "m1", "subdl", "EN", false, 0);
     Check(!spurWeg.IsClosed && spurWeg.ClosedAt == null && spurWeg.SourceId == null,
         "F-M668: ohne Matrix-Zeile ist die Spur für diese Quelle OFFEN — es gibt keinen Rückfall mehr",
         "closed=" + spurWeg.IsClosed);
@@ -1038,7 +1053,7 @@ File.Copy(DbFiles.PathIn(seedDir), DbFiles.PreviousPathIn(switchDir), overwrite:
 
 using (var db = new ScribeDbContext(switchDir, null))
 {
-    var marke = SourceMatrix.TrackMark(db, "s1", "subdl", "EN", false);
+    var marke = SourceMatrix.TrackMarkAt(db, "s1", "subdl", "EN", false, 0);
     Check(marke.IsClosed && marke.SourceId == "900" && marke.ClosedAt == t1,
         "F-M668: auch die Datei, die der Formatwechsel (F-M637) baut, bekommt ihre Marken aus der Übernahme",
         (marke.SourceId ?? "-") + " / " + marke.ClosedAt);

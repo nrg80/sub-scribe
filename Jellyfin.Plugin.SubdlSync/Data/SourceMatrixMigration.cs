@@ -150,9 +150,22 @@ public static class SourceMatrixMigration
                 ix.ExecuteNonQuery();
             }
 
-            // Eine Datei aus Schritt A (Schema 18) trägt die Tabelle ohne die zwei Felder, die Schritt B
-            // ergänzt. Sie werden IN der Transaktion nachgezogen, damit der INSERT unten passt.
+            // Eine Datei aus Schritt A (Schema 18) trägt die Tabelle ohne die Felder, die Schritt B/C
+            // ergänzen. Sie werden IN der Transaktion nachgezogen, damit der INSERT unten passt.
             EnsureMatrixColumns(conn, tx);
+
+            // F-M669: eine Datei aus Schritt A trägt die Matrix bereits — dort stand EINE Spur-Marke je
+            // Paar (SubPos null). Die Übernahme leitet dieselben Urteile jetzt JE POSITION aus den
+            // Altspalten ab; die paarweite Kopie muss fallen, sonst stünde jedes Urteil zweimal da
+            // (einmal breit, einmal je Position) — der doppelte Datenbestand, den F-M668 verbietet.
+            // Nur wenn Spur-Altspalten da sind: sonst gäbe es nichts, woraus die Positionen entstehen.
+            if (altspalten.Any(a => a.Table is "embeds" or "sidecars"))
+            {
+                using var weg = conn.CreateCommand();
+                weg.Transaction = tx;
+                weg.CommandText = "DELETE FROM source_matrix WHERE Kind IN ('track','track-hi') AND SubPos IS NULL;";
+                weg.ExecuteNonQuery();
+            }
 
             int marken = zeilen.Count;
             int geschrieben = Schreibe(conn, tx, zeilen.Values);
@@ -269,6 +282,9 @@ public static class SourceMatrixMigration
         {
             ("Id", Select("Id")),
             ("MediaHash", Select("MediaHash")),
+            // F-M669: die Position der Spur steht an der alten Zeile (`embeds.SubPos`). Ein Seitenwagen
+            // hat keine — er bekommt die feste `SidecarPosition`, wie jeder Seitenwagen-Schreiber.
+            ("SubPos", sidecar ? "NULL" : Select("SubPos")),
             ("Language", Select("Language")),
             ("HearingImpaired", Select("HearingImpaired")),
             ("ImdbId", sidecar ? Select("ImdbId") : (hatMedia ? "m.ImdbId" : "NULL")),
@@ -308,6 +324,11 @@ public static class SourceMatrixMigration
                 string language = werte["Language"] as string ?? string.Empty;
                 bool? hi = werte["HearingImpaired"] is long h ? h != 0 : werte["HearingImpaired"] is bool b ? b : null;
                 string mediaHash = werte["MediaHash"] as string ?? string.Empty;
+                // F-M669: eine Schema-17-Zeile hat KEINE Position — dann bleibt sie null und die Marke
+                // ist die paarweite Brücke, die ein Leser ohne Position noch findet.
+                int? subPos = sidecar
+                    ? SourceMatrix.SidecarPosition
+                    : AsInt(werte["SubPos"]);
 
                 foreach (string quelle in SourceMatrix.Sources)
                 {
@@ -343,6 +364,7 @@ public static class SourceMatrixMigration
                         Language = SourceMatrix.Normalise(language),
                         Season = AsInt(werte["Season"]),
                         Episode = AsInt(werte["Episode"]),
+                        SubPos = subPos,
                         HearingImpaired = hi,
                         ClosedAt = zeit,
                         SourceId = abrufId,
@@ -523,7 +545,9 @@ public static class SourceMatrixMigration
     private static void Lege(
         Dictionary<string, SourceMatrixEntity> zeilen, SourceMatrixEntity neu, string anchor)
     {
-        string key = SourceMatrix.KeyOf(anchor, neu.Source, neu.Kind, neu.Language, neu.HearingImpaired == true);
+        // F-M669: die Position ist Teil des Schlüssels der Spur-Arten; `file`/`pack` tragen keine.
+        string key = SourceMatrix.KeyOf(
+            anchor, neu.Source, neu.Kind, neu.Language, neu.HearingImpaired == true, neu.SubPos);
         if (string.IsNullOrEmpty(key))
         {
             return;
@@ -606,17 +630,17 @@ public static class SourceMatrixMigration
         cmd.Transaction = tx;
         cmd.CommandText =
             "INSERT OR IGNORE INTO source_matrix (Id, MediaHash, ImdbId, TmdbId, Source, Kind, Language, Season, "
-            + "Episode, HearingImpaired, ClosedAt, Fingerprint, MtimeUnix, SourceId, UploadId, RefusalReason, "
+            + "Episode, SubPos, HearingImpaired, ClosedAt, Fingerprint, MtimeUnix, SourceId, UploadId, RefusalReason, "
             + "RefusedAt, RefusalSignature, Written) "
             + "VALUES ($Id, $MediaHash, $ImdbId, $TmdbId, $Source, $Kind, $Language, $Season, $Episode, "
-            + "$HearingImpaired, $ClosedAt, $Fingerprint, $MtimeUnix, $SourceId, $UploadId, $RefusalReason, "
+            + "$SubPos, $HearingImpaired, $ClosedAt, $Fingerprint, $MtimeUnix, $SourceId, $UploadId, $RefusalReason, "
             + "$RefusedAt, $RefusalSignature, $Written);";
 
         var p = new Dictionary<string, SqliteParameter>(StringComparer.Ordinal);
         foreach (string name in new[]
                  {
                      "$Id", "$MediaHash", "$ImdbId", "$TmdbId", "$Source", "$Kind", "$Language", "$Season",
-                     "$Episode", "$HearingImpaired", "$ClosedAt", "$Fingerprint", "$MtimeUnix", "$SourceId",
+                     "$Episode", "$SubPos", "$HearingImpaired", "$ClosedAt", "$Fingerprint", "$MtimeUnix", "$SourceId",
                      "$UploadId", "$RefusalReason", "$RefusedAt", "$RefusalSignature", "$Written",
                  })
         {
@@ -638,6 +662,7 @@ public static class SourceMatrixMigration
             p["$Language"].Value = z.Language;
             p["$Season"].Value = (object?)z.Season ?? DBNull.Value;
             p["$Episode"].Value = (object?)z.Episode ?? DBNull.Value;
+            p["$SubPos"].Value = (object?)z.SubPos ?? DBNull.Value;
             p["$HearingImpaired"].Value = z.HearingImpaired == null ? DBNull.Value : (object)(z.HearingImpaired.Value ? 1 : 0);
             p["$ClosedAt"].Value = MomentOderNull(z.ClosedAt);
             p["$Fingerprint"].Value = (object?)z.Fingerprint ?? DBNull.Value;
@@ -716,8 +741,8 @@ public static class SourceMatrixMigration
     }
 
     /// <summary>
-    /// F-M668: die zwei Felder, die Schritt B an der Matrix ergänzt. Eine Datei aus Schritt A trägt die
-    /// Tabelle ohne sie — der Einfüge-Befehl würde sonst scheitern.
+    /// F-M668/F-M669: die Felder, die die Matrix seit Schritt A/B ergänzt hat. Eine ältere Datei trägt
+    /// die Tabelle ohne sie — der Einfüge-Befehl würde sonst scheitern.
     /// </summary>
     private static void EnsureMatrixColumns(SqliteConnection conn, SqliteTransaction tx)
     {
@@ -725,6 +750,8 @@ public static class SourceMatrixMigration
                  {
                      ("UploadId", "ALTER TABLE source_matrix ADD COLUMN UploadId TEXT NULL;"),
                      ("RefusalSignature", "ALTER TABLE source_matrix ADD COLUMN RefusalSignature TEXT NULL;"),
+                     // F-M669: die Spur-Position (null bei file/pack, -1 bei einem Seitenwagen).
+                     ("SubPos", "ALTER TABLE source_matrix ADD COLUMN SubPos INTEGER NULL;"),
                  })
         {
             if (ColumnExists(conn, "source_matrix", column))
