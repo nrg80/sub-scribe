@@ -942,7 +942,7 @@ public sealed class TvSubtitlesClient
 
         if ((int)response.StatusCode == 429)
         {
-            return ScribeReportOutcome.Deferred;
+            return ScribeReportOutcome.Busy;
         }
 
         if (!response.IsSuccessStatusCode)

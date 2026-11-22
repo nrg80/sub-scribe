@@ -638,11 +638,11 @@ internal static class Program
             Check(Zeile("Hole") && hole.Fault?.Kind == SourceFault.NotFound,
                 "F-M684 (b): der Auftrag Hole erzeugt eine Zeile mit Griff, Folge, Mitglied, Größe und Dauer",
                 ruf.Lines.FirstOrDefault(l => l.Text.Contains(" Hole —", StringComparison.Ordinal)).Text);
-            Check(Zeile("Sende") && sende.Status == SourceSendStatus.Rejected,
-                "F-M684 (b): der Auftrag Sende erzeugt eine Zeile mit Umfang, Sprache, HI, Ziel und Urteil",
+            Check(Zeile("Sende") && sende.Outcome == SourceOutcome.Rejected,
+                "F-M684 (b): der Auftrag Sende erzeugt eine Zeile mit Umfang, Sprache, HI, Ziel und Ausgang",
                 ruf.Lines.FirstOrDefault(l => l.Text.Contains(" Sende —", StringComparison.Ordinal)).Text);
-            Check(Zeile("Melde") && melde.Status == SourceReportStatus.Failed,
-                "F-M684 (b): der Auftrag Melde erzeugt eine Zeile mit Eintrag, Art und Urteil",
+            Check(Zeile("Melde") && melde.Outcome == SourceOutcome.Failed,
+                "F-M684 (b): der Auftrag Melde erzeugt eine Zeile mit Eintrag, Art und Ausgang",
                 ruf.Lines.FirstOrDefault(l => l.Text.Contains(" Melde —", StringComparison.Ordinal)).Text);
 
             Check(ruf.Lines.Any(l => l.Level == Microsoft.Extensions.Logging.LogLevel.Debug
@@ -669,7 +669,7 @@ internal static class Program
             // (2) Die Summenzeile: eine Zeile je Quelle, auf Normal, mit Aufrufen, Seiten, Fehlern, Dauer.
             SourceTraffic.WriteSummary(ruf, new[] { SubdlEngine.SourceKey });
             string summe = ruf.Lines.Last(l => l.Text.Contains("Aufrufe", StringComparison.Ordinal)).Text;
-            Check(summe.StartsWith("[N] SubDL: 5 Aufrufe, 0 Seiten, 3 Fehler, ", StringComparison.Ordinal)
+            Check(summe.StartsWith("[N] SubDL: 5 Aufrufe, 0 Seiten, 4 Fehler, ", StringComparison.Ordinal)
                   && summe.Contains(" s", StringComparison.Ordinal)
                   && summe.Contains("(5 Aufträge)", StringComparison.Ordinal),
                 "F-M684 (2): die Summenzeile nennt je Quelle Abrufe, Seiten, Fehler und Dauer — in EINER Zeile",
@@ -731,10 +731,188 @@ internal static class Program
             "RateLimited=" + nachBremse.RateLimited + ", Grund=" + (nachBremse.LastFailureReason ?? "-"));
 
         // -----------------------------------------------------------------------------------------
+        // (h) F-M685: EIN Ausgang für Senden und Melden — vier Werte, keine zwei Aussagen.
+        // -----------------------------------------------------------------------------------------
+        Console.WriteLine("(h) F-M685: ein Ausgang für Senden und Melden");
+
+        // (a) Vier Werte, in dieser Reihenfolge — gezählt, nicht behauptet.
+        var ausgaenge = Enum.GetNames<SourceOutcome>();
+        Check(ausgaenge.SequenceEqual(new[] { "Accepted", "Rejected", "Busy", "Failed" }),
+            "F-M685 (a): SourceOutcome hat genau vier Werte — Accepted, Rejected, Busy, Failed, in dieser Reihenfolge",
+            ausgaenge.Length + ": " + string.Join(", ", ausgaenge));
+
+        // (b) Die alten Bezeichner sind fort: die zwei Typen aus dem Kontrakt und die zwei Urteilsnamen
+        // im Quelltext von Sources/.
+        // Nachschlag per Namen statt Assembly.GetTypes(): die Suite laedt die MVC-Assemblies nicht, und
+        // ein Rundgang ueber ALLE Typen wuerde daran scheitern (ReflectionTypeLoadException).
+        var alteTypen = new[] { "SourceSendStatus", "SourceReportStatus" }
+            .Where(n => typeof(ISourceEngine).Assembly
+                .GetType("Jellyfin.Plugin.SubScribe.Sources." + n, throwOnError: false) is not null)
+            .ToList();
+        Check(alteTypen.Count == 0,
+            "F-M685 (b): SourceSendStatus und SourceReportStatus existieren nicht mehr (in der Assembly gesucht, nicht im Kommentar)",
+            alteTypen.Count == 0 ? "0 von 2 Typen gefunden" : "noch da: " + string.Join(", ", alteTypen));
+
+        // „Failed“ ist seit F-M685 ein Wert des NEUEN Ausgangs und darf deshalb stehen; die zwei
+        // abgeschafften Urteilsnamen dürfen es nicht.
+        var alteNamen = new[] { "NoVerdict", "Deferred" };
+        var alteTreffer = Directory.GetFiles(sourcesDir, "*.cs", SearchOption.AllDirectories)
+            .SelectMany(f => alteNamen.SelectMany(n => TrefferZeilen(f, n)))
+            .ToList();
+        Check(alteTreffer.Count == 0,
+            "F-M685 (b): NoVerdict und Deferred kommen im Quelltext von Sources/ nicht mehr vor",
+            alteTreffer.Count == 0
+                ? "0 Treffer in " + Directory.GetFiles(sourcesDir, "*.cs", SearchOption.AllDirectories).Length + " Datei(en)"
+                : string.Join(" | ", alteTreffer.Take(4)));
+
+        // Die Fixtures sind die ANTWORTEN der Clients, nicht das Netz: jeder Fall unten ist eine
+        // Antwort, wie sie die Quelle heute gibt — 429, Anmeldung, „schon da“, „thank“, „nicht hochladbar“.
+        TimeProvider uhr = TimeProvider.System;
+        DateTime jetzt = uhr.GetUtcNow().UtcDateTime;
+
+        // (c) Eine Bremse ist „beschäftigt“ — mit Wartezeit, und ausdrücklich NICHT „fehlgeschlagen“.
+        var bremse = SubdlEngine.Translate(
+            UploadResult.NoVerdict("rate-limited", busy: true), jetzt.AddSeconds(90), uhr);
+        Check(bremse.Outcome == SourceOutcome.Busy && bremse.RetryAfterSeconds > 0,
+            "F-M685 (c): eine 429-Antwort ergibt Busy mit RetryAfterSeconds > 0 — kein Failed",
+            "Ausgang=" + bremse.Outcome + ", Wartezeit=" + (bremse.RetryAfterSeconds?.ToString() ?? "null"));
+        Check(bremse.Outcome != SourceOutcome.Failed,
+            "F-M685 (c): derselbe 429 ist ausdrücklich nicht als Fehlschlag gebucht",
+            bremse.Outcome.ToString());
+
+        // Die zweite Quelle nennt bei 429 keine Wartezeit — dann steht am Ausgang keine.
+        var bremseOhneZeit = TvstEngine.Translate(
+            new TvSubtitlesUploadResult(true, 429, "Too many requests", 120, "pruefung"));
+        Check(bremseOhneZeit.Outcome == SourceOutcome.Busy && bremseOhneZeit.RetryAfterSeconds is null,
+            "F-M685 (c): ein 429 ohne genannte Wartezeit ist Busy mit RetryAfterSeconds = null (nichts wird geraten)",
+            bremseOhneZeit.Outcome + "/" + (bremseOhneZeit.RetryAfterSeconds?.ToString() ?? "null"));
+
+        // (d) Anmeldung ist ein Fehlschlag — bei beiden Seiten-Adaptern.
+        var anmeldungTvst = TvstEngine.Translate(
+            new TvSubtitlesUploadResult(true, 401, "Login required", 120, "pruefung"));
+        var anmeldungMsub = MsubEngine.Translate(
+            new MovieSubtitlesUploadResult(true, 403, "Forbidden", 120, "pruefung"));
+        Check(anmeldungTvst.Outcome == SourceOutcome.Failed && anmeldungMsub.Outcome == SourceOutcome.Failed,
+            "F-M685 (d): eine Anmelde-Antwort (401/403) ergibt Failed — bei beiden Adaptern",
+            "tvst=" + anmeldungTvst.Outcome + ", msub=" + anmeldungMsub.Outcome);
+
+        // (e) Eine Absage trägt den Quelltext als Grund — im Wortlaut, nicht in unserer Übersetzung.
+        var dublette = SubdlEngine.Translate(
+            UploadResult.Skipped("duplicate-content", "Duplicate upload: identical file already published"),
+            jetzt.AddSeconds(90), uhr);
+        Check(dublette.Outcome == SourceOutcome.Rejected
+              && string.Equals(dublette.Reason, "Duplicate upload: identical file already published", StringComparison.Ordinal),
+            "F-M685 (e): „duplicate … already published“ ergibt Rejected mit dem Quelltext als Grund",
+            dublette.Outcome + ": " + (dublette.Reason ?? "-"));
+
+        var schonDa = SubdlEngine.Translate(UploadResult.Skipped("already-uploaded"), jetzt.AddSeconds(90), uhr);
+        Check(schonDa.Outcome == SourceOutcome.Rejected
+              && string.Equals(schonDa.Reason, "already-uploaded", StringComparison.Ordinal),
+            "F-M685 (e): „already-uploaded“ ergibt Rejected mit dem Quelltext als Grund",
+            schonDa.Outcome + ": " + (schonDa.Reason ?? "-"));
+
+        var staffelGrenze = TvstEngine.Translate(
+            new TvSubtitlesUploadResult(true, 200, "season must be 1..22", 120, "pruefung"));
+        Check(staffelGrenze.Outcome == SourceOutcome.Rejected
+              && string.Equals(staffelGrenze.Reason, "season must be 1..22", StringComparison.Ordinal),
+            "F-M685 (e): „season must be 1..22“ ergibt Rejected mit dem Quelltext als Grund",
+            staffelGrenze.Outcome + ": " + (staffelGrenze.Reason ?? "-"));
+
+        var filmAbsage = MsubEngine.Translate(
+            new MovieSubtitlesUploadResult(true, 200, "Film nicht hochladbar", 120, "pruefung"));
+        Check(filmAbsage.Outcome == SourceOutcome.Rejected
+              && string.Equals(filmAbsage.Reason, "Film nicht hochladbar", StringComparison.Ordinal),
+            "F-M685 (e): „Film nicht hochladbar“ ergibt Rejected mit dem Quelltext als Grund",
+            filmAbsage.Outcome + ": " + (filmAbsage.Reason ?? "-"));
+
+        var keineCookies = TvstEngine.Translate(
+            new TvSubtitlesUploadResult(true, 200, "Your request could not be served (cookies disabled)", 171, "pruefung"));
+        Check(keineCookies.Outcome == SourceOutcome.Rejected
+              && (keineCookies.Reason ?? string.Empty).Contains("could not be served", StringComparison.Ordinal),
+            "F-M685 (e): „could not be served … cookies disabled“ ergibt Rejected mit dem Quelltext als Grund",
+            keineCookies.Outcome + ": " + (keineCookies.Reason ?? "-"));
+
+        // (f) Eine Annahme ist „angenommen“ — die Client-Antwort auf „success/status: true“, die Seite
+        // mit „thank“, die Filmseite mit „Thank you“.
+        var angenommenSubdl = SubdlEngine.Translate(UploadResult.Success("4711"), jetzt.AddSeconds(90), uhr);
+        var angenommenTvst = TvstEngine.Translate(
+            new TvSubtitlesUploadResult(true, 200, "Thank you for your upload", 120, "pruefung"));
+        var angenommenMsub = MsubEngine.Translate(
+            new MovieSubtitlesUploadResult(true, 200, "Thank you", 120, "pruefung"));
+        Check(angenommenSubdl.Outcome == SourceOutcome.Accepted
+              && string.Equals(angenommenSubdl.SubmissionId, "4711", StringComparison.Ordinal),
+            "F-M685 (f): die Annahme des SubDL-Clients („success/status: true“) ergibt Accepted samt Einsendungs-Kennung",
+            angenommenSubdl.Outcome + "/" + (angenommenSubdl.SubmissionId ?? "-"));
+        Check(angenommenTvst.Outcome == SourceOutcome.Accepted && angenommenMsub.Outcome == SourceOutcome.Accepted,
+            "F-M685 (f): „thank“ auf der Seite ergibt Accepted — bei tvsubtitles und bei moviesubtitles",
+            "tvst=" + angenommenTvst.Outcome + ", msub=" + angenommenMsub.Outcome);
+
+        // (g) Senden und Melden tragen denselben Ausgangstyp — gezählt, nicht behauptet.
+        Type? sendeTyp = typeof(SourceSendAnswer).GetProperty("Outcome")?.PropertyType;
+        Type? meldeTyp = typeof(SourceReportAnswer).GetProperty("Outcome")?.PropertyType;
+        var ausgangstypen = new[] { sendeTyp, meldeTyp }.Where(t => t is not null).Distinct().ToList();
+        Check(sendeTyp is not null && sendeTyp == meldeTyp && ausgangstypen.Count == 1,
+            "F-M685 (g): Sende und Melden tragen denselben Ausgangstyp — EIN Typ für beide Richtungen",
+            "Senden=" + (sendeTyp?.Name ?? "?") + ", Melden=" + (meldeTyp?.Name ?? "?")
+            + ", verschiedene Typen=" + ausgangstypen.Count);
+
+        // (h) Die Wartezeit steht am AUSGANG — und an Senden/Melden hängt kein Fehlerfeld mehr.
+        var warteSende = typeof(SourceSendAnswer).GetProperty("RetryAfterSeconds");
+        var warteMelde = typeof(SourceReportAnswer).GetProperty("RetryAfterSeconds");
+        bool keinFehlerfeld = typeof(SourceSendAnswer).GetProperties().All(p => p.PropertyType != typeof(SourceFaultInfo))
+            && typeof(SourceReportAnswer).GetProperties().All(p => p.PropertyType != typeof(SourceFaultInfo));
+        Check(warteSende?.PropertyType == typeof(int?) && warteMelde?.PropertyType == typeof(int?) && keinFehlerfeld,
+            "F-M685 (h): RetryAfterSeconds steht am Ausgang (int?) — und keine der beiden Antworten trägt noch ein Fehlerfeld",
+            "Senden=" + (warteSende?.PropertyType.Name ?? "fehlt") + ", Melden=" + (warteMelde?.PropertyType.Name ?? "fehlt")
+            + ", Fehlerfeld=" + !keinFehlerfeld);
+
+        Check(typeof(SourceSearchAnswer).GetProperty("Fault") is not null
+              && typeof(SourceFetchAnswer).GetProperty("Fault") is not null,
+            "F-M685 (h): Suche und Hole behalten ihren Fehlerweg — der Ausgang ersetzt ihn nicht");
+
+        // Eine Bremse zählt als EIGENER Zähler, getrennt von den Fehlern, und die Zeilen nennen sie.
+        var bremsen = new Rec();
+        var starre = new StarreQuelle(SourceSendAnswer.Busy(30, "HTTP 429"), SourceReportAnswer.Busy(45, "HTTP 429"));
+        var gehuelle = new AuditedSourceEngine(starre, bremsen, Jellyfin.Plugin.SubScribe.Configuration.LogLevelMode.Debug);
+        SourceTraffic.BeginRun(new[] { StarreQuelle.Key });
+
+        var sendung = gehuelle.SendAsync(
+            new SourceSendRequest { FileName = "x.srt", Language = "DEU", Bytes = new byte[] { 1, 2, 3 } },
+            CancellationToken.None).GetAwaiter().GetResult();
+        var meldung = gehuelle.ReportAsync(
+            new SourceReportRequest("4711", SourceReportKind.Missing, "Pruefung"), CancellationToken.None)
+            .GetAwaiter().GetResult();
+        var nachBremsen = SourceTraffic.For(StarreQuelle.Key).Snapshot();
+
+        Check(sendung.Outcome == SourceOutcome.Busy && nachBremsen.Busy == 2 && nachBremsen.Errors == 0,
+            "F-M685 (4): „beschäftigt“ zählt als eigener Zähler — Senden und Melden in denselben Topf, KEIN Fehlschlag",
+            "Busy=" + nachBremsen.Busy + ", Fehler=" + nachBremsen.Errors + ", letzte Wartezeit="
+            + (nachBremsen.LastBusySeconds?.ToString() ?? "null"));
+
+        Check(bremsen.Lines.Any(l => l.Level == Microsoft.Extensions.Logging.LogLevel.Warning
+                  && l.Text.Contains("beschäftigt", StringComparison.Ordinal)
+                  && l.Text.Contains("30 s", StringComparison.Ordinal))
+              && bremsen.Lines.Any(l => l.Level == Microsoft.Extensions.Logging.LogLevel.Debug
+                  && l.Text.Contains("→ beschäftigt (30 s)", StringComparison.Ordinal)),
+            "F-M685 (4): die WRN-Zeile und die Auftragszeile nennen den neuen Ausgang MIT Wartezeit",
+            bremsen.Lines.FirstOrDefault(l => l.Text.Contains("beschäftigt", StringComparison.Ordinal)).Text);
+
+        SourceTraffic.WriteSummary(bremsen, new[] { StarreQuelle.Key });
+        string bremsZeile = bremsen.Lines.Last(l => l.Text.Contains("Aufrufe", StringComparison.Ordinal)).Text;
+        Check(bremsZeile.Contains("2 beschäftigt", StringComparison.Ordinal)
+              && bremsZeile.Contains("45 s zuletzt", StringComparison.Ordinal),
+            "F-M685 (4): die Summenzeile nennt „beschäftigt“ als eigenen Posten mit der genannten Wartezeit",
+            bremsZeile);
+
+        Check(meldung.Outcome == SourceOutcome.Busy,
+            "F-M685 (g): Melden liefert denselben Ausgang wie Senden — Busy heißt hier wie dort „später nochmal“",
+            meldung.Outcome.ToString());
+
+        // -----------------------------------------------------------------------------------------
         // Bericht.
         // -----------------------------------------------------------------------------------------
         Console.WriteLine();
-        Console.WriteLine("sources: " + _checks + " Prüfungen (T339/T340/T341, F-M682/F-M683/F-M684)");
+        Console.WriteLine("sources: " + _checks + " Prüfungen (T339/T340/T341/T342, F-M682/F-M683/F-M684/F-M685)");
         if (Failures.Count == 0)
         {
             Console.WriteLine(">>> SOURCES OK: " + _checks + " Prüfungen bestanden");
@@ -770,6 +948,46 @@ internal static class Program
             Exception? exception,
             Func<TState, Exception?, string> formatter)
             => Lines.Add((logLevel, formatter(state, exception)));
+    }
+
+    /// <summary>
+    /// F-M685: eine Quelle, die NUR antwortet — für die Hülle und die Zähler. Sie tut nichts, sie sagt
+    /// nur den Ausgang, den der Prüffall verlangt; kein Netz, keine Adresse, kein Zugang.
+    /// </summary>
+    private sealed class StarreQuelle : ISourceEngine
+    {
+        public const string Key = "pruefquelle";
+
+        private readonly SourceSendAnswer _sende;
+        private readonly SourceReportAnswer _melde;
+
+        public StarreQuelle(SourceSendAnswer sende, SourceReportAnswer melde)
+        {
+            _sende = sende;
+            _melde = melde;
+        }
+
+        public SourceCapabilities Capabilities { get; } = new()
+        {
+            Key = Key,
+            DisplayName = "Prüfquelle",
+            CanUpload = true,
+            CanReport = true,
+        };
+
+        public IReadOnlyList<SourceField> Fields { get; } = Array.Empty<SourceField>();
+
+        public Task<SourceSearchAnswer> SearchAsync(SourceSearchRequest request, CancellationToken ct)
+            => Task.FromResult(SourceSearchAnswer.Empty);
+
+        public Task<SourceFetchAnswer> FetchAsync(SourceFetchRequest request, CancellationToken ct)
+            => Task.FromResult(SourceFetchAnswer.Because(SourceFaultInfo.NotFound("Prüfung")));
+
+        public Task<SourceSendAnswer> SendAsync(SourceSendRequest request, CancellationToken ct)
+            => Task.FromResult(_sende);
+
+        public Task<SourceReportAnswer> ReportAsync(SourceReportRequest request, CancellationToken ct)
+            => Task.FromResult(_melde);
     }
 
     /// <summary>

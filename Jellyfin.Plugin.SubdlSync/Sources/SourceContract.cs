@@ -87,7 +87,7 @@ public interface ISourceEngine
     /// </summary>
     /// <param name="request">Bytes, Sprache, Variante, Releasename, Ziel, Kommentar, Umfang.</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>Angenommen oder abgelehnt, mit Grund und — falls die Quelle eine gibt — ihrer Kennung.</returns>
+    /// <returns>Der eine Ausgang: angenommen, abgelehnt, beschäftigt oder fehlgeschlagen, mit Grund und — falls die Quelle eine gibt — ihrer Kennung.</returns>
     Task<SourceSendAnswer> SendAsync(SourceSendRequest request, CancellationToken ct);
 
     /// <summary>
@@ -95,7 +95,7 @@ public interface ISourceEngine
     /// </summary>
     /// <param name="request">Fremde Kennung, Art des Defekts, Text.</param>
     /// <param name="ct">Cancellation token.</param>
-    /// <returns>Angenommen, vertagt (429) oder fehlgeschlagen.</returns>
+    /// <returns>Derselbe eine Ausgang wie beim Senden: angenommen, abgelehnt, beschäftigt (429) oder fehlgeschlagen.</returns>
     Task<SourceReportAnswer> ReportAsync(SourceReportRequest request, CancellationToken ct);
 }
 
@@ -389,32 +389,78 @@ public sealed record SourceSendRequest
     public IReadOnlyList<SourcePackMember> Members { get; init; } = Array.Empty<SourcePackMember>();
 }
 
-/// <summary>F-M682, Auftrag 3: das Urteil der Quelle über eine Abgabe.</summary>
-public enum SourceSendStatus
+/// <summary>
+/// F-M685: der EINE Ausgang der beiden schreibenden Aufträge — für Senden UND Melden derselbe.
+/// <para>
+/// Bis hierher gab es zwei Aussagen für denselben Sachverhalt: beim Senden war „beschäftigt" nur ein
+/// Nebenfeld (ein 429 kam als „ohne Urteil" mit <c>Fault = RateLimited</c> zurück), beim Melden war
+/// „vertagt" ein eigener Ausgang. Wer die Antwort las, musste beides kennen — und hielt einen 429
+/// sonst für „weiß nicht". Jetzt sind es vier Werte, und der Ausgang allein sagt, was zu tun ist.
+/// </para>
+/// <para>
+/// <see cref="Accepted"/> und <see cref="Rejected"/> sind Entscheidungen der Quelle;
+/// <see cref="Busy"/> ist „später nochmal" (die Wartezeit steht am Ausgang, nicht im Fehler);
+/// <see cref="Failed"/> ist „nicht als Urteil buchen, aber protokollieren" — Netz, Anmeldung oder
+/// Unbekanntes. Suche und Hole behalten ihren Fehlerweg (<see cref="SourceFaultInfo"/>).
+/// </para>
+/// </summary>
+public enum SourceOutcome
 {
     /// <summary>Die Quelle hat angenommen.</summary>
     Accepted,
 
-    /// <summary>Die Quelle hat abgelehnt — es gibt eine Entscheidung, sie schließt das Paar.</summary>
+    /// <summary>Die Quelle hat endgültig abgelehnt — der Grund steht im Klartext der Quelle.</summary>
     Rejected,
 
-    /// <summary>Niemand hat entschieden (429, 5xx, Verbindungsfehler) — das Paar bleibt offen.</summary>
-    NoVerdict,
+    /// <summary>Vorübergehend nicht möglich — <see cref="SourceSendAnswer.RetryAfterSeconds"/> sagt, wie lange.</summary>
+    Busy,
+
+    /// <summary>Netz, Anmeldung oder Unbekanntes — kein Urteil über die Sache.</summary>
+    Failed,
 }
 
 /// <summary>
-/// F-M682, Auftrag 3: Antwort auf eine Abgabe.
+/// F-M682/F-M685, Auftrag 3: Antwort auf eine Abgabe.
 /// </summary>
-/// <param name="Status">Angenommen, abgelehnt oder ohne Urteil.</param>
-/// <param name="Reason">Der Grund, wenn die Quelle einen nennt.</param>
+/// <param name="Outcome">Der eine Ausgang: angenommen, abgelehnt, beschäftigt oder fehlgeschlagen.</param>
+/// <param name="Reason">Der Grund im Klartext der Quelle, wenn sie einen nennt.</param>
+/// <param name="RetryAfterSeconds">
+/// F-M685: die Wartezeit bei <see cref="SourceOutcome.Busy"/> — aus <c>Retry-After</c> bzw. der
+/// Reset-Zeit der Quelle, <c>null</c>, wenn die Quelle keine nennt. Sie steht AM AUSGANG; der
+/// Fehlerweg von Suche und Hole ist davon unberührt.
+/// </param>
 /// <param name="SubmissionId">
 /// Die eigene Einsendungs-Kennung, WENN die Quelle eine zurückgibt. SubDL antwortet mit
 /// <c>{"success": true}</c>, tvsubtitles.net mit einer Seite, auf der „thank" steht — beide nennen
 /// keine. Das Feld ist deshalb optional und es gibt KEINE Spalte dafür im Bestand.
 /// </param>
-/// <param name="Fault">Der normalisierte Fehler, wenn einer vorliegt.</param>
 public sealed record SourceSendAnswer(
-    SourceSendStatus Status, string? Reason = null, string? SubmissionId = null, SourceFaultInfo? Fault = null);
+    SourceOutcome Outcome, string? Reason = null, int? RetryAfterSeconds = null, string? SubmissionId = null)
+{
+    /// <summary>F-M685: die Quelle hat angenommen.</summary>
+    /// <param name="submissionId">Ihre Einsendungs-Kennung, wenn sie eine nennt.</param>
+    /// <param name="reason">Ihr Text, wenn sie einen mitgibt.</param>
+    /// <returns>Die Antwort.</returns>
+    public static SourceSendAnswer Accepted(string? submissionId = null, string? reason = null)
+        => new(SourceOutcome.Accepted, reason, null, submissionId);
+
+    /// <summary>F-M685: die Quelle hat endgültig abgelehnt.</summary>
+    /// <param name="reason">Ihr Klartext.</param>
+    /// <returns>Die Antwort.</returns>
+    public static SourceSendAnswer Rejected(string reason) => new(SourceOutcome.Rejected, reason);
+
+    /// <summary>F-M685: vorübergehend nicht möglich.</summary>
+    /// <param name="retryAfterSeconds">Die genannte Wartezeit, oder null.</param>
+    /// <param name="reason">Ihr Klartext, wenn sie einen mitgibt.</param>
+    /// <returns>Die Antwort.</returns>
+    public static SourceSendAnswer Busy(int? retryAfterSeconds, string? reason = null)
+        => new(SourceOutcome.Busy, reason, retryAfterSeconds);
+
+    /// <summary>F-M685: Netz, Anmeldung oder Unbekanntes.</summary>
+    /// <param name="reason">Der Grund, wenn einer bekannt ist.</param>
+    /// <returns>Die Antwort.</returns>
+    public static SourceSendAnswer Failed(string? reason) => new(SourceOutcome.Failed, reason);
+}
 
 /// <summary>F-M682, Auftrag 4: die Art des Defekts, in neutralen Worten.</summary>
 public enum SourceReportKind
@@ -441,30 +487,43 @@ public enum SourceReportKind
 /// <param name="Text">Der Meldungstext, wie das Plugin ihn schreibt.</param>
 public sealed record SourceReportRequest(string RemoteId, SourceReportKind Kind, string Text);
 
-/// <summary>F-M682, Auftrag 4: das Urteil der Quelle über eine Meldung.</summary>
-public enum SourceReportStatus
-{
-    /// <summary>Angenommen.</summary>
-    Accepted,
-
-    /// <summary>Vertagt — die Quelle hat um später gebeten (429).</summary>
-    Deferred,
-
-    /// <summary>Fehlgeschlagen.</summary>
-    Failed,
-}
-
 /// <summary>
-/// F-M682, Auftrag 4: Antwort auf eine Meldung.
+/// F-M682/F-M685, Auftrag 4: Antwort auf eine Meldung.
 /// </summary>
-/// <param name="Status">Angenommen, vertagt oder fehlgeschlagen.</param>
+/// <param name="Outcome">Derselbe eine Ausgang wie beim Senden.</param>
+/// <param name="Reason">Der Grund im Klartext der Quelle, wenn sie einen nennt.</param>
+/// <param name="RetryAfterSeconds">F-M685: die Wartezeit bei <see cref="SourceOutcome.Busy"/>, sonst null.</param>
 /// <param name="MessageId">
 /// Die Kennung, die die Quelle der Meldung gibt, WENN sie eine gibt. Heute gibt keine der drei Quellen
 /// eine zurück; das Feld ist optional und es gibt KEINE Spalte dafür.
 /// </param>
-/// <param name="Fault">Der normalisierte Fehler, wenn einer vorliegt.</param>
 public sealed record SourceReportAnswer(
-    SourceReportStatus Status, string? MessageId = null, SourceFaultInfo? Fault = null);
+    SourceOutcome Outcome, string? Reason = null, int? RetryAfterSeconds = null, string? MessageId = null)
+{
+    /// <summary>F-M685: die Quelle hat die Meldung angenommen.</summary>
+    /// <param name="messageId">Ihre Kennung, wenn sie eine nennt.</param>
+    /// <param name="reason">Ihr Text, wenn sie einen mitgibt.</param>
+    /// <returns>Die Antwort.</returns>
+    public static SourceReportAnswer Accepted(string? messageId = null, string? reason = null)
+        => new(SourceOutcome.Accepted, reason, null, messageId);
+
+    /// <summary>F-M685: die Quelle hat die Meldung endgültig abgelehnt.</summary>
+    /// <param name="reason">Ihr Klartext.</param>
+    /// <returns>Die Antwort.</returns>
+    public static SourceReportAnswer Rejected(string reason) => new(SourceOutcome.Rejected, reason);
+
+    /// <summary>F-M685: vorübergehend nicht möglich.</summary>
+    /// <param name="retryAfterSeconds">Die genannte Wartezeit, oder null.</param>
+    /// <param name="reason">Ihr Klartext, wenn sie einen mitgibt.</param>
+    /// <returns>Die Antwort.</returns>
+    public static SourceReportAnswer Busy(int? retryAfterSeconds, string? reason = null)
+        => new(SourceOutcome.Busy, reason, retryAfterSeconds);
+
+    /// <summary>F-M685: Netz, Anmeldung oder Unbekanntes.</summary>
+    /// <param name="reason">Der Grund, wenn einer bekannt ist.</param>
+    /// <returns>Die Antwort.</returns>
+    public static SourceReportAnswer Failed(string? reason) => new(SourceOutcome.Failed, reason);
+}
 
 /// <summary>
 /// F-M682: die normalisierten Fehler der Grenze. Jede Engine übersetzt ihre eigenen Zustände hierher,

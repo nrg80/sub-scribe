@@ -4030,7 +4030,7 @@ public sealed class DownloadPipeline : IDisposable
                 {
                     summary.Reported++;
                 }
-                else if (outcome == ScribeReportOutcome.Deferred)
+                else if (outcome == ScribeReportOutcome.Busy)
                 {
                     summary.ReportsDeferred++;
                 }

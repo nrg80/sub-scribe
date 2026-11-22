@@ -210,11 +210,11 @@ public sealed class AuditedSourceEngine : ISourceEngine
             ms = uhr.ElapsedMilliseconds;
         }
 
-        SourceTraffic.NoteAnswer(key, antwort.Fault);
+        SourceTraffic.NoteSendAnswer(key, antwort);
         LogUtil.Debug(
             _mode,
             _logger,
-            "[Sub Scribe-Q] {Source} Sende — {Umfang}, Sprache {Language}, HI={Hi}, {Bytes} Byte, {Target} → {Status} in {Ms} ms",
+            "[Sub Scribe-Q] {Source} Sende — {Umfang}, Sprache {Language}, HI={Hi}, {Bytes} Byte, {Target} → {Outcome} in {Ms} ms",
             key,
             request.AsPack
                 ? "Behälter mit " + request.Members.Count.ToString(CultureInfo.InvariantCulture) + " Mitglied(ern)"
@@ -223,13 +223,10 @@ public sealed class AuditedSourceEngine : ISourceEngine
             request.HearingImpaired ? "ja" : "nein",
             request.Bytes.Length,
             Ziel(request.Target),
-            antwort.Status.ToString(),
+            Ausgang(antwort.Outcome, antwort.RetryAfterSeconds),
             ms);
 
-        if (antwort.Fault is { } fehler)
-        {
-            Fault(key, "Sende", fehler);
-        }
+        Outcome(key, "Sende", antwort.Outcome, antwort.Reason, antwort.RetryAfterSeconds);
 
         return antwort;
     }
@@ -273,26 +270,86 @@ public sealed class AuditedSourceEngine : ISourceEngine
             ms = uhr.ElapsedMilliseconds;
         }
 
-        SourceTraffic.NoteAnswer(key, antwort.Fault);
+        SourceTraffic.NoteReportAnswer(key, antwort);
         LogUtil.Debug(
             _mode,
             _logger,
-            "[Sub Scribe-Q] {Source} Melde — Eintrag {Remote}, Art {Kind} → {Status} in {Ms} ms",
+            "[Sub Scribe-Q] {Source} Melde — Eintrag {Remote}, Art {Kind} → {Outcome} in {Ms} ms",
             key,
             Short(request.RemoteId),
             request.Kind.ToString(),
-            antwort.Status.ToString(),
+            Ausgang(antwort.Outcome, antwort.RetryAfterSeconds),
             ms);
 
-        if (antwort.Fault is { } fehler)
-        {
-            Fault(key, "Melde", fehler);
-        }
+        Outcome(key, "Melde", antwort.Outcome, antwort.Reason, antwort.RetryAfterSeconds);
 
         return antwort;
     }
 
     private string Key => _inner.Capabilities.Key;
+
+    /// <summary>
+    /// F-M685: die sichtbare Zeile eines Ausgangs. „Angenommen" braucht keine — die Debug-Zeile sagt es
+    /// schon; „abgelehnt", „beschäftigt" (MIT Wartezeit) und „fehlgeschlagen" stehen sichtbar auf WRN,
+    /// weil sie den nächsten Schritt bestimmen.
+    /// </summary>
+    /// <param name="key">Der Quellenschlüssel.</param>
+    /// <param name="auftrag">Der Auftrag (Sende, Melde).</param>
+    /// <param name="ausgang">Der eine Ausgang.</param>
+    /// <param name="reason">Der Klartext der Quelle, wenn sie einen nennt.</param>
+    /// <param name="retryAfterSeconds">Die Wartezeit bei „beschäftigt", wenn die Quelle eine nennt.</param>
+    private void Outcome(string key, string auftrag, SourceOutcome ausgang, string? reason, int? retryAfterSeconds)
+    {
+        string grund = Short(reason);
+        switch (ausgang)
+        {
+            case SourceOutcome.Busy:
+                // Mit Zeitpunkt: die Quelle nennt die Wartezeit, und der Lauf soll sagen, ab wann es
+                // weitergeht — ein „429" ohne Zeit ist eine Zeile, mit der niemand planen kann.
+                DateTime ab = DateTime.UtcNow.AddSeconds(retryAfterSeconds ?? 0);
+                _logger.LogWarning(
+                    "[Sub Scribe-Q] {Source} {Task} — beschäftigt: {Seconds} s warten, nächster Versuch ab {From:HH:mm:ss}Z ({Reason})",
+                    key, auftrag,
+                    retryAfterSeconds?.ToString(CultureInfo.InvariantCulture) ?? "?",
+                    ab,
+                    grund);
+                break;
+
+            case SourceOutcome.Rejected:
+                _logger.LogWarning(
+                    "[Sub Scribe-Q] {Source} {Task} — abgelehnt: Feld abgewiesen, die Quelle hat mit Grund abgelehnt ({Reason})",
+                    key, auftrag, grund);
+                break;
+
+            case SourceOutcome.Failed:
+                _logger.LogWarning(
+                    "[Sub Scribe-Q] {Source} {Task} — fehlgeschlagen: kein Urteil der Quelle ({Reason})",
+                    key, auftrag, grund);
+                break;
+
+            default:
+                // Accepted: die Quelle hat angenommen. Das steht in der Debug-Zeile; eine Warnung wäre
+                // hier eine Störung, die keine ist.
+                break;
+        }
+    }
+
+    /// <summary>
+    /// F-M685: der Ausgang in einem Wort für die Auftragszeile — bei „beschäftigt" mit der Wartezeit,
+    /// damit die Zeile auch ohne die WRN-Zeile lesbar bleibt.
+    /// </summary>
+    /// <param name="ausgang">Der eine Ausgang.</param>
+    /// <param name="retryAfterSeconds">Die Wartezeit, wenn die Quelle eine genannt hat.</param>
+    /// <returns>Der Text.</returns>
+    private static string Ausgang(SourceOutcome ausgang, int? retryAfterSeconds)
+        => ausgang switch
+        {
+            SourceOutcome.Accepted => "angenommen",
+            SourceOutcome.Rejected => "abgelehnt",
+            SourceOutcome.Busy => "beschäftigt ("
+                + (retryAfterSeconds?.ToString(CultureInfo.InvariantCulture) ?? "unbekannte") + " s)",
+            _ => "fehlgeschlagen",
+        };
 
     /// <summary>
     /// F-M684: die sichtbare Zeile eines Fehlerfalls. Vier Fälle sind ausdrücklich verlangt — kein

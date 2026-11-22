@@ -77,6 +77,16 @@ public sealed class SourceCounter
     /// <summary>Gets die Fehlschläge wegen Netz (5xx, Zeitüberschreitung, keine Antwort).</summary>
     public int NetworkFailed { get; private set; }
 
+    /// <summary>
+    /// F-M685: die Antworten „beschäftigt" (429, Stundendeckel) — ein EIGENER Zähler, getrennt von den
+    /// Fehlschlägen. Eine Bremse ist keine Störung: sie sagt „später nochmal", und wer sie unter die
+    /// Fehler zählte, machte aus einer Wartezeit einen Defekt.
+    /// </summary>
+    public int Busy { get; private set; }
+
+    /// <summary>F-M685: die Wartezeit der zuletzt gesehenen Bremse in Sekunden, oder null.</summary>
+    public int? LastBusySeconds { get; private set; }
+
     /// <summary>Gets die Abweisungen der Quelle mit Grund.</summary>
     public int Rejected { get; private set; }
 
@@ -110,6 +120,8 @@ public sealed class SourceCounter
             RateLimited = 0;
             AuthFailed = 0;
             NetworkFailed = 0;
+            Busy = 0;
+            LastBusySeconds = null;
             Rejected = 0;
             NoSearchBase = 0;
             NotFound = 0;
@@ -191,6 +203,51 @@ public sealed class SourceCounter
         }
     }
 
+    /// <summary>
+    /// F-M685: zählt eine Bremse — als eigener Zähler, NICHT als Fehlschlag, mit der genannten Wartezeit.
+    /// </summary>
+    /// <param name="retryAfterSeconds">Die Wartezeit, wenn die Quelle eine genannt hat.</param>
+    public void CountBusy(int? retryAfterSeconds)
+    {
+        lock (_gate)
+        {
+            Busy++;
+            LastBusySeconds = retryAfterSeconds;
+        }
+    }
+
+    /// <summary>
+    /// F-M685: zählt den Ausgang eines schreibenden Auftrags. Die Abbildung steht hier EINMAL, damit
+    /// Senden und Melden dieselbe Zahl in dieselben Töpfe legen.
+    /// </summary>
+    /// <param name="ausgang">Der eine Ausgang.</param>
+    /// <param name="reason">Der Klartext der Quelle, wenn sie einen nennt.</param>
+    /// <param name="retryAfterSeconds">Die Wartezeit bei „beschäftigt", wenn die Quelle eine nennt.</param>
+    public void CountOutcome(SourceOutcome ausgang, string? reason, int? retryAfterSeconds)
+    {
+        switch (ausgang)
+        {
+            case SourceOutcome.Accepted:
+                CountPage();
+                break;
+
+            case SourceOutcome.Rejected:
+                CountFault(SourceFault.Rejected, reason);
+                break;
+
+            case SourceOutcome.Busy:
+                CountBusy(retryAfterSeconds);
+                break;
+
+            case SourceOutcome.Failed:
+                CountFault(SourceFault.Transient, reason);
+                break;
+
+            default:
+                break;
+        }
+    }
+
     /// <summary>F-M684: zählt ein unlesbares Einstellungsfile dieser Quelle.</summary>
     /// <param name="reason">Der Klartext-Grund aus <see cref="SourceSettings.Problem"/>.</param>
     public void CountConfigFault(string? reason)
@@ -223,6 +280,8 @@ public sealed class SourceCounter
                 NoSearchBase,
                 NotFound,
                 ConfigFailed,
+                Busy,
+                LastBusySeconds,
                 LastSuccessUtc,
                 LastFailureUtc,
                 LastFailureReason,
@@ -262,6 +321,8 @@ public sealed class SourceCounter
 /// <param name="NoSearchBase">Anfragen ohne Suchgrundlage.</param>
 /// <param name="NotFound">Einträge, die die Quelle nicht mehr kennt.</param>
 /// <param name="ConfigFailed">Unlesbare Einstellungsfilen.</param>
+/// <param name="Busy">F-M685: Antworten „beschäftigt" (eigener Zähler, nicht bei den Fehlern).</param>
+/// <param name="LastBusySeconds">F-M685: die Wartezeit der letzten Bremse in Sekunden, oder null.</param>
 /// <param name="LastSuccessUtc">Zeitpunkt des letzten Erfolgs.</param>
 /// <param name="LastFailureUtc">Zeitpunkt des letzten Fehlers.</param>
 /// <param name="LastFailureReason">Kurzer Grund des letzten Fehlers.</param>
@@ -279,6 +340,8 @@ public sealed record SourceCountersView(
     int NoSearchBase,
     int NotFound,
     int ConfigFailed,
+    int Busy,
+    int? LastBusySeconds,
     DateTime? LastSuccessUtc,
     DateTime? LastFailureUtc,
     string? LastFailureReason,
@@ -391,6 +454,22 @@ public static class SourceTraffic
         zaehler.CountFault(fault.Kind, fault.Reason);
     }
 
+    /// <summary>
+    /// F-M685: der Ausgang eines Sende-Auftrags — angenommen, abgelehnt, beschäftigt oder fehlgeschlagen.
+    /// </summary>
+    /// <param name="key">Der Quellenschlüssel.</param>
+    /// <param name="answer">Die Antwort der Grenze.</param>
+    public static void NoteSendAnswer(string key, SourceSendAnswer answer)
+        => For(key).CountOutcome(answer.Outcome, answer.Reason, answer.RetryAfterSeconds);
+
+    /// <summary>
+    /// F-M685: der Ausgang eines Melde-Auftrags — dieselben vier Werte, dieselben Zähler.
+    /// </summary>
+    /// <param name="key">Der Quellenschlüssel.</param>
+    /// <param name="answer">Die Antwort der Grenze.</param>
+    public static void NoteReportAnswer(string key, SourceReportAnswer answer)
+        => For(key).CountOutcome(answer.Outcome, answer.Reason, answer.RetryAfterSeconds);
+
     /// <summary>F-M684: ein unlesbares Einstellungsfile EINER Quelle.</summary>
     /// <param name="key">Der Quellenschlüssel.</param>
     /// <param name="reason">Der Klartext-Grund.</param>
@@ -418,13 +497,21 @@ public static class SourceTraffic
                 ? " (" + stand.Tasks.ToString(CultureInfo.InvariantCulture) + " Aufträge)"
                 : string.Empty;
 
+            // F-M685: „beschäftigt" steht als eigener Posten in der Zeile — getrennt von den Fehlern und
+            // mit der Wartezeit, die die Quelle zuletzt genannt hat.
+            string beschaeftigt = stand.Busy > 0
+                ? " (" + (stand.LastBusySeconds?.ToString(CultureInfo.InvariantCulture) ?? "?") + " s zuletzt)"
+                : string.Empty;
+
             LogUtil.Normal(
                 logger,
-                "{Source}: {Calls} Aufrufe, {Pages} Seiten, {Errors} Fehler, {Seconds} s{Auftraege}",
+                "{Source}: {Calls} Aufrufe, {Pages} Seiten, {Errors} Fehler, {Busy} beschäftigt{BusySeconds}, {Seconds} s{Auftraege}",
                 DisplayName(key),
                 stand.Requests,
                 stand.Pages,
                 stand.Errors,
+                stand.Busy,
+                beschaeftigt,
                 sekunden,
                 auftraege);
         }

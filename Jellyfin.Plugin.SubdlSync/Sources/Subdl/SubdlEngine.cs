@@ -304,18 +304,12 @@ public sealed class SubdlEngine : ISourceEngine
         string sprache = LanguageMapper.MapToSubdl(request.Language) ?? string.Empty;
         if (sprache.Length == 0)
         {
-            return new SourceSendAnswer(
-                SourceSendStatus.Rejected,
-                "language unknown to SubDL: " + request.Language,
-                Fault: SourceFaultInfo.Rejected("language unknown to the source"));
+            return SourceSendAnswer.Rejected("language unknown to SubDL: " + request.Language);
         }
 
         if (request.Bytes.Length == 0)
         {
-            return new SourceSendAnswer(
-                SourceSendStatus.Rejected,
-                "no bytes to send",
-                Fault: SourceFaultInfo.Rejected("empty payload"));
+            return SourceSendAnswer.Rejected("no bytes to send");
         }
 
         try
@@ -347,8 +341,8 @@ public sealed class SubdlEngine : ISourceEngine
         }
         catch (Exception ex)
         {
-            return new SourceSendAnswer(
-                SourceSendStatus.NoVerdict, ex.Message, Fault: SourceFaultInfo.Transient(ex.Message));
+            // Netz: kein Urteil der Quelle, aber auch kein „beschäftigt" — Failed (F-M685).
+            return SourceSendAnswer.Failed(ex.Message);
         }
     }
 
@@ -359,8 +353,7 @@ public sealed class SubdlEngine : ISourceEngine
 
         if (string.IsNullOrWhiteSpace(request.RemoteId))
         {
-            return new SourceReportAnswer(
-                SourceReportStatus.Failed, Fault: SourceFaultInfo.NotFound("no remote id"));
+            return SourceReportAnswer.Failed("no remote id");
         }
 
         try
@@ -369,12 +362,7 @@ public sealed class SubdlEngine : ISourceEngine
                 .ReportBrokenSubtitleAsync(request.RemoteId, Category(request.Kind), request.Text, ct)
                 .ConfigureAwait(false);
 
-            return new SourceReportAnswer(ergebnis switch
-            {
-                ScribeReportOutcome.Accepted => SourceReportStatus.Accepted,
-                ScribeReportOutcome.Deferred => SourceReportStatus.Deferred,
-                _ => SourceReportStatus.Failed,
-            });
+            return ReportVerdict(ergebnis);
         }
         catch (OperationCanceledException)
         {
@@ -382,8 +370,7 @@ public sealed class SubdlEngine : ISourceEngine
         }
         catch (Exception ex)
         {
-            return new SourceReportAnswer(
-                SourceReportStatus.Failed, Fault: SourceFaultInfo.Transient(ex.Message));
+            return SourceReportAnswer.Failed(ex.Message);
         }
     }
 
@@ -432,24 +419,74 @@ public sealed class SubdlEngine : ISourceEngine
             request.HearingImpaired);
     }
 
-    /// <summary>F-M609: das Urteil des Clients in die drei Fälle der Grenze.</summary>
+    /// <summary>
+    /// F-M685: das Urteil des Clients in den EINEN Ausgang der Grenze — am echten Verhalten der Quelle
+    /// gemessen: <c>{"success": true}</c> heißt angenommen, <c>already-uploaded</c> und
+    /// „duplicate upload: identical file already published" heißen abgelehnt (im Wortlaut der Quelle),
+    /// ein 429 bzw. der Stundendeckel heißt beschäftigt (mit der Reset-Zeit, wenn der Client sie kennt),
+    /// und alles Unbeantwortete — Timeout, Netz, Abbruch — heißt fehlgeschlagen.
+    /// </summary>
     /// <param name="ergebnis">Das Ergebnis des Uploads.</param>
     /// <returns>Die Antwort der Grenze.</returns>
-    private static SourceSendAnswer Verdict(UploadResult ergebnis)
+    private SourceSendAnswer Verdict(UploadResult ergebnis)
+        => Translate(ergebnis, _client.RateLimitResetUtc, _context.Clock);
+
+    /// <summary>
+    /// F-M685: die Übersetzung selbst — als reine Funktion, damit sie ohne Netz prüfbar ist. Sie ist
+    /// die EINZIGE Stelle, an der die Antwort des SubDL-Clients zu einem Ausgang der Grenze wird.
+    /// </summary>
+    /// <param name="ergebnis">Das Ergebnis des Uploads.</param>
+    /// <param name="resetUtc">Die Reset-Zeit der Quelle, wenn sie eine genannt hat.</param>
+    /// <param name="clock">Der Zeitgeber des Laufs.</param>
+    /// <returns>Die Antwort der Grenze.</returns>
+    public static SourceSendAnswer Translate(UploadResult ergebnis, DateTime? resetUtc, TimeProvider clock)
     {
+        ArgumentNullException.ThrowIfNull(ergebnis);
+
         if (ergebnis.Ok || ergebnis.SourceAccepted)
         {
-            return new SourceSendAnswer(SourceSendStatus.Accepted, ergebnis.Reason, ergebnis.SourceId);
+            return SourceSendAnswer.Accepted(ergebnis.SourceId, ergebnis.Reason);
         }
 
-        return ergebnis.Verdict switch
+        // „vorübergehend nicht möglich" ist ein Ausgang, kein Nebenfeld: 429 und der Stundendeckel
+        // kommen hier an, und die Wartezeit steht AM AUSGANG.
+        if (ergebnis.TemporarilyBusy)
         {
-            UploadVerdict.NoVerdict => new SourceSendAnswer(
-                SourceSendStatus.NoVerdict, ergebnis.Reason, Fault: SourceFaultInfo.Transient(ergebnis.Reason)),
-            _ => new SourceSendAnswer(
-                SourceSendStatus.Rejected,
-                ergebnis.Reason ?? "refused",
-                Fault: SourceFaultInfo.Rejected(ergebnis.Reason ?? "refused")),
-        };
+            return SourceSendAnswer.Busy(SourceNeutral.SecondsUntil(resetUtc, clock), ergebnis.Reason);
+        }
+
+        // Niemand hat geantwortet (Timeout, Netz, Abbruch): kein Urteil über den Untertitel.
+        if (ergebnis.Unanswered)
+        {
+            return SourceSendAnswer.Failed(ergebnis.Reason);
+        }
+
+        // Es gibt eine Entscheidung. Der Klartext der Quelle gewinnt gegen unseren kurzen Grund.
+        return SourceSendAnswer.Rejected(ergebnis.SourceText ?? ergebnis.Reason ?? "refused");
     }
+
+    /// <summary>
+    /// F-M685: dasselbe für die Meldung — der Client kennt drei Ausgänge, die Grenze vier, und
+    /// „beschäftigt" heißt hier wie dort dasselbe.
+    /// </summary>
+    /// <param name="ergebnis">Das Ergebnis der Meldung.</param>
+    /// <returns>Die Antwort der Grenze.</returns>
+    private SourceReportAnswer ReportVerdict(ScribeReportOutcome ergebnis)
+        => TranslateReport(ergebnis, _client.RateLimitResetUtc, _context.Clock);
+
+    /// <summary>
+    /// F-M685: die Übersetzung einer Meldung, als reine Funktion (ohne Netz prüfbar).
+    /// </summary>
+    /// <param name="ergebnis">Das Ergebnis der Meldung.</param>
+    /// <param name="resetUtc">Die Reset-Zeit der Quelle, wenn sie eine genannt hat.</param>
+    /// <param name="clock">Der Zeitgeber des Laufs.</param>
+    /// <returns>Die Antwort der Grenze.</returns>
+    public static SourceReportAnswer TranslateReport(ScribeReportOutcome ergebnis, DateTime? resetUtc, TimeProvider clock)
+        => ergebnis switch
+        {
+            ScribeReportOutcome.Accepted => SourceReportAnswer.Accepted(),
+            ScribeReportOutcome.Busy => SourceReportAnswer.Busy(
+                SourceNeutral.SecondsUntil(resetUtc, clock), "HTTP 429"),
+            _ => SourceReportAnswer.Failed("the source did not confirm the report"),
+        };
 }

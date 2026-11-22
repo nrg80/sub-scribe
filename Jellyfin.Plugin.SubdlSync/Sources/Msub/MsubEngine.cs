@@ -236,25 +236,18 @@ public sealed class MsubEngine : ISourceEngine
 
         if (request.AsPack)
         {
-            return new SourceSendAnswer(
-                SourceSendStatus.Rejected,
-                "moviesubtitles.org takes no season containers",
-                Fault: SourceFaultInfo.Rejected("no season packs at this source"));
+            return SourceSendAnswer.Rejected("moviesubtitles.org takes no season containers");
         }
 
         string? sprache = MovieSubtitlesClient.SiteLanguage(request.Language);
         if (sprache is null)
         {
-            return new SourceSendAnswer(
-                SourceSendStatus.Rejected,
-                "language unknown to the page: " + request.Language,
-                Fault: SourceFaultInfo.Rejected("language unknown to the source"));
+            return SourceSendAnswer.Rejected("language unknown to the page: " + request.Language);
         }
 
         if (request.Bytes.Length == 0)
         {
-            return new SourceSendAnswer(
-                SourceSendStatus.Rejected, "no bytes to send", Fault: SourceFaultInfo.Rejected("empty payload"));
+            return SourceSendAnswer.Rejected("no bytes to send");
         }
 
         try
@@ -264,10 +257,7 @@ public sealed class MsubEngine : ISourceEngine
                 .ConfigureAwait(false);
             if (film is null)
             {
-                return new SourceSendAnswer(
-                    SourceSendStatus.Rejected,
-                    "no film entry for '" + request.Target.Title + "'",
-                    Fault: SourceFaultInfo.NotFound("film not found"));
+                return SourceSendAnswer.Rejected("no film entry for '" + request.Target.Title + "'");
             }
 
             long? tmdb = long.TryParse(request.Target.TmdbId, NumberStyles.Integer, CultureInfo.InvariantCulture, out long zahl)
@@ -302,13 +292,11 @@ public sealed class MsubEngine : ISourceEngine
         }
         catch (ArgumentException ex)
         {
-            return new SourceSendAnswer(
-                SourceSendStatus.Rejected, ex.Message, Fault: SourceFaultInfo.Rejected(ex.Message));
+            return SourceSendAnswer.Rejected(ex.Message);
         }
         catch (Exception ex)
         {
-            return new SourceSendAnswer(
-                SourceSendStatus.NoVerdict, ex.Message, Fault: SourceFaultInfo.Transient(ex.Message));
+            return SourceSendAnswer.Failed(ex.Message);
         }
     }
 
@@ -316,36 +304,106 @@ public sealed class MsubEngine : ISourceEngine
     public async Task<SourceReportAnswer> ReportAsync(SourceReportRequest request, CancellationToken ct)
     {
         await Task.CompletedTask.ConfigureAwait(false);
-        return new SourceReportAnswer(
-            SourceReportStatus.Failed,
-            Fault: SourceFaultInfo.Rejected("moviesubtitles.org has no reporting channel"));
+
+        // Diese Seite hat keinen Meldeweg: es gibt keine Antwort, also kein Urteil — Failed.
+        return SourceReportAnswer.Failed("moviesubtitles.org has no reporting channel");
     }
 
-    /// <summary>F-M506: das Urteil der Seite in die drei Fälle der Grenze.</summary>
+    /// <summary>
+    /// F-M685: das Urteil der Seite in den EINEN Ausgang der Grenze. Am echten Verhalten der Seite:
+    /// „Film nicht hochladbar" heißt abgelehnt (im Wortlaut der Seite), ein 429 heißt beschäftigt, ein
+    /// Anmeldefehler oder Serverfehler heißt fehlgeschlagen.
+    /// </summary>
     /// <param name="ergebnis">Die Antwort der Seite.</param>
     /// <returns>Die Antwort der Grenze.</returns>
     private static SourceSendAnswer Verdict(MovieSubtitlesUploadResult ergebnis)
+        => Translate(ergebnis);
+
+    /// <summary>
+    /// F-M685: die Übersetzung selbst — als reine Funktion, damit sie ohne Netz prüfbar ist.
+    /// </summary>
+    /// <param name="ergebnis">Die Antwort der Seite.</param>
+    /// <returns>Die Antwort der Grenze.</returns>
+    public static SourceSendAnswer Translate(MovieSubtitlesUploadResult ergebnis)
     {
+        ArgumentNullException.ThrowIfNull(ergebnis);
+
         if (!ergebnis.Sent)
         {
-            return new SourceSendAnswer(
-                SourceSendStatus.NoVerdict, "nothing was sent", Fault: SourceFaultInfo.Transient("dry run"));
+            // Nichts ging hinaus: keine Antwort der Seite, also kein Ausgang.
+            return SourceSendAnswer.Failed("nothing was sent");
         }
 
         if (ergebnis.Status is 429)
         {
-            return new SourceSendAnswer(
-                SourceSendStatus.NoVerdict, "HTTP 429", Fault: SourceFaultInfo.RateLimited(null, "HTTP 429"));
+            return SourceSendAnswer.Busy(null, "HTTP 429");
+        }
+
+        if (ergebnis.Status is 401 or 403)
+        {
+            return SourceSendAnswer.Failed("HTTP " + ergebnis.Status?.ToString(CultureInfo.InvariantCulture));
+        }
+
+        if (ergebnis.Status is null or 0 or >= 500)
+        {
+            return SourceSendAnswer.Failed("HTTP " + (ergebnis.Status?.ToString(CultureInfo.InvariantCulture) ?? "0"));
+        }
+
+        if (Refusal(ergebnis.Response) is { } absage)
+        {
+            return SourceSendAnswer.Rejected(absage);
         }
 
         if (ergebnis.Status is >= 200 and < 300)
         {
-            return new SourceSendAnswer(SourceSendStatus.Accepted, null);
+            return SourceSendAnswer.Accepted();
         }
 
-        return new SourceSendAnswer(
-            SourceSendStatus.Rejected,
-            "HTTP " + ergebnis.Status?.ToString(CultureInfo.InvariantCulture),
-            Fault: SourceFaultInfo.Rejected("HTTP " + ergebnis.Status?.ToString(CultureInfo.InvariantCulture)));
+        return SourceSendAnswer.Rejected(Text(ergebnis.Response, ergebnis.Status));
     }
+
+    /// <summary>
+    /// F-M685: die Sätze, mit denen die Seite eine Abgabe ABLEHNT („Film nicht hochladbar" und seine
+    /// englischen Fassungen). Steht einer davon in der Antwort, ist es eine Absage, kein Netzfehler.
+    /// </summary>
+    private static readonly string[] Refusals =
+    {
+        "nicht hochladbar",
+        "could not be uploaded",
+        "not uploaded",
+        "already exist",
+        "duplicate",
+        "refused",
+        "denied",
+    };
+
+    /// <summary>Der Ablehnungssatz der Seite, wenn einer in der Antwort steht.</summary>
+    /// <param name="response">Der Text der Antwort.</param>
+    /// <returns>Der Satz der Seite, oder null.</returns>
+    private static string? Refusal(string? response)
+    {
+        if (string.IsNullOrWhiteSpace(response))
+        {
+            return null;
+        }
+
+        foreach (string satz in Refusals)
+        {
+            if (response.Contains(satz, StringComparison.OrdinalIgnoreCase))
+            {
+                return response.Trim();
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Der Grund einer Absage: der Text der Seite, sonst der Status.</summary>
+    /// <param name="response">Der Text der Antwort.</param>
+    /// <param name="status">Der HTTP-Status.</param>
+    /// <returns>Der Grund.</returns>
+    private static string Text(string? response, int? status)
+        => string.IsNullOrWhiteSpace(response)
+            ? "HTTP " + status?.ToString(CultureInfo.InvariantCulture)
+            : response.Trim();
 }

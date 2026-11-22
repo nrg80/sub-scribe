@@ -1270,7 +1270,9 @@ internal static class Program
             && ur609.Contains("AcceptedWithoutId,", StringComparison.Ordinal)
             && ur609.Contains("Refused,", StringComparison.Ordinal)
             && ur609.Contains("NoVerdict,", StringComparison.Ordinal)
-            && ur609.Contains("public static UploadResult NoVerdict(string reason)", StringComparison.Ordinal)
+            // F-M685: derselbe Ausgang kennt jetzt zwei Spielarten des "ohne Antwort" — 429/Stundendeckel
+            // sind voruebergehend (busy), Timeout/Netz nicht. Der Wert bleibt derselbe.
+            && ur609.Contains("public static UploadResult NoVerdict(string reason, bool busy = false)", StringComparison.Ordinal)
             && ur609.Contains("Verdict = UploadVerdict.NoVerdict", StringComparison.Ordinal));
         Check("F-M609: Timeout, Ausnahme und Abbruch vor dem Senden sind KEIN Urteil",
             up605.Contains("return UploadResult.NoVerdict(\"timeout\");", StringComparison.Ordinal)
@@ -1281,10 +1283,11 @@ internal static class Program
             && up605.Contains("=> status is 429 or (>= 500 and < 600);", StringComparison.Ordinal)
             && up605.Contains("IstStoerung(answer.Status)", StringComparison.Ordinal));
         Check("F-M609: bei SubDL sind Stundendeckel, rate-limited und API-Fehler Stoerungen, kein Nein",
-            api609.Contains("return UploadResult.NoVerdict(\"rate-limited\");", StringComparison.Ordinal)
-            && api609.Contains("return UploadResult.NoVerdict(\"upload-hourly-cap\");", StringComparison.Ordinal)
+            api609.Contains("return UploadResult.NoVerdict(\"rate-limited\", busy: true);", StringComparison.Ordinal)
+            && api609.Contains("return UploadResult.NoVerdict(\"upload-hourly-cap\", busy: true);", StringComparison.Ordinal)
             && api609.Contains("return UploadResult.NoVerdict($\"getNId failed: {Trim(nBody)}\");", StringComparison.Ordinal)
-            && api609.Contains("return UploadResult.Skipped(\"duplicate-content\");", StringComparison.Ordinal));
+            // F-M685: die Dublette traegt jetzt den Klartext der Quelle mit (zweites Argument).
+            && api609.Contains("return UploadResult.Skipped(\"duplicate-content\"", StringComparison.Ordinal));
         Check("F-M609: gemerkt wird nach URTEIL, nicht nach einer Liste von Wortanfaengen",
             refusal605.Contains("public static bool ShouldRemember(string? reason, Api.UploadVerdict verdict)", StringComparison.Ordinal)
             && refusal605.Contains("return verdict == Api.UploadVerdict.Refused;", StringComparison.Ordinal)

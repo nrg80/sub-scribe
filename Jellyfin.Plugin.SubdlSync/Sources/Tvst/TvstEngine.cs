@@ -258,16 +258,12 @@ public sealed class TvstEngine : ISourceEngine
         string? sprache = TvSubtitlesClient.SiteLanguage(request.Language);
         if (sprache is null)
         {
-            return new SourceSendAnswer(
-                SourceSendStatus.Rejected,
-                "language unknown to the page: " + request.Language,
-                Fault: SourceFaultInfo.Rejected("language unknown to the source"));
+            return SourceSendAnswer.Rejected("language unknown to the page: " + request.Language);
         }
 
         if (request.Bytes.Length == 0)
         {
-            return new SourceSendAnswer(
-                SourceSendStatus.Rejected, "no bytes to send", Fault: SourceFaultInfo.Rejected("empty payload"));
+            return SourceSendAnswer.Rejected("no bytes to send");
         }
 
         try
@@ -275,10 +271,7 @@ public sealed class TvstEngine : ISourceEngine
             int? showId = await ResolveShowAsync(request.Target.Title, ct).ConfigureAwait(false);
             if (showId is null)
             {
-                return new SourceSendAnswer(
-                    SourceSendStatus.Rejected,
-                    "the show is not on the page: " + request.Target.Title,
-                    Fault: SourceFaultInfo.NotFound("show not found"));
+                return SourceSendAnswer.Rejected("the show is not on the page: " + request.Target.Title);
             }
 
             long? tmdb = long.TryParse(request.Target.TmdbId, NumberStyles.Integer, CultureInfo.InvariantCulture, out long zahl)
@@ -331,14 +324,12 @@ public sealed class TvstEngine : ISourceEngine
         catch (ArgumentException ex)
         {
             // Die Seite lehnt den Payload selbst ab (Staffel, Folge, Endung, Kennungen) — das ist eine
-            // Absage, kein Netzfehler.
-            return new SourceSendAnswer(
-                SourceSendStatus.Rejected, ex.Message, Fault: SourceFaultInfo.Rejected(ex.Message));
+            // Absage, kein Netzfehler. „season must be 1..22" kommt genau hier an.
+            return SourceSendAnswer.Rejected(ex.Message);
         }
         catch (Exception ex)
         {
-            return new SourceSendAnswer(
-                SourceSendStatus.NoVerdict, ex.Message, Fault: SourceFaultInfo.Transient(ex.Message));
+            return SourceSendAnswer.Failed(ex.Message);
         }
     }
 
@@ -349,8 +340,7 @@ public sealed class TvstEngine : ISourceEngine
 
         if (string.IsNullOrWhiteSpace(request.RemoteId))
         {
-            return new SourceReportAnswer(
-                SourceReportStatus.Failed, Fault: SourceFaultInfo.NotFound("no remote id"));
+            return SourceReportAnswer.Failed("no remote id");
         }
 
         try
@@ -359,12 +349,12 @@ public sealed class TvstEngine : ISourceEngine
                 .ReportBadAsync(request.RemoteId, request.Text, ct)
                 .ConfigureAwait(false);
 
-            return new SourceReportAnswer(ergebnis switch
+            return ergebnis switch
             {
-                ScribeReportOutcome.Accepted => SourceReportStatus.Accepted,
-                ScribeReportOutcome.Deferred => SourceReportStatus.Deferred,
-                _ => SourceReportStatus.Failed,
-            });
+                ScribeReportOutcome.Accepted => SourceReportAnswer.Accepted(),
+                ScribeReportOutcome.Busy => SourceReportAnswer.Busy(null, "HTTP 429"),
+                _ => SourceReportAnswer.Failed("the page did not confirm the report"),
+            };
         }
         catch (OperationCanceledException)
         {
@@ -372,8 +362,7 @@ public sealed class TvstEngine : ISourceEngine
         }
         catch (Exception ex)
         {
-            return new SourceReportAnswer(
-                SourceReportStatus.Failed, Fault: SourceFaultInfo.Transient(ex.Message));
+            return SourceReportAnswer.Failed(ex.Message);
         }
     }
 
@@ -410,34 +399,102 @@ public sealed class TvstEngine : ISourceEngine
             ? sprache.Iso3
             : null;
 
-    /// <summary>F-M480: das Urteil der Seite in die drei Fälle der Grenze.</summary>
+    /// <summary>
+    /// F-M685: das Urteil der Seite in den EINEN Ausgang der Grenze. Am echten Verhalten der Seite
+    /// gemessen: eine Seite mit „thank" heißt angenommen, „Your request could not be served … cookies
+    /// disabled" und „season must be 1..22" heißen abgelehnt (im Wortlaut der Seite), ein 429 heißt
+    /// beschäftigt, ein Anmeldefehler (401/403) oder ein Serverfehler heißt fehlgeschlagen.
+    /// </summary>
     /// <param name="ergebnis">Die Antwort der Seite.</param>
     /// <returns>Die Antwort der Grenze.</returns>
     private static SourceSendAnswer Verdict(TvSubtitlesUploadResult ergebnis)
+        => Translate(ergebnis);
+
+    /// <summary>
+    /// F-M685: die Übersetzung selbst — als reine Funktion, damit sie ohne Netz prüfbar ist.
+    /// </summary>
+    /// <param name="ergebnis">Die Antwort der Seite.</param>
+    /// <returns>Die Antwort der Grenze.</returns>
+    public static SourceSendAnswer Translate(TvSubtitlesUploadResult ergebnis)
     {
+        ArgumentNullException.ThrowIfNull(ergebnis);
+
         if (!ergebnis.Sent)
         {
-            // Nichts ging hinaus — kein Urteil, kein Grund, den die Quelle genannt hätte.
-            return new SourceSendAnswer(
-                SourceSendStatus.NoVerdict, "nothing was sent", Fault: SourceFaultInfo.Transient("dry run"));
+            // Nichts ging hinaus: es gibt keine Antwort der Seite, also auch keinen Ausgang.
+            return SourceSendAnswer.Failed("nothing was sent");
         }
 
         if (ergebnis.Status is 429)
         {
-            return new SourceSendAnswer(
-                SourceSendStatus.NoVerdict,
-                "HTTP 429",
-                Fault: SourceFaultInfo.RateLimited(null, "HTTP 429"));
+            // Die Seite nennt keine Wartezeit — dann steht am Ausgang keine (F-M685).
+            return SourceSendAnswer.Busy(null, "HTTP 429");
+        }
+
+        if (ergebnis.Status is 401 or 403)
+        {
+            return SourceSendAnswer.Failed("HTTP " + ergebnis.Status?.ToString(CultureInfo.InvariantCulture));
+        }
+
+        if (ergebnis.Status is null or 0 or >= 500)
+        {
+            return SourceSendAnswer.Failed("HTTP " + (ergebnis.Status?.ToString(CultureInfo.InvariantCulture) ?? "0"));
+        }
+
+        if (Refusal(ergebnis.Response) is { } absage)
+        {
+            return SourceSendAnswer.Rejected(absage);
         }
 
         if (ergebnis.Status is >= 200 and < 300)
         {
-            return new SourceSendAnswer(SourceSendStatus.Accepted, null);
+            return SourceSendAnswer.Accepted();
         }
 
-        return new SourceSendAnswer(
-            SourceSendStatus.Rejected,
-            "HTTP " + ergebnis.Status?.ToString(CultureInfo.InvariantCulture),
-            Fault: SourceFaultInfo.Rejected("HTTP " + ergebnis.Status?.ToString(CultureInfo.InvariantCulture)));
+        return SourceSendAnswer.Rejected(Text(ergebnis.Response, ergebnis.Status));
     }
+
+    /// <summary>
+    /// F-M685: die Sätze, mit denen die Seite eine Abgabe ABLEHNT — gemessen bzw. belegt. Steht einer
+    /// davon in der Antwort, ist es eine Absage und kein Netzfehler; der Satz ist der Grund.
+    /// </summary>
+    private static readonly string[] Refusals =
+    {
+        "could not be served",
+        "cookies disabled",
+        "season must be 1..22",
+        "not accepted",
+        "refused",
+        "denied",
+    };
+
+    /// <summary>Der Ablehnungssatz der Seite, wenn einer in der Antwort steht.</summary>
+    /// <param name="response">Der Text der Antwort.</param>
+    /// <returns>Der Satz der Seite, oder null.</returns>
+    private static string? Refusal(string? response)
+    {
+        if (string.IsNullOrWhiteSpace(response))
+        {
+            return null;
+        }
+
+        foreach (string satz in Refusals)
+        {
+            if (response.Contains(satz, StringComparison.OrdinalIgnoreCase))
+            {
+                return response.Trim();
+            }
+        }
+
+        return null;
+    }
+
+    /// <summary>Der Grund einer Absage: der Text der Seite, sonst der Status.</summary>
+    /// <param name="response">Der Text der Antwort.</param>
+    /// <param name="status">Der HTTP-Status.</param>
+    /// <returns>Der Grund.</returns>
+    private static string Text(string? response, int? status)
+        => string.IsNullOrWhiteSpace(response)
+            ? "HTTP " + status?.ToString(CultureInfo.InvariantCulture)
+            : response.Trim();
 }

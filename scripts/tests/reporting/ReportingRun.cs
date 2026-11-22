@@ -203,7 +203,7 @@ internal static class ReportingRun
             "the report id is taken from the search answer");
         Check(api.Contains("$\"{ApiBase}/report\"", StringComparison.Ordinal),
             "the report goes to the site's report endpoint");
-        Check(api.Contains("== 429", StringComparison.Ordinal) && api.Contains("ScribeReportOutcome.Deferred", StringComparison.Ordinal),
+        Check(api.Contains("== 429", StringComparison.Ordinal) && api.Contains("ScribeReportOutcome.Busy", StringComparison.Ordinal),
             "a rate-limited report is reported back as deferred");
         Check(api.Contains("ud.TryGetProperty(\"name\"", StringComparison.Ordinal),
             "the attribution uses the account name, not the login mail");
