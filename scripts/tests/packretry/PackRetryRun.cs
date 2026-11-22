@@ -444,19 +444,27 @@ internal static class Program
               && adopt.Contains("File.Exists", StringComparison.Ordinal),
             "F-M423: adoption resolves the media hash of the file and refuses a path that is gone");
 
-        // ── 27. F-M424: ein Arrival-Lauf packt nur, wenn seine eigenen Items die Staffel sind ─
-        Console.WriteLine("27. An arrival run packs only what it brought");
-        Check(upload.Contains("brought all {Aired} episode(s)", StringComparison.Ordinal)
-              && upload.Contains("the queued items are not the whole season", StringComparison.Ordinal),
-            "F-M424: arrival compares its queued episodes with the aired set and names both numbers");
-        Check(upload.Contains("IReadOnlySet<int>>? onlyEpisodes = null", StringComparison.Ordinal),
-            "F-M424: the plan and the filler can be cut to the arrived episodes");
+        // ── 27. F-M680: ein Ankunftslauf packt GAR NICHT mehr ─────────────────────────────
+        // Betreiber-Vorgabe 22.11.2026: „Season Packs nur bei Refetch- und Manual-Läufen (also nicht
+        // bei Ankunftsläufen) — und für alle Quellen gleich." Der frühere Zweig F-M424 (der Lauf packt
+        // seine eigenen Folgen) ist ersatzlos gefallen, samt der arrival-scoped Kürzung `onlyEpisodes`.
+        Console.WriteLine("27. An arrival run packs nothing at all");
+        Check(upload.Contains("arrival run — no season pack", StringComparison.Ordinal)
+              && !upload.Contains("brought all {Aired} episode(s)", StringComparison.Ordinal)
+              && !upload.Contains("the queued items are not the whole season", StringComparison.Ordinal),
+            "F-M680: an arrival run gets no pack scope — the F-M424 branch and its two log lines are gone");
+        Check(!upload.Contains("onlyEpisodes", StringComparison.Ordinal)
+              && !upload.Contains("HasOpenLanguage(", StringComparison.Ordinal),
+            "F-M680: the arrival-only helpers fell with it — no dead scope cut, no second season question");
 
         // ── 28. F-M426: eine vollständig gepackte Staffel wird gar nicht erst untersucht ─
+        // F-M680: die arrival-eigene Fassung dieser Frage (`HasOpenLanguage`, VOR dem Vergleich
+        // gefragt) ist mit dem Ankunftslauf-Zweig gefallen. Die Regel selbst gilt weiter — sie steht
+        // jetzt nur noch an EINER Stelle, im vollen Lauf, und wird dort mit der Zahl der Paare gesagt.
         Console.WriteLine("28. A fully packed season is not investigated");
-        Check(upload.Contains("HasOpenLanguage(", StringComparison.Ordinal)
-              && upload.Contains("every language is already inside a pack, nothing is investigated", StringComparison.Ordinal),
-            "F-M426: the pack question is asked before the queued-versus-aired comparison");
+        Check(upload.Contains("all {Count} known pair(s)", StringComparison.Ordinal)
+              && upload.Contains("already up as a pack", StringComparison.Ordinal),
+            "F-M426: a season whose pairs are all packed ends before any extraction, and says so with its pair count");
 
         // ── 29. F-M429: Pack zuerst, Einzel danach, übernommene Positionen gemerkt ─
         Console.WriteLine("29. The pack goes up first, the singles after it");

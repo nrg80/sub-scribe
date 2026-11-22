@@ -526,9 +526,20 @@ internal static class Program
             "F-M429: the pack phase runs before the single uploads, stated where it is enforced");
         Check(pipeline.Contains("PlanPacksFromStore(completeSeasons, sources: slotQuellen)", StringComparison.Ordinal),
             "and the plan is made from the queue, before any single went up — for every source of the slot (F-M647)");
-        Check(pipeline.Contains("brought all {Aired} episode(s)", StringComparison.Ordinal)
-              && pipeline.Contains("no queue of this run was a whole season (F-M424/F-M425)", StringComparison.Ordinal),
-            "every run packs only when its own queued episodes are the whole season (F-M425)");
+        // F-M680 (Betreiber-Vorgabe 22.11.2026: „Season Packs nur bei Refetch- und Manual-Läufen (also
+        // nicht bei Ankunftsläufen) — und für alle Quellen gleich"): der Ankunftslauf-Zweig F-M424 ist
+        // ersatzlos gefallen. Er war die Ungleichheit selbst — derselbe Lauf baute am 21.11.2026 um 09:58
+        // zwei SubDL-Packs, während tvsubtitles.net mit „stays with a full run" draußen blieb.
+        Check(!pipeline.Contains("no queue of this run was a whole season", StringComparison.Ordinal)
+              && !pipeline.Contains("the pack is built from the queued items of this run", StringComparison.Ordinal)
+              && !pipeline.Contains("brought all {Aired} episode(s)", StringComparison.Ordinal),
+            "F-M680: the arrival-run branch F-M424 is gone — no run packs its own queue any more");
+        Check(pipeline.Contains("arrival run — no season pack", StringComparison.Ordinal)
+              && pipeline.Contains("completeSeasons = new Dictionary<(string ImdbId, int Season), IReadOnlyList<int>>();", StringComparison.Ordinal),
+            "F-M680: an arrival run gets NO pack scope — it says so and uploads single");
+        Check(pipeline.IndexOf("if (!IsArrivalRun)", StringComparison.Ordinal)
+              < pipeline.IndexOf("arrival run — no season pack", StringComparison.Ordinal),
+            "F-M680: the one place that still asks for the run's kind is the pack-scope gate itself");
         Check(pipeline.Contains("the rest is filled from what is already uploaded", StringComparison.Ordinal),
             "a partly queued season says that the gap is filled, not that it stays single");
         Check(pipeline.Split("await packCoordinator.AddAsync(").Length - 1 >= 2,
@@ -1161,11 +1172,14 @@ internal static class Program
             // `PlanPacksFromStore(completeSeasons)`, danach ein zweiter Block mit
             // `PlanPacksFromStore(completeSeasons, source: TvSubtitlesSource)` und einer zweiten
             // `FillOnlyAsync`-Schleife. Jetzt gibt es EINE Paar-Schleife, EINEN Sammler und EINEN Slot.
-            int tvstSlot = tvstPipe.IndexOf("var slotQuellen = new List<string> { PackEntity.SubdlSource };", StringComparison.Ordinal);
+            // F-M680: der Slot holt seine Quellen aus EINER Antwort (`PackSlotSources`); die Inline-Kopie
+            // mit dem Ankunftslauf-Sonderfall ist gefallen. Damit steht die zweite Quelle im selben Slot,
+            // sobald ihr Schalter an ist — unabhängig davon, welcher Art der Lauf ist.
+            int tvstSlot = tvstPipe.IndexOf("var slotQuellen = PackSlotSources();", StringComparison.Ordinal);
             Check(tvstSlot > 0
-                  && tvstPipe.IndexOf("else if (!SourceAllowed(Configuration.SubtitleProvider.TvSubtitles))", tvstSlot, StringComparison.Ordinal) > tvstSlot
-                  && tvstPipe.IndexOf("slotQuellen.Add(PackEntity.TvSubtitlesSource);", tvstSlot, StringComparison.Ordinal) > tvstSlot,
-                "F-M643/F-M647: the second source joins the SAME slot, only when the run is a full run and the source may upload");
+                  && tvstPipe.IndexOf("PlanPacksFromStore(completeSeasons, sources: slotQuellen)", tvstSlot, StringComparison.Ordinal) > tvstSlot
+                  && tvstPipe.IndexOf("var tvstDraussen = slotQuellen.Contains(PackEntity.TvSubtitlesSource)", tvstSlot, StringComparison.Ordinal) > tvstSlot,
+                "F-M643/F-M647/F-M680: the second source joins the SAME slot, from the switch alone — the run's kind no longer decides");
 
             int paarSchleife = tvstPipe.IndexOf("foreach (var (packImdb, packSeason, packLang, packHi) in packPaare)", StringComparison.Ordinal);
             int sammler = paarSchleife < 0 ? -1 : tvstPipe.IndexOf("FillAsync(packImdb, packSeason, packLang, packHi, slotQuellen, runCt)", paarSchleife, StringComparison.Ordinal);
@@ -1278,11 +1292,18 @@ internal static class Program
                   && uploadSrc.Contains("var gepackt = PacksOfAllSlotSources(entry.Key.Item1, entry.Key.Item2);", StringComparison.Ordinal),
                 "F-M654: BOTH places use it — the early season end and the pair filter");
 
-            Check(uploadSrc.Contains("private List<string> PackSlotSources()", StringComparison.Ordinal)
-                  && uploadSrc.Contains("quellen.Add(PackEntity.TvSubtitlesSource)", StringComparison.Ordinal)
-                  && uploadSrc.IndexOf("if (!IsArrivalRun && SourceAllowed(Configuration.SubtitleProvider.TvSubtitles))", StringComparison.Ordinal)
-                     < uploadSrc.IndexOf("quellen.Add(PackEntity.TvSubtitlesSource)", StringComparison.Ordinal),
-                "F-M654: the slot names its sources — tvst only in a full run and only with its switch on (F-M495)");
+            // F-M680: der Quellen-Sonderfall „nur im vollen Lauf" ist gefallen. Der Slot antwortet für
+            // JEDEN Lauf gleich; die Frage „packt dieser Lauf überhaupt?" steht eine Etage höher.
+            var slotStart = uploadSrc.IndexOf("private List<string> PackSlotSources()", StringComparison.Ordinal);
+            var slotEnde = slotStart < 0 ? -1 : uploadSrc.IndexOf("return quellen;", slotStart, StringComparison.Ordinal);
+            var slotBody = slotStart < 0 || slotEnde < 0 ? string.Empty : uploadSrc.Substring(slotStart, slotEnde - slotStart);
+            Check(slotStart >= 0
+                  && slotBody.Contains("quellen.Add(PackEntity.TvSubtitlesSource)", StringComparison.Ordinal)
+                  && slotBody.Contains("if (SourceAllowed(Configuration.SubtitleProvider.TvSubtitles))", StringComparison.Ordinal)
+                  && !slotBody.Contains("IsArrivalRun", StringComparison.Ordinal),
+                "F-M680: the slot names its sources symmetrically — the switch decides, not the run's kind (F-M495)");
+            Check(uploadSrc.Contains("var slotQuellen = PackSlotSources();", StringComparison.Ordinal),
+                "F-M680: one answer for the slot's sources — the inline copy of the same question is gone");
 
             Check(uploadSrc.Contains("already up as a pack for {Sources}", StringComparison.Ordinal),
                 "F-M654: the one line names the sources the pairs are packed for");

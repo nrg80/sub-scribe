@@ -689,17 +689,16 @@ public sealed class UploadPipeline : IPackFiller
         // staffelpack". Nothing is held back for a pack any more. Every position goes up the SINGLE
         // way first, and the pack is assembled at the END of the run out of what is in the store by
         // then — this run's own uploads included — deleting the singles it absorbs (F-M391). An
-        // arrival run never builds a LIBRARY pack: it carries only its own arrivals, so a pack can only
-        // come from those items and nothing else (F-M424, below).
+        // arrival run builds NO pack at all — not from the library and not from its own arrivals
+        // (F-M680, below; the F-M424 branch that packed a run's own episodes is gone).
         SeasonPackCoordinator? packCoordinator = null;
         IReadOnlyDictionary<(string ImdbId, int Season), IReadOnlyList<int>> completeSeasons
             = new Dictionary<(string ImdbId, int Season), IReadOnlyList<int>>();
-        // F-M424 (operator order 02.11.2026): "on arrival to investigate first if the queued items can
-        // form a pack. If so pls do, but only with the queued items." An arrival run therefore asks the
-        // same completeness question — but the answer it needs is narrower: it does not care whether
-        // the whole LIBRARY is complete, only whether the episodes that arrived in THIS run are the
-        // whole season. If they are, the pack is built out of exactly those items and nothing else is
-        // pulled in from the store; if they are not, the run stays what it was, a single uploader.
+        // F-M680 (operator order 22.11.2026: "Season Packs nur bei Refetch- und Manual-Läufen (also
+        // nicht bei Ankunftsläufen) — und für alle Quellen gleich"): the F-M424 branch that let an
+        // arrival run pack its own episodes is gone. An arrival run now takes no pack scope at all; it
+        // says so in one line and uploads single. Only a full, refetch or manual run asks the
+        // completeness question over the library.
         if (_config.UploadSeasonPacks)
         {
             completeSeasons = await CompleteSeasonsAsync(runCt).ConfigureAwait(false);
@@ -716,60 +715,19 @@ public sealed class UploadPipeline : IPackFiller
             }
             else
             {
-            var queued = QueuedEpisodes(items);
-            var arrivalSeasons = new Dictionary<(string ImdbId, int Season), IReadOnlyList<int>>();
-            foreach (var entry in completeSeasons)
-            {
-                if (!queued.TryGetValue(entry.Key, out var arrived) || arrived.Count == 0)
-                {
-                    // F-M640 (Nachtrag 12.2.0.2, Debug-Stufe): eine Staffel, die in der Bibliothek vollstaendig
-                    // ist, von diesem Lauf aber keine einzige Folge mitbringt, fiel hier lautlos heraus — im
-                    // Log stand nur die Kandidaten-Zeile, danach nichts mehr (MobLand S2 am 19.11.2026).
-                    LogUtil.PerItem(
-                        _config.LogMode,
-                        _logger,
-                        "[Sub Scribe] season pack — {Imdb} S{Season}: complete in the library ({Aired} episode(s)), but this run brings none of them — an arrival run builds no pack, that stays with a full run (F-M424, F-M640).",
-                        entry.Key.Item1, entry.Key.Item2, entry.Value.Count);
-                    continue;
-                }
-
-                var aired = entry.Value;
-                var have = arrived.Where(n => aired.Contains(n)).Distinct().OrderBy(n => n).ToList();
-                if (aired.Count == 0 || have.Count < aired.Count)
-                {
-                    LogUtil.PerItem(_config.LogMode,
-                        _logger,
-                        "[Sub Scribe] queue: {Imdb} S{Season} brought {Have} of {Aired} episode(s) — the queued items are not the whole season, so no pack is built from this run.",
-                        entry.Key.Item1, entry.Key.Item2, have.Count, aired.Count);
-                    continue;
-                }
-
-                // F-M426: only investigated when something is still open — a fully packed season is not.
-                if (!HasOpenLanguage(entry.Key, have))
-                {
-                    LogUtil.PerItem(_config.LogMode,
-                        _logger,
-                        "[Sub Scribe] queue: {Imdb} S{Season} — every language is already inside a pack, nothing is investigated.",
-                        entry.Key.Item1, entry.Key.Item2);
-                    continue;
-                }
-
-                arrivalSeasons[entry.Key] = have;
-                LogUtil.PerItem(_config.LogMode,
-                    _logger,
-                    "[Sub Scribe] queue: {Imdb} S{Season} brought all {Aired} episode(s) — the pack is built from the queued items of this run only.",
-                    entry.Key.Item1, entry.Key.Item2, aired.Count);
-            }
-
-            completeSeasons = arrivalSeasons;
-            if (completeSeasons.Count == 0)
-            {
+                // F-M680 (Betreiber-Vorgabe 22.11.2026: „Season Packs nur bei Refetch- und Manual-Läufen
+                // (also nicht bei Ankunftsläufen) — und für alle Quellen gleich"): ein Ankunftslauf
+                // bekommt KEINEN Pack-Umfang mehr. Bis 12.3.3.0 galt hier F-M424 — der Ankunftslauf
+                // packte seine eigenen Folgen, wenn sie zufällig eine ganze Staffel waren. Das war die
+                // Quelle der Ungleichheit: derselbe Lauf baute am 21.11.2026 um 09:58 zwei SubDL-Packs
+                // (MobLand S02, regular 524.500 B und HI 574.748 B), während tvsubtitles.net im selben
+                // Lauf mit „stays with a full run" ausgeschlossen wurde. Wer ankommt, lädt einzeln hoch;
+                // wer packt, ist der Refetch- oder der Manual-Lauf.
                 LogUtil.Normal(
                     _logger,
-                    "[Sub Scribe] no season pack this run — no queue of this run was a whole season (F-M424/F-M425).");
+                    "[Sub Scribe] arrival run — no season pack, the episodes go up single and the season stays with the next full, refetch or manual run (F-M680).");
+                completeSeasons = new Dictionary<(string ImdbId, int Season), IReadOnlyList<int>>();
             }
-            }
-
             if (completeSeasons.Count > 0)
             {
                 // An EMPTY packable set on purpose: ShouldBuffer answers no for every season, so no
@@ -867,25 +825,20 @@ public sealed class UploadPipeline : IPackFiller
             // JEDE Quelle des Slots GLEICHZEITIG (SendAsync je Quelle, Task.WhenAll).
             //
             // Welche Quellen im Slot stehen, entscheidet der Lauf und die Schalter, nicht das Paar:
-            //   • nur der VOLLE Lauf packt die Bibliothek — ein Ankunftslauf bringt seine eigenen Folgen
-            //     und laesst die Staffel dem naechsten vollen Lauf (F-M424),
+            //   • ein Ankunftslauf packt gar nicht — er lädt einzeln hoch und lässt die Staffel dem
+            //     nächsten vollen, Refetch- oder Manual-Lauf (F-M680, vorher F-M424),
             //   • die zweite Quelle haengt an IHREM Upload-Schalter (F-M495),
             //   • der Pack-Schalter (UploadSeasonPacks) gilt fuer beide — einen zweiten gibt es nicht (F-M641).
-            var slotQuellen = new List<string> { PackEntity.SubdlSource };
-            string tvstDraussen;
-            if (IsArrivalRun)
-            {
-                tvstDraussen = "this is an arrival run — a season pack of the library stays with a full run (F-M424)";
-            }
-            else if (!SourceAllowed(Configuration.SubtitleProvider.TvSubtitles))
-            {
-                tvstDraussen = "the upload switch of tvsubtitles.net is off — nothing is built or sent for this source (F-M495)";
-            }
-            else
-            {
-                tvstDraussen = string.Empty;
-                slotQuellen.Add(PackEntity.TvSubtitlesSource);
-            }
+            // F-M680 (Betreiber-Vorgabe 22.11.2026: „Season Packs nur bei Refetch- und Manual-Läufen —
+            // und für alle Quellen gleich"): der Slot fragt nicht mehr, welcher ART der Lauf ist. Ein
+            // Ankunftslauf kommt hier ohnehin nie mit Umfang an (oben, F-M680), und für die Quellen gilt
+            // allein der Quellen-Schalter. Damit meldet der Slot symmetrisch dieselben Quellen für jeden
+            // Lauf, in dem überhaupt gepackt wird — vorher stand tvsubtitles.net bei jedem Ankunftslauf
+            // draußen, obwohl der Lauf am 21.11.2026 um 09:58 zwei SubDL-Packs baute.
+            var slotQuellen = PackSlotSources();
+            var tvstDraussen = slotQuellen.Contains(PackEntity.TvSubtitlesSource)
+                ? string.Empty
+                : "the upload switch of tvsubtitles.net is off — nothing is built or sent for this source (F-M495)";
 
             var packPaare = PlanPacksFromStore(completeSeasons, sources: slotQuellen);
 
@@ -4316,14 +4269,18 @@ public sealed class UploadPipeline : IPackFiller
     /// <returns>Die Paare, leer wenn nichts gepackt ist.</returns>
     /// <summary>
     /// F-M654 (Operator-Anweisung 20.11.2026: „Uploads bei subdl gelten bei subdl erledigt, updates bei
-    /// tvst gelten bei tvst erledigt"): die Quellen des Pack-Slots — SubDL immer, tvsubtitles nur im
-    /// vollen Lauf und nur bei eingeschaltetem Upload-Schalter (F-M495, F-M641).
+    /// tvst gelten bei tvst erledigt"): die Quellen des Pack-Slots — SubDL immer, tvsubtitles bei
+    /// eingeschaltetem Upload-Schalter (F-M495, F-M641). F-M680: für ALLE Läufe dieselbe Antwort; der
+    /// frühere Zusatz „nur im vollen Lauf" ist gefallen.
     /// </summary>
     /// <returns>Die Quellen, fuer die in diesem Lauf ein Pack entstehen kann.</returns>
     private List<string> PackSlotSources()
     {
         var quellen = new List<string> { PackEntity.SubdlSource };
-        if (!IsArrivalRun && SourceAllowed(Configuration.SubtitleProvider.TvSubtitles))
+        // F-M680: kein Ankunftslauf-Sonderfall mehr — die Frage „darf diese Quelle packen?" wird vom
+        // Quellen-Schalter beantwortet, nicht von der Art des Laufs. Ob der Lauf überhaupt packt,
+        // entscheidet eine Etage höher (Pack-Schalter und Ankunftslauf-Gate), nicht diese Liste.
+        if (SourceAllowed(Configuration.SubtitleProvider.TvSubtitles))
         {
             quellen.Add(PackEntity.TvSubtitlesSource);
         }
@@ -5765,70 +5722,6 @@ public sealed class UploadPipeline : IPackFiller
     /// </summary>
     /// <param name="items">The run's items.</param>
     /// <returns>Episode numbers per (series, season).</returns>
-    /// <summary>
-    /// F-M426 (operator rule 02.11.2026: "It is only investigated if the sub is not part of a pack already"):
-    /// answers whether a season still has a language that is NOT inside a pack.
-    /// <para>
-    /// Asked BEFORE the queued-versus-aired comparison, so a season that is fully packed is not
-    /// investigated at all: no hash look beyond this one, no extraction, no plan line. A season whose
-    /// episodes carry no uploaded row yet counts as open — there is nothing packed about it either.
-    /// </para>
-    /// </summary>
-    /// <param name="key">Series and season.</param>
-    /// <param name="episodes">The episode numbers this run queued for that season.</param>
-    /// <returns>True when at least one language still lacks a pack.</returns>
-    private bool HasOpenLanguage((string ImdbId, int Season) key, IReadOnlyCollection<int> episodes)
-    {
-        if (!_completeSeasonItems.TryGetValue(key, out var items) || items.Count == 0)
-        {
-            return true;
-        }
-
-        bool sawRow = false;
-        foreach (var item in items)
-        {
-            int number = item.IndexNumber ?? 0;
-            if (number <= 0 || !episodes.Contains(number))
-            {
-                continue;
-            }
-
-            string? path = item.Path;
-            string? mediaHash;
-            try
-            {
-                mediaHash = string.IsNullOrWhiteSpace(path) ? null : MediaHashFor(path);
-            }
-            catch (Exception)
-            {
-                continue;
-            }
-
-            if (string.IsNullOrWhiteSpace(mediaHash))
-            {
-                continue;
-            }
-
-            foreach (var row in Registry.GetEmbeds(mediaHash))
-            {
-                if (row.Status != SubtitleStatus.Uploaded || row.Forced == true)
-                {
-                    continue;
-                }
-
-                sawRow = true;
-                // F-M654: offen ist die Sprache schon dann, wenn EINE Quelle des Slots sie nicht gepackt
-                // hat — nicht erst, wenn keine sie hat.
-                if (!PackSlotSources().All(quelle => Registry.HasPack(
-                        key.ImdbId, key.Season, row.Language, row.HearingImpaired ?? false, quelle)))
-                {
-                    return true;
-                }
-            }
-        }
-
-        return !sawRow;
-    }
 
     private Dictionary<(string ImdbId, int Season), List<int>> QueuedEpisodes(IReadOnlyList<BaseItem> items)
     {
@@ -5988,7 +5881,6 @@ public sealed class UploadPipeline : IPackFiller
 
     private List<(string ImdbId, int Season, string Lang, bool Hi)> PlanPacksFromStore(
         IReadOnlyDictionary<(string ImdbId, int Season), IReadOnlyList<int>> complete,
-        IReadOnlyDictionary<(string ImdbId, int Season), IReadOnlySet<int>>? onlyEpisodes = null,
         IReadOnlyList<string>? sources = null)
     {
         var planned = new List<(string ImdbId, int Season, string Lang, bool Hi)>();
@@ -6005,16 +5897,10 @@ public sealed class UploadPipeline : IPackFiller
                 continue;
             }
 
-            // F-M424 (operator order 02.11.2026): an arrival run plans its pack out of the queued items
-            // only. The library holds the whole season, so without this cut the plan would count rows
-            // of episodes that did not arrive — and the pack would carry members this run never touched.
-            var episodes = onlyEpisodes != null && onlyEpisodes.TryGetValue(entry.Key, out var allowed)
-                ? allEpisodes.Where(e => allowed.Contains(e.IndexNumber ?? 0)).ToList()
-                : allEpisodes;
-            if (episodes.Count == 0)
-            {
-                continue;
-            }
+            // F-M680: the arrival-scoped cut fell with F-M424 — a pack is only ever built by a full,
+            // refetch or manual run, and that run sees the whole season. The scope therefore comes from
+            // the library alone; the extra parameter had no caller left.
+            var episodes = allEpisodes;
 
             var seen = new Dictionary<(string Lang, bool Hi), int>();
             // F-M422 (operator doubt 02.11.2026: "es kann eigentlich nicht sein, dass so wenig durch
