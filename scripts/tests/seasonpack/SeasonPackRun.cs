@@ -466,25 +466,23 @@ internal static class Program
         // field is allowed and is the majority on the page, hence the `?? string.Empty`. Bound as
         // source text, so a later edit cannot quietly put the file name back.
         {
-            // F-M643: seit dem Staffel-Pack der zweiten Quelle gibt es ZWEI tvst-Tickets in der Datei.
-            // Der Anker ist deshalb die Einzel-Upload-Methode — geprueft wird ihr Ticket, nicht das
-            // des Behaelters (der traegt den Pack-Namen, nicht die Gruppe).
+            // F-M687: der Einzel-Upload der Serien-Adresse ist kein Ticket mehr, sondern ein AUFTRAG an
+            // die Engine. Der Anker ist deshalb die Einzel-Upload-Methode — geprueft wird ihr Auftrag,
+            // nicht der des Behaelters (der traegt den Pack-Namen, nicht die Gruppe).
             int einzelAt = pipeline.IndexOf("private async Task<UploadResult> SendToTvSubtitlesAsync(", StringComparison.Ordinal);
             int ticketAt = einzelAt < 0
                 ? -1
-                : pipeline.IndexOf("var ticket = new Api.Endpoints.UploadTicket(", einzelAt, StringComparison.Ordinal);
+                : pipeline.IndexOf("Bytes = System.Text.Encoding.UTF8.GetBytes(srtContent)", einzelAt, StringComparison.Ordinal);
             int ticketEnd = ticketAt < 0
                 ? -1
-                : pipeline.IndexOf("TvstShowId: show.ShowId", ticketAt, StringComparison.Ordinal);
-            // F-M572: das Ticket endet nicht mehr an "TvstShowId: show.ShowId);" — der Folgentitel steht
-            // jetzt als letztes Feld dahinter. Der Anker ist deshalb der Feldname ohne Klammer.
+                : pipeline.IndexOf("AsPack = false,", ticketAt, StringComparison.Ordinal);
             string ticket = ticketAt < 0 || ticketEnd < 0
                 ? string.Empty
-                : pipeline[ticketAt..(ticketEnd + "TvstShowId: show.ShowId".Length)];
+                : pipeline[ticketAt..ticketEnd];
             Check(ticket.Length > 0
                   && ticket.Contains("SeasonPack.ReleaseGroup(releaseName) ?? string.Empty", StringComparison.Ordinal)
                   && !ticket.Contains("GetFileNameWithoutExtension", StringComparison.Ordinal),
-                "F-M505: the tvst ticket's release field is the GROUP (`SeasonPack.ReleaseGroup(releaseName) ?? string.Empty`) and never the media file name — the page cuts a name at the dash (\"The Middle.S01E21.MULTI.1080p.WEB-DL\") and the group would be lost, an empty field being allowed and the majority on the page");
+                "F-M505: the tvst order's release field is the GROUP (`SeasonPack.ReleaseGroup(releaseName) ?? string.Empty`) and never the media file name — the page cuts a name at the dash (\"The Middle.S01E21.MULTI.1080p.WEB-DL\") and the group would be lost, an empty field being allowed and the majority on the page");
         }
         Check(pipeline.Contains("&& !cand.IsLoose && !cand.Forced", StringComparison.Ordinal), "no pack for a loose sidecar or a forced track");
         Check(pipeline.Contains("await packCoordinator.FlushAsync(runCt)", StringComparison.Ordinal), "the run closes its buffers before the summary");
@@ -1116,9 +1114,9 @@ internal static class Program
             var tvstPipe = File.ReadAllText(
                 Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Pipeline/UploadPipeline.cs"));
 
-            Check(tvstCoord.Contains("public Func<TvPackTransfer, CancellationToken, Task<UploadResult>>? TvSubtitlesSender", StringComparison.Ordinal)
-                  && tvstCoord.Contains("public sealed record TvPackTransfer(", StringComparison.Ordinal),
-                "F-M643: the collector hands the container to a sender for the second source — the collection itself is shared");
+            Check(tvstCoord.Contains("public Func<PackPlan, Sources.ISourceEngine, CancellationToken, Task<Sources.SourcePackRequest>>? PackRequest", StringComparison.Ordinal)
+                  && tvstCoord.Contains("Sources.SourcePackRequest NeutralPackRequest(", StringComparison.Ordinal),
+                "F-M687: the collector hands the container to the ONE send path — what a source needs for its payload is asked of the run, the send itself is the order");
 
             // Der echte Behälter: der Koordinator baut ihn in einer privaten Hilfsmethode, die Seite
             // liest die Folgen aus den Eintragsnamen. Beides wird hier wirklich ausgefuehrt.
@@ -1155,18 +1153,19 @@ internal static class Program
                   && tvstCoord.Contains("SeasonPack.NeutralFileName(", StringComparison.Ordinal),
                 "F-M643/F-M647: the plan carries BOTH namings — the tvst entries with the season, the SubDL members without it");
 
-            // Der Versand: Ticket mit SeasonPack=true in den Staffel-Slot, Schalter der GUI, Quelle tvst.
-            int packVersand = tvstPipe.IndexOf("private async Task<UploadResult> SendPackToTvSubtitlesAsync(", StringComparison.Ordinal);
+            // Der Versand: EIN Auftrag mit AsPack=true an die Engine — mit der Nummer, die der Lauf
+            // aufgelöst hat, dem fertigen Behälter und dem Pack-Namen im release-Feld.
+            int packVersand = tvstPipe.IndexOf("private async Task<Sources.SourcePackRequest> PackRequestForAsync(", StringComparison.Ordinal);
             int packEnde = packVersand < 0 ? -1 : tvstPipe.IndexOf("private async Task<UploadResult> SendToTvSubtitlesAsync(", packVersand, StringComparison.Ordinal);
             string sender = packVersand < 0 || packEnde < 0 ? string.Empty : tvstPipe[packVersand..packEnde];
-            Check(sender.Contains("SeasonPack: true", StringComparison.Ordinal)
-                  && sender.Contains("TvstShowId: show.ShowId", StringComparison.Ordinal)
-                  && sender.Contains("seasonPacks: _config.UploadSeasonPacks", StringComparison.Ordinal)
-                  && sender.Contains("registry: Registry", StringComparison.Ordinal),
-                "F-M643: the container goes as a pack ticket into the season slot, with the GUI's pack switch and the store");
-            Check(sender.Contains("uebergabe.Hi", StringComparison.Ordinal)
-                  && sender.Contains("DoubleEpisode: false", StringComparison.Ordinal),
-                "F-M643: hi describes the WHOLE container — the collector builds one container per (language, variant), never a mixture");
+            Check(sender.Contains("AsPack = true", StringComparison.Ordinal)
+                  && sender.Contains("MediaId = show.ShowId", StringComparison.Ordinal)
+                  && sender.Contains("Bytes = plan.TvstZip ?? Array.Empty<byte>()", StringComparison.Ordinal)
+                  && sender.Contains("Quality = Api.TvSubtitlesClient.RipFromQuality(plan.Ordered[0].Quality)", StringComparison.Ordinal),
+                "F-M687: the container is ONE order with AsPack=true — the finished archive, the source's own rip value and the number the run resolved");
+            Check(sender.Contains("HearingImpaired = plan.Hi", StringComparison.Ordinal)
+                  && sender.Contains("Episode: 0", StringComparison.Ordinal),
+                "F-M687: hi describes the WHOLE container — the collector builds one container per (language, variant), never a mixture; episode 0 is the season slot");
 
             // F-M647: EIN Slot je Paar. Bis 12.2.0.8 standen hier zwei Phasen — erst
             // `PlanPacksFromStore(completeSeasons)`, danach ein zweiter Block mit
@@ -1197,9 +1196,9 @@ internal static class Program
                   && tvstPipe.Split("PlanPacksFromStore(completeSeasons").Length - 1 == 1,
                 "F-M647: the second pack phase is gone — no second plan, no second collector loop, no two sources in sequence");
 
-            Check(tvstPipe.Contains("packCoordinator.TvSubtitlesSender = SendPackToTvSubtitlesAsync;", StringComparison.Ordinal)
+            Check(tvstPipe.Contains("packCoordinator.PackRequest = PackRequestForAsync;", StringComparison.Ordinal)
                   && tvstPipe.Contains("geplantProStaffel[(packImdb, packSeason)]", StringComparison.Ordinal),
-                "F-M643: the run wires the sender, and a tvst pair counts as the season's one line (F-M640)");
+                "F-M687: the run wires the request builder, and a tvst pair counts as the season's one line (F-M640)");
         }
 
         // ── 10. F-M647/F-M648/F-M649: EIN Slot je Paar, beide Quellen ------------------------------

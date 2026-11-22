@@ -4062,6 +4062,11 @@ public sealed class DownloadPipeline : IDisposable
             // F-M531: die vorbereiteten Meldungen abgeben — nur wenn der Schalter steht (derselbe wie
             // fuer defekte Untertitel, F-M450) und nur mit Melde-Id. Ein Fehlschlag aendert am Lauf
             // nichts: die Meldung ist Beiwerk, der Untertitel ist ohnehin verworfen.
+            //
+            // F-M687: die Meldung ist ein AUFTRAG an die Engine (ReportAsync). BUCHHALTUNG (bleibt): die
+            // vorgemerkten Ids stammen aus der Warteschlange des Suchwegs selbst (`TakeFormatReports`
+            // des Clients) — die Quelle ist damit die des Suchwegs, und der Schlüssel sagt, welche
+            // Engine das ist. Kein Namensvergleich, sondern eine Aussage über die Herkunft der Nummer.
             foreach (var meldung in _api.TakeFormatReports())
             {
                 if (!_config.ReportBrokenSubtitles)
@@ -4069,15 +4074,27 @@ public sealed class DownloadPipeline : IDisposable
                     break;
                 }
 
-                var outcome = await _api.ReportBrokenSubtitleAsync(
-                    meldung.NId, meldung.Category, meldung.Comment, ct).ConfigureAwait(false);
-                if (outcome == ScribeReportOutcome.Accepted)
+                var answer = await ReportToSourceAsync(
+                    Api.Endpoints.Provenance.Name(MainSearchSource),
+                    meldung.NId,
+                    ReportKinds.Of(meldung.Category),
+                    meldung.Comment,
+                    ct).ConfigureAwait(false);
+                if (answer.Outcome == Sources.SourceOutcome.Accepted)
                 {
                     summary.Reported++;
                 }
-                else if (outcome == ScribeReportOutcome.Busy)
+                else if (answer.Outcome == Sources.SourceOutcome.Busy)
                 {
+                    // F-M687: „beschäftigt" (429) ist KEIN Urteil — die Zeile bleibt offen und der
+                    // nächste Lauf meldet erneut, genau wie vorher.
                     summary.ReportsDeferred++;
+                }
+                else
+                {
+                    LogUtil.Detail(_config.LogMode, _logger,
+                        "[Sub Scribe-D] report for {NId} not accepted ({Reason}) — no verdict, nothing recorded",
+                        meldung.NId, answer.Reason ?? "?");
                 }
             }
 
@@ -5696,18 +5713,58 @@ public sealed class DownloadPipeline : IDisposable
             return;
         }
 
-        var outcome = await _api.ReportBrokenSubtitleAsync(row.NId, text.Category, text.Comment, ct).ConfigureAwait(false);
-        if (outcome == ScribeReportOutcome.Accepted)
+        // F-M687: der Bad-Apple-Meldeweg geht als Auftrag an die Engine — die Quelle steht als DATEN in
+        // der Zeile (`row.Source`), und der Schlüssel sucht die Engine dazu. Der Befund reist in der
+        // neutralen Sprache der Grenze; den Wortlaut der Seite macht ihre Engine daraus.
+        Sources.SourceReportAnswer answer = await ReportToSourceAsync(
+            row.Source, row.NId, text.Kind, text.Comment, ct).ConfigureAwait(false);
+        if (answer.Outcome == Sources.SourceOutcome.Accepted)
         {
             _qaFails.MarkReported(row);
             summary.Reported++;
             LogUtil.PerItem(_config.LogMode, _logger,
-                "[Sub Scribe-D] {Release} [{Lang}] — reported to SubDL ({Category}) for subtitle {NId}",
-                row.ReleaseName, lang, text.Category, row.NId);
+                "[Sub Scribe-D] {Release} [{Lang}] — reported to {Source} ({Category}) for subtitle {NId}",
+                row.ReleaseName, lang, row.Source, text.Category, row.NId);
             return;
         }
 
+        // F-M687: „beschäftigt" und „fehlgeschlagen" schreiben KEIN ReportedAt — die Zeile bleibt
+        // `open` und der nächste Lauf meldet erneut (genau wie vorher, F-M450).
         summary.ReportsDeferred++;
+        if (answer.Outcome == Sources.SourceOutcome.Rejected)
+        {
+            LogUtil.Detail(_config.LogMode, _logger,
+                "[Sub Scribe-D] {Release}/{Member} [{Lang}] — {Source} refused the report: {Reason}",
+                row.ReleaseName, row.Member, lang, row.Source, answer.Reason ?? "?");
+        }
+    }
+
+    /// <summary>
+    /// F-M687: der EINE Meldeweg — ein <see cref="Sources.SourceReportRequest"/> an die Engine des
+    /// Quellenschlüssels, zurück kommt der eine Ausgang. Kein Endpunkt, kein Client, kein Meldevokabular
+    /// einer Quelle im Ablauf.
+    /// <para>
+    /// Der Schlüssel kommt aus der Zeile bzw. aus der Warteschlange, die die Nummer erzeugt hat — die
+    /// Zuordnung „welche Engine wofür" steht in der Registry (F-M682), nicht in einem Vergleich.
+    /// </para>
+    /// </summary>
+    /// <param name="source">Der Quellenschlüssel.</param>
+    /// <param name="remoteId">Die fremde Kennung des Eintrags.</param>
+    /// <param name="kind">Die Art des Defekts, neutral.</param>
+    /// <param name="text">Der Meldungstext, wie der Lauf ihn schreibt.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Die Antwort der Quelle.</returns>
+    private async Task<Sources.SourceReportAnswer> ReportToSourceAsync(
+        string source, string remoteId, Sources.SourceReportKind kind, string text, CancellationToken ct)
+    {
+        Sources.ISourceEngine? engine = _sources.ByKey(source);
+        if (engine is null)
+        {
+            return Sources.SourceReportAnswer.Failed("no engine for the source of this report");
+        }
+
+        return await engine.ReportAsync(new Sources.SourceReportRequest(remoteId, kind, text), ct)
+            .ConfigureAwait(false);
     }
 
     private static string? NormalizeId(string id)

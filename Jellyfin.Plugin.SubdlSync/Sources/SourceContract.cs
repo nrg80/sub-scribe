@@ -165,6 +165,18 @@ public sealed record SourceCapabilities
     /// </summary>
     public bool CanSeasonPacks { get; init; }
 
+    /// <summary>
+    /// F-M687: nimmt die Quelle den FERTIGEN Behälter (ein Archiv in EINEM Feld) statt der
+    /// Einzeldateien? tvsubtitles.net legt einen Zip in ihren Staffel-Slot, SubDL baut seinen Behälter
+    /// selbst aus den Mitgliedsdateien.
+    /// <para>
+    /// Die Frage steht hier, weil der Ablauf sie stellen muss, ohne einen Quellennamen zu nennen: die
+    /// Behälterform ist eine Eigenschaft der Quelle wie jede andere. Sie entscheidet nur, WELCHE
+    /// Nutzlast gebaut wird — nicht, ob gesendet wird.
+    /// </para>
+    /// </summary>
+    public bool TakesPrebuiltPack { get; init; }
+
     /// <summary>Gets legt die Quelle einen fehlenden Titel selbst an?</summary>
     public bool CanCreateTitle { get; init; }
 
@@ -464,7 +476,20 @@ public sealed record SourceSendTarget(
     string? ImdbId = null,
     string? TmdbId = null,
     int? Season = null,
-    int? Episode = null);
+    int? Episode = null)
+{
+    /// <summary>
+    /// Gets F-M687: die Kennung, die der Ablauf für dieses Ziel bei der Quelle SCHON aufgelöst hat —
+    /// die Seriennummer des Staffel-Slots oder die Filmnummer der Filmseite, als Zeichenkette, weil die
+    /// Grenze keine fremde Kennungsform führt.
+    /// <para>
+    /// Sie ist der Grund, warum der Versand nicht ein zweites Mal suchen muss: die Auflösung hat der
+    /// Lauf bereits gemacht und in seinem Bestand geprüft (F-M501/F-M508). Fehlt sie, löst die Engine
+    /// selbst auf — derselbe Weg wie vorher, nur als Rückfall und nicht als Regel.
+    /// </para>
+    /// </summary>
+    public string? MediaId { get; init; }
+}
 
 /// <summary>F-M682, Auftrag 3: ein Mitglied eines Behälters.</summary>
 /// <param name="FileName">Der Name, unter dem das Mitglied im Behälter steht bzw. gesendet wird.</param>
@@ -502,9 +527,55 @@ public sealed record SourceSendRequest
     /// <summary>Gets wahr, wenn ein Behälter abgegeben wird (dann zählt <see cref="Members"/>).</summary>
     public bool AsPack { get; init; }
 
-    /// <summary>Gets die Mitglieder des Behälters — für die Quellen, die je Folge einen Teil erwarten.</summary>
+    /// <summary>
+    /// Gets die Mitglieder des Behälters — für die Quellen, die je Folge einen Teil erwarten.
+    /// </summary>
     public IReadOnlyList<SourcePackMember> Members { get; init; } = Array.Empty<SourcePackMember>();
+
+    /// <summary>
+    /// Gets F-M687: der Wert, der in das Qualitäts- bzw. Rip-Feld DIESER Quelle geht — so, wie der
+    /// Ablauf ihn berechnet hat.
+    /// <para>
+    /// Die Zuordnung „unser Release-Name → Auswahlfeld der Seite" ist eine Eigenschaft der Seite und
+    /// bleibt im Client; WELCHER unserer Werte hineingeht, entscheidet der Lauf, weil es dort schon
+    /// entschieden wurde (SubDL nimmt den dokumentierten Code, die Serienseite ihren Rip, die
+    /// Filmseite ihren eigenen Satz — F-M506/F-M511). Leer heißt „keine Angabe", und das ist erlaubt.
+    /// </para>
+    /// </summary>
+    public string Quality { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets F-M687: der Bildraten-Code der Quelle (SubDL dokumentiert ihn, F-M350), leer wenn unbekannt.
+    /// </summary>
+    public string Framerate { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets F-M687: der Folgentitel, den der Lauf kennt — er ist bei der Serienseite der einzige Ort,
+    /// an dem der richtige Name mitkommt, weil die Seite den Dateinamen aus ihrem eigenen Folgeneintrag
+    /// baut (F-M572). Null, wenn der Lauf keinen kennt.
+    /// </summary>
+    public string? EpisodeTitle { get; init; }
+
+    /// <summary>
+    /// Gets F-M687: die Release-Namen der Mitglieder eines Behälters, in der Reihenfolge der Folgen —
+    /// SubDL speichert das Feld als Liste, und ein Behälter trägt die Namen aller seiner Folgen.
+    /// Leer heißt „nur <see cref="ReleaseName"/>".
+    /// </summary>
+    public IReadOnlyList<string> Releases { get; init; } = Array.Empty<string>();
 }
+
+/// <summary>
+/// F-M687: ein Behälter-Auftrag — oder das NEIN eines Tores des Laufs, mit seinem Grund.
+/// <para>
+/// Der Koordinator baut den Behälter, der Lauf weiß, wohin er geht (Serientitel, Jahr, Nummer der
+/// Seite); beides zusammen ergibt <see cref="Request"/>. Sagt ein Tor des Laufs nein, gibt es keinen
+/// Auftrag und der Grund steht in <see cref="Refusal"/> — gesendet wird dann nichts, und das ist kein
+/// Fehlschlag (F-M648).
+/// </para>
+/// </summary>
+/// <param name="Request">Der Auftrag an die Engine, oder null.</param>
+/// <param name="Refusal">Der Grund des Tores, wenn es keinen Auftrag gibt.</param>
+public sealed record SourcePackRequest(SourceSendRequest? Request, string? Refusal = null);
 
 /// <summary>
 /// F-M685: der EINE Ausgang der beiden schreibenden Aufträge — für Senden UND Melden derselbe.

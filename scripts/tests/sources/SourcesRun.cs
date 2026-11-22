@@ -923,7 +923,7 @@ internal static class Program
         // Bericht.
         // -----------------------------------------------------------------------------------------
         Console.WriteLine();
-        Console.WriteLine("sources: " + _checks + " Prüfungen (T339/T340/T341/T342/T343, F-M682/F-M683/F-M684/F-M685/F-M686)");
+        Console.WriteLine("sources: " + _checks + " Prüfungen (T339/T340/T341/T342/T343/T344, F-M682/F-M683/F-M684/F-M685/F-M686/F-M687)");
         if (Failures.Count == 0)
         {
             Console.WriteLine(">>> SOURCES OK: " + _checks + " Prüfungen bestanden");
@@ -1213,6 +1213,633 @@ internal static class Program
             "F-M686 (a): ein Film hat keine Behälter, und die Kennung, die der Bestand führt, ist die des Eintrags",
             string.Join(", ", msubNeu.Candidates.Select(c => c.Handle)));
 
+
+        // -----------------------------------------------------------------------------------------
+        // (g) F-M687: SENDEN und MELDEN — alter Weg (Client direkt) gegen neuen Weg (Auftrag).
+        //
+        // Die Frage ist nicht „läuft es?", sondern „geht DERSELBE Rumpf hinaus, und wird DIESELBE
+        // Antwort gleich gedeutet?". Deshalb wird je Fall zweimal gesendet: einmal über den Client, wie
+        // die Kette es vorher tat, einmal als Auftrag an die Engine. Verglichen werden
+        //   (1) die Anfragen selbst — Methode, Pfad und Rumpf, Feld für Feld (die zufällige
+        //       Multipart-Grenze wird aus dem Content-Type gelesen und ersetzt; sonst wäre sie das
+        //       Einzige, was sich unterscheidet),
+        //   (2) das Urteil, das die Kette daraus macht (geschlossen / abgelehnt / offen) — genau die drei
+        //       Klassen, aus denen die Store-Wirkung folgt (UploadedAt / RefusedAt / nichts).
+        //
+        // KEIN Netz: jede Anfrage landet in einem Fixture-Handler dieser Suite. Der Wächter in (g6)
+        // zählt jede Anfrage, deren Host die Suite NICHT als Fixture kennt — er muss 0 bleiben.
+        // -----------------------------------------------------------------------------------------
+        int t344Start = _checks;
+        Console.WriteLine("(g) F-M687: Senden und Melden — alter Weg gegen neuen Weg");
+
+        // --- (g1) SubDL: der Einzelupload, vier Ausgänge -----------------------------------------
+        foreach (string fall in new[] { "accepted", "refused", "busy", "failed" })
+        {
+            const string srt = "1\r\n00:00:01,000 --> 00:00:02,000\r\nHallo\r\n";
+            const string name = "tt1234567.S01E02.abc12345.EN.srt";
+            const string release = "Show.S01E02.1080p.WEB-DL";
+
+            (SubdlUploadFixture altHuelle, ScribeApiClient altClient) = await NeuerSubdlAsync(fall).ConfigureAwait(false);
+            UploadResult alt = await altClient.UploadSubtitleAsync(
+                srt, name, "EN", release, "WEB-DL", "tt1234567", "42", true, 1, 2,
+                CancellationToken.None, false, "0").ConfigureAwait(false);
+
+            (SubdlUploadFixture neuHuelle, ScribeApiClient neuClient) = await NeuerSubdlAsync(fall).ConfigureAwait(false);
+            var neuEngine = new SubdlEngine(neuClient, SubdlKontext(neuHuelle, neuClient), seasonPacks: true);
+            SourceSendAnswer neuerAusgang = await neuEngine.SendAsync(
+                new SourceSendRequest
+                {
+                    Bytes = Encoding.UTF8.GetBytes(srt),
+                    FileName = name,
+                    Language = "EN",
+                    HearingImpaired = false,
+                    ReleaseName = release,
+                    Quality = "WEB-DL",
+                    Framerate = "0",
+                    Target = new SourceSendTarget(
+                        IsSeries: true, ImdbId: "tt1234567", TmdbId: "42", Season: 1, Episode: 2),
+                    AsPack = false,
+                },
+                CancellationToken.None).ConfigureAwait(false);
+
+            Check(altHuelle.RumpfGleich(neuHuelle),
+                "F-M687 (g1) SubDL " + fall + ": derselbe Rumpf geht hinaus — Methode, Pfad und jedes Feld, über den Auftrag wie über den Client",
+                RumpfBericht(altHuelle, neuHuelle));
+
+            UploadResult neu = UploadResult.FromAnswer(neuerAusgang);
+            Check(Urteilsklasse(neu) == Urteilsklasse(alt),
+                "F-M687 (g1) SubDL " + fall + ": dieselbe Antwort wird gleich gedeutet und schreibt dieselbe Store-Zeile",
+                fall + ": alt " + Urteilsklasse(alt) + " / neu " + Urteilsklasse(neu));
+        }
+
+        // --- (g2) SubDL: der Behälter, vier Ausgänge --------------------------------------------
+        foreach (string fall in new[] { "accepted", "refused", "busy", "failed" })
+        {
+            var dateien = new List<(string FileName, string Srt)>
+            {
+                ("01 Pilot.srt", "1\r\n00:00:01,000 --> 00:00:02,000\r\nA\r\n"),
+                ("02 Zwei.srt", "1\r\n00:00:01,000 --> 00:00:02,000\r\nB\r\n"),
+            };
+            var releases = new[] { "Show.S01E01.1080p.WEB-DL", "Show.S01E02.1080p.WEB-DL" };
+
+            (SubdlUploadFixture altHuelle, ScribeApiClient altClient) = await NeuerSubdlAsync(fall).ConfigureAwait(false);
+            UploadResult alt = await altClient.UploadSeasonPackAsync(
+                dateien, "Show.S01.1080p.WEB-DL", "EN", releases, "WEB-DL", "tt1234567", "42",
+                1, 1, 2, CancellationToken.None, false, "0").ConfigureAwait(false);
+
+            (SubdlUploadFixture neuHuelle, ScribeApiClient neuClient) = await NeuerSubdlAsync(fall).ConfigureAwait(false);
+            var neuEngine = new SubdlEngine(neuClient, SubdlKontext(neuHuelle, neuClient), seasonPacks: true);
+            SourceSendAnswer neuerAusgang = await neuEngine.SendAsync(
+                new SourceSendRequest
+                {
+                    FileName = "Show.S01.1080p.WEB-DL",
+                    Language = "EN",
+                    HearingImpaired = false,
+                    ReleaseName = "Show.S01.1080p.WEB-DL",
+                    Releases = releases,
+                    Quality = "WEB-DL",
+                    Framerate = "0",
+                    Target = new SourceSendTarget(IsSeries: true, ImdbId: "tt1234567", TmdbId: "42", Season: 1),
+                    AsPack = true,
+                    Members = dateien
+                        .Select((f, i) => new SourcePackMember(f.FileName, i + 1, Encoding.UTF8.GetBytes(f.Srt)))
+                        .ToList(),
+                },
+                CancellationToken.None).ConfigureAwait(false);
+
+            Check(altHuelle.RumpfGleich(neuHuelle),
+                "F-M687 (g2) SubDL-Behälter " + fall + ": derselbe Rumpf — Mitgliedsdateien, Release-Liste, Bereich und is_full_season",
+                RumpfBericht(altHuelle, neuHuelle));
+
+            UploadResult neu = UploadResult.FromAnswer(neuerAusgang);
+            Check(Urteilsklasse(neu) == Urteilsklasse(alt),
+                "F-M687 (g2) SubDL-Behälter " + fall + ": dieselbe Deutung der Antwort",
+                fall + ": alt " + Urteilsklasse(alt) + " / neu " + Urteilsklasse(neu));
+        }
+
+        // --- (g3) tvsubtitles.net: der Einzelupload, vier Ausgänge -------------------------------
+        foreach (string fall in new[] { "accepted", "refused", "busy", "failed" })
+        {
+            byte[] daten = Encoding.UTF8.GetBytes("1\r\n00:00:01,000 --> 00:00:02,000\r\nHallo\r\n");
+
+            var altHuelle = new TvstUploadFixture { Fall = fall };
+            var altClient = new TvSubtitlesClient(new HttpClient(altHuelle));
+            TvSubtitlesUpload altRumpf = TvSubtitlesClient.BuildUpload(
+                512, 2, 24, "EN",
+                "The Middle - 2x24 - Back To Summer.WEB-DL.EN.srt", daten,
+                rip: "WEB", release: "FTMVHD", tmdbId: 271087, imdbId: "tt1442464",
+                hearingImpaired: false, showTitle: "The Middle", episodeTitle: "Back To Summer", year: 2009);
+            TvSubtitlesUploadResult altAntwort = await altClient
+                .UploadAsync(altRumpf, dryRun: false, CancellationToken.None).ConfigureAwait(false);
+
+            var neuHuelle = new TvstUploadFixture { Fall = fall };
+            var neuClient = new TvSubtitlesClient(new HttpClient(neuHuelle));
+            var neuEngine = new TvstEngine(
+                neuClient,
+                new SourceEngineContext(new HttpClient(neuHuelle), NullLogger.Instance, TimeProvider.System, Tvst: neuClient),
+                seasonPacks: true);
+            SourceSendAnswer neuerAusgang = await neuEngine.SendAsync(
+                new SourceSendRequest
+                {
+                    Bytes = daten,
+                    FileName = "The Middle - 2x24 - Back To Summer.WEB-DL.EN.srt",
+                    Language = "EN",
+                    HearingImpaired = false,
+                    ReleaseName = "FTMVHD",
+                    Quality = "WEB",
+                    EpisodeTitle = "Back To Summer",
+                    Target = new SourceSendTarget(
+                        IsSeries: true, Title: "The Middle", Year: 2009, ImdbId: "tt1442464",
+                        TmdbId: "271087", Season: 2, Episode: 24)
+                    {
+                        MediaId = "512",
+                    },
+                    AsPack = false,
+                },
+                CancellationToken.None).ConfigureAwait(false);
+
+            Check(altHuelle.RumpfGleich(neuHuelle),
+                "F-M687 (g3) tvsubtitles " + fall + ": derselbe Rumpf — Seriennummer, Staffel/Folge, Sprache, Rip, Gruppe, Kommentar",
+                RumpfBericht(altHuelle, neuHuelle));
+
+            UploadResult altUrteil = AltesUrteil(altAntwort.Sent, altAntwort.Status, altAntwort.Response);
+            UploadResult neuUrteil = UploadResult.FromAnswer(neuerAusgang);
+            string erwartet = ErwarteteKlasse(fall);
+            Check(Urteilsklasse(neuUrteil) == erwartet,
+                "F-M687 (g3) tvsubtitles " + fall + ": der Ausgang der Grenze wird als " + erwartet + " gebucht",
+                "neu " + Urteilsklasse(neuUrteil) + " (" + neuerAusgang.Outcome + ")");
+
+            // DER EINE BEFUND des Vergleichs, ausdrücklich festgehalten statt stillschweigend übernommen:
+            // die Seite antwortet auf eine Ablehnung mit HTTP 200 und dem Satz im Text. Der alte Weg las
+            // nur den STATUS und buchte „hochgeladen"; der neue liest den Text der Quelle (F-M685) und
+            // bucht „abgelehnt". Beides ist unten gemessen — der Unterschied ist die Verbesserung, die
+            // dieser Schritt verlangt (Rejected = Urteil abgelehnt mit Quelltext).
+            if (fall == "refused")
+            {
+                Check(Urteilsklasse(altUrteil) == "geschlossen" && Urteilsklasse(neuUrteil) == "abgelehnt",
+                    "F-M687 (g3) tvsubtitles: der gefundene Unterschied — dieselbe 200-Antwort hieß vorher „hochgeladen\" und heißt jetzt „abgelehnt\", weil der Satz der Seite entscheidet",
+                    "alt " + Urteilsklasse(altUrteil) + " / neu " + Urteilsklasse(neuUrteil));
+            }
+        }
+
+        // --- (g4) moviesubtitles.org: der Einzelupload, vier Ausgänge ----------------------------
+        foreach (string fall in new[] { "accepted", "refused", "busy", "failed" })
+        {
+            byte[] daten = Encoding.UTF8.GetBytes("1\r\n00:00:01,000 --> 00:00:02,000\r\nHallo\r\n");
+
+            var altHuelle = new MsubUploadFixture { Fall = fall };
+            var altClient = new MovieSubtitlesClient(new HttpClient(altHuelle));
+            MovieSubtitlesUpload altRumpf = MovieSubtitlesClient.BuildUpload(
+                102, "en", "Dune.Part.One.2021.1080p.WEB-DL", "Dune.Part.One.2021.EN.srt", daten,
+                rip: MovieSubtitlesClient.RipFromQuality("WEB-DL"), author: null,
+                tmdbId: 438631, imdbId: "tt1160419", commentExtra: null,
+                movieTitle: "Dune: Part One", year: 2021);
+            MovieSubtitlesUploadResult altAntwort = await altClient
+                .UploadAsync(altRumpf, dryRun: false, CancellationToken.None).ConfigureAwait(false);
+
+            var neuHuelle = new MsubUploadFixture { Fall = fall };
+            var neuClient = new MovieSubtitlesClient(new HttpClient(neuHuelle));
+            var neuEngine = new MsubEngine(
+                neuClient,
+                new SourceEngineContext(new HttpClient(neuHuelle), NullLogger.Instance, TimeProvider.System, Msub: neuClient));
+            SourceSendAnswer neuerAusgang = await neuEngine.SendAsync(
+                new SourceSendRequest
+                {
+                    Bytes = daten,
+                    FileName = "Dune.Part.One.2021.EN.srt",
+                    Language = "EN",
+                    HearingImpaired = false,
+                    ReleaseName = "Dune.Part.One.2021.1080p.WEB-DL",
+                    Quality = "WEB-DL",
+                    Target = new SourceSendTarget(
+                        IsSeries: false, Title: "Dune: Part One", Year: 2021,
+                        ImdbId: "tt1160419", TmdbId: "438631", Season: 0, Episode: 0)
+                    {
+                        MediaId = "102",
+                    },
+                    AsPack = false,
+                },
+                CancellationToken.None).ConfigureAwait(false);
+
+            Check(altHuelle.RumpfGleich(neuHuelle),
+                "F-M687 (g4) moviesubtitles " + fall + ": derselbe Rumpf — Filmnummer, Sprache, Rip, Release, Kommentar",
+                RumpfBericht(altHuelle, neuHuelle));
+            Check(neuHuelle.FilmSuchen == 0,
+                "F-M687 (g4) moviesubtitles " + fall + ": die Filmnummer aus dem Bestand führt — der Versand sucht den Film nicht ein zweites Mal",
+                "Suchaufrufe: " + neuHuelle.FilmSuchen);
+
+            UploadResult altUrteil = AltesUrteil(altAntwort.Sent, altAntwort.Status, altAntwort.Response);
+            UploadResult neuUrteil = UploadResult.FromAnswer(neuerAusgang);
+            string erwartet = ErwarteteKlasse(fall);
+            Check(Urteilsklasse(neuUrteil) == erwartet,
+                "F-M687 (g4) moviesubtitles " + fall + ": der Ausgang der Grenze wird als " + erwartet + " gebucht",
+                "neu " + Urteilsklasse(neuUrteil) + " (" + neuerAusgang.Outcome + ")");
+            if (fall == "refused")
+            {
+                Check(Urteilsklasse(altUrteil) == "geschlossen" && Urteilsklasse(neuUrteil) == "abgelehnt",
+                    "F-M687 (g4) moviesubtitles: derselbe Befund — „Film nicht hochladbar\" kam als HTTP 200 und hieß vorher „hochgeladen\"",
+                    "alt " + Urteilsklasse(altUrteil) + " / neu " + Urteilsklasse(neuUrteil));
+            }
+        }
+
+        // --- (g5) MELDEN: SubDL und tvsubtitles, je Art des Ausgangs ----------------------------
+        foreach (string fall in new[] { "accepted", "busy", "failed" })
+        {
+            (SubdlUploadFixture altHuelle, ScribeApiClient altClient) = await NeuerSubdlAsync(fall).ConfigureAwait(false);
+            ScribeReportOutcome alt = await altClient.ReportBrokenSubtitleAsync(
+                "Nj3hP7BQDw", "wrong_release_info", "Package 7 ('X', EN) no usable cues.",
+                CancellationToken.None).ConfigureAwait(false);
+
+            (SubdlUploadFixture neuHuelle, ScribeApiClient neuClient) = await NeuerSubdlAsync(fall).ConfigureAwait(false);
+            var neuEngine = new SubdlEngine(neuClient, SubdlKontext(neuHuelle, neuClient), seasonPacks: true);
+            SourceReportAnswer neu = await neuEngine.ReportAsync(
+                new SourceReportRequest(
+                    "Nj3hP7BQDw", SourceReportKind.WrongContent, "Package 7 ('X', EN) no usable cues."),
+                CancellationToken.None).ConfigureAwait(false);
+
+            Check(altHuelle.RumpfGleich(neuHuelle),
+                "F-M687 (g5) SubDL-Meldung " + fall + ": derselbe Rumpf — targetType, nId, reason und Kommentar, Zeichen für Zeichen",
+                RumpfBericht(altHuelle, neuHuelle));
+            Check(neu.Outcome == Meldeausgang(alt),
+                "F-M687 (g5) SubDL-Meldung " + fall + ": derselbe Ausgang — und damit dieselbe Wirkung auf die Zeile",
+                fall + ": alt " + alt + " / neu " + neu.Outcome);
+        }
+
+        foreach (string fall in new[] { "accepted", "busy", "failed" })
+        {
+            var altHuelle = new TvstUploadFixture { Fall = fall };
+            var altClient = new TvSubtitlesClient(new HttpClient(altHuelle));
+            ScribeReportOutcome alt = await altClient.ReportBadAsync(
+                "31911", "Package 7 ('X', EN) no usable cues.", CancellationToken.None).ConfigureAwait(false);
+
+            var neuHuelle = new TvstUploadFixture { Fall = fall };
+            var neuClient = new TvSubtitlesClient(new HttpClient(neuHuelle));
+            var neuEngine = new TvstEngine(
+                neuClient,
+                new SourceEngineContext(new HttpClient(neuHuelle), NullLogger.Instance, TimeProvider.System, Tvst: neuClient),
+                seasonPacks: true);
+            SourceReportAnswer neu = await neuEngine.ReportAsync(
+                new SourceReportRequest(
+                    "31911", SourceReportKind.Missing, "Package 7 ('X', EN) no usable cues."),
+                CancellationToken.None).ConfigureAwait(false);
+
+            Check(altHuelle.RumpfGleich(neuHuelle),
+                "F-M687 (g5) tvsubtitles-Meldung " + fall + ": derselbe Rumpf an dieselbe Adresse",
+                RumpfBericht(altHuelle, neuHuelle));
+            Check(neu.Outcome == Meldeausgang(alt),
+                "F-M687 (g5) tvsubtitles-Meldung " + fall + ": derselbe Ausgang",
+                fall + ": alt " + alt + " / neu " + neu.Outcome);
+        }
+
+        // moviesubtitles.org hat KEINEN Meldeweg: der Auftrag antwortet „geht nicht" und spricht nicht
+        // mit der Seite. Das ist die ehrliche Antwort und keine Auslassung.
+        {
+            var huelle = new MsubUploadFixture { Fall = "accepted" };
+            var client = new MovieSubtitlesClient(new HttpClient(huelle));
+            var engine = new MsubEngine(
+                client,
+                new SourceEngineContext(new HttpClient(huelle), NullLogger.Instance, TimeProvider.System, Msub: client));
+            SourceReportAnswer antwort = await engine.ReportAsync(
+                new SourceReportRequest("102", SourceReportKind.Missing, "x"), CancellationToken.None).ConfigureAwait(false);
+            Check(antwort.Outcome == SourceOutcome.Failed && huelle.Calls.Count == 0,
+                "F-M687 (g5) moviesubtitles: kein Meldeweg — der Auftrag antwortet Failed und schickt nichts",
+                antwort.Outcome + ", Anfragen " + huelle.Calls.Count);
+        }
+
+        // --- (g6) der Wächter: keine echte Adresse ----------------------------------------------
+        // Gezählt wird im Handler selbst: jede Anfrage, deren Host diese Suite nicht als Fixture kennt,
+        // und jede, die auf einem Pfad landet, den das Fixture nicht beantwortet (dann hätte der
+        // Vergleich zwei leere Rümpfe gegenübergestellt und nichts gemessen).
+        Check(AufzeichnenderHandler.FremdeHosts == 0,
+            "F-M687 (g6): keine Anfrage dieser Abteilung geht an eine Adresse, die kein Fixture ist",
+            AufzeichnenderHandler.Anfragen + " Anfrage(n), davon " + AufzeichnenderHandler.FremdeHosts + " unbekannt");
+        Check(AufzeichnenderHandler.UnbekanntePfade == 0,
+            "F-M687 (g6): jede Anfrage trifft einen Pfad, den das Fixture beantwortet — der Vergleich misst echte Rümpfe",
+            AufzeichnenderHandler.Anfragen + " Anfrage(n), davon " + AufzeichnenderHandler.UnbekanntePfade + " ohne Antwort");
+
+        int t344Pruefungen = _checks - t344Start;
+        Console.WriteLine("    T344: " + t344Pruefungen + " Prüfungen in dieser Abteilung");
+    }
+
+    /// <summary>
+    /// F-M687: der gemeinsame Fixture-Handler der Abteilung (g). Er zeichnet jede Anfrage auf — Methode,
+    /// Pfad und Rumpf mit ersetzter Multipart-Grenze — und antwortet je Fall. Die Zähler sind statisch,
+    /// damit der Wächter am Ende der Abteilung JEDE Anfrage sieht, auch die eines anderen Handlers.
+    /// </summary>
+    private abstract class AufzeichnenderHandler : HttpMessageHandler
+    {
+        /// <summary>Anfragen, die in einem Fixture dieser Suite gelandet sind.</summary>
+        public static int Anfragen;
+
+        /// <summary>Anfragen an einen Host, den diese Suite nicht als Fixture kennt — muss 0 bleiben.</summary>
+        public static int FremdeHosts;
+
+        /// <summary>Anfragen, die ein Fixture nicht beantworten konnte — dann misst der Vergleich nichts.</summary>
+        public static int UnbekanntePfade;
+
+        private static readonly string[] BekannteHosts =
+        {
+            "api.subdl.com", "www.tvsubtitles.net", "www.moviesubtitles.org",
+        };
+
+        /// <summary>Gets der Fall, auf den dieses Fixture antwortet.</summary>
+        public string Fall { get; init; } = "accepted";
+
+        /// <summary>Gets die aufgezeichneten Anfragen in der Reihenfolge, in der sie ankamen.</summary>
+        public List<(string Method, string Pfad, string Rumpf)> Calls { get; } = new();
+
+        /// <summary>
+        /// F-M687: haben beide Wege DIESELBEN Anfragen gestellt? Methode, Pfad und Rumpf müssen
+        /// übereinstimmen — die Grenze ist ersetzt, alles andere ist Inhalt.
+        /// </summary>
+        /// <param name="andere">Der Handler des anderen Wegs.</param>
+        /// <returns>Wahr, wenn die Folgen gleich sind.</returns>
+        public bool RumpfGleich(AufzeichnenderHandler andere)
+            => Calls.Count == andere.Calls.Count
+               && Calls.Zip(andere.Calls).All(p => p.First == p.Second);
+
+        /// <summary>Antwortet auf eine Anfrage. Was hier nicht beantwortet wird, zählt als unbekannter Pfad.</summary>
+        /// <param name="request">Die Anfrage.</param>
+        /// <param name="rumpf">Der gelesene Rumpf.</param>
+        /// <returns>Die Antwort.</returns>
+        protected abstract HttpResponseMessage Antwort(HttpRequestMessage request, string rumpf);
+
+        /// <inheritdoc />
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            await Task.Yield();
+            Anfragen++;
+            Uri uri = request.RequestUri!;
+            if (Array.IndexOf(BekannteHosts, uri.Host) < 0)
+            {
+                FremdeHosts++;
+            }
+
+            string rumpf = request.Content is null
+                ? string.Empty
+                : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+
+            // Die Multipart-Grenze ist je Aufruf zufällig; sie steht im Content-Type und wird dort
+            // gelesen — so bleibt vom Rumpf alles übrig, was Inhalt ist.
+            string? grenze = request.Content?.Headers.ContentType?.Parameters
+                .FirstOrDefault(p => string.Equals(p.Name, "boundary", StringComparison.OrdinalIgnoreCase))?.Value?.Trim('"');
+            if (!string.IsNullOrEmpty(grenze))
+            {
+                rumpf = rumpf.Replace(grenze!, "GRENZE", StringComparison.Ordinal);
+            }
+
+            Calls.Add((request.Method.Method, uri.AbsolutePath, rumpf));
+
+            HttpResponseMessage antwort = Antwort(request, rumpf);
+            if (antwort.StatusCode == System.Net.HttpStatusCode.NotFound)
+            {
+                UnbekanntePfade++;
+            }
+
+            return antwort;
+        }
+
+        /// <summary>Eine JSON-Antwort.</summary>
+        /// <param name="json">Der Rumpf.</param>
+        /// <returns>Die Antwort.</returns>
+        protected static HttpResponseMessage Json(string json)
+            => new(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(json, Encoding.UTF8, "application/json"),
+            };
+
+        /// <summary>Eine HTML-Antwort.</summary>
+        /// <param name="html">Der Rumpf.</param>
+        /// <returns>Die Antwort.</returns>
+        protected static HttpResponseMessage Html(string html)
+            => new(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(html, Encoding.UTF8, "text/html"),
+            };
+    }
+
+    /// <summary>
+    /// F-M687: SubDL, wie die API antwortet — Anmeldung, Sitzung (<c>getNId</c>), Datei, Metadaten und
+    /// Meldeformular. Der Fall entscheidet nur über den letzten Schritt: die Metadaten-Antwort und die
+    /// des Meldeformulars.
+    /// </summary>
+    private sealed class SubdlUploadFixture : AufzeichnenderHandler
+    {
+        /// <inheritdoc />
+        protected override HttpResponseMessage Antwort(HttpRequestMessage request, string rumpf)
+        {
+            string pfad = request.RequestUri!.AbsolutePath;
+
+            if (pfad.EndsWith("/login", StringComparison.Ordinal))
+            {
+                return Json("{\"status\":true,\"token\":\"fixture-token\"}");
+            }
+
+            if (pfad.EndsWith("/user/getNId", StringComparison.Ordinal))
+            {
+                return Json("{\"n_id\":\"fixture-nid\"}");
+            }
+
+            if (pfad.EndsWith("/user/uploadSingleSubtitle", StringComparison.Ordinal))
+            {
+                return Json("{\"file\":{\"file_n_id\":\"fixture-file\"}}");
+            }
+
+            if (pfad.EndsWith("/user/uploadSubtitle", StringComparison.Ordinal))
+            {
+                return Fall switch
+                {
+                    "accepted" => Json("{\"status\":true}"),
+                    "refused" => Json("{\"status\":false,\"message\":\"Duplicate upload: identical file already published\"}"),
+                    "busy" => new HttpResponseMessage(System.Net.HttpStatusCode.TooManyRequests),
+                    _ => new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError),
+                };
+            }
+
+            if (pfad.EndsWith("/report", StringComparison.Ordinal))
+            {
+                return Fall switch
+                {
+                    "accepted" => Json("{\"success\":true}"),
+                    "refused" => Json("{\"success\":false}"),
+                    "busy" => new HttpResponseMessage(System.Net.HttpStatusCode.TooManyRequests),
+                    _ => new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError),
+                };
+            }
+
+            return new HttpResponseMessage(System.Net.HttpStatusCode.NotFound);
+        }
+    }
+
+    /// <summary>
+    /// F-M687: tvsubtitles.net — <c>add1.php</c> nimmt die Abgabe, <c>report_bad.php</c> die Meldung.
+    /// Die Seite antwortet auf BEIDES mit einer Seite; „thank" heißt angenommen.
+    /// </summary>
+    private sealed class TvstUploadFixture : AufzeichnenderHandler
+    {
+        /// <inheritdoc />
+        protected override HttpResponseMessage Antwort(HttpRequestMessage request, string rumpf)
+        {
+            string pfad = request.RequestUri!.AbsolutePath;
+
+            if (pfad.EndsWith("/add1.php", StringComparison.Ordinal))
+            {
+                return Fall switch
+                {
+                    // Die Seite legt nach der Abgabe ihre Staffelseite auf; „thank" steht im Erfolgsfall.
+                    "accepted" => Html("<html><body><b>Thank you, your subtitle was accepted</b></body></html>"),
+                    "refused" => Html("<html><body>Your request could not be served. Are cookies disabled?</body></html>"),
+                    "busy" => new HttpResponseMessage(System.Net.HttpStatusCode.TooManyRequests),
+                    _ => new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError),
+                };
+            }
+
+            if (pfad.EndsWith("/report_bad.php", StringComparison.Ordinal))
+            {
+                return Fall switch
+                {
+                    "accepted" => Html("<html><body>Thank you for your report.</body></html>"),
+                    "busy" => new HttpResponseMessage(System.Net.HttpStatusCode.TooManyRequests),
+                    _ => new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError),
+                };
+            }
+
+            return new HttpResponseMessage(System.Net.HttpStatusCode.NotFound);
+        }
+    }
+
+    /// <summary>
+    /// F-M687: moviesubtitles.org — <c>add.php</c> nimmt die Abgabe. Auch diese Seite antwortet mit
+    /// HTTP 200 und einem Satz, wenn sie ablehnt („Film nicht hochladbar").
+    /// </summary>
+    private sealed class MsubUploadFixture : AufzeichnenderHandler
+    {
+        /// <summary>Gets wie oft der Film über die Suche gesucht wurde (muss 0 bleiben: die Nummer führt).</summary>
+        public int FilmSuchen { get; private set; }
+
+        /// <inheritdoc />
+        protected override HttpResponseMessage Antwort(HttpRequestMessage request, string rumpf)
+        {
+            string pfad = request.RequestUri!.AbsolutePath;
+
+            if (pfad.EndsWith("/search.php", StringComparison.Ordinal))
+            {
+                FilmSuchen++;
+                return Html("<html></html>");
+            }
+
+            if (pfad.EndsWith("/add.php", StringComparison.Ordinal))
+            {
+                return Fall switch
+                {
+                    "accepted" => Html("<html><body>Thank you, the subtitle was added.</body></html>"),
+                    "refused" => Html("<html><body>This file could not be uploaded.</body></html>"),
+                    "busy" => new HttpResponseMessage(System.Net.HttpStatusCode.TooManyRequests),
+                    _ => new HttpResponseMessage(System.Net.HttpStatusCode.InternalServerError),
+                };
+            }
+
+            return new HttpResponseMessage(System.Net.HttpStatusCode.NotFound);
+        }
+    }
+
+    /// <summary>F-M687: ein angemeldeter SubDL-Client samt seinem Fixture — zweimal derselbe Aufbau.</summary>
+    /// <param name="fall">Der Fall, auf den das Fixture antwortet.</param>
+    /// <returns>Das Fixture und der Client darüber.</returns>
+    private static async Task<(SubdlUploadFixture Huelle, ScribeApiClient Client)> NeuerSubdlAsync(string fall)
+    {
+        var huelle = new SubdlUploadFixture { Fall = fall };
+        var client = new ScribeApiClient(new HttpClient(huelle));
+        client.Username = "fixture@example.invalid";
+        client.Password = "fixture";
+        await client.LoginAsync(CancellationToken.None).ConfigureAwait(false);
+        return (huelle, client);
+    }
+
+    /// <summary>F-M687: der Kontext, den die SubDL-Engine bekommt — derselbe Client, dasselbe Fixture.</summary>
+    /// <param name="huelle">Das Fixture.</param>
+    /// <param name="client">Der Client darüber.</param>
+    /// <returns>Der Kontext.</returns>
+    private static SourceEngineContext SubdlKontext(SubdlUploadFixture huelle, ScribeApiClient client)
+        => new(new HttpClient(huelle), NullLogger.Instance, TimeProvider.System, Subdl: client);
+
+    /// <summary>
+    /// F-M687: das Urteil, das die Kette VOR diesem Schritt aus der Antwort einer Seite machte — nur der
+    /// Status entschied (<c>2xx</c> angenommen, <c>429</c>/<c>5xx</c> keine Antwort, alles andere ein
+    /// Nein). Diese Fassung steht hier als Maßstab des „alten Wegs"; sie ist bewusst nicht die des neuen.
+    /// </summary>
+    /// <param name="sent">Ist die Abgabe hinausgegangen?</param>
+    /// <param name="status">Der Status der Antwort.</param>
+    /// <param name="response">Der Text der Antwort.</param>
+    /// <returns>Das Urteil des alten Wegs.</returns>
+    private static UploadResult AltesUrteil(bool sent, int? status, string? response)
+    {
+        _ = response;
+        if (sent && status is >= 200 and < 300)
+        {
+            return UploadResult.Success();
+        }
+
+        return status is 429 or (>= 500 and < 600)
+            ? UploadResult.NoVerdict("keine Antwort")
+            : UploadResult.Failed("abgelehnt");
+    }
+
+    /// <summary>
+    /// F-M687: die drei Klassen, in denen die Store-Wirkung steht — geschlossen (<c>upload.UploadedAt</c>),
+    /// abgelehnt (<c>upload.RefusedAt</c>/<c>RefusedReason</c>) oder offen (kein Urteil, der nächste Lauf
+    /// fragt neu). Mehr entscheidet der Bestand nicht.
+    /// </summary>
+    /// <param name="ergebnis">Das Urteil.</param>
+    /// <returns>Die Klasse.</returns>
+    private static string Urteilsklasse(UploadResult ergebnis)
+        => ergebnis.Ok || ergebnis.SourceAccepted
+            ? "geschlossen"
+            : ergebnis.Verdict == UploadVerdict.NoVerdict ? "offen" : "abgelehnt";
+
+    /// <summary>F-M687: die Klasse, die der Ausgang der Grenze für einen Fall ergeben MUSS.</summary>
+    /// <param name="fall">Der Fixture-Fall.</param>
+    /// <returns>Die erwartete Klasse.</returns>
+    private static string ErwarteteKlasse(string fall) => fall switch
+    {
+        "accepted" => "geschlossen",
+        "refused" => "abgelehnt",
+        _ => "offen",
+    };
+
+    /// <summary>F-M687: der Ausgang des Meldewegs, wie ihn der Client kennt — Accepted, Busy, Failed.</summary>
+    /// <param name="ausgang">Der Ausgang des Clients.</param>
+    /// <returns>Derselbe Ausgang in der Sprache der Grenze.</returns>
+    private static SourceOutcome Meldeausgang(ScribeReportOutcome ausgang) => ausgang switch
+    {
+        ScribeReportOutcome.Accepted => SourceOutcome.Accepted,
+        ScribeReportOutcome.Busy => SourceOutcome.Busy,
+        _ => SourceOutcome.Failed,
+    };
+
+    /// <summary>F-M687: was sich an den Rümpfen unterscheidet — oder dass nichts sich unterscheidet.</summary>
+    /// <param name="alt">Der Handler des alten Wegs.</param>
+    /// <param name="neu">Der Handler des neuen Wegs.</param>
+    /// <returns>Eine Zeile für die Prüfung.</returns>
+    private static string RumpfBericht(AufzeichnenderHandler alt, AufzeichnenderHandler neu)
+    {
+        if (alt.Calls.Count != neu.Calls.Count)
+        {
+            return alt.Calls.Count + " / " + neu.Calls.Count + " Anfrage(n)";
+        }
+
+        for (int i = 0; i < alt.Calls.Count; i++)
+        {
+            if (alt.Calls[i] != neu.Calls[i])
+            {
+                return "Anfrage " + (i + 1) + ": " + alt.Calls[i].Method + " " + alt.Calls[i].Pfad
+                    + " / " + neu.Calls[i].Method + " " + neu.Calls[i].Pfad
+                    + " — Rumpf " + alt.Calls[i].Rumpf.Length + " B / " + neu.Calls[i].Rumpf.Length + " B";
+            }
+        }
+
+        return alt.Calls.Count + " Anfrage(n), Rumpf gleich";
     }
 
     /// <summary>

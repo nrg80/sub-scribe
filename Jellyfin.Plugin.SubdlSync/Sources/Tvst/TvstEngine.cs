@@ -102,6 +102,10 @@ public sealed class TvstEngine : ISourceEngine
             CanHearingImpaired = true,
             CanOfferSeasonPacks = true,
             CanSeasonPacks = seasonPacks,
+
+            // F-M687: der Staffel-Slot dieser Seite nimmt EIN Archiv — die Behälterform ist eine
+            // Eigenschaft der Quelle, keine Frage an ihren Namen.
+            TakesPrebuiltPack = true,
             CanCreateTitle = true,
             SearchesByImdb = false,
             SearchesByTmdb = false,
@@ -302,10 +306,25 @@ public sealed class TvstEngine : ISourceEngine
 
         try
         {
-            int? showId = await ResolveShowAsync(request.Target.Title, ct).ConfigureAwait(false);
+            // F-M687: die Nummer, die der LAUF schon aufgelöst hat, führt (F-M501) — der Versand sucht
+            // nicht ein zweites Mal. Nur ohne Nummer (direkter Aufruf, ältere Zeile) wird der Name
+            // gesucht, und dann mit demselben engen Vergleich wie dort.
+            int? showId = int.TryParse(
+                request.Target.MediaId,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out int vorhandene)
+                && vorhandene > 0
+                ? vorhandene
+                : null;
+
             if (showId is null)
             {
-                return SourceSendAnswer.Rejected("the show is not on the page: " + request.Target.Title);
+                showId = await ResolveShowAsync(request.Target.Title, ct).ConfigureAwait(false);
+                if (showId is null)
+                {
+                    return SourceSendAnswer.Rejected("the show is not on the page: " + request.Target.Title);
+                }
             }
 
             long? tmdb = long.TryParse(request.Target.TmdbId, NumberStyles.Integer, CultureInfo.InvariantCulture, out long zahl)
@@ -319,7 +338,7 @@ public sealed class TvstEngine : ISourceEngine
                     sprache,
                     request.FileName,
                     request.Bytes,
-                    rip: null,
+                    rip: request.Quality,
                     release: request.ReleaseName,
                     tmdbId: tmdb,
                     imdbId: request.Target.ImdbId,
@@ -333,7 +352,7 @@ public sealed class TvstEngine : ISourceEngine
                     sprache,
                     request.FileName,
                     request.Bytes,
-                    rip: null,
+                    rip: request.Quality,
                     release: request.ReleaseName,
                     tmdbId: tmdb,
                     imdbId: request.Target.ImdbId,
@@ -343,6 +362,10 @@ public sealed class TvstEngine : ISourceEngine
                     commentExtra: request.Comment,
                     hearingImpaired: request.HearingImpaired,
                     showTitle: request.Target.Title,
+
+                    // F-M572: der Folgentitel steht im Kommentar — den Dateinamen baut die Seite aus
+                    // ihrem eigenen Folgeneintrag, das ist kein Feld, das wir senden.
+                    episodeTitle: request.EpisodeTitle,
                     year: request.Target.Year ?? 0);
 
             TvSubtitlesUploadResult ergebnis = await _client

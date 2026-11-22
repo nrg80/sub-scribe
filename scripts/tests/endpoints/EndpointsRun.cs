@@ -468,12 +468,13 @@ internal static class Program
             // F-M509: die Bauform „alles ausser SubDL" ist weg — sie haette einen Film zur Serien-Adresse
             // geschickt und keiner dritten Quelle je einen eigenen Weg gelassen.
             && !uploadSource.Contains("SendToSecondSourceAsync(", StringComparison.Ordinal));
-        Check("the SubDL upload call itself is untouched — the response body the caller reads stays",
-            // F-M509: der Aufruf steht jetzt in der Versandtabelle der Quelle statt im Rumpf der Kette,
-            // aber er bekommt dieselben Angaben — Framerate und HI eingeschlossen.
-            uploadSource.Contains("Configuration.SubtitleProvider.Subdl => _api.UploadSubtitleAsync(", StringComparison.Ordinal)
-            && uploadSource.Contains("srtContent, neutralName, lang, releaseName, quality, imdbId, tmdbId, isSeries, season,", StringComparison.Ordinal)
-            && uploadSource.Contains("episode, ct, hearingImpaired, framerate),", StringComparison.Ordinal)
+        Check("the SubDL order carries the same fields as the call before it — quality, framerate and HI included",
+            // F-M687: der Aufruf steht nicht mehr in der Versandtabelle, sondern im AUFTRAG — die Angaben
+            // sind dieselben, und die Engine reicht sie unverändert an denselben Client.
+            uploadSource.Contains("Configuration.SubtitleProvider.Subdl => SendAsync(", StringComparison.Ordinal)
+            && uploadSource.Contains("Quality = quality,", StringComparison.Ordinal)
+            && uploadSource.Contains("Framerate = framerate ?? string.Empty,", StringComparison.Ordinal)
+            && uploadSource.Contains("Encoding.UTF8.GetBytes(srtContent)", StringComparison.Ordinal)
             && downloadSource.Contains("SubDL", StringComparison.Ordinal));
         Check("an additional source never breaks the run — its errors are warnings",
             downloadSource.Contains("[{Source}-D] search failed for", StringComparison.Ordinal));
@@ -803,8 +804,10 @@ internal static class Program
             && uploadSource.Contains("\"[\" + Api.Endpoints.Provenance.Name(quelle) + \"] DRY-RUN would upload {Name} [{Lang}]\"", StringComparison.Ordinal)
             && uploadSource.Contains("foreach (var quelle in UploadSourceOrder(isSeries))", StringComparison.Ordinal)
             && uploadSource.Contains("if (!SourceAllowed(quelle))", StringComparison.Ordinal)
-            && uploadSource.Contains("new Api.Endpoints.TvSubtitlesUploadEndpoint(", StringComparison.Ordinal)
-            && uploadSource.Contains("seasonPacks: _config.UploadSeasonPacks", StringComparison.Ordinal),
+            // F-M687: der Endpunkt ist aus der Kette verschwunden — die Quelle wird ueber ihren AUFTRAG
+            // angesprochen, und ihr eigener Schalter wird vorher gefragt (F-M495).
+            && uploadSource.Contains("Configuration.SubtitleProvider.TvSubtitles => SendToTvSubtitlesAsync(", StringComparison.Ordinal)
+            && uploadSource.Contains("if (!SourceAllowed(Configuration.SubtitleProvider.TvSubtitles))", StringComparison.Ordinal),
             "tvst line @" + dryLineTvst + ", dry block @" + dryBlockStart + ", call @" + secondSourceCall);
 
         // ---- 17. TMDb ist die einzige Pflicht, SubDL faellt ohne Konfiguration aus der Kette (F-M497) --
@@ -972,7 +975,7 @@ internal static class Program
             && tvstSource.Contains("episodeTitle: ticket.EpisodeTitle", StringComparison.Ordinal)
             && tvstSource.Contains("showTitle: ticket.ShowName", StringComparison.Ordinal)
             && tvstSource.Contains("year: ticket.MovieYear", StringComparison.Ordinal)
-            && uploadSource.Contains("EpisodeTitle: EpisodeTitleOf(mediaPath)", StringComparison.Ordinal)
+            && uploadSource.Contains("EpisodeTitle = EpisodeTitleOf(mediaPath)", StringComparison.Ordinal)
             && uploadSource.Contains("EpisodenPlatzhalter", StringComparison.Ordinal));
 
         // --- F-M575: eine Sammel-Karte statt eines Tabellendurchlaufs je Staffel -------------------
@@ -1286,9 +1289,13 @@ internal static class Program
             && up605.Contains("return UploadResult.NoVerdict(ex.Message);", StringComparison.Ordinal)
             && up605.Contains("return UploadResult.NoVerdict(\"run cancelled before the send\");", StringComparison.Ordinal));
         Check("F-M609: 429 und 5xx sind eine Stoerung, 4xx eine Ablehnung",
-            up605.Contains("private static bool IstStoerung(int? status)", StringComparison.Ordinal)
-            && up605.Contains("=> status is 429 or (>= 500 and < 600);", StringComparison.Ordinal)
-            && up605.Contains("IstStoerung(answer.Status)", StringComparison.Ordinal));
+            // F-M687: der Statusleser ist mit dem Endpunkt aus der Kette gefallen; die Regel steht jetzt
+            // an EINER Stelle — der Ausgang der Grenze wird dort gedeutet.
+            ur609.Contains("public static UploadResult FromAnswer(Sources.SourceSendAnswer answer)", StringComparison.Ordinal)
+            && ur609.Contains("case Sources.SourceOutcome.Busy:", StringComparison.Ordinal)
+            && ur609.Contains("return NoVerdict(answer.Reason ?? ", StringComparison.Ordinal)
+            && ur609.Contains(", busy: true);", StringComparison.Ordinal)
+            && !up605.Contains("IstStoerung(", StringComparison.Ordinal));
         Check("F-M609: bei SubDL sind Stundendeckel, rate-limited und API-Fehler Stoerungen, kein Nein",
             api609.Contains("return UploadResult.NoVerdict(\"rate-limited\", busy: true);", StringComparison.Ordinal)
             && api609.Contains("return UploadResult.NoVerdict(\"upload-hourly-cap\", busy: true);", StringComparison.Ordinal)
@@ -2485,7 +2492,7 @@ internal static class Program
                     uploadSource.Contains("var series = await _tmdb.SeriesInfoAsync(tmdbId!, ct)", StringComparison.Ordinal)
                     && uploadSource.Contains(
                         ".ResolveForMediaAsync(Registry, mediaHash, series, _config.DryRun, ct, mediaPath)", StringComparison.Ordinal)
-                    && uploadSource.Contains("TvstShowId: show.ShowId", StringComparison.Ordinal)
+                    && uploadSource.Contains("MediaId = show.ShowId", StringComparison.Ordinal)
                     && uploadSource.Contains("_tvstShows.BeginRun()", StringComparison.Ordinal)
                     // der alte Weg (Serienname aus dem Dateinamen) steht im tvst-Zweig nicht mehr
                     && !uploadSource.Contains(
@@ -3030,13 +3037,11 @@ internal static class Program
         // ---- 23. F-M508/F-M509: der UPLOAD-Weg der Film-Adresse --------------------------------
         // Gebaut, verdrahtet, GESPERRT. Die Pruefungen halten beides fest: dass der Weg da ist (Endpunkt,
         // Kette, Tor, Marke) und dass er ohne ausdrueckliche Entscheidung nicht angetreten wird.
-        Check("die Film-Adresse steht mit eigenem Endpunkt, eigenem Trockenlauf und eigener Marke in der Kette (F-M508)",
+        Check("die Film-Adresse steht mit eigenem Auftrag, eigener Vorpruefung und eigener Marke in der Kette (F-M508/F-M687)",
             uploadSource.Contains("Configuration.SubtitleProvider.MovieSubtitles => SendToMovieSubtitlesAsync(", StringComparison.Ordinal)
-            && uploadSource.Contains("new Api.Endpoints.MovieSubtitlesUploadEndpoint(_msubClient, dryRun: _config.DryRun)", StringComparison.Ordinal)
-            && uploadSource.Contains("Season: 0,", StringComparison.Ordinal)
-            && uploadSource.Contains("Episode: 0,", StringComparison.Ordinal)
-            && uploadSource.Contains("MsubMovieId: aufloesung.MovieId,", StringComparison.Ordinal)
-            && uploadSource.Contains("MovieYear: movie.ReleaseYear ?? 0);", StringComparison.Ordinal)
+            && uploadSource.Contains("MediaId = aufloesung.MovieId?.ToString(System.Globalization.CultureInfo.InvariantCulture),", StringComparison.Ordinal)
+            && uploadSource.Contains("IsSeries: false,", StringComparison.Ordinal)
+            && uploadSource.Contains("Year: movie.ReleaseYear ?? 0,", StringComparison.Ordinal)
             && uploadSource.Contains("if (isSeries)", StringComparison.Ordinal)
             && uploadSource.Contains("UploadResult.Skipped(\"film-source-films-only\")", StringComparison.Ordinal));
 

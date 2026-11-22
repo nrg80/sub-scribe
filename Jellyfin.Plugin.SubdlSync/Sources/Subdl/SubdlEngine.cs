@@ -377,9 +377,14 @@ public sealed class SubdlEngine : ISourceEngine
             return SourceSendAnswer.Rejected("language unknown to SubDL: " + request.Language);
         }
 
-        if (request.Bytes.Length == 0)
+        if (!request.AsPack && request.Bytes.Length == 0)
         {
             return SourceSendAnswer.Rejected("no bytes to send");
+        }
+
+        if (request.AsPack && request.Members.Count == 0)
+        {
+            return SourceSendAnswer.Rejected("no files to send");
         }
 
         try
@@ -392,16 +397,18 @@ public sealed class SubdlEngine : ISourceEngine
                     sprache,
                     request.ReleaseName,
 
-                    // Die Qualität ist eine Angabe des Laufs; die Grenze trägt sie nicht, und ein
-                    // geratener Wert wäre schlechter als keiner.
-                    string.Empty,
+                    // F-M687: die Qualität und die Bildrate sind Angaben des LAUFS — er hat sie aus dem
+                    // Release-Namen gelesen (F-M344/F-M350) und reicht sie mit dem Auftrag herüber. Eine
+                    // hier geratene wäre schlechter als keine.
+                    request.Quality,
                     request.Target.ImdbId,
                     request.Target.TmdbId,
                     request.Target.IsSeries,
                     request.Target.Season ?? 0,
                     request.Target.Episode,
                     ct,
-                    request.HearingImpaired).ConfigureAwait(false);
+                    request.HearingImpaired,
+                    Framerate(request)).ConfigureAwait(false);
 
             return Verdict(ergebnis);
         }
@@ -474,20 +481,37 @@ public sealed class SubdlEngine : ISourceEngine
         int von = request.Members.Count == 0 ? request.Target.Episode ?? 0 : request.Members.Min(m => m.Episode);
         int bis = request.Members.Count == 0 ? request.Target.Episode ?? 0 : request.Members.Max(m => m.Episode);
 
+        // F-M687: die Release-Namen ALLER Folgen reisen mit (das Feld ist eine Liste) — der Lauf hat sie
+        // aus seinen Mitgliedern zusammengestellt. Fehlt die Liste, gilt der eine Name des Behälters.
+        IReadOnlyList<string> releases = request.Releases.Count > 0
+            ? request.Releases
+            : new[] { request.ReleaseName };
+
         return _client.UploadSeasonPackAsync(
             dateien,
             request.ReleaseName,
             sprache,
-            new[] { request.ReleaseName },
-            string.Empty,
+            releases,
+            request.Quality,
             request.Target.ImdbId,
             request.Target.TmdbId,
             request.Target.Season ?? 0,
             von,
             bis,
             ct,
-            request.HearingImpaired);
+            request.HearingImpaired,
+            Framerate(request));
     }
+
+    /// <summary>
+    /// F-M687: der Bildraten-Code des Auftrags, oder SubDLs dokumentierter Vorgabewert <c>0</c>
+    /// („unbekannt", F-M350), wenn der Lauf keinen kennt — derselbe Wert, den der Lauf vorher selbst
+    /// hineingereicht hat.
+    /// </summary>
+    /// <param name="request">Die Abgabe.</param>
+    /// <returns>Der Code.</returns>
+    private static string Framerate(SourceSendRequest request)
+        => string.IsNullOrEmpty(request.Framerate) ? "0" : request.Framerate;
 
     /// <summary>
     /// F-M685: das Urteil des Clients in den EINEN Ausgang der Grenze — am echten Verhalten der Quelle

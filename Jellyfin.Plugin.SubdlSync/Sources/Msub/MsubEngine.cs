@@ -303,10 +303,27 @@ public sealed class MsubEngine : ISourceEngine
 
         try
         {
-            int? film = await _client
-                .FindMovieAsync(request.Target.Title, request.Target.Year, ct)
-                .ConfigureAwait(false);
-            if (film is null)
+            // F-M687: die Filmnummer, die der Lauf schon aufgelöst hat (F-M508), führt — der Versand
+            // sucht nicht ein zweites Mal und legt hier nichts an. Nur ohne Nummer (direkter Aufruf)
+            // wird über Titel und Jahr gesucht, genau wie im Endpunkt zuvor.
+            int film = int.TryParse(
+                request.Target.MediaId,
+                NumberStyles.Integer,
+                CultureInfo.InvariantCulture,
+                out int vorhandene)
+                && vorhandene > 0
+                ? vorhandene
+                : 0;
+
+            if (film <= 0)
+            {
+                film = await _client
+                    .FindMovieAsync(request.Target.Title, request.Target.Year, ct)
+                    .ConfigureAwait(false)
+                    ?? 0;
+            }
+
+            if (film <= 0)
             {
                 return SourceSendAnswer.Rejected("no film entry for '" + request.Target.Title + "'");
             }
@@ -316,12 +333,16 @@ public sealed class MsubEngine : ISourceEngine
                 : null;
 
             MovieSubtitlesUpload payload = MovieSubtitlesClient.BuildUpload(
-                film.Value,
+                film,
                 sprache,
                 request.ReleaseName,
                 request.FileName,
                 request.Bytes,
-                rip: null,
+
+                // F-M511: die Seite kennt ihre neun Rip-Werte und sonst nichts — die Abbildung von
+                // unserem Qualitätsnamen auf ihr Auswahlfeld ist ihre eigene Tabelle (F-M506) und steht
+                // deshalb HIER, nicht im Ablauf.
+                rip: MovieSubtitlesClient.RipFromQuality(request.Quality),
                 author: null,
                 tmdbId: tmdb,
                 imdbId: request.Target.ImdbId,

@@ -283,7 +283,7 @@ internal static class Program
         Check(!coord.Contains("DeletePublishedSubtitleAsync(single.Id, ct)", StringComparison.Ordinal),
             "F-M585: the coordinator no longer deletes the absorbed single — it stays beside the pack");
         Check(coord.IndexOf("DeletePublishedSubtitleAsync(single.Id, ct)", StringComparison.Ordinal)
-              < coord.IndexOf("UploadSeasonPackAsync(", StringComparison.Ordinal),
+              < coord.IndexOf("await engine.SendAsync(vorbereitet.Request, ct)", StringComparison.Ordinal),
             "BEFORE it uploads the pack, not after");
         // F-M585: es wird nichts mehr geloescht — die packs-Zeile traegt deshalb auch keine geloeschten
         // Ids mehr, sondern nur die Folgen des Containers.
@@ -312,7 +312,7 @@ internal static class Program
         Check(coord.Contains("\"already up with these members\"", StringComparison.Ordinal),
             "the buffer path refuses a pack that is already up with the same members");
         Check(coord.IndexOf("_registry.GetPack(key.ImdbId, key.Season, key.Lang, key.Hi)", StringComparison.Ordinal)
-              < coord.IndexOf("await _api.UploadSeasonPackAsync", StringComparison.Ordinal),
+              < coord.IndexOf("await engine.SendAsync(vorbereitet.Request, ct)", StringComparison.Ordinal),
             "and it decides that BEFORE the pack is sent");
         var refresh = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/ScheduledTasks/ScribeDatabaseRefreshTask.cs"));
         Check(refresh.Contains("registry.PruneOrphanedPacks()", StringComparison.Ordinal),
@@ -362,7 +362,7 @@ internal static class Program
         Console.WriteLine("16. The pack loop keeps the watchdog quiet");
         var coordSrc = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Pipeline/SeasonPackCoordinator.cs"));
         Check(coordSrc.Contains("_progress?.Invoke()"), "the coordinator reports progress per episode");
-        Check(upload.Contains("watchdog.Heartbeat)"), "the pipeline hands the watchdog beat to the coordinator");
+        Check(upload.Contains("watchdog.Heartbeat,"), "the pipeline hands the watchdog beat to the coordinator");
         Check(coordSrc.Contains("Action? progress = null"), "and th callback is optional");
 
         // ── 17. F-M410/F-M411: ein Hash je Folge, eine Logzeile je Datei ─────────
@@ -377,7 +377,7 @@ internal static class Program
         var coordPackSrc = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Pipeline/SeasonPackCoordinator.cs"));
         Check(coordPackSrc.Contains("have no single id yet"), "F-M412: a member without a SubDL id is named");
         Check(coordPackSrc.IndexOf("undeletable", StringComparison.Ordinal)
-              < coordPackSrc.IndexOf("await _api.UploadSeasonPackAsync"), "F-M412: the note comes before the pack is sent");
+              < coordPackSrc.IndexOf("await engine.SendAsync(vorbereitet.Request, ct)", StringComparison.Ordinal), "F-M412: the note comes before the pack is sent");
 
         // ── 19. F-M413: die Id kommt aus mySubtitles ────────────────────────────
         Console.WriteLine("19. The upload id is taken from mySubtitles");

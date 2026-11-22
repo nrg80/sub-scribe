@@ -1253,13 +1253,59 @@ public sealed class ScribeApiClient
             responseDoc = null;
         }
 
-        return UploadResult.Success(responseDoc);
+        return UploadResult.Success(responseDoc, PackIdOf(responseDoc));
     }
 
     /// <summary>
-    /// Step 2 of the upload for one file: returns the <c>file_n_id</c> SubDL assigns, or null when
-    /// the file was refused.
+    /// F-M687: die Kennung, die SubDL auf eine Behälter-Abgabe zurückgibt, aus der eigenen Antwort
+    /// gelesen — dieselben Pfade, die der Koordinator vorher selbst abgeklopft hat. Sie ist die eine
+    /// Zahl, die die Folgen an EIN entferntes Objekt bindet (F-M414); nennt die Antwort keine, bleibt
+    /// sie leer und der Lauf vergibt seine eigene Marke (F-M421).
     /// </summary>
+    /// <param name="response">Die Antwort auf <c>uploadSubtitle</c>, oder null.</param>
+    /// <returns>Die Kennung, oder null.</returns>
+    public static string? PackIdOf(System.Text.Json.JsonDocument? response)
+    {
+        if (response == null)
+        {
+            return null;
+        }
+
+        var root = response.RootElement;
+        foreach (var path in new[] { new[] { "data", "upload", "id" }, new[] { "upload", "id" }, new[] { "id" }, new[] { "subtitle_id" } })
+        {
+            System.Text.Json.JsonElement cursor = root;
+            bool ok = true;
+            foreach (var step in path)
+            {
+                if (cursor.ValueKind == System.Text.Json.JsonValueKind.Object && cursor.TryGetProperty(step, out var next))
+                {
+                    cursor = next;
+                }
+                else
+                {
+                    ok = false;
+                    break;
+                }
+            }
+
+            if (ok)
+            {
+                string? text = cursor.ValueKind switch
+                {
+                    System.Text.Json.JsonValueKind.String => cursor.GetString(),
+                    System.Text.Json.JsonValueKind.Number => cursor.GetRawText(),
+                    _ => null
+                };
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    return text;
+                }
+            }
+        }
+
+        return null;
+    }
     private async Task<string?> UploadSingleFileAsync(string token, string nId, string fileName, string content, CancellationToken ct)
     {
         var boundary = "----Boundary" + Guid.NewGuid().ToString("N");
