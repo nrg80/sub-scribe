@@ -45,6 +45,12 @@ public sealed class SubdlEngine : ISourceEngine
     /// <summary>F-M450: die Seitenzahl-Obergrenze der Suche (Sicherheit, nicht Takt).</summary>
     private const int MaxSearchPages = 20;
 
+    /// <summary>F-M691: der Upload-Schalter in der eigenen Datei dieser Quelle.</summary>
+    public const string FieldUploadEnabled = SourceSwitches.UploadField;
+
+    /// <summary>F-M691: der Download-Schalter in der eigenen Datei dieser Quelle.</summary>
+    public const string FieldDownloadEnabled = SourceSwitches.DownloadField;
+
     /// <summary>F-M683: der Schlüssel des API-Schlüssels in der eigenen Datei dieser Quelle.</summary>
     public const string FieldApiKey = "apiKey";
 
@@ -74,6 +80,12 @@ public sealed class SubdlEngine : ISourceEngine
     /// </summary>
     public static IReadOnlyList<SourceField> Declared { get; } = new SourceField[]
     {
+        // F-M691: die beiden Richtungen stehen zuerst — sie sind die gröbste Frage an eine Quelle
+        // („nimmst du überhaupt teil?"), alles andere gilt innerhalb einer eingeschalteten Richtung.
+        new(FieldUploadEnabled, "Upload", SourceFieldKind.Switch, Default: "false",
+            Help: "Offer our own subtitles to this source. Off unless you switch it on."),
+        new(FieldDownloadEnabled, "Download", SourceFieldKind.Switch, Default: "true",
+            Help: "Search and fetch subtitles from this source."),
         new(FieldApiKey, "API key", SourceFieldKind.Secret, Default: string.Empty, Required: true,
             Help: "Sent as a bearer token. Without a key SubDL neither searches nor downloads."),
         new(FieldAccount, "Account", SourceFieldKind.Text,

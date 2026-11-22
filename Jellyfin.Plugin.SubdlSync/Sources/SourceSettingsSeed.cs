@@ -11,6 +11,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using Jellyfin.Plugin.SubScribe.Api;
 using Jellyfin.Plugin.SubScribe.Configuration;
 using Jellyfin.Plugin.SubScribe.Sources.Msub;
@@ -126,4 +127,105 @@ public static class SourceSettingsSeed
                 [MsubEngine.FieldBaseUrl] = MovieSubtitlesClient.BaseUrl,
             }),
         };
+
+    /// <summary>
+    /// F-M691: die Marke, die sagt „die Richtungsschalter stehen jetzt in den Quelldateien". Eine eigene
+    /// Marke, weil die Übernahme von F-M683 auf prod längst gelaufen ist — ohne sie käme der Nachtrag dort
+    /// nie an.
+    /// </summary>
+    public const string DirectionMarkerName = ".seed-directions-1";
+
+    /// <summary>
+    /// F-M691: schreibt die beiden Richtungsschalter EINMAL in die vorhandene Datei jeder Quelle, die sie
+    /// noch nicht führt. Betreiberansage 22.11.2026: die Schalter gehören „ins source feld" — bis dahin
+    /// standen sie in der Plugin-Konfiguration. Ohne diesen Nachtrag zeigte die Karte die Vorgabe der
+    /// Engine, während der Alt-Wert weiter galt: die Oberfläche würde über eine laufende Richtung lügen.
+    /// <para>
+    /// Der übernommene Wert ist der, der HEUTE gilt (<see cref="PluginConfiguration.IsUploadEnabled"/>/
+    /// <see cref="PluginConfiguration.IsDownloadEnabled"/>) — der Nachtrag ändert kein Verhalten, er zieht
+    /// nur den Wert an die Stelle, an der er ab jetzt gepflegt wird. Eine fehlende oder kaputte Datei wird
+    /// nicht angelegt und nicht überschrieben; ein bereits gespeicherter Wert bleibt unangetastet.
+    /// </para>
+    /// </summary>
+    /// <param name="dataDir">Der Datenordner des Plugins (null/leer = nichts tun).</param>
+    /// <param name="config">Die Konfiguration dieses Laufs.</param>
+    /// <returns>Die Schlüssel der Quellen, deren Datei in DIESEM Aufruf ergänzt wurde.</returns>
+    public static IReadOnlyList<string> EnsureDirectionSwitches(string? dataDir, PluginConfiguration? config)
+    {
+        var ergaenzt = new List<string>();
+        if (string.IsNullOrWhiteSpace(dataDir) || config is null)
+        {
+            return ergaenzt;
+        }
+
+        string ordner = SourceSettingsFile.DirIn(dataDir);
+        string marke = Path.Combine(ordner, DirectionMarkerName);
+        if (File.Exists(marke))
+        {
+            return ergaenzt;
+        }
+
+        foreach ((SubtitleProvider provider, string key, IReadOnlyList<SourceField> schema) in DirectionPlan)
+        {
+            string datei = SourceSettingsFile.PathIn(dataDir, key);
+            if (!File.Exists(datei))
+            {
+                // Keine Datei: die Vorgabe der Engine gilt, und die ist genau der heutige Wert.
+                continue;
+            }
+
+            SourceSettings vorhanden = SourceSettingsFile.Load(dataDir, key, schema);
+            if (vorhanden.Problem is not null)
+            {
+                // Eine kaputte Datei ist kein Rohling — sie wird nicht überschrieben (F-M683).
+                continue;
+            }
+
+            var werte = new Dictionary<string, string>(StringComparer.Ordinal);
+            bool fehltEtwas = false;
+            foreach (KeyValuePair<string, string> paar in vorhanden.Stored)
+            {
+                werte[paar.Key] = paar.Value;
+            }
+
+            if (!vorhanden.Has(SourceSwitches.UploadField)
+                && schema.Any(f => f.Key == SourceSwitches.UploadField))
+            {
+                werte[SourceSwitches.UploadField] = config.IsUploadEnabled(provider) ? "true" : "false";
+                fehltEtwas = true;
+            }
+
+            if (!vorhanden.Has(SourceSwitches.DownloadField)
+                && schema.Any(f => f.Key == SourceSwitches.DownloadField))
+            {
+                werte[SourceSwitches.DownloadField] = config.IsDownloadEnabled(provider) ? "true" : "false";
+                fehltEtwas = true;
+            }
+
+            if (!fehltEtwas)
+            {
+                continue;
+            }
+
+            SourceSettingsFile.Save(dataDir, key, schema, werte);
+            ergaenzt.Add(key);
+        }
+
+        Directory.CreateDirectory(ordner);
+        SourceSettingsFile.RestrictFolderToOwner(ordner);
+        File.WriteAllText(marke, "directions " + SourceSettingsFile.SchemaNumber);
+        SourceSettingsFile.RestrictToOwner(marke);
+        return ergaenzt;
+    }
+
+    /// <summary>
+    /// F-M691: welche Quelle welchen Schlüssel führt und welchen Schalter sie erklärt — die Grundlage des
+    /// Nachtrags. Die Zuordnung steht hier, weil <see cref="SourceSwitches"/> sie schon hält.
+    /// </summary>
+    private static readonly (SubtitleProvider Provider, string Key, IReadOnlyList<SourceField> Schema)[] DirectionPlan =
+    {
+        (SubtitleProvider.Subdl, SubdlEngine.SourceKey, SubdlEngine.Declared),
+        (SubtitleProvider.TvSubtitles, TvstEngine.SourceKey, TvstEngine.Declared),
+        (SubtitleProvider.MovieSubtitles, MsubEngine.SourceKey, MsubEngine.Declared),
+    };
 }

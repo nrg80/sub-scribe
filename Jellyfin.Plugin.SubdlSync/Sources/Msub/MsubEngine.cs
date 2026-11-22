@@ -36,6 +36,9 @@ public sealed class MsubEngine : ISourceEngine
     /// <summary>Der Griff trägt seine Herkunft: <c>m:</c> + Filmnummer + <c>:</c> + Eintrags-Kennung.</summary>
     private const string HandlePrefix = "m:";
 
+    /// <summary>F-M691: der Download-Schalter in der eigenen Datei dieser Quelle.</summary>
+    public const string FieldDownloadEnabled = SourceSwitches.DownloadField;
+
     /// <summary>F-M683: der Schlüssel der Adresse in der eigenen Datei dieser Quelle.</summary>
     public const string FieldBaseUrl = "baseUrl";
 
@@ -50,6 +53,11 @@ public sealed class MsubEngine : ISourceEngine
     /// </summary>
     public static IReadOnlyList<SourceField> Declared { get; } = new SourceField[]
     {
+        // F-M691: hier steht NUR der Download-Schalter. Einen Upload-Schalter zu zeigen, der nichts tun
+        // darf, wäre eine Behauptung: der Upload dieser Adresse ist bis zur belegten Sprachabbildung
+        // gesperrt (F-M508, Betreiber: „Bevor wir falsche Sprachen hochladen, laden wir nix hoch.").
+        new(FieldDownloadEnabled, "Download", SourceFieldKind.Switch, Default: "true",
+            Help: "Search and fetch subtitles from this site."),
         new(FieldBaseUrl, "Address", SourceFieldKind.Url, Default: MovieSubtitlesClient.BaseUrl,
             Help: "The site address. This build uses the built-in one; a differing value is reported."),
         new(FieldAccess, "Access", SourceFieldKind.Secret,

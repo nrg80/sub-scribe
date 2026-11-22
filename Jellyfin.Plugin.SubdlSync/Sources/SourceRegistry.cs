@@ -12,6 +12,7 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Microsoft.Extensions.Logging;
 using Jellyfin.Plugin.SubScribe.Configuration;
 using Jellyfin.Plugin.SubScribe.Sources.Msub;
 using Jellyfin.Plugin.SubScribe.Sources.Subdl;
@@ -71,6 +72,19 @@ public sealed class SourceRegistry
         // eigenen Dateien. Sie steht hier, weil hier ohnehin jede Quelle genau einmal gebaut wird —
         // ein zweiter Ort, an dem jemand daran denken müsste, wäre ein Ort, an dem es vergessen wird.
         SourceSettingsSeed.Ensure(context.DataFolder, config);
+
+        // F-M691: die Richtungsschalter nachtragen, wo sie noch in der Plugin-Konfiguration stehen.
+        // Eine eigene Marke, damit der Nachtrag auch auf einer Instanz ankommt, deren Übernahme
+        // (F-M683) längst gelaufen ist.
+        var richtungen = SourceSettingsSeed.EnsureDirectionSwitches(context.DataFolder, config);
+        if (richtungen.Count > 0)
+        {
+            context.Logger?.LogInformation(
+                "[Sub Scribe] the upload/download switch of {Count} source(s) now lives in their own file "
+                + "(F-M691): {Keys}",
+                richtungen.Count,
+                string.Join(", ", richtungen));
+        }
 
         // F-M654: SubDL steht immer im Pack-Slot — der Schalter dieser Quelle entscheidet eine Etage
         // höher, ob der Lauf überhaupt packt, nicht diese Liste. Das ist der Stand vor F-M682 und bleibt

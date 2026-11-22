@@ -427,17 +427,23 @@ internal static class Program
                 .SelectMany(e => e.Fields.Select(f => e.Capabilities.Key + " " + f.Key + " = "
                     + (f.Default.Length == 0 ? "[leer]" : f.Default)))
                 .ToList();
+            // F-M691: die beiden Richtungsschalter stehen jetzt VOR den Zugängen — die gröbste Frage an
+            // eine Quelle zuerst. moviesubtitles führt nur den Download (F-M508).
             var erwarteteFelder = new[]
             {
+                "subdl uploadEnabled = false", "subdl downloadEnabled = true",
                 "subdl apiKey = [leer]", "subdl account = [leer]",
                 "subdl baseUrl = " + Jellyfin.Plugin.SubScribe.Api.ScribeApiClient.ApiBase,
                 "subdl preferSeasonZip = true",
+                "tvsubtitles uploadEnabled = false", "tvsubtitles downloadEnabled = true",
                 "tvsubtitles baseUrl = " + Jellyfin.Plugin.SubScribe.Api.TvSubtitlesClient.BaseUrl,
+                "moviesubtitles downloadEnabled = true",
                 "moviesubtitles baseUrl = " + Jellyfin.Plugin.SubScribe.Api.MovieSubtitlesClient.BaseUrl,
                 "moviesubtitles access = [leer]",
             };
             Check(feldStand.SequenceEqual(erwarteteFelder),
-                "F-M683 (A): die Felder der drei Quellen sind die vereinbarten — und ihre Vorgaben sind die Adressen, die die Clients WIRKLICH benutzen",
+                "F-M683 (A)/F-M691: die Felder der drei Quellen sind die vereinbarten — Richtungen zuerst, "
+                + "dann Zugänge, und ihre Vorgaben sind die Adressen, die die Clients WIRKLICH benutzen",
                 string.Join(", ", feldStand));
 
             // ---- C: ein Geheimnis steht nie in der Antwort ----
@@ -920,10 +926,22 @@ internal static class Program
         VergleichAsync(root).GetAwaiter().GetResult();
 
         // -----------------------------------------------------------------------------------------
+        // (h) F-M691: die Richtungsschalter liegen in der Datei der Quelle.
+        //
+        //     Betreiberansage 22.11.2026: "Enable upload/download pro source dann bitte auch ins source
+        //     feld". Gemessen wird hier der ganze Weg: die Engine ERKLAERT die beiden Schalter, die Datei
+        //     TRÄGT sie, der Leser der Konfiguration FRAGT sie zuerst, und der Nachtrag holt den Alt-Wert
+        //     genau einmal ab.
+        // -----------------------------------------------------------------------------------------
+        Console.WriteLine();
+        Console.WriteLine("(h) F-M691: uploadEnabled / downloadEnabled in der Datei der Quelle");
+        Richtungen(root);
+
+        // -----------------------------------------------------------------------------------------
         // Bericht.
         // -----------------------------------------------------------------------------------------
         Console.WriteLine();
-        Console.WriteLine("sources: " + _checks + " Prüfungen (T339/T340/T341/T342/T343/T344, F-M682/F-M683/F-M684/F-M685/F-M686/F-M687)");
+        Console.WriteLine("sources: " + _checks + " Prüfungen (T339-T348, F-M682-F-M691)");
         if (Failures.Count == 0)
         {
             Console.WriteLine(">>> SOURCES OK: " + _checks + " Prüfungen bestanden");
@@ -2030,6 +2048,165 @@ internal static class Program
             + "<td title=\"uploaded\">2026-01-01</td>"
             + "<td title=\"downloaded\">12</td>"
             + "</tr></table></div></a>";
+    }
+
+    /// <summary>
+    /// F-M691: die Richtungsschalter einer Quelle stehen in ihrer eigenen Datei.
+    /// <para>
+    /// Gemessen wird der ganze Weg und nicht nur die Erklärung: (1) jede Engine, die die Richtung
+    /// bedienen kann, ERKLÄRT den Schalter; (2) die Datei TRÄGT ihn nach dem Speichern; (3) der Leser
+    /// antwortet aus der Datei, BEVOR der Alt-Wert aus der Plugin-Konfiguration antwortet; (4) der
+    /// Nachtrag schreibt den heutigen Wert genau EINMAL und lässt einen gespeicherten Wert stehen.
+    /// </para>
+    /// </summary>
+    /// <param name="root">Der Repo-Wurzelpfad.</param>
+    private static void Richtungen(string root)
+    {
+        string dir = Path.Combine(Path.GetTempPath(), "sources-directions-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dir);
+
+        // Der Leser der Konfiguration fragt die Dateien — hier zeigt er auf das temporäre Verzeichnis.
+        Func<string?> vorher = SourceSwitches.DataFolder;
+        SourceSwitches.DataFolder = () => dir;
+        try
+        {
+            // (1) Wer eine Richtung bedienen kann, erklärt sie. msub erklärt NUR den Download (F-M508).
+            static bool Hat(IReadOnlyList<SourceField> schema, string key) => schema.Any(f => f.Key == key);
+
+            Check(Hat(SubdlEngine.Declared, SourceSwitches.UploadField)
+                  && Hat(SubdlEngine.Declared, SourceSwitches.DownloadField),
+                "F-M691 (1): SubDL erklärt beide Richtungen als eigenes Feld");
+            Check(Hat(TvstEngine.Declared, SourceSwitches.UploadField)
+                  && Hat(TvstEngine.Declared, SourceSwitches.DownloadField),
+                "F-M691 (1): tvsubtitles erklärt beide Richtungen als eigenes Feld");
+            Check(Hat(MsubEngine.Declared, SourceSwitches.DownloadField)
+                  && !Hat(MsubEngine.Declared, SourceSwitches.UploadField),
+                "F-M691 (1): moviesubtitles erklärt NUR den Download — ein Upload-Schalter wäre dort eine "
+                + "Behauptung (F-M508)");
+
+            Check(SubdlEngine.Declared.Take(2).All(f => f.Key is SourceSwitches.UploadField or SourceSwitches.DownloadField)
+                  && TvstEngine.Declared.Take(2).All(f => f.Key is SourceSwitches.UploadField or SourceSwitches.DownloadField),
+                "F-M691 (1): die Richtungen stehen ZUERST — die gröbste Frage an eine Quelle kommt vor der "
+                + "Adresse und den Zugängen");
+
+            // Die Vorgaben sind die des Betreibers (F-M503): Download an, Upload aus.
+            Check(SubdlEngine.Declared.First(f => f.Key == SourceSwitches.DownloadField).Default == "true"
+                  && SubdlEngine.Declared.First(f => f.Key == SourceSwitches.UploadField).Default == "false"
+                  && TvstEngine.Declared.First(f => f.Key == SourceSwitches.UploadField).Default == "false"
+                  && MsubEngine.Declared.First(f => f.Key == SourceSwitches.DownloadField).Default == "true",
+                "F-M691 (1): die Vorgaben sind Download an / Upload aus (F-M503)");
+
+            // (2) Die Datei trägt den Schalter — geschrieben über denselben Weg wie jede Karte.
+            SourceSettingsFile.Save(dir, SubdlEngine.SourceKey, SubdlEngine.Declared,
+                new Dictionary<string, string>(StringComparer.Ordinal)
+                {
+                    [SourceSwitches.UploadField] = "true",
+                    [SourceSwitches.DownloadField] = "false",
+                });
+
+            Check(SourceSettingsFile.ReadFlag(dir, SubdlEngine.SourceKey, SourceSwitches.UploadField) == true
+                  && SourceSettingsFile.ReadFlag(dir, SubdlEngine.SourceKey, SourceSwitches.DownloadField) == false,
+                "F-M691 (2): die Datei der Quelle trägt beide Schalter, und der Leser liest sie ohne Schema");
+
+            Check(SourceSettingsFile.ReadFlag(dir, TvstEngine.SourceKey, SourceSwitches.UploadField) == null,
+                "F-M691 (2): eine fehlende Datei sagt NICHTS (null) — sie sagt nicht „aus“");
+
+            File.WriteAllText(SourceSettingsFile.PathIn(dir, TvstEngine.SourceKey),
+                "{\"schema\":1,\"key\":\"tvsubtitles\",\"baseUrl\":\"x\"}");
+            Check(SourceSettingsFile.ReadFlag(dir, TvstEngine.SourceKey, SourceSwitches.UploadField) == null,
+                "F-M691 (2): eine Datei ohne den Schalter sagt nichts — der Alt-Wert bleibt zuständig");
+
+            File.WriteAllText(SourceSettingsFile.PathIn(dir, MsubEngine.SourceKey),
+                "{\"schema\":1,\"key\":\"falsch\",\"downloadEnabled\":true}");
+            Check(SourceSettingsFile.ReadFlag(dir, MsubEngine.SourceKey, SourceSwitches.DownloadField) == null,
+                "F-M691 (2): eine Datei, die einer anderen Quelle gehört, wird nicht gelesen (F-M683)");
+
+            // (3) Der Leser der Konfiguration fragt die DATEI zuerst, dann den Alt-Wert.
+            var config = new PluginConfiguration
+            {
+                UploadEnabled = false,
+                SubdlUploadEnabled = false,
+                SubdlDownloadEnabled = true,
+                TvSubtitlesUploadEnabled = false,
+                TvSubtitlesDownloadEnabled = true,
+            };
+
+            Check(config.IsUploadEnabled(SubtitleProvider.Subdl),
+                "F-M691 (3): die Datei schlägt den Alt-Wert — uploadEnabled=true in der Datei bei "
+                + "SubdlUploadEnabled=false ergibt AN",
+                "Datei true, Alt-Wert false");
+            Check(!config.IsDownloadEnabled(SubtitleProvider.Subdl),
+                "F-M691 (3): dieselbe Regel andersherum — downloadEnabled=false schlägt SubdlDownloadEnabled=true",
+                "Datei false, Alt-Wert true");
+            Check(config.IsDownloadEnabled(SubtitleProvider.TvSubtitles)
+                  && !config.IsUploadEnabled(SubtitleProvider.TvSubtitles),
+                "F-M691 (3): wo die Datei nichts sagt, antwortet der Alt-Wert wie bisher "
+                + "(tvst Download an, Upload aus, F-M503)");
+
+            // (4) Der Nachtrag: einmal, mit dem heutigen Wert, ohne einen gespeicherten zu überschreiben.
+            string nachtrag = Path.Combine(dir, "nachtrag");
+            Directory.CreateDirectory(SourceSettingsFile.DirIn(nachtrag));
+            File.WriteAllText(SourceSettingsFile.PathIn(nachtrag, SubdlEngine.SourceKey),
+                "{\"schema\":1,\"key\":\"subdl\",\"apiKey\":\"GEHEIM\",\"uploadEnabled\":true}");
+            File.WriteAllText(SourceSettingsFile.PathIn(nachtrag, TvstEngine.SourceKey),
+                "{\"schema\":1,\"key\":\"tvsubtitles\",\"baseUrl\":\"x\"}");
+
+            // Der Alt-Stand, aus dem der Nachtrag abschreibt: SubDL-Upload AN, SubDL-Download AUS,
+            // tvst-Upload AN, tvst-Download AUS. Damit unterscheidet sich der nachgetragene Wert in jedem
+            // Fall von der Vorgabe der Engine — sonst bewiese die Prüfung nichts.
+            var alt = new PluginConfiguration
+            {
+                UploadEnabled = true,
+                SubdlUploadEnabled = true,
+                SubdlDownloadEnabled = false,
+                TvSubtitlesUploadEnabled = true,
+                TvSubtitlesDownloadEnabled = false,
+            };
+
+            SourceSwitches.DataFolder = () => (string?)null;
+            IReadOnlyList<string> ergaenzt = SourceSettingsSeed.EnsureDirectionSwitches(nachtrag, alt);
+
+            Check(ergaenzt.Count == 2 && ergaenzt.Contains(SubdlEngine.SourceKey)
+                  && ergaenzt.Contains(TvstEngine.SourceKey),
+                "F-M691 (4): der Nachtrag ergänzt die Dateien, die den Schalter noch nicht führen",
+                string.Join(", ", ergaenzt));
+
+            SourceSettings nachher = SourceSettingsFile.Load(nachtrag, SubdlEngine.SourceKey, SubdlEngine.Declared);
+            Check(nachher.Switch(SourceSwitches.UploadField),
+                "F-M691 (4): ein gespeicherter Wert bleibt stehen (uploadEnabled=true wurde nicht überschrieben)",
+                "uploadEnabled=" + nachher.Switch(SourceSwitches.UploadField));
+            Check(nachher.Has(SourceSwitches.DownloadField) && !nachher.Switch(SourceSwitches.DownloadField),
+                "F-M691 (4): der fehlende Schalter wird mit dem HEUTIGEN Wert nachgetragen — "
+                + "SubdlDownloadEnabled=false landet als downloadEnabled=false in der Datei (und nicht die "
+                + "Vorgabe der Engine, die true wäre)",
+                "downloadEnabled=" + nachher.Switch(SourceSwitches.DownloadField));
+
+            SourceSettings tvstNachher = SourceSettingsFile.Load(nachtrag, TvstEngine.SourceKey, TvstEngine.Declared);
+            Check(tvstNachher.Switch(SourceSwitches.UploadField)
+                  && !tvstNachher.Switch(SourceSwitches.DownloadField),
+                "F-M691 (4): dasselbe für tvsubtitles — Upload AN und Download AUS kommen mit",
+                "upload=" + tvstNachher.Switch(SourceSwitches.UploadField)
+                + " download=" + tvstNachher.Switch(SourceSwitches.DownloadField));
+            Check(nachher.Secret(SubdlEngine.FieldApiKey) == "GEHEIM",
+                "F-M691 (4): der Nachtrag lässt den Zugang in der Datei unangetastet");
+
+            Check(File.Exists(Path.Combine(SourceSettingsFile.DirIn(nachtrag), SourceSettingsSeed.DirectionMarkerName)),
+                "F-M691 (4): der Nachtrag setzt seine eigene Marke");
+            Check(SourceSettingsSeed.EnsureDirectionSwitches(nachtrag, alt).Count == 0,
+                "F-M691 (4): ein zweiter Lauf tut nichts mehr");
+        }
+        finally
+        {
+            SourceSwitches.DataFolder = vorher;
+            try
+            {
+                Directory.Delete(dir, recursive: true);
+            }
+            catch (IOException)
+            {
+                // Aufräumen ist Kür, nicht Prüfung.
+            }
+        }
     }
 
     /// <summary>Zeilen einer Datei, die einen Text enthalten — mit Dateiname und Zeilennummer.</summary>

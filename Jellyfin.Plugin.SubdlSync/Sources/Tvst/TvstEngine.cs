@@ -43,6 +43,12 @@ public sealed class TvstEngine : ISourceEngine
     /// <summary>Der Griff trägt seine Herkunft: <c>s:</c> + Eintrags-Kennung der Seite.</summary>
     private const string HandlePrefix = "s:";
 
+    /// <summary>F-M691: der Upload-Schalter in der eigenen Datei dieser Quelle.</summary>
+    public const string FieldUploadEnabled = SourceSwitches.UploadField;
+
+    /// <summary>F-M691: der Download-Schalter in der eigenen Datei dieser Quelle.</summary>
+    public const string FieldDownloadEnabled = SourceSwitches.DownloadField;
+
     /// <summary>F-M683: der Schlüssel der Adresse in der eigenen Datei dieser Quelle.</summary>
     public const string FieldBaseUrl = "baseUrl";
 
@@ -54,6 +60,12 @@ public sealed class TvstEngine : ISourceEngine
     /// </summary>
     public static IReadOnlyList<SourceField> Declared { get; } = new SourceField[]
     {
+        // F-M691: Richtungen zuerst. Die Vorgaben sind die des Betreibers vom 15.11.2026 (F-M503):
+        // Download an, Upload aus — ein Upload verlässt den Rechner und ist deshalb opt-in.
+        new(FieldUploadEnabled, "Upload", SourceFieldKind.Switch, Default: "false",
+            Help: "Offer our own subtitles to this site. Off unless you switch it on."),
+        new(FieldDownloadEnabled, "Download", SourceFieldKind.Switch, Default: "true",
+            Help: "Search and fetch subtitles from this site."),
         new(FieldBaseUrl, "Address", SourceFieldKind.Url, Default: TvSubtitlesClient.BaseUrl,
             Help: "The site address. This build uses the built-in one; a differing value is reported."),
     };

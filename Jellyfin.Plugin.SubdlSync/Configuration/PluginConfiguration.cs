@@ -12,6 +12,7 @@
 using System;
 using System.Collections.Generic;
 using MediaBrowser.Model.Plugins;
+using Jellyfin.Plugin.SubScribe.Sources;
 
 namespace Jellyfin.Plugin.SubScribe.Configuration;
 
@@ -930,12 +931,17 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <returns>True when the download direction runs for this source.</returns>
     public bool IsDownloadEnabled(SubtitleProvider provider) => provider switch
     {
-        SubtitleProvider.Subdl => HasProvider(provider) && (SubdlDownloadEnabled ?? DownloadEnabled),
-        SubtitleProvider.TvSubtitles => HasProvider(provider) && (TvSubtitlesDownloadEnabled ?? true),
+        // F-M691: die Datei der Quelle antwortet ZUERST (Betreiberansage „ins source feld"); sagt sie
+        // nichts — Bestand von vor F-M691, von Hand gekürzte Datei —, antwortet der Alt-Wert wie bisher.
+        SubtitleProvider.Subdl =>
+            HasProvider(provider) && (SourceSwitches.Download(provider) ?? SubdlDownloadEnabled ?? DownloadEnabled),
+        SubtitleProvider.TvSubtitles =>
+            HasProvider(provider) && (SourceSwitches.Download(provider) ?? TvSubtitlesDownloadEnabled ?? true),
 
         // F-M507: moviesubtitles.org hat keinen Alt-Wert — wie tvst ist ein ungesetzter Download AN
         // und ein gespeichertes false AUS.
-        SubtitleProvider.MovieSubtitles => HasProvider(provider) && (MovieSubtitlesDownloadEnabled ?? true),
+        SubtitleProvider.MovieSubtitles =>
+            HasProvider(provider) && (SourceSwitches.Download(provider) ?? MovieSubtitlesDownloadEnabled ?? true),
         _ => false,
     };
 
@@ -962,11 +968,15 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <returns>True when the upload direction runs for this source.</returns>
     public bool IsUploadEnabled(SubtitleProvider provider) => provider switch
     {
-        SubtitleProvider.Subdl => HasProvider(provider) && (SubdlUploadEnabled ?? UploadEnabled),
-        SubtitleProvider.TvSubtitles => HasProvider(provider) && (TvSubtitlesUploadEnabled ?? false),
+        // F-M691: Datei zuerst, dann der Alt-Wert (siehe IsDownloadEnabled).
+        SubtitleProvider.Subdl =>
+            HasProvider(provider) && (SourceSwitches.Upload(provider) ?? SubdlUploadEnabled ?? UploadEnabled),
+        SubtitleProvider.TvSubtitles =>
+            HasProvider(provider) && (SourceSwitches.Upload(provider) ?? TvSubtitlesUploadEnabled ?? false),
 
         // F-M507: der Upload dieser Quelle ist default AUS (F-M503-Regel: Download an, Upload aus).
-        SubtitleProvider.MovieSubtitles => HasProvider(provider) && (MovieSubtitlesUploadEnabled ?? false),
+        SubtitleProvider.MovieSubtitles =>
+            HasProvider(provider) && (SourceSwitches.Upload(provider) ?? MovieSubtitlesUploadEnabled ?? false),
         _ => false,
     };
 

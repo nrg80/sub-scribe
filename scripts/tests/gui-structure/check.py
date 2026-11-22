@@ -95,6 +95,10 @@ def run_case_probe(page_src):
         "Languages": { "DEU": "DE", "ENG": "EN" }
       },
       "Fields": [
+        { "Key": "uploadEnabled", "Label": "Upload", "Kind": "switch", "Default": "false",
+          "Value": false, "Gesetzt": false, "Options": [] },
+        { "Key": "downloadEnabled", "Label": "Download", "Kind": "switch", "Default": "true",
+          "Value": true, "Gesetzt": false, "Options": [] },
         { "Key": "apiKey", "Label": "API-Schluessel", "Kind": "secret", "Required": true,
           "Help": "Bearer", "Gesetzt": true, "Options": [] },
         { "Key": "account", "Label": "Konto", "Kind": "text", "Required": false,
@@ -169,13 +173,21 @@ def run_case_probe(page_src):
         fehler.append("configured(tvst)=%r" % tvst.get("configured"))
     felder = subdl.get("fields") or []
     arten = [f.get("kind") for f in felder]
-    if arten != ["secret", "text", "url", "switch", "number", "choice"]:
+    if arten != ["switch", "switch", "secret", "text", "url", "switch", "number", "choice"]:
         fehler.append("Arten=%s" % arten)
-    if felder and felder[1].get("visibleWhen", {}) and \
-            felder[1]["visibleWhen"].get("field") != "apiKey":
-        fehler.append("visibleWhen=%r" % felder[1].get("visibleWhen"))
-    if felder and felder[0].get("gesetzt") is not True:
-        fehler.append("gesetzt=%r" % felder[0].get("gesetzt"))
+
+    # F-M691: die beiden Richtungsschalter stehen als Schalter auf der Karte, mit ihrem Wert.
+    if felder and felder[0].get("key") != "uploadEnabled":
+        fehler.append("erstes Feld=%r" % (felder[0].get("key") if felder else None))
+    if felder and felder[0].get("value") is not False:
+        fehler.append("Upload-Wert=%r" % felder[0].get("value"))
+    if len(felder) > 1 and felder[1].get("value") is not True:
+        fehler.append("Download-Wert=%r" % felder[1].get("value"))
+    if felder and felder[3].get("visibleWhen", {}) and \
+            felder[3]["visibleWhen"].get("field") != "apiKey":
+        fehler.append("visibleWhen=%r" % felder[3].get("visibleWhen"))
+    if len(felder) > 2 and felder[2].get("gesetzt") is not True:
+        fehler.append("gesetzt=%r" % felder[2].get("gesetzt"))
     caps = subdl.get("capabilities") or {}
     if caps.get("canSeasonPacks") is not True or caps.get("searchesByTmdb") is not False:
         fehler.append("Faehigkeiten=%r" % caps)
@@ -1988,19 +2000,23 @@ def main():
     nxt = [n for n in nxt if n > 0]
     down_part = rest[:min(nxt)] if nxt else rest
 
-    for tab_name, part, box, reason in (("upload", up_part, "TvstUploadEnabled", "TvstUploadReason"),
-                                        ("download", down_part, "TvstDownloadEnabled", "TvstDownloadReason")):
-        check("F-M520: the %s tab shows ONE tvst switch, not one per address" % tab_name,
-              ('id="%s"' % box) in part
-              and 'id="TvSubtitlesUploadEnabled"' not in part
-              and 'id="MovieSubtitlesUploadEnabled"' not in part
-              and 'id="TvSubtitlesDownloadEnabled"' not in part
-              and 'id="MovieSubtitlesDownloadEnabled"' not in part)
-        check("F-M520: the %s switch carries a short default line" % tab_name,
-              ('id="%s"' % reason) in part)
-        # Der Download-Tab nennt den Satz zweimal (einmal am Schalter, einmal in der Statuszeile der
-        # Familie) — geprueft wird, dass er DA ist und beide Adressen nennt, nicht wie oft.
-        check("F-M520: the %s tab names both addresses and says who decides" % tab_name,
+    # F-M691 (Operator-Anweisung 22.11.2026: „Enable upload/download pro source dann bitte auch ins
+    # source feld"): die Richtungsschalter standen bis hier als Kaestchen in diesen beiden Reitern. Jetzt
+    # fuehrt sie die Karte ihrer Quelle unter „Endpoints" — ein Kaestchen hier waere ein zweiter Ort, an
+    # dem dieselbe Frage beantwortet wird, und der eine davon wuerde luegen.
+    for tab_name, part in (("upload", up_part), ("download", down_part)):
+        check("F-M691: the %s tab carries NO direction switch of its own" % tab_name,
+              not re.search(r'id="(Subdl|Tvst|TvSubtitles|MovieSubtitles)(Upload|Download)Enabled"', part),
+              "Kaestchen im Reiter: %d" % len(re.findall(
+                  r'id="(Subdl|Tvst|TvSubtitles|MovieSubtitles)(Upload|Download)Enabled"', part)))
+        check("F-M691: the %s tab points at the source cards instead" % tab_name,
+              "Endpoints" in part,
+              "Hinweis auf Endpoints fehlt")
+
+    for tab_name, part in (("upload", up_part), ("download", down_part)):
+        # Der Satz der Familie („Series … tvsubtitles.net, films … moviesubtitles.org. TMDb decides.")
+        # bleibt, wo er steht — er erklaert, WOHIN eine Abgabe geht, nicht OB sie stattfindet.
+        check("F-M520: the %s tab still names both addresses and says who decides" % tab_name,
               part.count("tvsubtitles.net") >= 1
               and part.count("moviesubtitles.org") >= 1
               and part.count("TMDb decides") >= 1)
@@ -2012,16 +2028,17 @@ def main():
           up_part.count("<h3>tvst</h3>") == 0,
           "%d gefunden" % up_part.count("<h3>tvst</h3>"))
 
-    check("F-M520: saving the family switch writes BOTH address flags",
-          "config.TvSubtitlesUploadEnabled = tvstUp;" in page_src
-          and "config.MovieSubtitlesUploadEnabled = tvstUp;" in page_src
-          and "config.TvSubtitlesDownloadEnabled = tvstDown;" in page_src
-          and "config.MovieSubtitlesDownloadEnabled = tvstDown;" in page_src)
-
-    check("F-M520: loading the family switch reads the EFFECTIVE state of both addresses",
-          "config.TvSubtitlesUploadEnabled === true || config.MovieSubtitlesUploadEnabled === true" in page_src
-          and "? true : !!config.TvSubtitlesDownloadEnabled)" in page_src
-          and "? true : !!config.MovieSubtitlesDownloadEnabled);" in page_src)
+    # F-M691: die Seite SCHREIBT die alten Schalter nicht mehr — ein Speichern dieser Seite darf die
+    # Werte, die in den Quelldateien gelten, nicht ueberschreiben (sonst setzt jeder Klick auf
+    # „Save" in einem anderen Reiter die Richtungen zurueck).
+    check("F-M691: saving this page does not touch the old per-source direction flags",
+          "config.SubdlUploadEnabled =" not in page_src
+          and "config.SubdlDownloadEnabled =" not in page_src
+          and "config.TvSubtitlesUploadEnabled =" not in page_src
+          and "config.MovieSubtitlesUploadEnabled =" not in page_src
+          and "config.TvSubtitlesDownloadEnabled =" not in page_src
+          and "config.MovieSubtitlesDownloadEnabled =" not in page_src,
+          "Zuweisungen an die Alt-Felder in der Seite")
 
     check("F-M509: the order field keeps exactly TWO values — the family is ordered, not its addresses",
           'id="DownloadOrder"' in down_part
@@ -2038,11 +2055,11 @@ def main():
           and page_src.count('id="TvSubtitlesUploadEnabled"') == 0
           and page_src.count('id="TvSubtitlesDownloadEnabled"') == 0)
 
-    check("F-M508: the film-address fields are still saved and loaded as configuration",
-          "config.MovieSubtitlesUploadEnabled" in page_src
-          and "config.MovieSubtitlesDownloadEnabled" in page_src
-          and "config.TvSubtitlesUploadEnabled" in page_src
-          and "config.TvSubtitlesDownloadEnabled" in page_src)
+    check("F-M508: the film-address fields keep their place in the configuration — the page no longer names them",
+          "config.MovieSubtitlesUploadEnabled" not in page_src
+          and "config.MovieSubtitlesDownloadEnabled" not in page_src
+          and "config.TvSubtitlesUploadEnabled" not in page_src
+          and "config.TvSubtitlesDownloadEnabled" not in page_src)
 
     # ---- F-M526: jede Einstellung sagt, WELCHE Quelle sie betrifft -------------------------------
     # Operator-Anweisung 17.11.2026: „Dann sollten wir in der gui vermerken welches feature nur auf

@@ -266,6 +266,69 @@ public static class SourceSettingsFile
     }
 
     /// <summary>
+    /// F-M691: liest EIN Wahrheitsfeld (einen Schalter) aus der Datei einer Quelle, OHNE deren Erklärung
+    /// zu kennen. Nötig, weil die Richtungsschalter einer Quelle an Stellen gefragt werden, die das
+    /// Schema dieser Quelle nicht zur Hand haben (Aufgaben, Endpunkt-Filter, Ablaufsteuerung).
+    /// <para>
+    /// Dieselben Bedingungen wie <see cref="Load"/>: Schema-Zahl, Quellenschlüssel, sichere Form. Alles
+    /// andere — keine Datei, kein Feld, ein fremder Wert, eine kaputte Datei — ergibt <c>null</c>, also
+    /// „die Datei sagt nichts". Geworfen wird nie, und gelesen wird nichts außer diesem einen Feld.
+    /// </para>
+    /// </summary>
+    /// <param name="dataDir">Der Datenordner des Plugins (null/leer = kein Ordner: null).</param>
+    /// <param name="key">Der Quellenschlüssel.</param>
+    /// <param name="fieldKey">Der Feldname des Schalters.</param>
+    /// <returns>Der gespeicherte Wahrheitswert, oder null.</returns>
+    public static bool? ReadFlag(string? dataDir, string key, string fieldKey)
+    {
+        if (string.IsNullOrWhiteSpace(dataDir) || string.IsNullOrWhiteSpace(key)
+            || string.IsNullOrWhiteSpace(fieldKey) || !IsSafeKey(key))
+        {
+            return null;
+        }
+
+        string path = PathIn(dataDir, key);
+        if (!File.Exists(path))
+        {
+            return null;
+        }
+
+        try
+        {
+            using JsonDocument doc = JsonDocument.Parse(File.ReadAllText(path));
+            JsonElement root = doc.RootElement;
+            if (root.ValueKind != JsonValueKind.Object
+                || !root.TryGetProperty("schema", out JsonElement schemaElement)
+                || !schemaElement.TryGetInt32(out int gelesen)
+                || gelesen != SchemaVersion
+                || !root.TryGetProperty("key", out JsonElement keyElement)
+                || keyElement.ValueKind != JsonValueKind.String
+                || !string.Equals(keyElement.GetString(), key, StringComparison.Ordinal)
+                || !root.TryGetProperty(fieldKey, out JsonElement flag))
+            {
+                return null;
+            }
+
+            return flag.ValueKind switch
+            {
+                JsonValueKind.True => true,
+                JsonValueKind.False => false,
+
+                // Ein als Text abgelegter Schalter ("true"/"false") zählt auch — die Datei ist von Hand
+                // lesbar, und ein Bearbeiter soll sie nicht deshalb kaputt machen.
+                JsonValueKind.String => bool.TryParse(flag.GetString(), out bool als)
+                    ? als
+                    : (bool?)null,
+                _ => null,
+            };
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
     /// F-M683: setzt die Rechte des Ordners auf 0700 — nur der Eigentümer betritt ihn. 0600 wäre hier
     /// falsch: ohne das Ausführungsrecht kommt niemand mehr an die Dateien darin.
     /// </summary>
