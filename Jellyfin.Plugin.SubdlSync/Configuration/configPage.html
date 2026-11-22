@@ -107,35 +107,21 @@
                             <div class="fieldDescription">Required — the one mandatory key: without it neither download nor upload starts. Resolves IMDb / TMDb ids for upload and download. Register at <a href="https://www.themoviedb.org" target="_blank" rel="noopener">themoviedb.org</a>, then request a free key at <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org/settings/api</a>.</div>
                         </div>
 
-                        <!-- F-M497 (Operator-Anweisung 15.11.2026: "Pflichtkonfiguration ist tmdb key …
-                             Kennzeichnung als required for subdl"): die SubDL-Felder sind NICHT mehr
-                             Pflicht — sie gehoeren zu EINER Quelle. Fehlt eines, faellt SubDL aus der
-                             Kette und tvsubtitles.net laeuft weiter; der Hinweis unter jedem Feld sagt
-                             das. Die IDs der Felder bleiben unveraendert. -->
-                        <h3>SubDL Account (<span class="subdl-required">Required for SubDL only</span>)</h3>
-                        <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="Username">SubDL email</label>
-                            <input id="Username" name="Username" type="text" is="emby-input" required />
-                            <div class="fieldDescription">Required for SubDL only. Login email of your SubDL account. Register free at <a href="https://subdl.com" target="_blank" rel="noopener">subdl.com</a>, then get your API key from the account panel. Leave the SubDL fields empty to run on tvsubtitles.net alone.</div>
-                        </div>
-
-                        <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="Password">SubDL password</label>
-                            <input id="Password" name="Password" type="password" is="emby-input" autocomplete="new-password" required />
-                            <div class="fieldDescription">Required for SubDL only — the upload logs in with this pair. Without it SubDL is skipped, for upload as for download.</div>
-                        </div>
-
-                        <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="ApiKey">SubDL API key</label>
-                            <input id="ApiKey" name="ApiKey" type="password" is="emby-input" autocomplete="new-password" required />
-                            <div class="fieldDescription">Required for SubDL only. Free key, created in your account panel &mdash; documented at <a href="https://subdl.com/api-doc" target="_blank" rel="noopener">subdl.com/api-doc</a>. Without it SubDL is skipped, for download as for upload.</div>
-                        </div>
-
-                        
-
-                        
-
-                        
+                        <!-- F-M688 (Betreiber-Entscheidung 22.11.2026, woertlich: "Die uebergeordneten
+                             Einstellungen haben wir ja schon. Was wir jetzt brauchen sind flexibel
+                             einblendbare Eigenschaften pro engine", "Und entsprechend ein eigenes konfi
+                             file pro engine", "Und die hmi Anpassung?"): die Einstellungen JE QUELLE
+                             stehen ab hier als KARTEN. Was in einer Karte steht, sagt die Engine
+                             selbst (GET Plugins/SubdlSync/Sources) — Beschriftung, Art, Pflicht,
+                             Hilfetext, Grenzen, Auswahl und die Bedingung, unter der ein Feld
+                             erscheint. Gespeichert wird JE KARTE ueber POST
+                             Plugins/SubdlSync/Sources/<key>; die Sammel-Speicherung dieser Seite
+                             bleibt fuer die uebergeordneten Einstellungen, was sie war.
+                             Die drei alten SubDL-Felder (Username, Password, ApiKey) sind damit von
+                             dieser Seite verschwunden: ihr Wert lebt in sources/subdl.json als
+                             account und apiKey (F-M683, Uebernahme beim ersten Start). -->
+                        <h3>Quellen</h3>
+                        <div id="SourceCards"></div>
 
                         <h3>Media files</h3>
                         <div class="checkboxContainer checkboxContainer-withDescription">
@@ -819,6 +805,22 @@
         /* F-M228: required fields use the accent blue, never red - red means destructive or failed. */
         .subdl-required { color: #00a4dc; font-weight: 600; font-size: 0.9em; }
         .subdl-req-inline { color: #00a4dc; font-weight: 600; font-size: 0.9em; }
+        /* F-M688: eine Karte je Quelle. Der Rahmen trennt die Quellen, weil je KARTE gespeichert
+           wird — ohne Rahmen sieht man nicht, welcher Speichern-Knopf zu welchen Feldern gehoert. */
+        .subdl-source-card { border: 1px solid rgba(255,255,255,0.16); border-radius: 6px; padding: 0.8em 1em; margin: 0 0 1em 0; }
+        .subdl-source-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.6em; }
+        .subdl-source-name { font-weight: 600; font-size: 1.05em; }
+        .subdl-source-key { font-size: 0.8em; opacity: 0.65; font-family: monospace; }
+        .subdl-source-state { margin-left: auto; font-size: 0.85em; font-weight: 600; }
+        .subdl-source-state.on { color: #107c10; }
+        .subdl-source-state.off { color: #a4262c; }
+        .subdl-source-caps { display: flex; flex-wrap: wrap; gap: 0.35em; margin: 0.4em 0 0.2em 0; }
+        .subdl-source-cap { font-size: 0.78em; padding: 0 0.45em; border-radius: 0.6em; background: rgba(0,164,220,0.15); color: #00a4dc; }
+        .subdl-source-hint { font-size: 0.9em; color: #ffc107; margin: 0.3em 0; }
+        .subdl-source-secret-state { font-size: 0.85em; opacity: 0.8; margin-left: 0.5em; }
+        .subdl-source-result { min-height: 1.2em; margin-top: 0.4em; }
+        .subdl-source-result.ok { color: #107c10; font-weight: 600; }
+        .subdl-source-result.fail { color: #a4262c; font-weight: 600; }
         /* F-M229: links use the page accent, not the browser default. */
         #SubdlSyncConfigPage a { color: #00a4dc; }
     `;
@@ -1068,12 +1070,16 @@
             function subdlInitConfigPage() {
                 console.log('[Sub Scribe] pageinit called');
                 if (typeof Dashboard !== 'undefined' && Dashboard.showLoadingMsg) { try { Dashboard.showLoadingMsg(); } catch (err) { /* non-fatal */ } }
+                // F-M688: der Abschnitt Quellen haengt nicht an der Plugin-Konfiguration — seine
+                // Karten kommen aus GET Plugins/SubdlSync/Sources, also gleich beim Aufbau der Seite.
+                subdlLoadSources();
                 ApiClient.getPluginConfiguration(SubdlSyncConfig.pluginUniqueId).then(function (config) {
                     console.log('[Sub Scribe] config loaded');
-                    document.querySelector('#Username').value = config.Username || '';
-                        document.querySelector('#Password').value = config.Password || '';
-                        document.querySelector('#ApiKey').value = config.ApiKey || '';
-                        document.querySelector('#TmdbApiKey').value = config.TmdbApiKey || '';
+                    // F-M688: die drei alten SubDL-Felder (Username, Password, ApiKey) werden hier
+                    // NICHT mehr gelesen — ihr Wert steht in sources/subdl.json und kommt mit der
+                    // Karte der Quelle (subdlLoadSources); diese Seite schreibt die alten Felder
+                    // auch nicht mehr (kein zweiter Ort fuer denselben Wert).
+                    document.querySelector('#TmdbApiKey').value = config.TmdbApiKey || '';
                         subdlLoadQuota();
                         subdlStartQuotaPoll();
                         document.querySelector('#UploadsPerHour').value = config.UploadsPerHour;
@@ -1803,9 +1809,9 @@ workers.forEach(function (w) {
                             if (el && typeof el.focus === 'function') { el.focus(); }
                             return false;
                         }
-                        config.Username = document.querySelector('#Username').value;
-                        config.Password = document.querySelector('#Password').value;
-                        config.ApiKey = document.querySelector('#ApiKey').value;
+                        // F-M688: die drei SubDL-Felder der Quelle werden hier NICHT mehr
+                        // mitgeschrieben — die Karte der Quelle speichert sie ueber
+                        // POST Plugins/SubdlSync/Sources/subdl. Ein Wert, ein Ort.
                         config.TmdbApiKey = tmdbKey;
                         var uph = parseInt(document.querySelector('#UploadsPerHour').value) || 450;
                         config.DownloadQaRetryLimit = (function () { var v = parseInt(document.querySelector('#DownloadQaRetryLimit').value, 10); return isNaN(v) ? 3 : Math.min(20, Math.max(0, v)); })();
@@ -1962,6 +1968,373 @@ workers.forEach(function (w) {
                     if (dirList) { dirList.innerHTML = '<div class="fieldDescription" style="color:#a4262c;">Unable to load status.</div>'; }
                 });
             }
+
+            // ==== F-M688: Quellen — eine Karte je Engine, gebaut aus dem, was die Engine erklaert ====
+            // Was in einer Karte steht, entscheidet die ANTWORT von GET Plugins/SubdlSync/Sources:
+            // Anzeigename, Key, Zustand (configured), Hinweis, Faehigkeiten und die erklaerten Felder
+            // in Erklaerungsreihenfolge. In diesem Block steht deshalb KEIN Quellenname — kaeme hier
+            // einer vor, waere die Karte nicht mehr aus dem Schema gebaut, sondern aus unserem Wissen
+            // ueber die Quelle.
+            var SUBDL_SOURCE_CAP_KEYS = ['canUpload', 'canReport', 'canHearingImpaired',
+                'canOfferSeasonPacks', 'canSeasonPacks', 'canCreateTitle', 'canQuota',
+                'searchesByImdb', 'searchesByTmdb', 'searchesByName', 'searchesByHash'];
+
+            function subdlSourceId(prefix, key) { return prefix + '-' + key; }
+
+            function subdlSourceEl(tag, cls, text) {
+                var el = document.createElement(tag);
+                if (cls) { el.className = cls; }
+                if (text !== undefined && text !== null) { el.textContent = String(text); }
+                return el;
+            }
+
+            // Die Faehigkeiten sind reine ANZEIGE: je wahrer Faehigkeit ein Wort des Kontrakts, dazu
+            // Takt und Sprachbruecke, wie die Engine sie nennt. Kein Schalter, kein Eingabefeld.
+            function subdlSourceCaps(caps) {
+                var box = subdlSourceEl('div', 'subdl-source-caps');
+                if (!caps) { return box; }
+                for (var i = 0; i < SUBDL_SOURCE_CAP_KEYS.length; i++) {
+                    var name = SUBDL_SOURCE_CAP_KEYS[i];
+                    if (caps[name] === true) { box.appendChild(subdlSourceEl('span', 'subdl-source-cap', name)); }
+                }
+                if (caps.pace) {
+                    if (caps.pace.uploadsPerHour > 0) {
+                        box.appendChild(subdlSourceEl('span', 'subdl-source-cap', 'uploadsPerHour ' + caps.pace.uploadsPerHour));
+                    }
+                    if (caps.pace.minCallPauseSeconds > 0) {
+                        box.appendChild(subdlSourceEl('span', 'subdl-source-cap', 'minCallPauseSeconds ' + caps.pace.minCallPauseSeconds));
+                    }
+                }
+                if (caps.languages) {
+                    for (var iso in caps.languages) {
+                        if (caps.languages.hasOwnProperty(iso) && caps.languages[iso]) {
+                            box.appendChild(subdlSourceEl('span', 'subdl-source-cap', iso + ' ' + caps.languages[iso]));
+                        }
+                    }
+                }
+                return box;
+            }
+
+            // Ein Feld, so wie die Engine es erklaert: Beschriftung, Pflicht, Hilfetext, Grenzen,
+            // Auswahl. Die ART entscheidet ueber das Steuerelement; ein Geheimnis bekommt NIE einen
+            // Wert ins DOM — nur die Auskunft "gesetzt" / "nicht gesetzt".
+            function subdlSourceField(entry, field) {
+                var id = 'SourceField-' + entry.key + '-' + field.key;
+                var row = document.createElement('div');
+                row.setAttribute('data-source-field-row', field.key);
+                row.setAttribute('data-source-field-kind', field.kind);
+                if (field.visibleWhen) {
+                    row.setAttribute('data-visible-when-field', field.visibleWhen.field);
+                    row.setAttribute('data-visible-when-value', field.visibleWhen.value);
+                }
+
+                if (field.kind === 'switch') {
+                    var wrap = subdlSourceEl('div', 'checkboxContainer checkboxContainer-withDescription');
+                    var label = subdlSourceEl('label', 'emby-checkbox-label');
+                    var box = document.createElement('input');
+                    box.type = 'checkbox';
+                    box.setAttribute('is', 'emby-checkbox');
+                    box.id = id;
+                    box.name = field.key;
+                    label.appendChild(box);
+                    var text = subdlSourceEl('span', null, field.label);
+                    if (field.required) {
+                        text.appendChild(document.createTextNode(' '));
+                        text.appendChild(subdlSourceEl('span', 'subdl-required', 'Required'));
+                    }
+                    label.appendChild(text);
+                    wrap.appendChild(label);
+                    if (field.help) { wrap.appendChild(subdlSourceEl('div', 'fieldDescription', field.help)); }
+                    row.appendChild(wrap);
+                    row.setAttribute('data-value', String(field.value) === 'true' ? 'true' : 'false');
+                    return row;
+                }
+
+                if (field.kind === 'choice') {
+                    var selWrap = subdlSourceEl('div', 'selectContainer');
+                    var selLabel = subdlSourceEl('label', 'selectLabel', field.label);
+                    selLabel.setAttribute('for', id);
+                    if (field.required) {
+                        selLabel.appendChild(document.createTextNode(' '));
+                        selLabel.appendChild(subdlSourceEl('span', 'subdl-required', 'Required'));
+                    }
+                    selWrap.appendChild(selLabel);
+                    var select = document.createElement('select');
+                    select.id = id;
+                    select.name = field.key;
+                    select.className = 'emby-select-withcolor emby-select';
+                    selWrap.appendChild(select);
+                    if (field.help) { selWrap.appendChild(subdlSourceEl('div', 'fieldDescription', field.help)); }
+                    row.appendChild(selWrap);
+                    // Die Moeglichkeiten kommen mit dem Feld; eingetragen werden sie nach dem
+                    // Einhaengen (subdlSourceApplyValues), damit sie ein Aufbau des Steuerelements
+                    // nicht wieder verliert.
+                    row.setAttribute('data-options', JSON.stringify(field.options || []));
+                    row.setAttribute('data-value', field.value === null || field.value === undefined ? '' : String(field.value));
+                    return row;
+                }
+
+                // text, url, number, secret
+                var boxWrap = subdlSourceEl('div', 'inputContainer');
+                var inputLabel = subdlSourceEl('label', 'inputLabel inputLabelUnfocused', field.label);
+                inputLabel.setAttribute('for', id);
+                if (field.required) {
+                    inputLabel.appendChild(document.createTextNode(' '));
+                    inputLabel.appendChild(subdlSourceEl('span', 'subdl-required', 'Required'));
+                }
+                boxWrap.appendChild(inputLabel);
+
+                var input = document.createElement('input');
+                input.id = id;
+                input.name = field.key;
+                input.className = 'emby-input';
+                input.setAttribute('is', 'emby-input');
+                if (field.kind === 'secret') {
+                    input.type = 'password';
+                    input.autocomplete = 'new-password';
+                } else if (field.kind === 'number') {
+                    input.type = 'number';
+                    if (field.min !== null && field.min !== undefined) { input.setAttribute('min', field.min); }
+                    if (field.max !== null && field.max !== undefined) { input.setAttribute('max', field.max); }
+                } else if (field.kind === 'url') {
+                    input.type = 'url';
+                } else {
+                    input.type = 'text';
+                }
+                boxWrap.appendChild(input);
+
+                if (field.kind === 'secret') {
+                    // Der EINZIGE Ausdruck ueber den Inhalt: ob eines abgelegt ist.
+                    row.setAttribute('data-gesetzt', field.gesetzt ? 'true' : 'false');
+                    var state = subdlSourceEl('span', 'subdl-source-secret-state',
+                        field.gesetzt ? 'gesetzt' : 'nicht gesetzt');
+                    state.id = 'SourceSecret-' + entry.key + '-' + field.key;
+                    boxWrap.appendChild(state);
+                } else {
+                    // Ein Geheimnis bekommt KEIN data-value — der Wert steht damit nirgends im DOM.
+                    row.setAttribute('data-value',
+                        field.value === null || field.value === undefined ? '' : String(field.value));
+                }
+
+                if (field.help) { boxWrap.appendChild(subdlSourceEl('div', 'fieldDescription', field.help)); }
+                row.appendChild(boxWrap);
+                return row;
+            }
+
+            // Werte NACH dem Einhaengen setzen: ein Aufbau des Steuerelements (emby-input,
+            // emby-checkbox, emby-select) darf sie nicht wieder verlieren. Ein Geheimnis hat kein
+            // data-value und wird hier deshalb nie beruehrt.
+            function subdlSourceApplyValues(card) {
+                if (!card) { return; }
+                var rows = card.querySelectorAll('[data-source-field-row]');
+                for (var i = 0; i < rows.length; i++) {
+                    var row = rows[i];
+                    var ctrl = row.querySelector('input, select');
+                    if (!ctrl) { continue; }
+                    var kind = row.getAttribute('data-source-field-kind');
+                    if (kind === 'choice' && row.hasAttribute('data-options')) {
+                        var optionen = [];
+                        try { optionen = JSON.parse(row.getAttribute('data-options')) || []; } catch (err) { optionen = []; }
+                        if (ctrl.options.length !== optionen.length) {
+                            ctrl.innerHTML = '';
+                            for (var o = 0; o < optionen.length; o++) {
+                                var opt = document.createElement('option');
+                                opt.value = String(optionen[o]);
+                                opt.textContent = String(optionen[o]);
+                                ctrl.appendChild(opt);
+                            }
+                        }
+                    }
+                    if (!row.hasAttribute('data-value')) { continue; }
+                    var wert = row.getAttribute('data-value');
+                    if (kind === 'switch') { ctrl.checked = (wert === 'true'); }
+                    else { ctrl.value = wert; }
+                }
+            }
+
+            // Der WIRKSAME Zustand eines Felds, wie die Bedingung eines anderen Felds ihn liest:
+            // Text und Zahl aus dem Feld, ein Schalter als true/false, ein Geheimnis als
+            // "gesetzt"/"nicht gesetzt" (ein abgelegtes ODER ein gerade eingetipptes).
+            function subdlSourceFieldState(card, key) {
+                var row = card.querySelector('[data-source-field-row="' + key + '"]');
+                if (!row) { return null; }
+                var ctrl = row.querySelector('input, select');
+                if (!ctrl) { return null; }
+                var kind = row.getAttribute('data-source-field-kind');
+                if (kind === 'secret') {
+                    var abgelegt = row.getAttribute('data-gesetzt') === 'true';
+                    return (abgelegt || ctrl.value.length > 0) ? 'gesetzt' : 'nicht gesetzt';
+                }
+                if (kind === 'switch') { return ctrl.checked ? 'true' : 'false'; }
+                return String(ctrl.value);
+            }
+
+            // sichtbar nur, wenn das genannte Feld den erwarteten Wert hat — ausgewertet bei jedem
+            // Tippen und jedem Umschalten (zuhören tut die Karte, s. subdlSourceRenderCard).
+            function subdlSourceApplyVisibility(card) {
+                if (!card) { return; }
+                var rows = card.querySelectorAll('[data-visible-when-field]');
+                for (var i = 0; i < rows.length; i++) {
+                    var row = rows[i];
+                    var ist = subdlSourceFieldState(card, row.getAttribute('data-visible-when-field'));
+                    var erwartet = row.getAttribute('data-visible-when-value');
+                    var sichtbar = ist !== null
+                        && String(ist).toLowerCase() === String(erwartet).toLowerCase();
+                    row.style.display = sichtbar ? '' : 'none';
+                }
+            }
+
+            function subdlSourceRenderCard(entry) {
+                var card = document.createElement('div');
+                card.className = 'subdl-source-card';
+                card.id = subdlSourceId('SourceCard', entry.key);
+                card.setAttribute('data-source-key', entry.key);
+
+                var head = subdlSourceEl('div', 'subdl-source-head');
+                head.appendChild(subdlSourceEl('span', 'subdl-source-name', entry.displayName));
+                head.appendChild(subdlSourceEl('span', 'subdl-source-key', entry.key));
+                head.appendChild(subdlSourceEl('span', 'subdl-source-state ' + (entry.configured ? 'on' : 'off'),
+                    entry.configured ? 'aktiv' : 'aus'));
+                card.appendChild(head);
+
+                card.appendChild(subdlSourceCaps(entry.capabilities));
+
+                if (entry.hint) {
+                    card.appendChild(subdlSourceEl('div', 'subdl-source-hint', entry.hint));
+                }
+
+                var fields = subdlSourceEl('div', 'subdl-source-fields');
+                var list = entry.fields || [];
+                for (var i = 0; i < list.length; i++) {
+                    fields.appendChild(subdlSourceField(entry, list[i]));
+                }
+                card.appendChild(fields);
+
+                var save = document.createElement('button');
+                save.type = 'button';
+                save.setAttribute('is', 'emby-button');
+                save.className = 'raised subdl-source-save';
+                save.id = subdlSourceId('SourceSave', entry.key);
+                save.textContent = 'Speichern';
+                save.addEventListener('click', function () { subdlSourceSave(entry.key); });
+                card.appendChild(save);
+
+                var result = subdlSourceEl('div', 'fieldDescription subdl-source-result', '');
+                result.id = subdlSourceId('SourceResult', entry.key);
+                card.appendChild(result);
+
+                // Ein Zuhoerer auf der Karte statt je Feld: er sieht auch ein Feld, das erst spaeter
+                // entsteht, und ein Tippen ins Geheimfeld laesst das abhaengige Feld sofort erscheinen.
+                card.addEventListener('input', function () { subdlSourceApplyVisibility(card); });
+                card.addEventListener('change', function () { subdlSourceApplyVisibility(card); });
+                return card;
+            }
+
+            function subdlSourceResult(key, cls, text) {
+                var el = document.getElementById(subdlSourceId('SourceResult', key));
+                if (!el) { return; }
+                el.className = 'fieldDescription subdl-source-result' + (cls ? ' ' + cls : '');
+                el.textContent = text || '';
+            }
+
+            // Was geschrieben wird, ist genau das, was die Karte zeigt: ein unsichtbares Feld bleibt
+            // in seiner Datei, wie es war. Ein leeres Geheimfeld heisst "unveraendert lassen".
+            function subdlSourceBody(card) {
+                var body = {};
+                var rows = card.querySelectorAll('[data-source-field-row]');
+                for (var i = 0; i < rows.length; i++) {
+                    var row = rows[i];
+                    if (row.style.display === 'none') { continue; }
+                    var ctrl = row.querySelector('input, select');
+                    if (!ctrl) { continue; }
+                    var key = row.getAttribute('data-source-field-row');
+                    var kind = row.getAttribute('data-source-field-kind');
+                    if (kind === 'switch') { body[key] = !!ctrl.checked; }
+                    else if (kind === 'secret') {
+                        if (ctrl.value !== '') { body[key] = ctrl.value; }
+                    } else { body[key] = ctrl.value; }
+                }
+                return body;
+            }
+
+            // Speichern JE KARTE: EIN Aufruf schreibt GENAU DIESE eine Quelle. Die Sammel-Speicherung
+            // der Seite (das eine updatePluginConfiguration weiter oben) wird hier nicht angefasst.
+            function subdlSourceSave(key) {
+                var card = document.getElementById(subdlSourceId('SourceCard', key));
+                if (!card) { return; }
+                subdlSourceResult(key, '', '');
+                fetch(ApiClient.getUrl('Plugins/SubdlSync/Sources/' + encodeURIComponent(key)), {
+                    method: 'POST',
+                    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                    body: JSON.stringify(subdlSourceBody(card))
+                }).then(function (r) {
+                    return r.text().then(function (text) {
+                        var res = null;
+                        try { res = text ? JSON.parse(text) : null; } catch (err) { res = null; }
+                        if (!r.ok) {
+                            var grund = (res && res.error) ? res.error : ('HTTP ' + r.status);
+                            if (res && res.unknown && res.unknown.length) {
+                                grund = grund + ': ' + res.unknown.join(', ');
+                            }
+                            throw new Error(grund);
+                        }
+                        return res;
+                    });
+                }).then(function (res) {
+                    // Erfolg: die Karte wird mit dem Stand NACH dem Schreiben neu befuellt und nennt
+                    // die Felder, die wirklich geschrieben wurden.
+                    if (res && res.source) {
+                        var neu = subdlSourceRenderCard(res.source);
+                        card.parentNode.replaceChild(neu, card);
+                        subdlSourceApplyValues(neu);
+                        subdlSourceApplyVisibility(neu);
+                    }
+                    var geschrieben = (res && res.written && res.written.length) ? res.written.join(', ') : '—';
+                    subdlSourceResult(key, 'ok', '✔ ' + geschrieben);
+                }).catch(function (err) {
+                    // Eine Abweisung steht im KLARTEXT der Antwort an der Karte (400, unbekanntes
+                    // Feld, Pflichtfeld leer, Grenze verletzt, Adresse ungueltig).
+                    subdlSourceResult(key, 'fail', '✖ ' + ((err && err.message) ? err.message : 'HTTP'));
+                });
+            }
+
+            function subdlSourcesRender(payload) {
+                var box = document.getElementById('SourceCards');
+                if (!box) { return; }
+                box.innerHTML = '';
+                var list = (payload && payload.sources) ? payload.sources : [];
+                for (var i = 0; i < list.length; i++) {
+                    var card = subdlSourceRenderCard(list[i]);
+                    box.appendChild(card);
+                    subdlSourceApplyValues(card);
+                    subdlSourceApplyVisibility(card);
+                }
+            }
+
+            function subdlLoadSources() {
+                var box = document.getElementById('SourceCards');
+                if (!box) { return; }
+                var url = ApiClient.getUrl('Plugins/SubdlSync/Sources');
+                url += (url.indexOf('?') === -1 ? '?' : '&') + '_t=' + Date.now();
+                fetch(url, { headers: { 'Accept': 'application/json' } })
+                    .then(function (r) {
+                        return r.text().then(function (text) {
+                            var res = null;
+                            try { res = text ? JSON.parse(text) : null; } catch (err) { res = null; }
+                            if (!r.ok) {
+                                throw new Error((res && res.error) ? res.error : ('HTTP ' + r.status));
+                            }
+                            return res;
+                        });
+                    })
+                    .then(function (res) { subdlSourcesRender(res); })
+                    .catch(function (err) {
+                        box.innerHTML = '';
+                        box.appendChild(subdlSourceEl('div', 'fieldDescription subdl-source-hint',
+                            '✖ ' + ((err && err.message) ? err.message : 'HTTP')));
+                    });
+            }
+            // ==== F-M688 Ende ====
 
             // Deferred script load — run load routine now if page div is present
             if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", subdlInitConfigPage); } else { subdlInitConfigPage(); }

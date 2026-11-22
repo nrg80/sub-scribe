@@ -1724,29 +1724,32 @@ def main():
         nxt = page_src_f497.find('<h3>', start + len(heading))
         return page_src_f497[start:nxt if nxt != -1 else len(page_src_f497)]
 
-    subdl_block = _section('<h3>SubDL Account')
+    subdl_block = _section('<h3>Quellen</h3>')
     tmdb_block = _section('<h3>TMDb (')
-    check("F-M497: the SubDL fields are marked 'Required for SubDL only', the TMDb key as Required",
-          "Required for SubDL only" in subdl_block
-          and subdl_block.count("Required for SubDL only") >= 3
-          and 'id="Username"' in subdl_block and 'id="Password"' in subdl_block and 'id="ApiKey"' in subdl_block
+    subdl_engine_src = read_source("Sources", "Subdl", "SubdlEngine.cs")
+    # F-M688: der Block heisst jetzt "Quellen" und traegt die Karten; die Pflicht der Quelle
+    # (apiKey) erklaert die Engine in ihrem eigenen Schema, nicht mehr die Seite.
+    check("F-M497: the TMDb key is Required on the page, the SubDL key's 'required' lives in the engine's schema",
+          "Required for SubDL only" not in subdl_block
+          and 'id="SourceCards"' in subdl_block
           and 'subdl-required">Required</span>' in tmdb_block
           and "the one mandatory key" in tmdb_block
-          and 'id="TmdbApiKey"' in tmdb_block,
-          "F-M497: SubDL ist optional (required for SubDL only), TMDb ist Pflicht")
+          and 'id="TmdbApiKey"' in tmdb_block
+          and re.search(r"new\(FieldApiKey,.*?Required: true", subdl_engine_src) is not None,
+          "F-M497: TMDb ist Pflicht; die Quelle erklaert ihr Pflichtfeld selbst (apiKey, Required: true)")
 
     # ---- F-M497 (Nachtrag des Nutzers: „Tmdb confi dann auch vor subdl konfi in der gui"): die
     # Pflicht steht VOR der optionalen Quelle — wer die Seite liest, sieht zuerst, was er haben MUSS.
     # Nur die beiden Blöcke sind getauscht; geladen und gespeichert wird über die Feld-IDs
     # (querySelector('#…')), die von ihrer Position nichts wissen — der Tausch darf dort nichts ändern.
-    check("F-M497: the TMDb block stands BEFORE the SubDL account block",
-          page_src_f497.index('<h3>TMDb (') < page_src_f497.index('<h3>SubDL Account')
-          and page_src_f497.index('id="TmdbApiKey"') < page_src_f497.index('id="Username"')
+    check("F-M497: the TMDb block stands BEFORE the sources section, and only TMDb is bound to the form",
+          page_src_f497.index('<h3>TMDb (') < page_src_f497.index('<h3>Quellen</h3>')
+          and page_src_f497.index('id="TmdbApiKey"') < page_src_f497.index('id="SourceCards"')
           and "document.querySelector('#TmdbApiKey').value = config.TmdbApiKey || '';" in page_src_f497
           and "config.TmdbApiKey = tmdbKey;" in page_src_f497
-          and "document.querySelector('#Username').value = config.Username || '';" in page_src_f497
-          and "config.Username = document.querySelector('#Username').value;" in page_src_f497,
-          "F-M497: TMDb zuerst, SubDL danach — die ID-Bindungen bleiben")
+          and "document.querySelector('#Username')" not in page_src_f497
+          and "config.Username" not in page_src_f497,
+          "F-M497: TMDb zuerst, die Quellen danach — die Quellenfelder laufen nicht mehr ueber die Formular-IDs")
 
     failed = [r for r in results if not r[1]]
     for name, ok, detail in results:
@@ -1984,6 +1987,140 @@ def main():
           and '<option value="verdicts+pack">' in page_src)
     check("F-M660: the reset block says that pack verdicts are a separate memory",
           "Pack verdicts" in page_src and "only the pack verdicts" in page_src)
+
+    # ---- F-M688 (Betreiber-Entscheidung 22.11.2026: „Die übergeordneten Einstellungen haben wir ja
+    # schon. Was wir jetzt brauchen sind flexibel einblendbare Eigenschaften pro engine", „Und
+    # entsprechend ein eigenes konfi file pro engine", „Und die hmi Anpassung?"): der Abschnitt
+    # Quellen. Geprueft wird, was die Seite TUT, nicht was sie behauptet: der Zeichner baut die
+    # Karten aus der Antwort des Endpunkts, kennt keinen Quellenamen, deckt alle Feldarten ab, wertet
+    # visibleWhen aus, laesst ein Geheimnis ohne Wert und schreibt beim Speichern genau eine Quelle.
+    quellen_start = page_src.find('// ==== F-M688')
+    quellen_ende = page_src.find('// ==== F-M688 Ende ====')
+    quellen = page_src[quellen_start:quellen_ende] if (quellen_start != -1 and quellen_ende > quellen_start) else ""
+
+    check("F-M688: the page carries ONE sources section, and it is a real heading",
+          page_src.count('<h3>Quellen</h3>') == 1 and page_src.count('id="SourceCards"') == 1,
+          "h3=%d cards=%d" % (page_src.count('<h3>Quellen</h3>'), page_src.count('id="SourceCards"')))
+
+    gen_q = html.find('data-tab-content="general"')
+    gen_end_q = html.find('data-tab-content=', gen_q + 1) if gen_q != -1 else -1
+    gen_q_section = html[gen_q:gen_end_q if gen_end_q != -1 else len(html)] if gen_q != -1 else ""
+    check("F-M688: the sources section sits INSIDE the general tab (a section outside renders under every tab)",
+          'id="SourceCards"' in gen_q_section,
+          "the cards would otherwise follow the operator onto all four tabs")
+
+    check("F-M688: the cards are drawn from the endpoint, and the loader runs when the page builds",
+          quellen != "" and "ApiClient.getUrl('Plugins/SubdlSync/Sources')" in quellen
+          and "'Plugins/SubdlSync/Sources/' + encodeURIComponent(key)" in quellen
+          and page_src.count('subdlLoadSources();') == 1,
+          "loader calls=%d" % page_src.count('subdlLoadSources();'))
+
+    check("F-M688: the drawing block names NO source — the answer decides which cards exist",
+          quellen != ""
+          and all(("'" + name + "'") not in quellen and ('"' + name + '"') not in quellen
+                  for name in ("subdl", "tvsubtitles", "moviesubtitles")),
+          "a name here would mean the card is built from our knowledge of the source, not from its schema")
+
+    check("F-M688: every field kind of the schema occurs in the drawing block",
+          all(("'" + kind + "'") in quellen
+              for kind in ("text", "url", "secret", "number", "switch", "choice")),
+          "one missing kind means a field of that kind renders as nothing")
+
+    check("F-M688: the number field carries its bounds, and the choice its options",
+          "'number'" in quellen and "input.setAttribute('min', field.min)" in quellen
+          and "input.setAttribute('max', field.max)" in quellen
+          and "data-options" in quellen and "JSON.parse(row.getAttribute('data-options'))" in quellen,
+          "min/max and the options come from the schema, not from a second list in the page")
+
+    check("F-M688: help stands under the field, and required is marked at the field",
+          "field.help" in quellen and "field.required" in quellen
+          and "subdl-required', 'Required'" in quellen,
+          "the operator asked for help as a note under the field and required visible on it")
+
+    check("F-M688: visibleWhen is read from the schema and stored on the row it governs",
+          "field.visibleWhen" in quellen and "data-visible-when-field" in quellen
+          and "data-visible-when-value" in quellen,
+          "the condition is the schema's, not a second rule in the page")
+
+    check("F-M688: visibleWhen is evaluated on typing and on switching — no reload needed",
+          "function subdlSourceApplyVisibility" in quellen
+          and "card.addEventListener('input'" in quellen
+          and "card.addEventListener('change'" in quellen
+          and "subdlSourceApplyVisibility(card)" in quellen,
+          "a condition read only at page build would leave 'account' hidden after entering a key")
+
+    check("F-M688: a secret reads as 'gesetzt' / 'nicht gesetzt', and a secret in the box counts as set",
+          "'gesetzt'" in quellen and "'nicht gesetzt'" in quellen
+          and "(abgelegt || ctrl.value.length > 0)" in quellen,
+          "typing a key must reveal the field that depends on it, without a save first")
+
+    _secret_branch = ""
+    _sb = quellen.find("if (field.kind === 'secret') {")
+    if _sb != -1:
+        _sb2 = quellen.find("if (field.kind === 'secret') {", _sb + 1)
+        _end = quellen.find("} else {", _sb2 if _sb2 != -1 else _sb)
+        if _sb2 != -1 and _end > _sb2:
+            _secret_branch = quellen[_sb2:_end]
+    check("F-M688: a secret field never carries a value into the DOM — only its stored state",
+          _secret_branch != "" and 'data-value' not in _secret_branch
+          and "input.type = 'password'" in quellen
+          and "row.setAttribute('data-gesetzt'" in _secret_branch,
+          "the endpoint sends wert=null for a secret; the page must not invent one")
+
+    check("F-M688: an empty secret field is not sent — it means 'leave it as it is'",
+          "if (ctrl.value !== '') { body[key] = ctrl.value; }" in quellen,
+          "sending the empty box would wipe a stored key on every save")
+
+    check("F-M688: a hidden field is not sent either — what the card shows is what is written",
+          "row.style.display === 'none'" in quellen and "subdlSourceBody" in quellen,
+          "a hidden account would otherwise be overwritten with an empty string")
+
+    check("F-M688: the card has its OWN 'Speichern' button, and it writes exactly one source",
+          "save.textContent = 'Speichern';" in quellen
+          and "'Plugins/SubdlSync/Sources/' + encodeURIComponent(key)" in quellen
+          and "method: 'POST'" in quellen
+          and 'ApiClient.updatePluginConfiguration' not in quellen,
+          "one button per card; the page-wide save must stay out of the card's path")
+
+    check("F-M688: the state word is 'aktiv' or 'aus', taken from the endpoint's configured flag",
+          "entry.configured ? 'aktiv' : 'aus'" in quellen,
+          "the operator named the two states himself")
+
+    _caps_fn = quellen[quellen.find('function subdlSourceCaps'):quellen.find('function subdlSourceField')] \
+        if quellen.find('function subdlSourceCaps') != -1 and quellen.find('function subdlSourceField') != -1 else ""
+    check("F-M688: the capabilities are a DISPLAY only — no input, no select, no checkbox",
+          _caps_fn != "" and "createElement('input')" not in _caps_fn
+          and "createElement('select')" not in _caps_fn and 'checkbox' not in _caps_fn
+          and "subdl-source-cap" in _caps_fn,
+          "a capability the operator could switch would be a second place for a decision")
+
+    check("F-M688: after a save the card is refilled from the answer, and the written fields are named",
+          "if (res && res.source)" in quellen and "card.parentNode.replaceChild(neu, card)" in quellen
+          and "subdlSourceApplyValues(neu)" in quellen and "'✔ '" in quellen,
+          "the card must show the state AFTER the write, not the one before it")
+
+    check("F-M688: a refusal is shown at the card in the endpoint's own words",
+          "res.error" in quellen and "'fail'" in quellen and "err.message" in quellen,
+          "400, unknown field, missing required or a broken bound — the text is the server's")
+
+    check("F-M688: the three old SubDL fields are GONE from the page — one value, one place",
+          'id="Username"' not in page_src and 'id="Password"' not in page_src
+          and 'id="ApiKey"' not in page_src
+          and 'config.Username' not in page_src and 'config.Password' not in page_src
+          and 'config.ApiKey' not in page_src,
+          "Username/Password/ApiKey: %d/%d/%d occurrences"
+          % (page_src.count('id="Username"'), page_src.count('id="Password"'), page_src.count('id="ApiKey"')))
+
+    check("F-M688: the page-wide save is still there and still the only updatePluginConfiguration",
+          page_src.count('ApiClient.updatePluginConfiguration(') == 1
+          and 'ApiClient.updatePluginConfiguration(SubdlSyncConfig.pluginUniqueId, config)' in page_src,
+          "count=%d — the superior settings keep their collective save"
+          % page_src.count('ApiClient.updatePluginConfiguration('))
+
+    check("F-M688: the card takes its values from the source's file, not from the plugin configuration",
+          quellen != "" and 'entry.fields' in quellen and 'getPluginConfiguration' not in quellen,
+          "the values arrived in sources/<key>.json (F-M683); reading the old fields would be a second place")
+
 
     # Die Zaehlung gehoert ans ENDE: stand sie mitten in der Datei, waren alle spaeteren Pruefungen
     # fuer die Zusammenfassung unsichtbar (F-M525 — zehn rote Pruefungen bei "326/326 OK").
