@@ -707,7 +707,7 @@
     },
     "T337": {
       "suite": "storex",
-      "checks": 13
+      "checks": 15
     }
   }
 }

@@ -139,7 +139,27 @@ public static class ScribeIds
     /// </summary>
     /// <param name="packId">The four-character pack segment.</param>
     /// <returns>The pack id, <c>[xxxx]</c>.</returns>
-    public static string PackIdOf(string? packId) => "[" + Fill(packId, PackSegment) + "]";
+    public static string PackIdOf(string? packId) => PackOpen + PackPart(packId) + PackClose;
+
+    /// <summary>
+    /// F-M680: das PACK-SEGMENT einer Angabe, die ein Segment oder schon eine volle Id sein darf. Wer
+    /// eine Id hineingibt, bekommt ihr Segment — sonst entsteht aus <c>[FrEI]</c> die Id <c>[[FrEI]]</c>.
+    /// Genau das passierte beim Aufstieg eines Schema-23-Stores: dort stehen die Kennungen bereits in
+    /// der lesbaren Form, und der Umbau hüllte sie ein zweites Mal ein — der Fremdschlüssel von
+    /// <c>pack_track</c> schlug zu und der ganze Aufstieg fiel in die Rolle zurück.
+    /// </summary>
+    /// <param name="packId">Segment oder volle Pack-Id.</param>
+    /// <returns>Das vierstellige Segment.</returns>
+    private static string PackPart(string? packId)
+    {
+        string wert = packId ?? string.Empty;
+        if (wert.Length == PackSegment + 2 && wert[0] == PackOpen && wert[wert.Length - 1] == PackClose)
+        {
+            return wert.Substring(1, PackSegment);
+        }
+
+        return Fill(wert, PackSegment);
+    }
 
     /// <summary>F-M676: die Id einer DATEI — <c>#yyyyy</c>.</summary>
     /// <param name="fileId">The five-character file segment, or a full file id.</param>

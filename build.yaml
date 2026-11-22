@@ -10,7 +10,7 @@
 # See the GNU General Public License for more details.
 name: "Sub Scribe"
 guid: "7d1c5a2e-3f4b-4d6e-9a8b-5c2f8e1d4a9b"
-version: "12.3.4.0"
+version: "12.3.5.0"
 targetAbi: "12.1.0.0"
 framework: "net10.0"
 owner: "nrg80"
@@ -26,6 +26,7 @@ artifacts:
 - "Jellyfin.Plugin.SubdlSync.dll"
 - "LanguageDetection.dll"
 changelog: >
+  v12.3.5.0: season packs are built by a full, refetch or manual run only — and every source is treated alike. The F-M424 branch, which let an arrival run pack the episodes it happened to bring, is gone: the run at 09:58 on 21.11. built two SubDL packs (MobLand S02, 524.500 B regular and 574.748 B HI) while tvsubtitles.net stood outside the very same run with "stays with a full run". An arrival run now takes no pack scope at all, says so in one line and uploads single; the slot asks only the source switch, so it names subdl and tvsubtitles symmetrically, and the second copy of that question is gone. The arrival-only helpers fell with it (the second season question, the arrival-scoped plan cut). Found on the way and fixed: the id builders are idempotent — upgrading a schema-23 store wrapped the already readable ids a second time (`[FrEI]` became `[[FrEI]]`), the `pack_track` foreign key dropped the transaction and the store stayed halfway while the marker already said 24 (F-M680).
   v12.3.4.0: a bad download is a SINGLE subtitle, whether it came alone or inside a season pack — `badapple` gains `Member`, the name of the file within the foreign entry (`MobLand - 2x05 - Birdland.WEB.NeoNoir.en.srt`), empty for a single download. `Member` is part of the key (SubjectId, Source, SourceId, Member), so two broken subs of one pack are two rows and a bad sub burns only itself instead of the whole pack (operator, 22.11.2026: "Halt fuer subs einzeln und im pack"). A store from schema 23 is rebuilt in one transaction after one timestamped safety copy — SQLite cannot change a primary key — with every row carried over as Member = '', ReportState and Written copied rather than re-derived, and a second start does nothing. Schema 24 (F-M679).
   v12.3.3.0: the season archive of tvsubtitles.net is fetched in a session that keeps the site's cookies, so a whole season comes as one ZIP instead of one request per episode.
   v12.3.2.0: the ids become readable and the pack owns its tracks — `[xxxx]` pack, `#yyyyy` file, `#yyyyy#zzz` embedded track, `#yyyyy&zzz` sidecar (the markers are not in the alphabet, so a sidecar can never be mistaken for an embedded track); a separate display column is unnecessary and the file id is no longer a column of its own, it sits in the track id. The pack — which carries language and hearing-impaired, as the track does, while the file carries neither — now holds its membership in `pack_track` instead of every row pointing at one pack, which is what had put all 315 tracks into the English HI pack and left the French, Portuguese and Spanish packs empty; measured on the live test file: English+HI 9 tracks / 9 files, French 25 / 9, Portuguese 25 / 9, Spanish 25 / 9, 84 rows in `pack_track`, all 543 id values preserved. Step B follows: `upload`, `reference`, `badapple` (one `SubjectId` each) replace `source_matrix` and `rejected_candidates`, `OriginId` has moved into `reference`, no foreign id lives outside those two tables; schema 23 (F-M672…F-M677).

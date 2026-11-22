@@ -1589,6 +1589,23 @@ using (var db = new ScribeDbContext(m24Dir, null))
     Check(QIn("SELECT SchemaVersion FROM meta WHERE Id = 'db'", m24Db) == 24,
         "F-M679: der Marker steht danach auf 24",
         QIn("SELECT SchemaVersion FROM meta WHERE Id = 'db'", m24Db).ToString(System.Globalization.CultureInfo.InvariantCulture));
+
+    // F-M680 (Fehler, gemessen 22.11.2026 an einer echten 23er-Datei): der Aufstieg hueLLte die schon
+    // LESBAREN Kennungen ein zweites Mal ein — aus `[FrEI]` wurde `[[FrEI]]`, und der Fremdschluessel
+    // von `pack_track` liess den ganzen Lauf in die Rolle zurueckfallen. Die Id-Bauer sind seither
+    // idempotent: wer eine fertige Id hineingibt, bekommt SIE zurueck, nicht ihre Umhuellung.
+    Check(ScribeIds.PackIdOf("[Ab3x]") == "[Ab3x]"
+          && ScribeIds.FileIdOf("#Ab3xY") == "#Ab3xY"
+          && ScribeIds.TrackIdOf("#Ab3xY", "#Ab3xY#zz9") == "#Ab3xY#zz9"
+          && ScribeIds.SidecarIdOf("#Ab3xY", "#Ab3xY&zz9") == "#Ab3xY&zz9",
+        "F-M680: eine fertige Id wird nicht ein zweites Mal eingefasst — sonst kippt der Aufstieg am Fremdschluessel",
+        ScribeIds.PackIdOf("[Ab3x]") + " | " + ScribeIds.TrackIdOf("#Ab3xY", "#Ab3xY#zz9"));
+
+    // Und die Kennung der echten Datei steht nach dem Aufstieg unveraendert da (kein Doppelzeichen).
+    Check(db.Files.FindAll().First().FileId == m24Subjekt
+          && !db.Files.FindAll().Any(f => f.FileId.StartsWith("##", StringComparison.Ordinal)),
+        "F-M680: die Kennungen der uebernommenen Datei bleiben unveraendert, ohne Doppelmarke",
+        db.Files.FindAll().Select(f => f.FileId).FirstOrDefault() ?? "-");
 }
 
 // Eine Sicherung, und sie ist der Stand VOR dem Lauf: in der Kopie fehlt Member noch.
