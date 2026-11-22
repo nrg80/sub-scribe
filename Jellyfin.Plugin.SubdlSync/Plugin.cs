@@ -83,6 +83,29 @@ public class Plugin : BasePlugin<Configuration.PluginConfiguration>, IHasWebPage
         // F-M533: die tvst-Befunde melden ueber denselben Weg wie alles andere — eine Meldestelle.
         var tvstLog = _loggerFactory?.CreateLogger("SubDL-Tvst");
         Api.TvstMetadataChecks.OnMessage = msg => tvstLog?.LogInformation("{Msg}", msg);
+
+        // F-M683: der Uebergang der Quellen-Einstellungen in ihre eigenen Dateien — EINMAL beim ersten
+        // Start, danach nie wieder (die Marke in `sources/` sagt es). Er steht hier und nicht nur am
+        // Registry-Bau, damit ein Server, der nie einen Lauf startet, trotzdem seine Dateien hat.
+        // Fehler dabei duerfen den Start nicht verhindern: sie werden gemeldet, die Quellen gelten dann
+        // eben als nicht eingerichtet.
+        try
+        {
+            var uebernommen = Sources.SourceSettingsSeed.Ensure(DataFolderPath, Configuration);
+            if (uebernommen.Count > 0)
+            {
+                _loggerFactory?.CreateLogger("SubDL-Start")?.LogInformation(
+                    "[Sub Scribe] the settings of {Count} source(s) were moved into their own file: {Keys} (F-M683).",
+                    uebernommen.Count,
+                    string.Join(", ", uebernommen));
+            }
+        }
+        catch (Exception ex)
+        {
+            _loggerFactory?.CreateLogger("SubDL-Start")?.LogWarning(
+                "[Sub Scribe] moving the source settings into their own files failed: {Msg}", ex.Message);
+        }
+
         // Stats period start defaults to plugin install/first start —
         // the GUI "since" always shows a real date until "Reset statistics" re-sets it.
     }

@@ -47,6 +47,24 @@ public interface ISourceEngine
     SourceCapabilities Capabilities { get; }
 
     /// <summary>
+    /// F-M683: die Einstellungen, die DIESE Quelle erklärt — ihre eigenen Felder, in der Reihenfolge, in
+    /// der sie erscheinen sollen.
+    /// <para>
+    /// Das ist die Antwort auf „was braucht diese Quelle, und was davon darf man einstellen": der
+    /// Schlüssel (Speichername), eine deutsche Beschriftung, die Art, die Vorgabe, ob das Feld Pflicht
+    /// ist, ein Hilfetext, Grenzen bei einer Zahl, die Möglichkeiten bei einer Auswahl und die
+    /// Bedingung, unter der ein Feld überhaupt sichtbar ist. Die Felder sind eine EIGENSCHAFT und kein
+    /// Auftrag — die vier Aufträge bleiben vier.
+    /// </para>
+    /// <para>
+    /// Gespeichert wird jedes Feld in der eigenen Datei der Quelle
+    /// (<c>&lt;Datenordner&gt;/sources/&lt;key&gt;.json</c>, F-M683), gelesen über
+    /// <see cref="SourceSettings"/>; ein Geheimnis wird nie ausgeliefert.
+    /// </para>
+    /// </summary>
+    IReadOnlyList<SourceField> Fields { get; }
+
+    /// <summary>
     /// F-M682, Auftrag 1: sucht Untertitel zu einem Titel. Die Engine darf innerhalb EINES Auftrags
     /// beliebig viele Abrufe machen (Serie finden, Staffel, Folgenseite, Einträge) — die Grenze zählt
     /// Aufträge, nicht Anfragen.
@@ -94,6 +112,11 @@ public interface ISourceEngine
 /// <param name="Subdl">Der bereits aufgebaute SubDL-Client samt Zugang, wenn es ihn gibt.</param>
 /// <param name="Tvst">Der bereits aufgebaute tvst-Client, wenn es ihn gibt.</param>
 /// <param name="Msub">Der bereits aufgebaute Film-Client, wenn es ihn gibt.</param>
+/// <param name="DataFolder">
+/// F-M683: der Datenordner des Plugins — dort liegen die Einstellungsdateien der Quellen
+/// (<c>sources/&lt;key&gt;.json</c>). Null heißt „kein Ordner bekannt": dann gelten die Vorgaben der
+/// Erklärung und es wird nichts geschrieben.
+/// </param>
 public sealed record SourceEngineContext(
     HttpClient Http,
     ILogger Logger,
@@ -101,7 +124,8 @@ public sealed record SourceEngineContext(
     ArchiveDiskCache? ArchiveCache = null,
     ScribeApiClient? Subdl = null,
     TvSubtitlesClient? Tvst = null,
-    MovieSubtitlesClient? Msub = null);
+    MovieSubtitlesClient? Msub = null,
+    string? DataFolder = null);
 
 /// <summary>
 /// F-M682: was eine Quelle kann — erfragt, nicht am Namen abgelesen.

@@ -1,0 +1,303 @@
+// This file is part of Sub Scribe (https://github.com/nrg80/sub-scribe)
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// Sub Scribe is free software: you can redistribute it and/or modify it
+// under the terms of the GNU General Public License as published by the
+// Free Software Foundation, either version 3 of the License, or (at your
+// option) any later version. Sub Scribe is distributed WITHOUT ANY WARRANTY;
+// without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+// PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+using System;
+using System.Collections.Generic;
+using System.IO;
+using System.Linq;
+using Jellyfin.Plugin.SubScribe.Sources;
+
+namespace Jellyfin.Plugin.SubScribe.Api;
+
+/// <summary>F-M683: ein erklärtes Feld, so wie es der Endpunkt ausliefert.</summary>
+/// <param name="Key">Der stabile Schlüssel (Speichername).</param>
+/// <param name="Label">Die deutsche Beschriftung.</param>
+/// <param name="Kind">Die Art (text, secret, number, switch, choice, url).</param>
+/// <param name="Required">Ist das Feld Pflicht?</param>
+/// <param name="Help">Der Hilfetext, oder null.</param>
+/// <param name="Default">Die Vorgabe — bei einem Geheimnis IMMER null.</param>
+/// <param name="Value">Der wirksame Wert — bei einem Geheimnis IMMER null.</param>
+/// <param name="Gesetzt">Ist ein Wert abgelegt? (Bei einem Geheimnis die EINZIGE Auskunft über seinen Inhalt.)</param>
+/// <param name="Min">Untere Grenze einer Zahl, oder null.</param>
+/// <param name="Max">Obere Grenze einer Zahl, oder null.</param>
+/// <param name="Options">Die Möglichkeiten einer Auswahl.</param>
+/// <param name="VisibleWhen">Die Bedingung, unter der das Feld sichtbar ist, oder null.</param>
+public sealed record SourceFieldView(
+    string Key,
+    string Label,
+    string Kind,
+    bool Required,
+    string? Help,
+    string? Default,
+    string? Value,
+    bool Gesetzt,
+    double? Min,
+    double? Max,
+    IReadOnlyList<string> Options,
+    SourceFieldVisibility? VisibleWhen);
+
+/// <summary>F-M683: die Taktgrenzen einer Quelle, wie sie sie selbst nennt.</summary>
+/// <param name="UploadsPerHour">Abgaben je Stunde, 0 wenn die Quelle keine nennt.</param>
+/// <param name="MinCallPauseSeconds">Mindestabstand, 0 wenn keiner bekannt ist.</param>
+public sealed record SourcePaceView(int UploadsPerHour, double MinCallPauseSeconds);
+
+/// <summary>
+/// F-M683: die Fähigkeiten einer Quelle, wie <see cref="SourceCapabilities"/> sie heute führt — ohne die
+/// Sprachbrücke als Funktion, sondern mit ihren Ergebnissen für die Sprachen, die der Lauf benutzt.
+/// </summary>
+/// <param name="CanUpload">Nimmt die Quelle eigene Untertitel an?</param>
+/// <param name="CanReport">Hat sie einen Meldeweg?</param>
+/// <param name="CanHearingImpaired">Trennt sie die HI-Fassung?</param>
+/// <param name="CanOfferSeasonPacks">Kann sie Behälter überhaupt annehmen?</param>
+/// <param name="CanSeasonPacks">Steht sie in DIESEM Lauf im Pack-Slot?</param>
+/// <param name="CanCreateTitle">Legt sie einen fehlenden Titel selbst an?</param>
+/// <param name="CanQuota">Führt sie ein Kontingent?</param>
+/// <param name="SearchesByImdb">Sucht sie über IMDb?</param>
+/// <param name="SearchesByTmdb">Sucht sie über TMDb?</param>
+/// <param name="SearchesByName">Sucht sie über den Namen?</param>
+/// <param name="SearchesByHash">Sucht sie über den Inhalts-Hash?</param>
+/// <param name="Pace">Ihre Taktgrenzen.</param>
+/// <param name="Languages">Ihre Sprachbrücke für DEU, ENG, FRA und SPA (ISO → Code der Quelle, null = kennt sie nicht).</param>
+public sealed record SourceCapabilityView(
+    bool CanUpload,
+    bool CanReport,
+    bool CanHearingImpaired,
+    bool CanOfferSeasonPacks,
+    bool CanSeasonPacks,
+    bool CanCreateTitle,
+    bool CanQuota,
+    bool SearchesByImdb,
+    bool SearchesByTmdb,
+    bool SearchesByName,
+    bool SearchesByHash,
+    SourcePaceView Pace,
+    IReadOnlyDictionary<string, string?> Languages);
+
+/// <summary>F-M683: EINE Quelle, so wie der Endpunkt sie ausliefert.</summary>
+/// <param name="Key">Der Quellenschlüssel.</param>
+/// <param name="DisplayName">Der Anzeigename.</param>
+/// <param name="Configured">Darf diese Quelle mitlaufen? (Falsch bei kaputter Datei oder fehlendem Pflichtfeld.)</param>
+/// <param name="Hint">Der Klartext-Hinweis, warum sie nicht eingerichtet ist — oder null.</param>
+/// <param name="File">Die Datei dieser Quelle, relativ zum Datenordner.</param>
+/// <param name="Capabilities">Ihre Fähigkeiten.</param>
+/// <param name="Fields">Ihre erklärten Felder in Erklärungsreihenfolge, mit den aktuellen Werten.</param>
+public sealed record SourceEntryView(
+    string Key,
+    string DisplayName,
+    bool Configured,
+    string? Hint,
+    string? File,
+    SourceCapabilityView Capabilities,
+    IReadOnlyList<SourceFieldView> Fields);
+
+/// <summary>F-M683: das Ergebnis eines Schreibvorgangs.</summary>
+/// <param name="Ok">Wurde gespeichert?</param>
+/// <param name="Error">Der Grund, warum nicht, oder null.</param>
+/// <param name="UnknownFields">Die abgewiesenen, unbekannten Felder.</param>
+/// <param name="Written">Die wirklich geschriebenen Felder.</param>
+/// <param name="Entry">Der Stand der Quelle nach dem Schreiben (null bei einem Fehler).</param>
+public sealed record SourceSaveResult(
+    bool Ok,
+    string? Error,
+    IReadOnlyList<string> UnknownFields,
+    IReadOnlyList<string> Written,
+    SourceEntryView? Entry);
+
+/// <summary>
+/// F-M683: die Antwortform des Einstellungs-Endpunkts — eine reine Rechnung über Registry und Datei,
+/// damit sie ohne HTTP prüfbar ist (dieselbe Trennung wie bei den Endpunkt-Adaptern: der Controller
+/// bleibt eine dünne Hülle).
+/// <para>
+/// ZWEI REGELN, DIE HIER STEHEN UND NIRGENDS SONST:
+/// </para>
+/// <para>
+/// (1) <b>Ein Geheimnis verlässt das Plugin nie.</b> Für ein Geheimfeld ist <c>wert</c> und
+/// <c>vorgabe</c> immer null; geantwortet wird nur <c>gesetzt</c>. Das gilt für den Lese- UND den
+/// Schreibweg — auch die Antwort auf ein Schreiben zeigt den Wert nicht.
+/// </para>
+/// <para>
+/// (2) <b>Geschrieben wird genau eine Datei.</b> <see cref="Save"/> liest die Datei der genannten
+/// Quelle, mischt die übergebenen Felder darüber und schreibt sie zurück. Kein anderer Pfad wird
+/// angefasst — die anderen Quellen merken von einem Schreibvorgang nichts.
+/// </para>
+/// </summary>
+public static class SourceSettingsView
+{
+    /// <summary>F-M683: die Sprachen, für die die Fähigkeiten die Sprachbrücke mitliefern.</summary>
+    private static readonly string[] BridgeLanguages = { "DEU", "ENG", "FRA", "SPA" };
+
+    /// <summary>F-M683: alle Quellen der Registry, in Frage-Reihenfolge, mit Feldern und Werten.</summary>
+    /// <param name="registry">Die gebaute Registry.</param>
+    /// <param name="dataDir">Der Datenordner des Plugins.</param>
+    /// <returns>Je Quelle ein Eintrag.</returns>
+    public static IReadOnlyList<SourceEntryView> Build(SourceRegistry registry, string? dataDir)
+    {
+        ArgumentNullException.ThrowIfNull(registry);
+        return registry.Engines.Select(e => Entry(registry, e, dataDir)).ToList();
+    }
+
+    /// <summary>
+    /// F-M683: speichert die übergebenen Felder GENAU EINER Quelle. Leere Geheimfelder bedeuten
+    /// „unverändert lassen", unbekannte Felder werden abgewiesen, und die Pflichtfelder werden gegen den
+    /// Stand NACH dem Schreiben geprüft.
+    /// </summary>
+    /// <param name="registry">Die gebaute Registry.</param>
+    /// <param name="dataDir">Der Datenordner des Plugins.</param>
+    /// <param name="key">Die Quelle.</param>
+    /// <param name="updates">Feldname → Wert; null heißt „nichts übergeben".</param>
+    /// <returns>Das Ergebnis samt neuem Stand.</returns>
+    public static SourceSaveResult Save(
+        SourceRegistry registry, string? dataDir, string key, IReadOnlyDictionary<string, string?>? updates)
+    {
+        ArgumentNullException.ThrowIfNull(registry);
+
+        ISourceEngine? engine = registry.ByKey(key);
+        if (engine is null)
+        {
+            return Fail("unbekannte Quelle '" + (key ?? string.Empty) + "'");
+        }
+
+        if (string.IsNullOrWhiteSpace(dataDir))
+        {
+            return Fail("kein Datenordner — es kann nichts gespeichert werden");
+        }
+
+        IReadOnlyList<SourceField> schema = engine.Fields;
+        var unknown = (updates ?? new Dictionary<string, string?>())
+            .Keys
+            .Where(name => schema.All(f => !string.Equals(f.Key, name, StringComparison.Ordinal)))
+            .ToList();
+        if (unknown.Count > 0)
+        {
+            return new SourceSaveResult(false, "unbekannte Felder", unknown, Array.Empty<string>(), null);
+        }
+
+        // Der Stand, der gilt: was die Datei trägt — darüber die übergebenen Felder.
+        SourceSettings current = SourceSettingsFile.Load(dataDir, key, schema);
+        var merged = new Dictionary<string, string>(current.Stored, StringComparer.Ordinal);
+        var geschrieben = new List<string>();
+
+        foreach (KeyValuePair<string, string?> paar in updates ?? new Dictionary<string, string?>())
+        {
+            SourceField feld = schema.First(f => string.Equals(f.Key, paar.Key, StringComparison.Ordinal));
+
+            // Ein leeres Geheimnis ist „unverändert lassen" — nicht „lösche den Schlüssel". Wer den
+            // Schlüssel wirklich loswerden will, schreibt ihn über die Datei oder setzt einen neuen.
+            if (feld.IsSecret && string.IsNullOrWhiteSpace(paar.Value))
+            {
+                continue;
+            }
+
+            if (feld.Validate(paar.Value, out string clean) is { } fehler)
+            {
+                return Fail(fehler);
+            }
+
+            merged[feld.Key] = clean;
+            geschrieben.Add(feld.Key);
+        }
+
+        foreach (SourceField feld in schema.Where(f => f.Required))
+        {
+            string wert = merged.TryGetValue(feld.Key, out string? vorhanden) ? vorhanden : feld.Default;
+            if (wert.Length == 0)
+            {
+                return Fail("Pflichtfeld '" + feld.Label + "' fehlt");
+            }
+        }
+
+        SourceSettingsFile.Save(dataDir, key, schema, merged);
+        return new SourceSaveResult(true, null, Array.Empty<string>(), geschrieben, Entry(registry, engine, dataDir));
+    }
+
+    private static SourceEntryView Entry(SourceRegistry registry, ISourceEngine engine, string? dataDir)
+    {
+        string key = engine.Capabilities.Key;
+        SourceSettings settings = SourceSettingsFile.Load(dataDir, key, engine.Fields);
+
+        string? hinweis = null;
+        bool eingerichtet = settings.IsConfigured;
+        if (!settings.IsConfigured)
+        {
+            hinweis = engine.Capabilities.DisplayName + " gilt als nicht eingerichtet: " + settings.Problem
+                + ". Die anderen Quellen lesen ihre eigenen Dateien und laufen weiter.";
+        }
+        else
+        {
+            SourceField? fehlend = engine.Fields
+                .FirstOrDefault(f => f.Required && (settings.Has(f.Key) ? settings.Text(f.Key) : f.Default).Length == 0);
+            if (fehlend is not null)
+            {
+                eingerichtet = false;
+                hinweis = engine.Capabilities.DisplayName + " gilt als nicht eingerichtet: das Pflichtfeld '"
+                    + fehlend.Label + "' ist leer.";
+            }
+        }
+
+        return new SourceEntryView(
+            key,
+            engine.Capabilities.DisplayName,
+            eingerichtet,
+            hinweis,
+            RelativeFile(key),
+            Capabilities(engine.Capabilities),
+            Fields(settings));
+    }
+
+    private static SourceCapabilityView Capabilities(SourceCapabilities capabilities)
+    {
+        var sprachen = new Dictionary<string, string?>(StringComparer.Ordinal);
+        foreach (string iso in BridgeLanguages)
+        {
+            sprachen[iso] = capabilities.LanguageCode(iso);
+        }
+
+        return new SourceCapabilityView(
+            capabilities.CanUpload,
+            capabilities.CanReport,
+            capabilities.CanHearingImpaired,
+            capabilities.CanOfferSeasonPacks,
+            capabilities.CanSeasonPacks,
+            capabilities.CanCreateTitle,
+            capabilities.CanQuota,
+            capabilities.SearchesByImdb,
+            capabilities.SearchesByTmdb,
+            capabilities.SearchesByName,
+            capabilities.SearchesByHash,
+            new SourcePaceView(capabilities.Pace.UploadsPerHour, capabilities.Pace.MinCallPauseSeconds),
+            sprachen);
+    }
+
+    private static IReadOnlyList<SourceFieldView> Fields(SourceSettings settings)
+        => settings.Schema.Select(feld =>
+        {
+            // DIE Regel: ein Geheimnis wird nicht ausgeliefert — nur, ob eines abgelegt ist.
+            bool gesetzt = settings.Has(feld.Key);
+            return new SourceFieldView(
+                feld.Key,
+                feld.Label,
+                SourceField.KindName(feld.Kind),
+                feld.Required,
+                feld.Help,
+                feld.IsSecret ? null : feld.Default,
+                feld.IsSecret ? null : settings.Text(feld.Key),
+                gesetzt,
+                feld.Kind == SourceFieldKind.Number ? feld.Min : null,
+                feld.Kind == SourceFieldKind.Number ? feld.Max : null,
+                feld.Kind == SourceFieldKind.Choice ? feld.Options ?? Array.Empty<string>() : Array.Empty<string>(),
+                feld.VisibleWhen);
+        }).ToList();
+
+    private static string RelativeFile(string key)
+        => SourceSettingsFile.FolderName + "/" + key + SourceSettingsFile.Extension;
+
+    private static SourceSaveResult Fail(string grund)
+        => new(false, grund, Array.Empty<string>(), Array.Empty<string>(), null);
+}

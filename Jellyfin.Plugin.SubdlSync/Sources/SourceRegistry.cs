@@ -67,25 +67,45 @@ public sealed class SourceRegistry
         ArgumentNullException.ThrowIfNull(context);
         ArgumentNullException.ThrowIfNull(config);
 
+        // F-M683: die Übernahme läuft EINMAL (Marke in `sources/`), danach lesen die Engines aus ihren
+        // eigenen Dateien. Sie steht hier, weil hier ohnehin jede Quelle genau einmal gebaut wird —
+        // ein zweiter Ort, an dem jemand daran denken müsste, wäre ein Ort, an dem es vergessen wird.
+        SourceSettingsSeed.Ensure(context.DataFolder, config);
+
         // F-M654: SubDL steht immer im Pack-Slot — der Schalter dieser Quelle entscheidet eine Etage
         // höher, ob der Lauf überhaupt packt, nicht diese Liste. Das ist der Stand vor F-M682 und bleibt
         // er: die Umstellung ändert die Antwort, nicht den Umfang.
         var subdl = new SubdlEngine(
             context.Subdl ?? new Api.ScribeApiClient(context.Http),
             context,
-            seasonPacks: true);
+            seasonPacks: true,
+            Settings(context, SubdlEngine.SourceKey, SubdlEngine.Declared));
 
         // F-M495: die zweite Quelle hängt an IHREM Upload-Schalter — die Frage wird hier aus der
         // Konfiguration beantwortet, nicht im Ablauf am Namen.
         var tvst = new TvstEngine(
             context.Tvst,
             context,
-            seasonPacks: config.IsUploadEnabled(SubtitleProvider.TvSubtitles));
+            seasonPacks: config.IsUploadEnabled(SubtitleProvider.TvSubtitles),
+            Settings(context, TvstEngine.SourceKey, TvstEngine.Declared));
 
-        var msub = new MsubEngine(context.Msub, context);
+        var msub = new MsubEngine(
+            context.Msub, context, Settings(context, MsubEngine.SourceKey, MsubEngine.Declared));
 
         return new SourceRegistry(new ISourceEngine[] { subdl, tvst, msub });
     }
+
+    /// <summary>
+    /// F-M683: die Einstellungen EINER Quelle aus ihrer eigenen Datei. Kein Zwischenspeicher: die Datei
+    /// ist klein, sie wird je Lauf einmal gelesen, und ein Zwischenspeicher wäre die Stelle, an der eine
+    /// gerade gespeicherte Änderung erst beim nächsten Neustart ankäme.
+    /// </summary>
+    /// <param name="context">Der Kontext des Laufs (trägt den Datenordner).</param>
+    /// <param name="key">Der Quellenschlüssel.</param>
+    /// <param name="schema">Die Erklärung dieser Quelle.</param>
+    /// <returns>Die Einstellungen; ohne Datenordner die Vorgaben.</returns>
+    public static SourceSettings Settings(SourceEngineContext context, string key, IReadOnlyList<SourceField> schema)
+        => SourceSettingsFile.Load(context.DataFolder, key, schema);
 
     /// <summary>F-M682: schlägt eine Engine nach.</summary>
     /// <param name="key">Der Quellenschlüssel.</param>

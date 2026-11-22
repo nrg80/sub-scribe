@@ -15,6 +15,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.SubScribe.Api;
 using Jellyfin.Plugin.SubScribe.Language;
+using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.SubScribe.Sources.Msub;
 
@@ -35,6 +36,26 @@ public sealed class MsubEngine : ISourceEngine
     /// <summary>Der Griff trägt seine Herkunft: <c>m:</c> + Filmnummer + <c>:</c> + Eintrags-Kennung.</summary>
     private const string HandlePrefix = "m:";
 
+    /// <summary>F-M683: der Schlüssel der Adresse in der eigenen Datei dieser Quelle.</summary>
+    public const string FieldBaseUrl = "baseUrl";
+
+    /// <summary>F-M683: der Schlüssel des Zugangs in der eigenen Datei dieser Quelle.</summary>
+    public const string FieldAccess = "access";
+
+    /// <summary>
+    /// F-M683: die Felder, die DIESE Quelle erklärt — in dieser Reihenfolge. Die Adresse mit der
+    /// Vorgabe, die der Client dieses Builds wirklich benutzt (<see cref="MovieSubtitlesClient.BaseUrl"/>),
+    /// und ein Geheimfeld „Zugang", das HEUTE LEER IST: die Seite verlangt keinen (gemessen 15.11.2026 —
+    /// <c>/login.php</c>, <c>/panel.php</c> und <c>/upload.php</c> antworten mit 302 auf <c>/</c>).
+    /// </summary>
+    public static IReadOnlyList<SourceField> Declared { get; } = new SourceField[]
+    {
+        new(FieldBaseUrl, "Adresse", SourceFieldKind.Url, Default: MovieSubtitlesClient.BaseUrl,
+            Help: "Die Seitenadresse. Dieser Build benutzt sie fest eingebaut; ein abweichender Wert wird gemeldet."),
+        new(FieldAccess, "Zugang", SourceFieldKind.Secret,
+            Help: "Wird heute nicht benutzt — die Seite verlangt keinen Zugang."),
+    };
+
     private readonly MovieSubtitlesClient _client;
     private readonly SourceEngineContext _context;
 
@@ -44,10 +65,23 @@ public sealed class MsubEngine : ISourceEngine
     /// <param name="client">Der Film-Client des Laufs, oder null — dann baut ihn die Engine über den
     /// gereichten HttpClient.</param>
     /// <param name="context">Was das Plugin reicht (HttpClient, Logger, Zeitgeber).</param>
-    public MsubEngine(MovieSubtitlesClient? client, SourceEngineContext context)
+    /// <param name="settings">F-M683: die Einstellungen aus der eigenen Datei dieser Quelle.</param>
+    public MsubEngine(MovieSubtitlesClient? client, SourceEngineContext context, SourceSettings? settings = null)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _client = client ?? new MovieSubtitlesClient(context.Http);
+        Settings = settings ?? SourceSettings.Empty(SourceKey, Declared);
+        BaseUrl = Settings.Url(FieldBaseUrl);
+        HasAccess = Settings.Has(FieldAccess);
+
+        if (!string.Equals(BaseUrl, MovieSubtitlesClient.BaseUrl, StringComparison.OrdinalIgnoreCase))
+        {
+            _context.Logger.LogWarning(
+                "[Sub Scribe] sources/moviesubtitles.json names the address {Address}; this build talks to {Built}.",
+                BaseUrl,
+                MovieSubtitlesClient.BaseUrl);
+        }
+
         Capabilities = new SourceCapabilities
         {
             Key = SourceKey,
@@ -71,9 +105,27 @@ public sealed class MsubEngine : ISourceEngine
     public SourceCapabilities Capabilities { get; }
 
     /// <inheritdoc />
+    public IReadOnlyList<SourceField> Fields => Declared;
+
+    /// <summary>Gets F-M683: die Einstellungen, die diese Engine aus ihrer Datei gelesen hat (Vorgaben, wo nichts steht).</summary>
+    public SourceSettings Settings { get; }
+
+    /// <summary>Gets F-M683: die Adresse aus der eigenen Datei.</summary>
+    public string BaseUrl { get; }
+
+    /// <summary>Gets F-M683: ist ein Zugang abgelegt? (Die Seite verlangt heute keinen — der Wert wird nur geführt.)</summary>
+    public bool HasAccess { get; }
+
+    /// <inheritdoc />
     public async Task<SourceSearchAnswer> SearchAsync(SourceSearchRequest request, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        if (!Settings.IsConfigured)
+        {
+            // F-M683: die eigene Datei gilt nicht — diese Quelle ist nicht eingerichtet.
+            return SourceSearchAnswer.Because(SourceFaultInfo.NoSearchBase(Settings.Problem));
+        }
 
         if (request.IsSeries)
         {

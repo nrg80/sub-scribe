@@ -34,7 +34,9 @@ public sealed class ScribeApiClient
     // F-M63 (user decision 09.09.2026 "official endpoint"): the official documented API
     // host is https://api.subdl.com (subdl.com/api-doc lists it for search, upload and /me;
     // api3.subdl.com appears NOWHERE in the docs — it is an undocumented mirror).
-    private const string ApiBase = "https://api.subdl.com";
+    // F-M683: public, weil die Feldbeschreibung der SubDL-Quelle ihre Vorgabe von HIER nimmt — nicht
+    // von einer zweiten, abgetippten Adresse, die beim nächsten Wechsel daneben läge.
+    public const string ApiBase = "https://api.subdl.com";
     private readonly HttpClient _http;
 
     // F-M369/F-M386 (operator order 02.11.2026: "nur noch den Platten-Cache"): ONE archive cache,

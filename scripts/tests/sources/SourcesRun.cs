@@ -34,8 +34,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Threading;
 using Jellyfin.Plugin.SubScribe.Configuration;
 using Jellyfin.Plugin.SubScribe.Sources;
+using Jellyfin.Plugin.SubScribe.Api;
+using Jellyfin.Plugin.SubScribe.Sources.Msub;
+using Jellyfin.Plugin.SubScribe.Sources.Subdl;
+using Jellyfin.Plugin.SubScribe.Sources.Tvst;
 using Microsoft.Extensions.Logging.Abstractions;
 
 namespace SourcesRun;
@@ -230,10 +235,12 @@ internal static class Program
         Check(namen.SequenceEqual(new[] { "FetchAsync", "ReportAsync", "SearchAsync", "SendAsync" }),
             "F-M682 (d): es sind Suche, Hole, Sende und Melde — kein fünfter Auftrag",
             string.Join(", ", namen));
-        Check(typeof(ISourceEngine).GetProperties().Length == 1
-              && typeof(ISourceEngine).GetProperty("Capabilities") is not null,
-            "F-M682 (d): die Fähigkeiten sind eine Eigenschaft, kein Auftrag",
-            typeof(ISourceEngine).GetProperties().Length + " Eigenschaft(en)");
+        Check(typeof(ISourceEngine).GetProperties().Length == 2
+              && typeof(ISourceEngine).GetProperty("Capabilities") is not null
+              && typeof(ISourceEngine).GetProperty("Fields") is not null,
+            "F-M683 (d): der Kontrakt hat genau ZWEI Eigenschaften — die Fähigkeiten und die Felder (Eigenschaften getrennt von Aufträgen gezählt)",
+            typeof(ISourceEngine).GetProperties().Length + " Eigenschaft(en): "
+            + string.Join(", ", typeof(ISourceEngine).GetProperties().Select(p => p.Name)));
 
         // -----------------------------------------------------------------------------------------
         // Die Anfrage trägt ALLES, was wir über den Titel wissen — das ist Teil des Auftrags.
@@ -307,10 +314,240 @@ internal static class Program
             string.Join(", ", mitTvst.PackSlot()));
 
         // -----------------------------------------------------------------------------------------
+        // (f) F-M683: Einstellungen je Quelle — Erklärung, eigene Datei, Endpunkt, Geheimnisse.
+        // -----------------------------------------------------------------------------------------
+        Console.WriteLine("(f) jede Quelle erklärt ihre Felder und liest ihre eigene Datei");
+
+        // Ein Prüfwert, der nirgends echt ist und nur in diesem Temp-Verzeichnis steht. Er wird
+        // verglichen, nie ausgegeben.
+        const string PruefSchluessel = "pruefschluessel-4711";
+        const string PruefKonto = "konto-pruefung";
+
+        string tmp = Path.Combine(Path.GetTempPath(), "sources-suite-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tmp);
+        try
+        {
+            var uebernahmeConfig = new PluginConfiguration { ApiKey = PruefSchluessel, Username = PruefKonto };
+
+            // ---- D: die Übernahme beim ersten Start ----
+            var ersterLauf = SourceSettingsSeed.Ensure(tmp, uebernahmeConfig);
+            string[] quellen = { "subdl", "tvsubtitles", "moviesubtitles" };
+            Check(ersterLauf.Count == 3 && quellen.All(k => File.Exists(SourceSettingsFile.PathIn(tmp, k))),
+                "F-M683 (D): der erste Start schreibt je Quelle GENAU EINE Datei unter sources/",
+                string.Join(", ", ersterLauf));
+
+            var subdlGelesen = SourceSettingsFile.Load(tmp, SubdlEngine.SourceKey, SubdlEngine.Declared);
+            bool schluesselGleich = string.Equals(
+                subdlGelesen.Secret(SubdlEngine.FieldApiKey), uebernahmeConfig.ApiKey, StringComparison.Ordinal);
+            bool kontoGleich = string.Equals(
+                subdlGelesen.Text(SubdlEngine.FieldAccount), uebernahmeConfig.Username, StringComparison.Ordinal);
+            Check(subdlGelesen.IsConfigured && schluesselGleich && kontoGleich,
+                "F-M683 (D): der aus der Datei gelesene Wert ist der bisherige (Schlüssel und Konto verglichen, nicht ausgegeben)",
+                "Schlüssel gleich=" + schluesselGleich + ", Konto gleich=" + kontoGleich);
+
+            string subdlDatei = SourceSettingsFile.PathIn(tmp, SubdlEngine.SourceKey);
+            string subdlRoh = File.ReadAllText(subdlDatei);
+            Check(subdlRoh.Contains("\"schema\": 1", StringComparison.Ordinal)
+                  && subdlRoh.Contains("\"key\": \"subdl\"", StringComparison.Ordinal),
+                "F-M683 (B): die Datei trägt Schema-Zahl und Quellenschlüssel — und die Werte daneben",
+                subdlRoh.Split('\n').Length + " Zeilen, " + subdlRoh.Length + " Zeichen");
+
+            byte[] vorZweitemLauf = File.ReadAllBytes(subdlDatei);
+            var zweitemLauf = SourceSettingsSeed.Ensure(tmp, uebernahmeConfig);
+            Check(zweitemLauf.Count == 0 && File.ReadAllBytes(subdlDatei).SequenceEqual(vorZweitemLauf),
+                "F-M683 (D): ein zweiter Start schreibt nichts und ändert den gelesenen Wert nicht",
+                "geschrieben: " + zweitemLauf.Count + " Datei(en)");
+
+            // ---- B: eine Datei je Quelle, und keine zwei Quellen in derselben ----
+            var kontext = new SourceEngineContext(
+                new HttpClient(), NullLogger.Instance, TimeProvider.System, DataFolder: tmp);
+            var registry = SourceRegistry.Build(kontext, uebernahmeConfig);
+
+            var dateien = new[]
+            {
+                ((SubdlEngine)registry.ByKey(SubdlEngine.SourceKey)!).Settings.Path,
+                ((TvstEngine)registry.ByKey(TvstEngine.SourceKey)!).Settings.Path,
+                ((MsubEngine)registry.ByKey(MsubEngine.SourceKey)!).Settings.Path,
+            };
+            Check(dateien.Distinct(StringComparer.Ordinal).Count() == 3
+                  && quellen.Select(k => string.Equals(dateien[Array.IndexOf(quellen, k)],
+                      SourceSettingsFile.PathIn(tmp, k), StringComparison.Ordinal)).All(x => x),
+                "F-M683 (B): jede Quelle liest ihre EIGENE Datei — drei verschiedene Pfade, je <key>.json",
+                string.Join(", ", dateien.Select(d => Path.GetFileName(d!))));
+
+            // Eine kopierte Datei gehört weiter der Quelle, die in ihr steht: sie gilt für die andere
+            // Quelle NICHT. Das ist die Sperre dagegen, dass zwei Engines dieselbe Datei benutzen.
+            string tvstDatei = SourceSettingsFile.PathIn(tmp, TvstEngine.SourceKey);
+            File.Copy(subdlDatei, tvstDatei, overwrite: true);
+            var kopie = SourceSettingsFile.Load(tmp, TvstEngine.SourceKey, TvstEngine.Declared);
+            Check(!kopie.IsConfigured && (kopie.Problem ?? string.Empty).Contains("subdl", StringComparison.Ordinal),
+                "F-M683 (B): eine kopierte Datei gilt nicht — die Datei nennt ihren Quellenschlüssel, und der muss passen",
+                kopie.Problem ?? "kein Hinweis");
+
+            // ---- A/C: der Endpunkt liefert jedes erklärte Feld, und kein erfundenes ----
+            var sicht = Jellyfin.Plugin.SubScribe.Api.SourceSettingsView.Build(registry, tmp);
+            Check(sicht.Count == 3 && sicht.Select(e => e.Key).SequenceEqual(registry.Keys),
+                "F-M683 (C): der Endpunkt liefert je Quelle einen Eintrag, in der Reihenfolge der Registry",
+                string.Join(", ", sicht.Select(e => e.Key)));
+
+            var feldFehler = new List<string>();
+            foreach (var eintrag in sicht)
+            {
+                var erklaert = registry.ByKey(eintrag.Key)!.Fields;
+                if (eintrag.Fields.Count != erklaert.Count)
+                {
+                    feldFehler.Add(eintrag.Key + ": " + eintrag.Fields.Count + " statt " + erklaert.Count);
+                    continue;
+                }
+
+                for (int i = 0; i < erklaert.Count; i++)
+                {
+                    if (!string.Equals(eintrag.Fields[i].Key, erklaert[i].Key, StringComparison.Ordinal)
+                        || !string.Equals(eintrag.Fields[i].Label, erklaert[i].Label, StringComparison.Ordinal)
+                        || !string.Equals(eintrag.Fields[i].Kind, SourceField.KindName(erklaert[i].Kind), StringComparison.Ordinal)
+                        || eintrag.Fields[i].Required != erklaert[i].Required)
+                    {
+                        feldFehler.Add(eintrag.Key + "/" + erklaert[i].Key);
+                    }
+                }
+            }
+
+            Check(feldFehler.Count == 0,
+                "F-M683 (A)/(C): jedes erklärte Feld kommt im Endpunkt an — in Erklärungsreihenfolge, mit Beschriftung, Art und Pflicht —, und kein Feld wird erfunden",
+                feldFehler.Count == 0
+                    ? string.Join(", ", sicht.Select(e => e.Key + "=" + e.Fields.Count))
+                    : string.Join(" | ", feldFehler));
+
+            var feldStand = registry.Engines
+                .SelectMany(e => e.Fields.Select(f => e.Capabilities.Key + " " + f.Key + " = "
+                    + (f.Default.Length == 0 ? "[leer]" : f.Default)))
+                .ToList();
+            var erwarteteFelder = new[]
+            {
+                "subdl apiKey = [leer]", "subdl account = [leer]",
+                "subdl baseUrl = " + Jellyfin.Plugin.SubScribe.Api.ScribeApiClient.ApiBase,
+                "subdl preferSeasonZip = true",
+                "tvsubtitles baseUrl = " + Jellyfin.Plugin.SubScribe.Api.TvSubtitlesClient.BaseUrl,
+                "moviesubtitles baseUrl = " + Jellyfin.Plugin.SubScribe.Api.MovieSubtitlesClient.BaseUrl,
+                "moviesubtitles access = [leer]",
+            };
+            Check(feldStand.SequenceEqual(erwarteteFelder),
+                "F-M683 (A): die Felder der drei Quellen sind die vereinbarten — und ihre Vorgaben sind die Adressen, die die Clients WIRKLICH benutzen",
+                string.Join(", ", feldStand));
+
+            // ---- C: ein Geheimnis steht nie in der Antwort ----
+            string antwort = System.Text.Json.JsonSerializer.Serialize(sicht);
+            var subdlEintrag = sicht.Single(e => e.Key == SubdlEngine.SourceKey);
+            var keyFeld = subdlEintrag.Fields.Single(f => f.Key == SubdlEngine.FieldApiKey);
+            Check(!antwort.Contains(PruefSchluessel, StringComparison.Ordinal)
+                  && keyFeld.Gesetzt && keyFeld.Value is null && keyFeld.Default is null,
+                "F-M683 (C): ein Geheimwert steht NIE in der Antwort — nur gesetzt=true (Wert und Vorgabe sind null)",
+                "Antwort " + antwort.Length + " Zeichen, Wert nicht enthalten: "
+                + !antwort.Contains(PruefSchluessel, StringComparison.Ordinal));
+
+            // ---- C: Schreiben trifft genau eine Datei ----
+            string msubDatei = SourceSettingsFile.PathIn(tmp, MsubEngine.SourceKey);
+            byte[] tvstVorher = File.ReadAllBytes(tvstDatei);
+            byte[] msubVorher = File.ReadAllBytes(msubDatei);
+            var schreiben = Jellyfin.Plugin.SubScribe.Api.SourceSettingsView.Save(
+                registry, tmp, SubdlEngine.SourceKey,
+                new Dictionary<string, string?> { ["account"] = "konto-neu", ["preferSeasonZip"] = "false" });
+            Check(schreiben.Ok
+                  && File.ReadAllBytes(tvstDatei).SequenceEqual(tvstVorher)
+                  && File.ReadAllBytes(msubDatei).SequenceEqual(msubVorher),
+                "F-M683 (C): ein Schreibvorgang lässt die Dateien der anderen Quellen byte-gleich",
+                "geschrieben: " + string.Join(", ", schreiben.Written));
+
+            var rechte = File.GetUnixFileMode(subdlDatei);
+            Check(OperatingSystem.IsWindows()
+                  || rechte == (UnixFileMode.UserRead | UnixFileMode.UserWrite),
+                "F-M683 (B): die Datei einer Quelle hat die Rechte 0600",
+                OperatingSystem.IsWindows() ? "Windows: nicht prüfbar" : rechte.ToString());
+
+            var leerGeheim = Jellyfin.Plugin.SubScribe.Api.SourceSettingsView.Save(
+                registry, tmp, SubdlEngine.SourceKey,
+                new Dictionary<string, string?> { [SubdlEngine.FieldApiKey] = string.Empty });
+            var nachLeerem = SourceSettingsFile.Load(tmp, SubdlEngine.SourceKey, SubdlEngine.Declared);
+            Check(leerGeheim.Ok && nachLeerem.Has(SubdlEngine.FieldApiKey)
+                  && string.Equals(nachLeerem.Secret(SubdlEngine.FieldApiKey), PruefSchluessel, StringComparison.Ordinal),
+                "F-M683 (C): ein leeres Geheimfeld bedeutet „unverändert lassen\" — der abgelegte Wert bleibt",
+                "gesetzt=" + nachLeerem.Has(SubdlEngine.FieldApiKey));
+
+            var unbekannt = Jellyfin.Plugin.SubScribe.Api.SourceSettingsView.Save(
+                registry, tmp, SubdlEngine.SourceKey,
+                new Dictionary<string, string?> { ["erfunden"] = "x" });
+            Check(!unbekannt.Ok && unbekannt.UnknownFields.Contains("erfunden"),
+                "F-M683 (C): ein unbekanntes Feld wird abgewiesen statt gespeichert",
+                unbekannt.Error ?? "kein Grund");
+
+            // ---- D: danach liest die Engine aus ihrer Datei, nicht aus der Konfiguration ----
+            var nachSchreiben = SourceRegistry.Build(kontext, uebernahmeConfig);
+            var subdlNachher = (SubdlEngine)nachSchreiben.ByKey(SubdlEngine.SourceKey)!;
+            Check(string.Equals(subdlNachher.Account, "konto-neu", StringComparison.Ordinal)
+                  && !subdlNachher.PreferSeasonZip,
+                "F-M683 (D): die Engine liest Konto und Schalter aus ihrer Datei — der neue Wert gilt ohne Neustart der Konfiguration",
+                "Konto aus der Datei=" + subdlNachher.Account + ", Schalter=" + subdlNachher.PreferSeasonZip);
+
+            // ---- B: eine kaputte Datei trifft nur ihre eine Quelle ----
+            File.WriteAllText(tvstDatei, "{ das ist kein JSON");
+            var mitKaputter = SourceRegistry.Build(kontext, uebernahmeConfig);
+            var sichtKaputt = Jellyfin.Plugin.SubScribe.Api.SourceSettingsView.Build(mitKaputter, tmp);
+            var tvstEintrag = sichtKaputt.Single(e => e.Key == TvstEngine.SourceKey);
+            var subdlEintrag2 = sichtKaputt.Single(e => e.Key == SubdlEngine.SourceKey);
+            var msubEintrag = sichtKaputt.Single(e => e.Key == MsubEngine.SourceKey);
+            Check(!tvstEintrag.Configured && !string.IsNullOrEmpty(tvstEintrag.Hint),
+                "F-M683 (B): die kaputte Datei macht GENAU DIESE Quelle nicht eingerichtet — mit Klartext-Hinweis",
+                tvstEintrag.Hint ?? "kein Hinweis");
+
+            Check(subdlEintrag2.Configured && msubEintrag.Configured,
+                "F-M683 (B): die anderen Quellen laufen weiter — sie lesen ihre eigenen Dateien",
+                "subdl=" + subdlEintrag2.Configured + ", moviesubtitles=" + msubEintrag.Configured);
+
+            var tvstSuche = mitKaputter.ByKey(TvstEngine.SourceKey)!
+                .SearchAsync(
+                    new SourceSearchRequest { Name = "Pruefung", IsSeries = true, Season = 1, Episode = 1 },
+                    CancellationToken.None)
+                .GetAwaiter()
+                .GetResult();
+            Check(tvstSuche.Fault?.Kind == SourceFault.NoSearchBase && tvstSuche.Candidates.Count == 0,
+                "F-M683 (B): die nicht eingerichtete Quelle verweigert die Suche mit einem Grund — statt zu raten und ins Netz zu gehen",
+                tvstSuche.Fault?.Kind.ToString() ?? "kein Fehler");
+
+            // ---- A: ein Geheimnis trägt nie eine Vorgabe ----
+            var geheimMitVorgabe = registry.Engines
+                .SelectMany(e => e.Fields)
+                .Where(f => f.IsSecret && f.Default.Length > 0)
+                .Select(f => f.Key)
+                .ToList();
+            Check(geheimMitVorgabe.Count == 0,
+                "F-M683 (A): kein Geheimfeld trägt eine Vorgabe — ein Geheimnis, das niemand eingetragen hat, ist leer",
+                geheimMitVorgabe.Count == 0 ? "0 Geheimnisse mit Vorgabe" : string.Join(", ", geheimMitVorgabe));
+
+            // ---- C: die Routen und der Zugang ----
+            string controller = File.ReadAllText(Path.Combine(plugin, "Api", "SourceSettingsController.cs"));
+            Check(controller.Contains("[HttpGet(\"Sources\")]", StringComparison.Ordinal)
+                  && controller.Contains("[HttpPost(\"Sources/{key}\")]", StringComparison.Ordinal)
+                  && controller.Contains("[Authorize(Policy = \"LocalAccessOrRequiresElevation\")]", StringComparison.Ordinal)
+                  && !controller.Contains("AllowAnonymous", StringComparison.Ordinal),
+                "F-M683 (C): die Routen stehen als GET Sources und POST Sources/{key}, und der Zugang ist der eines Administrators — nicht anonym");
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(tmp, recursive: true);
+            }
+            catch (IOException)
+            {
+                // Ein liegengebliebenes Temp-Verzeichnis ist kein Prüfergebnis.
+            }
+        }
+
+        // -----------------------------------------------------------------------------------------
         // Bericht.
         // -----------------------------------------------------------------------------------------
         Console.WriteLine();
-        Console.WriteLine("sources: " + _checks + " Prüfungen (T339, F-M682)");
+        Console.WriteLine("sources: " + _checks + " Prüfungen (T339/T340, F-M682/F-M683)");
         if (Failures.Count == 0)
         {
             Console.WriteLine(">>> SOURCES OK: " + _checks + " Prüfungen bestanden");

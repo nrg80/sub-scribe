@@ -16,6 +16,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.SubScribe.Api;
 using Jellyfin.Plugin.SubScribe.Language;
+using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.SubScribe.Sources.Tvst;
 
@@ -42,6 +43,21 @@ public sealed class TvstEngine : ISourceEngine
     /// <summary>Der Griff trägt seine Herkunft: <c>s:</c> + Eintrags-Kennung der Seite.</summary>
     private const string HandlePrefix = "s:";
 
+    /// <summary>F-M683: der Schlüssel der Adresse in der eigenen Datei dieser Quelle.</summary>
+    public const string FieldBaseUrl = "baseUrl";
+
+    /// <summary>
+    /// F-M683: die Felder, die DIESE Quelle erklärt. Es ist GENAU EINES — die Adresse, und ihre Vorgabe
+    /// ist die Adresse, die der Client dieses Builds wirklich benutzt
+    /// (<see cref="TvSubtitlesClient.BaseUrl"/>). Die Seite verlangt keinen Zugang: ein Geheimfeld wäre
+    /// hier eine Behauptung über die Quelle, die niemand belegen kann.
+    /// </summary>
+    public static IReadOnlyList<SourceField> Declared { get; } = new SourceField[]
+    {
+        new(FieldBaseUrl, "Adresse", SourceFieldKind.Url, Default: TvSubtitlesClient.BaseUrl,
+            Help: "Die Seitenadresse. Dieser Build benutzt sie fest eingebaut; ein abweichender Wert wird gemeldet."),
+    };
+
     private readonly TvSubtitlesClient _client;
     private readonly SourceEngineContext _context;
 
@@ -52,10 +68,23 @@ public sealed class TvstEngine : ISourceEngine
     /// gereichten HttpClient.</param>
     /// <param name="context">Was das Plugin reicht (HttpClient, Archiv-Cache, Logger, Zeitgeber).</param>
     /// <param name="seasonPacks">Steht diese Quelle in diesem Lauf im Pack-Slot?</param>
-    public TvstEngine(TvSubtitlesClient? client, SourceEngineContext context, bool seasonPacks)
+    /// <param name="settings">F-M683: die Einstellungen aus der eigenen Datei dieser Quelle.</param>
+    public TvstEngine(
+        TvSubtitlesClient? client, SourceEngineContext context, bool seasonPacks, SourceSettings? settings = null)
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _client = client ?? new TvSubtitlesClient(context.Http, context.ArchiveCache);
+        Settings = settings ?? SourceSettings.Empty(SourceKey, Declared);
+        BaseUrl = Settings.Url(FieldBaseUrl);
+
+        if (!string.Equals(BaseUrl, TvSubtitlesClient.BaseUrl, StringComparison.OrdinalIgnoreCase))
+        {
+            _context.Logger.LogWarning(
+                "[Sub Scribe] sources/tvsubtitles.json names the address {Address}; this build talks to {Built}.",
+                BaseUrl,
+                TvSubtitlesClient.BaseUrl);
+        }
+
         Capabilities = new SourceCapabilities
         {
             Key = SourceKey,
@@ -85,9 +114,24 @@ public sealed class TvstEngine : ISourceEngine
     public SourceCapabilities Capabilities { get; }
 
     /// <inheritdoc />
+    public IReadOnlyList<SourceField> Fields => Declared;
+
+    /// <summary>Gets F-M683: die Einstellungen, die diese Engine aus ihrer Datei gelesen hat (Vorgaben, wo nichts steht).</summary>
+    public SourceSettings Settings { get; }
+
+    /// <summary>Gets F-M683: die Adresse aus der eigenen Datei.</summary>
+    public string BaseUrl { get; }
+
+    /// <inheritdoc />
     public async Task<SourceSearchAnswer> SearchAsync(SourceSearchRequest request, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        if (!Settings.IsConfigured)
+        {
+            // F-M683: die eigene Datei gilt nicht — diese Quelle ist nicht eingerichtet.
+            return SourceSearchAnswer.Because(SourceFaultInfo.NoSearchBase(Settings.Problem));
+        }
 
         if (string.IsNullOrWhiteSpace(request.Name))
         {

@@ -529,7 +529,8 @@ public sealed class UploadPipeline : IPackFiller
                 ArchiveCache: _api.ArchiveDiskCache,
                 Subdl: _api,
                 Tvst: _tvstClient,
-                Msub: _msubClient),
+                Msub: _msubClient,
+                DataFolder: Plugin.Instance?.DataFolderPath),
             config);
     }
 

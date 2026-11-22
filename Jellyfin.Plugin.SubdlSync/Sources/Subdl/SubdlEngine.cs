@@ -17,6 +17,7 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.SubScribe.Api;
 using Jellyfin.Plugin.SubScribe.Language;
+using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.SubScribe.Sources.Subdl;
 
@@ -41,6 +42,46 @@ public sealed class SubdlEngine : ISourceEngine
     /// <summary>F-M450: die Seitenzahl-Obergrenze der Suche (Sicherheit, nicht Takt).</summary>
     private const int MaxSearchPages = 20;
 
+    /// <summary>F-M683: der Schlüssel des API-Schlüssels in der eigenen Datei dieser Quelle.</summary>
+    public const string FieldApiKey = "apiKey";
+
+    /// <summary>F-M683: der Schlüssel des Kontonamens in der eigenen Datei dieser Quelle.</summary>
+    public const string FieldAccount = "account";
+
+    /// <summary>F-M683: der Schlüssel der Adresse in der eigenen Datei dieser Quelle.</summary>
+    public const string FieldBaseUrl = "baseUrl";
+
+    /// <summary>F-M683: der Schlüssel des Staffel-ZIP-Schalters in der eigenen Datei dieser Quelle.</summary>
+    public const string FieldPreferSeasonZip = "preferSeasonZip";
+
+    /// <summary>
+    /// F-M683: die Felder, die DIESE Quelle erklärt — in der Reihenfolge, in der sie erscheinen.
+    /// <para>
+    /// Vier Felder, und jedes hat einen Grund: der Schlüssel ist Pflicht, weil ohne ihn weder Suche noch
+    /// Abruf geht; der Kontoname gehört zur Anmeldung; die Adresse ist die, die dieser Build wirklich
+    /// benutzt (<see cref="ScribeApiClient.ApiBase"/>, nicht eine abgetippte zweite Fassung); der
+    /// Schalter ist die Betreiberansage vom 22.11.2026 („Staffel zips bevorzugen ist ebenfalls eine
+    /// eigenschaft von subdl\") und steht auf AN, weil ein Staffelpack eine Folge je Lauf bedient und
+    /// damit weniger Abrufe kostet als die Einzeldateien derselben Staffel.
+    /// </para>
+    /// <para>
+    /// <c>account</c> ist nur sichtbar, solange ein Schlüssel abgelegt ist — ohne Schlüssel gibt es
+    /// keine Anmeldung, zu der ein Konto gehören könnte (<see cref="SourceFieldVisibility"/>).
+    /// </para>
+    /// </summary>
+    public static IReadOnlyList<SourceField> Declared { get; } = new SourceField[]
+    {
+        new(FieldApiKey, "API-Schlüssel", SourceFieldKind.Secret, Default: string.Empty, Required: true,
+            Help: "Wird als Bearer-Token gesendet. Ohne Schlüssel sucht und lädt SubDL nicht."),
+        new(FieldAccount, "Konto", SourceFieldKind.Text,
+            Help: "Benutzername des SubDL-Kontos — er wird zur Anmeldung und für den Meldetext gebraucht.",
+            VisibleWhen: new SourceFieldVisibility(FieldApiKey, "gesetzt")),
+        new(FieldBaseUrl, "Adresse", SourceFieldKind.Url, Default: ScribeApiClient.ApiBase,
+            Help: "Die API-Adresse. Dieser Build benutzt sie fest eingebaut; ein abweichender Wert wird gemeldet."),
+        new(FieldPreferSeasonZip, "Staffel-ZIPs bevorzugen", SourceFieldKind.Switch, Default: "true",
+            Help: "Bei gewünschtem Behälter zuerst die Staffel-ZIPs anbieten (weniger Abrufe je Staffel)."),
+    };
+
     private readonly ScribeApiClient _client;
     private readonly SourceEngineContext _context;
 
@@ -50,10 +91,40 @@ public sealed class SubdlEngine : ISourceEngine
     /// <param name="client">Der SubDL-Client des Laufs — er trägt seinen Zugang bereits.</param>
     /// <param name="context">Was das Plugin reicht (Logger, Zeitgeber, Archiv-Cache).</param>
     /// <param name="seasonPacks">Steht diese Quelle in diesem Lauf im Pack-Slot?</param>
-    public SubdlEngine(ScribeApiClient client, SourceEngineContext context, bool seasonPacks)
+    /// <param name="settings">
+    /// F-M683: die Einstellungen aus der EIGENEN Datei dieser Quelle. Fehlt der Parameter, gelten die
+    /// Vorgaben (kein Datenordner bekannt) — dann bleibt der Zugang des gereichten Clients maßgeblich.
+    /// </param>
+    public SubdlEngine(
+        ScribeApiClient client, SourceEngineContext context, bool seasonPacks, SourceSettings? settings = null)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
         _context = context ?? throw new ArgumentNullException(nameof(context));
+        Settings = settings ?? SourceSettings.Empty(SourceKey, Declared);
+
+        // F-M683: die Datei ist die Quelle der Wahrheit, sobald sie einen Schlüssel trägt. Die
+        // Konfiguration hat ihn beim ersten Start EINMAL hineingeschrieben (SourceSettingsSeed); danach
+        // liest die Engine hier. Ist die Datei kaputt, wird NICHTS übernommen — die Quelle gilt dann als
+        // nicht eingerichtet und sagt das (SearchAsync), statt mit einem halben Zugang zu laufen.
+        if (Settings.IsConfigured && Settings.Secret(FieldApiKey) is { Length: > 0 } schluessel)
+        {
+            _client.ApiKey = schluessel;
+        }
+
+        Account = Settings.Text(FieldAccount);
+        BaseUrl = Settings.Url(FieldBaseUrl);
+        PreferSeasonZip = Settings.Switch(FieldPreferSeasonZip);
+
+        if (!string.Equals(BaseUrl, ScribeApiClient.ApiBase, StringComparison.OrdinalIgnoreCase))
+        {
+            // Die Adresse wird gelesen und ausgewiesen, aber die Clients dieses Builds tragen ihre
+            // Adresse als Konstante. Ein anderer Wert ist deshalb eine Meldung und keine stille Lüge.
+            _context.Logger.LogWarning(
+                "[Sub Scribe] sources/subdl.json names the address {Address}; this build talks to {Built}.",
+                BaseUrl,
+                ScribeApiClient.ApiBase);
+        }
+
         Capabilities = new SourceCapabilities
         {
             Key = SourceKey,
@@ -83,9 +154,31 @@ public sealed class SubdlEngine : ISourceEngine
     public SourceCapabilities Capabilities { get; }
 
     /// <inheritdoc />
+    public IReadOnlyList<SourceField> Fields => Declared;
+
+    /// <summary>Gets F-M683: die Einstellungen, die diese Engine aus ihrer Datei gelesen hat (Vorgaben, wo nichts steht).</summary>
+    public SourceSettings Settings { get; }
+
+    /// <summary>Gets F-M683: der Kontoname aus der eigenen Datei (leer, wenn keiner eingetragen ist).</summary>
+    public string Account { get; }
+
+    /// <summary>Gets F-M683: die Adresse aus der eigenen Datei.</summary>
+    public string BaseUrl { get; }
+
+    /// <summary>Gets F-M683: Staffel-ZIPs bevorzugen (Vorgabe an).</summary>
+    public bool PreferSeasonZip { get; }
+
+    /// <inheritdoc />
     public async Task<SourceSearchAnswer> SearchAsync(SourceSearchRequest request, CancellationToken ct)
     {
         ArgumentNullException.ThrowIfNull(request);
+
+        if (!Settings.IsConfigured)
+        {
+            // F-M683: die eigene Datei gilt nicht — diese Quelle ist nicht eingerichtet. Der Grund
+            // steht im Klartext, ohne jeden Wert aus der Datei.
+            return SourceSearchAnswer.Because(SourceFaultInfo.AuthFailed(Settings.Problem));
+        }
 
         if (string.IsNullOrWhiteSpace(request.ImdbId) && string.IsNullOrWhiteSpace(request.TmdbId))
         {
@@ -147,6 +240,14 @@ public sealed class SubdlEngine : ISourceEngine
                 c.HearingImpaired,
                 c.ReleaseName,
                 c.FullSeason || c.UnpackFiles.Count > 0));
+        }
+
+        // F-M683: „Staffel zips bevorzugen" ist eine Eigenschaft DIESER Quelle. Gefragt ist ein
+        // Behälter, der Schalter steht an und die Quelle hat Staffel-ZIPs angeboten: sie stehen vorn,
+        // die Reihenfolge der übrigen bleibt die Reihenfolge der Quelle (stabile Sortierung).
+        if (PreferSeasonZip && request.WantsPack && kandidaten.Any(k => k.IsPack))
+        {
+            kandidaten = kandidaten.OrderByDescending(k => k.IsPack).ToList();
         }
 
         return new SourceSearchAnswer(kandidaten);
