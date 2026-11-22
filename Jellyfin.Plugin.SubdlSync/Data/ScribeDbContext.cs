@@ -145,7 +145,7 @@ public sealed class ScribeDbContext : IDisposable
     /// Beide Hälften laufen im selben Lauf (`IdModel`), hängen aber am BESTAND, nicht am Marker — ein
     /// Zwischenstand in einer Datei wird beim nächsten Start nachgeholt.
     /// </summary>
-    public const int CurrentSchemaVersion = 23;
+    public const int CurrentSchemaVersion = 24;
 
     /// <summary>
     /// F-M671/F-M672: die DDL der vier Entity-Tabellen. Sie steht hier, wo die anderen Tabellen
@@ -336,11 +336,17 @@ public sealed class ScribeDbContext : IDisposable
         + "PRIMARY KEY (SubjectId, Source));";
 
     /// <summary>F-M672: die DDL der schlechten Downloads — die fremde Kennung, die eine Meldung braucht.</summary>
+    /// <remarks>
+    /// F-M679: <c>Member</c> steht im Schlüssel, nicht nur in der Zeile — ein schlechter Untertitel ist ein
+    /// einzelnes Sub, auch wenn er aus einem Staffelpack kam. Der Schlüssel lautet damit
+    /// (SubjectId, Source, SourceId, Member), und <c>Member</c> ist bei einem Einzeldownload leer.
+    /// </remarks>
     public const string BadAppleTableDdl =
         "CREATE TABLE IF NOT EXISTS badapple ("
         + "SubjectId TEXT NOT NULL, "
         + "Source TEXT NOT NULL, "
         + "SourceId TEXT NOT NULL DEFAULT '', "
+        + "Member TEXT NOT NULL DEFAULT '', "
         + "Language TEXT NOT NULL DEFAULT '', "
         + "Reason TEXT NOT NULL DEFAULT '', "
         + "Finding TEXT NOT NULL DEFAULT '', "
@@ -350,7 +356,7 @@ public sealed class ScribeDbContext : IDisposable
         + "ReportedAt TEXT NULL, "
         + "ReportState TEXT NOT NULL DEFAULT 'open', "
         + "Written TEXT NOT NULL DEFAULT '', "
-        + "PRIMARY KEY (SubjectId, Source, SourceId));";
+        + "PRIMARY KEY (SubjectId, Source, SourceId, Member));";
 
     /// <summary>F-M672: die Indizes der drei Quellen-Tabellen.</summary>
     public static readonly string[] SourceTableIndexDdl =
@@ -1914,7 +1920,8 @@ public sealed class ScribeSqliteContext : DbContext
         modelBuilder.Entity<BadAppleEntity>(e =>
         {
             e.ToTable("badapple");
-            e.HasKey(x => new { x.SubjectId, x.Source, x.SourceId });
+            // F-M679: der Member gehoert zum Schluessel — zwei kaputte Subs eines Packs sind zwei Zeilen.
+            e.HasKey(x => new { x.SubjectId, x.Source, x.SourceId, x.Member });
             e.HasIndex(x => x.Source);
             e.HasIndex(x => new { x.SubjectId, x.Language });
         });

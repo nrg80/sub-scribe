@@ -22,8 +22,8 @@ using Microsoft.Extensions.Logging;
 namespace Jellyfin.Plugin.SubScribe.Data;
 
 /// <summary>
-/// F-M671/F-M672: die einmalige Übernahme des Altbestands in das Kennungs-Modell und die
-/// Quellen-Tabellen (Schema 23) — in EINER Transaktion, nach EINER Sicherung.
+/// F-M671/F-M672/F-M679: die einmalige Übernahme des Altbestands in das Kennungs-Modell und die
+/// Quellen-Tabellen (Schema 24) — in EINER Transaktion, nach EINER Sicherung.
 /// <para>
 /// WAS HIER PASSIERT: <c>media</c> → <c>file</c>, <c>embeds</c> → <c>track</c>, <c>sidecars</c> →
 /// <c>sidecar</c>, <c>packs</c> → <c>pack</c>. Jede Zeile bekommt ihre zufällige, unveränderliche Kennung
@@ -43,9 +43,9 @@ namespace Jellyfin.Plugin.SubScribe.Data;
 /// <para>
 /// WANN SIE LÄUFT: wenn die Datei existiert, ein Store ist (<c>meta</c> vorhanden) und noch irgendetwas
 /// aus einem älteren Stand darin steht — eine der vier Alt-Tabellen, <c>source_matrix</c>,
-/// <c>rejected_candidates</c>, die Spalte <c>file.PackId</c>, <c>track.OriginId</c>/<c>sidecar.OriginId</c>
-/// oder ein fehlendes <c>Display</c>. Ein abgebrochener Lauf rollt zurück und wird beim nächsten Start
-/// nachgeholt; eine übernommene Datei tut nichts (idempotent).
+/// <c>rejected_candidates</c>, die Spalte <c>file.PackId</c>, <c>track.OriginId</c>/<c>sidecar.OriginId</c>,
+/// ein fehlendes <c>Display</c> oder ein <c>badapple</c> ohne <c>Member</c> (F-M679). Ein abgebrochener Lauf
+/// rollt zurück und wird beim nächsten Start nachgeholt; eine übernommene Datei tut nichts (idempotent).
 /// </para>
 /// <para>
 /// WARUM SQL UND NICHT DAS MODELL: der Lauf arbeitet auf einer Datei, die ein ÄLTERES Schema hat. Jede
@@ -182,7 +182,11 @@ public static class IdModel
                                  || (TableExists(conn, "sidecar") && ColumnExists(conn, "sidecar", "FileId"))
                                  || !TableExists(conn, "pack_track")
                                  || (TableExists(conn, "file") && ColumnExists(conn, "file", "Display"))
-                                 || (TableExists(conn, "track") && ColumnExists(conn, "track", "Display"));
+                                 || (TableExists(conn, "track") && ColumnExists(conn, "track", "Display"))
+                                 // F-M679: eine Datei aus Schema 23 traegt `badapple` mit dem alten Schluessel
+                                 // (ohne Member). Das ist der einzige Grund, weshalb ein 23er-Store hier
+                                 // hereinkommt — und der Grund, weshalb er NICHT markergetrieben umgebaut wird.
+                                 || (TableExists(conn, "badapple") && !ColumnExists(conn, "badapple", "Member"));
 
             if (!altEntities && !quellenArbeit)
             {
@@ -234,6 +238,16 @@ public static class IdModel
             foreach (string index in ScribeDbContext.SourceTableIndexDdl)
             {
                 Execute(conn, tx, index);
+            }
+
+            // F-M679: eine Datei aus Schema 23 traegt `badapple` noch mit dem Schluessel OHNE `Member` —
+            // und SQLite kann einen Primaerschluessel nicht aendern. Der Umbau haengt am BESTAND (fehlt
+            // die Spalte?), nicht am Marker: ein abgebrochener Lauf wird beim naechsten Start nachgeholt,
+            // ein umgebauter tut nichts und legt auch keine zweite Sicherung an.
+            int badAppleUmgebaut = -1;
+            if (TableExists(conn, "badapple") && !ColumnExists(conn, "badapple", "Member"))
+            {
+                badAppleUmgebaut = RebuildBadApple(conn, tx);
             }
 
             var packRows = ReadPacks(conn, tx);
@@ -559,19 +573,30 @@ public static class IdModel
                 }
             }
 
-            Execute(conn, tx, "UPDATE meta SET SchemaVersion = 23 WHERE Id = 'db';");
+            Execute(conn, tx, "UPDATE meta SET SchemaVersion = 24 WHERE Id = 'db';");
 
             tx.Commit();
 
-            logger?.LogInformation(
-                "[Sub Scribe] data file: schema 23 taken over — {Files} file(s), {Tracks} track(s), {Sidecars} sidecar(s), "
-                + "{Packs} pack(s); {Numbers} number(s) from the per-file circle, {OnTracks} track(s) with their pack, "
-                + "{Orphans} file(s) created for an orphan track; {Uploads} verdict(s), {References} reference(s), "
-                + "{BadApples} bad apple(s), {Unplaced} old mark(s) without a subject; old tables and columns dropped"
-                + (sicherung != null ? ", safety copy {Backup}." : "."),
-                fileRows.Count, trackRows.Count, sidecarRows.Count, packRows.Count,
-                nummern, packsOnTracks, orphans, uploadRows.Count, referenceRows.Count, badApples.Count,
-                ohneSubjekt, sicherung ?? "-");
+            if (badAppleUmgebaut >= 0)
+            {
+                logger?.LogInformation(
+                    "[Sub Scribe] data file: badapple rebuilt for schema 24 — {Count} row(s) taken over with "
+                    + "Member = '' (F-M679).",
+                    badAppleUmgebaut);
+            }
+
+            if (altEntities)
+            {
+                logger?.LogInformation(
+                    "[Sub Scribe] data file: schema 24 taken over — {Files} file(s), {Tracks} track(s), {Sidecars} sidecar(s), "
+                    + "{Packs} pack(s); {Numbers} number(s) from the per-file circle, {OnTracks} track(s) with their pack, "
+                    + "{Orphans} file(s) created for an orphan track; {Uploads} verdict(s), {References} reference(s), "
+                    + "{BadApples} bad apple(s), {Unplaced} old mark(s) without a subject; old tables and columns dropped"
+                    + (sicherung != null ? ", safety copy {Backup}." : "."),
+                    fileRows.Count, trackRows.Count, sidecarRows.Count, packRows.Count,
+                    nummern, packsOnTracks, orphans, uploadRows.Count, referenceRows.Count, badApples.Count,
+                    ohneSubjekt, sicherung ?? "-");
+            }
 
             return new Outcome(true, sicherung, gelesen, geschrieben, nummern, packsOnTracks, orphans,
                 referenceRows.Count, badApples.Count, ohneSubjekt);
@@ -581,7 +606,7 @@ public static class IdModel
             // Kein halber Zustand: die Transaktion ist zurückgerollt, die Datei ist unverändert, und der
             // nächste Start holt den Lauf nach.
             logger?.LogWarning(
-                "[Sub Scribe] could not take schema 23 over from the old structure (continuing, the run is retried at the next start): {Msg}",
+                "[Sub Scribe] could not take schema 24 over from the old structure (continuing, the run is retried at the next start): {Msg}",
                 ex.ToString());
             return new Outcome(false, null, leer, leer, 0, 0, 0);
         }
@@ -764,6 +789,7 @@ public static class IdModel
         public string SubjectId { get; set; } = string.Empty;
         public string Source { get; set; } = "subdl";
         public string SourceId { get; set; } = string.Empty;
+        public string Member { get; set; } = string.Empty;
         public string Language { get; set; } = string.Empty;
         public string Reason { get; set; } = string.Empty;
         public string Finding { get; set; } = string.Empty;
@@ -772,7 +798,7 @@ public static class IdModel
         public string Kind { get; set; } = "qa";
         public DateTime? ReportedAt { get; set; }
 
-        public string Key => SubjectId + "|" + Source + "|" + SourceId;
+        public string Key => SubjectId + "|" + Source + "|" + SourceId + "|" + Member;
     }
 
     private sealed class MatrixRow
@@ -2049,17 +2075,63 @@ public static class IdModel
         cmd.ExecuteNonQuery();
     }
 
+    /// <summary>
+    /// F-M679: den Schluessel von <c>badapple</c> um <c>Member</c> erweitern — SQLite kann einen
+    /// Primaerschluessel nicht aendern, also wird die Tabelle neu gebaut.
+    /// <para>
+    /// Der Weg: die alte Tabelle umbenennen, aus dem AKTUELLEN DDL neu anlegen, die Zeilen mit
+    /// <c>Member = ''</c> zurueckkopieren (eine Zeile aus Schema 23 kannte kein Sub — der fremde Eintrag
+    /// WAR das Sub), die alte fallen lassen. <c>ReportState</c> und <c>Written</c> werden mitkopiert und
+    /// nicht neu abgeleitet: sie sind der Zustand der Zeile, nicht ihre Form. Die Indizes fallen mit der
+    /// alten Tabelle und werden erst DANACH neu gelegt — solange sie an <c>badapple_alt</c> haengen, sind
+    /// ihre Namen belegt und ein <c>CREATE INDEX IF NOT EXISTS</c> waere ein stiller Fehlschlag.
+    /// </para>
+    /// <para>
+    /// Idempotent ist der Aufrufer: er fragt vorher <c>PRAGMA table_info</c> nach <c>Member</c>. Faellt
+    /// hier etwas um, rollt die Transaktion zurueck, und der naechste Start holt den Umbau nach.
+    /// </para>
+    /// </summary>
+    /// <param name="conn">Open connection on the data file.</param>
+    /// <param name="tx">The migration transaction — this whole rebuild rolls back with it.</param>
+    /// <returns>Wie viele Zeilen uebernommen wurden.</returns>
+    private static int RebuildBadApple(SqliteConnection conn, SqliteTransaction tx)
+    {
+        Execute(conn, tx, "ALTER TABLE badapple RENAME TO badapple_alt;");
+        Execute(conn, tx, ScribeDbContext.BadAppleTableDdl);
+
+        int kopiert;
+        using (var cmd = conn.CreateCommand())
+        {
+            cmd.Transaction = tx;
+            cmd.CommandText =
+                "INSERT INTO badapple (SubjectId, Source, SourceId, Member, Language, Reason, Finding, NId, "
+                + "ReleaseName, Kind, ReportedAt, ReportState, Written) "
+                + "SELECT SubjectId, Source, SourceId, '', Language, Reason, Finding, NId, ReleaseName, Kind, "
+                + "ReportedAt, ReportState, Written FROM badapple_alt;";
+            kopiert = cmd.ExecuteNonQuery();
+        }
+
+        Execute(conn, tx, "DROP TABLE badapple_alt;");
+        foreach (string index in ScribeDbContext.SourceTableIndexDdl)
+        {
+            Execute(conn, tx, index);
+        }
+
+        return kopiert;
+    }
+
     private static void InsertBadApple(SqliteConnection conn, SqliteTransaction tx, BadAppleRow b)
     {
         using var cmd = conn.CreateCommand();
         cmd.Transaction = tx;
         cmd.CommandText =
-            "INSERT INTO badapple (SubjectId, Source, SourceId, Language, Reason, Finding, NId, ReleaseName, Kind, "
-            + "ReportedAt, ReportState, Written) VALUES ($subject, $source, $sourceId, $lang, $reason, $finding, $nid, "
+            "INSERT INTO badapple (SubjectId, Source, SourceId, Member, Language, Reason, Finding, NId, ReleaseName, Kind, "
+            + "ReportedAt, ReportState, Written) VALUES ($subject, $source, $sourceId, $member, $lang, $reason, $finding, $nid, "
             + "$release, $kind, $reported, $state, $written);";
         cmd.Parameters.AddWithValue("$subject", b.SubjectId);
         cmd.Parameters.AddWithValue("$source", b.Source);
         cmd.Parameters.AddWithValue("$sourceId", b.SourceId);
+        cmd.Parameters.AddWithValue("$member", b.Member);
         cmd.Parameters.AddWithValue("$lang", b.Language);
         cmd.Parameters.AddWithValue("$reason", b.Reason);
         cmd.Parameters.AddWithValue("$finding", b.Finding);

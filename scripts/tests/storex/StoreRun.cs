@@ -1100,8 +1100,8 @@ Check(spurBelege >= 6,
 
 using (var db = new ScribeDbContext(matrixDir, null))
 {
-    Check(db.Meta.FindById("db")?.SchemaVersion == 23,
-        "F-M671/F-M672: der Marker steht nach der Übernahme auf 23",
+    Check(db.Meta.FindById("db")?.SchemaVersion == 24,
+        "F-M671/F-M672/F-M679: der Marker steht nach der Übernahme auf 24",
         "marker=" + (db.Meta.FindById("db")?.SchemaVersion));
 }
 
@@ -1310,8 +1310,8 @@ int s20Marken;
 using (var db = new ScribeDbContext(s20Dir, null))
 {
     s20Marken = SourceStore.CountByKind(db).Values.Sum();
-    Check(db.Meta.FindById("db")?.SchemaVersion == 23,
-        "F-M670/F-M671/F-M672: eine Datei aus Schema 20 zieht auf 23 nach",
+    Check(db.Meta.FindById("db")?.SchemaVersion == 24,
+        "F-M670/F-M671/F-M672: eine Datei aus Schema 20 zieht auf 24 nach",
         "marker=" + db.Meta.FindById("db")?.SchemaVersion);
 }
 
@@ -1495,6 +1495,201 @@ using (var db = new ScribeDbContext(idDir, null))
 Check(idMarks == 5 && Sicherungen(idDir).Length == 1,
     "F-M672: ein zweiter Start tut nichts — gleiche Markenzahl, keine zweite Sicherung",
     idMarks + " Marke(n), " + Sicherungen(idDir).Length + " Sicherung(en)");
+
+// ---------------------------------------------------------------------------------------------
+// T337 (F-M679): der Member gehoert zum Schluessel von `badapple` — ein schlechter Download ist ein
+// EINZELNES Sub, auch wenn es in einem Staffelpack kam.
+//
+// Aufgebaut wird eine ECHTE Schema-23-Datei: ein vollstaendiger Store (alle Tabellen des Modells),
+// dessen `badapple` danach aus dem ALTEN DDL neu entsteht — ohne `Member`, mit dem dreiteiligen
+// Schluessel. SQLite kann einen Primaerschluessel nicht aendern; die Datei zwingt den Aufstieg also
+// genau in den Weg, den F-M679 baut (Tabelle neu, Zeilen mit Member='' herueber, eine Transaktion nach
+// einer Sicherung, bestandsgetrieben statt markergetrieben).
+// ---------------------------------------------------------------------------------------------
+Console.WriteLine();
+Console.WriteLine("--- badapple carries the member: schema 23 -> 24 (F-M679) ---");
+
+string m24Dir = Path.Combine(workdir, "member24");
+Directory.CreateDirectory(m24Dir);
+string m24Db = DbFiles.PathIn(m24Dir);
+
+using (var db = new ScribeDbContext(m24Dir, null))
+{
+    db.Files.Upsert(new FileEntity
+    {
+        OsHash = "h24",
+        Path = "/lib/mobland/s02e05.mkv",
+        FileName = "mobland.s02e05.mkv",
+        ImdbId = "tt24",
+        IsSeries = true,
+        Season = 2,
+        Episode = 5,
+    });
+}
+
+string m24Subjekt;
+using (var db = new ScribeDbContext(m24Dir, null))
+{
+    m24Subjekt = db.Files.FindAll().First().FileId;
+}
+
+// Das DDL, das Schema 23 geschrieben hat — dreiteiliger Schluessel, kein Member.
+string badAppleDdl23 =
+    "CREATE TABLE badapple ("
+    + "SubjectId TEXT NOT NULL, Source TEXT NOT NULL, SourceId TEXT NOT NULL DEFAULT '', "
+    + "Language TEXT NOT NULL DEFAULT '', Reason TEXT NOT NULL DEFAULT '', Finding TEXT NOT NULL DEFAULT '', "
+    + "NId TEXT NOT NULL DEFAULT '', ReleaseName TEXT NOT NULL DEFAULT '', Kind TEXT NOT NULL DEFAULT 'qa', "
+    + "ReportedAt TEXT NULL, ReportState TEXT NOT NULL DEFAULT 'open', Written TEXT NOT NULL DEFAULT '', "
+    + "PRIMARY KEY (SubjectId, Source, SourceId));";
+
+using (var db = new ScribeDbContext(m24Dir, null))
+{
+    void Sql(string sql) => db.Context.Database.ExecuteSqlRaw(sql);
+    Sql("DROP TABLE badapple;");
+    Sql(badAppleDdl23);
+    Sql("CREATE INDEX IX_badapple_Source ON badapple (Source);");
+    Sql("CREATE INDEX IX_badapple_SubjectLanguage ON badapple (SubjectId, Language);");
+    Sql("INSERT INTO badapple (SubjectId, Source, SourceId, Language, Reason, Finding, NId, ReleaseName, Kind, "
+        + "ReportedAt, ReportState, Written) VALUES ('" + m24Subjekt + "', 'subdl', '380011', 'EN', "
+        + "'candidate-rejected', '0 bytes', '', 'Some.Pack.S02', 'qa', '2026-11-21 08:00:00', 'reported', "
+        + "'2026-11-21 09:00:00');");
+    Sql("UPDATE meta SET SchemaVersion = 23 WHERE Id = 'db';");
+}
+
+// VORHER: die Spalte gibt es nicht, der Marker steht auf 23 — die Probe kann also etwas finden.
+Check(!SpaltenVon("badapple", m24Db).Contains("Member")
+      && QIn("SELECT SchemaVersion FROM meta WHERE Id = 'db'", m24Db) == 23,
+    "F-M679: die Altdatei ist eine echte 23er-Datei — badapple ohne Member, Marker 23",
+    "Spalten=" + SpaltenVon("badapple", m24Db).Length + " Marker="
+    + QIn("SELECT SchemaVersion FROM meta WHERE Id = 'db'", m24Db));
+
+int m24Backups;
+using (var db = new ScribeDbContext(m24Dir, null))
+{
+    m24Backups = Sicherungen(m24Dir).Length;
+    var zeilen = db.BadApples.FindAll().ToList();
+
+    Check(SpaltenVon("badapple", m24Db).Contains("Member") && zeilen.Count == 1,
+        "F-M679: der Aufstieg 23 -> 24 baut badapple mit Member und nimmt die Zeile mit",
+        "Spalten=" + string.Join(",", SpaltenVon("badapple", m24Db)) + " Zeilen=" + zeilen.Count);
+
+    // Eine 23er-Zeile kannte kein Sub — der fremde Eintrag WAR das Sub, also Member = "".
+    Check(zeilen.Count == 1 && zeilen[0].Member.Length == 0 && zeilen[0].Reason == "candidate-rejected"
+          && zeilen[0].Finding == "0 bytes",
+        "F-M679: die uebernommene Zeile steht mit Member = '' da, Grund und Befund unveraendert",
+        zeilen.Count == 1 ? "'" + zeilen[0].Member + "|" + zeilen[0].Reason + "|" + zeilen[0].Finding + "'" : "-");
+
+    // Zustand ist Zustand: der Meldezustand und der Schreibzeitpunkt werden mitkopiert, nicht neu
+    // abgeleitet — sonst waere jede uebernommene Zeile plotzlich "die neueste" im 50-Zeilen-Pruning.
+    Check(QText("SELECT ReportState || '|' || Written || '|' || ReportedAt FROM badapple", m24Db)
+          == "reported|2026-11-21 09:00:00|2026-11-21 08:00:00",
+        "F-M679: ReportState, Written und ReportedAt werden mitkopiert, nicht neu abgeleitet",
+        QText("SELECT ReportState || '|' || Written FROM badapple", m24Db) ?? "-");
+
+    Check(QIn("SELECT SchemaVersion FROM meta WHERE Id = 'db'", m24Db) == 24,
+        "F-M679: der Marker steht danach auf 24",
+        QIn("SELECT SchemaVersion FROM meta WHERE Id = 'db'", m24Db).ToString(System.Globalization.CultureInfo.InvariantCulture));
+}
+
+// Eine Sicherung, und sie ist der Stand VOR dem Lauf: in der Kopie fehlt Member noch.
+var m24Sicherungen = Sicherungen(m24Dir);
+Check(m24Backups == 1 && m24Sicherungen.Length == 1 && !SpaltenVon("badapple", m24Sicherungen[0]).Contains("Member"),
+    "F-M679: genau EINE Sicherung, und sie traegt die Datei VOR dem Umbau (badapple ohne Member)",
+    m24Sicherungen.Length + " Sicherung(en)"
+    + (m24Sicherungen.Length == 1 ? ", Spalten dort=" + SpaltenVon("badapple", m24Sicherungen[0]).Length : string.Empty));
+
+// Der Schluessel: zwei Zeilen, die sich NUR im Member unterscheiden, sind zwei Zeilen. Und ein zweites
+// Melden DESSELBEN Subs bleibt eine Aktualisierung.
+const string memberEn = "MobLand - 2x05 - Birdland.WEB.NeoNoir.en.srt";
+const string memberDe = "MobLand - 2x05 - Birdland.WEB.NeoNoir.de.srt";
+using (var db = new ScribeDbContext(m24Dir, null))
+{
+    SourceStore.RecordBadApple(db, m24Subjekt, SourceStore.Subdl, "380011", "EN",
+        RejectReason.CandidateRejected, member: memberEn);
+    SourceStore.RecordBadApple(db, m24Subjekt, SourceStore.Subdl, "380011", "EN",
+        RejectReason.CandidateRejected, member: memberDe);
+    // Dasselbe Sub noch einmal: dieselbe Zeile, kein dritter Eintrag.
+    SourceStore.RecordBadApple(db, m24Subjekt, SourceStore.Subdl, "380011", "EN",
+        RejectReason.CandidateRejected, "no usable cues", member: memberEn);
+}
+
+Check(QIn("SELECT COUNT(*) FROM badapple WHERE SourceId = '380011' AND Member <> ''", m24Db) == 2,
+    "F-M679: zwei Zeilen, die sich NUR im Member unterscheiden, existieren beide — Member gehoert zum Schluessel",
+    QText("SELECT COUNT(*) FROM badapple WHERE SourceId = '380011' AND Member <> ''", m24Db) ?? "-");
+
+Check(QIn("SELECT COUNT(*) FROM badapple", m24Db) == 3,
+    "F-M679: das zweite Melden desselben Subs ist eine Aktualisierung, keine dritte Zeile",
+    QText("SELECT COUNT(*) FROM badapple", m24Db) ?? "-");
+
+using (var db = new ScribeDbContext(m24Dir, null))
+{
+    var zeile = db.BadApples.FindAll()
+        .FirstOrDefault(x => string.Equals(x.Member, memberEn, StringComparison.Ordinal));
+    var wieder = zeile == null ? null : db.BadApples.FindById(zeile.Key);
+    Check(zeile != null && wieder != null
+          && string.Equals(wieder.Member, memberEn, StringComparison.Ordinal)
+          && string.Equals(wieder.SourceId, "380011", StringComparison.Ordinal)
+          && string.Equals(wieder.Finding, "no usable cues", StringComparison.Ordinal)
+          && zeile.Key != zeile.SubjectId + "|" + zeile.Source + "|" + zeile.SourceId,
+        "F-M679: eine Zeile mit Member wird unveraendert wieder gelesen, und ihr Schluessel nennt das Sub",
+        wieder == null ? "(nicht gefunden)" : wieder.Key);
+}
+
+int m24Zeilen = QIn("SELECT COUNT(*) FROM badapple", m24Db);
+int m24Backups2;
+using (var db = new ScribeDbContext(m24Dir, null))
+{
+    m24Backups2 = Sicherungen(m24Dir).Length;
+    _ = db.BadApples.Count();
+}
+
+Check(m24Backups2 == 1 && QIn("SELECT COUNT(*) FROM badapple", m24Db) == m24Zeilen,
+    "F-M679: ein zweiter Start auf der 24er-Datei tut nichts — keine zweite Sicherung, keine zweite Zeile",
+    m24Backups2 + " Sicherung(en), " + QIn("SELECT COUNT(*) FROM badapple", m24Db) + " Zeile(n)");
+
+// ---------------------------------------------------------------------------------------------
+// F-M679, Weg 22 -> 24: ein Store aus Schema 22 traegt noch gar kein `badapple` — die Tabelle
+// entsteht beim Aufstieg frisch aus dem DDL, also MIT Member. Nachgebaut wird die 22er-Form aus einem
+// vollstaendigen Store: die Spalten `file.PackId` und `track.OriginId` zurueck (die 22 sie trug) und
+// die Marken-Matrix, die es damals noch gab.
+// ---------------------------------------------------------------------------------------------
+string m22Dir = Path.Combine(workdir, "member22");
+Directory.CreateDirectory(m22Dir);
+string m22Db = DbFiles.PathIn(m22Dir);
+using (var db = new ScribeDbContext(m22Dir, null))
+{
+    db.Files.Upsert(new FileEntity { OsHash = "h22", Path = "/lib/serie/s01e01.mkv", IsSeries = true, Season = 1, Episode = 1 });
+}
+
+using (var db = new ScribeDbContext(m22Dir, null))
+{
+    void Sql(string sql) => db.Context.Database.ExecuteSqlRaw(sql);
+    Sql("DROP TABLE badapple;");
+    Sql("ALTER TABLE file ADD COLUMN PackId TEXT NULL;");
+    Sql("ALTER TABLE track ADD COLUMN OriginId TEXT NULL;");
+    Sql(Jellyfin.Plugin.SubScribe.Data.ScribeDbContext.SourceMatrixDdl);
+    Sql("UPDATE meta SET SchemaVersion = 22 WHERE Id = 'db';");
+}
+
+Check(QIn("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='badapple'", m22Db) == 0
+      && QIn("SELECT COUNT(*) FROM pragma_table_info('file') WHERE name='PackId'", m22Db) == 1,
+    "F-M679: die 22er-Datei traegt kein badapple und noch die Spalten, die Schema 23 entfernt hat");
+
+int m22Backups;
+using (var db = new ScribeDbContext(m22Dir, null))
+{
+    m22Backups = Sicherungen(m22Dir).Length;
+    Check(SpaltenVon("badapple", m22Db).Contains("Member")
+          && QIn("SELECT SchemaVersion FROM meta WHERE Id = 'db'", m22Db) == 24,
+        "F-M679: der Aufstieg 22 -> 24 legt badapple frisch MIT Member an und setzt den Marker auf 24",
+        "Spalten=" + string.Join(",", SpaltenVon("badapple", m22Db)));
+}
+
+Check(m22Backups == 1
+      && QIn("SELECT COUNT(*) FROM pragma_table_info('file') WHERE name='PackId'", m22Db) == 0
+      && QIn("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='source_matrix'", m22Db) == 0,
+    "F-M679: auch dort genau eine Sicherung, und die 22er-Spalten sind danach weg",
+    m22Backups + " Sicherung(en)");
 
 Console.WriteLine();
 Console.WriteLine("=== " + (failures == 0 ? "STORE OK" : failures + " FAILURE(S)") + " ===");

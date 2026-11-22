@@ -999,8 +999,15 @@ public static class SourceStore
 
     /// <summary>
     /// Merkt einen schlechten Download: die Nummer des fremden Eintrags, der Grund und alles, was eine
-    /// Meldung an die Quelle braucht. Eine Zeile je (Subjekt, Quelle, fremde Kennung) — ein zweites
-    /// Melden desselben Eintrags ist eine Aktualisierung, keine zweite Zeile.
+    /// Meldung an die Quelle braucht. Eine Zeile je (Subjekt, Quelle, fremde Kennung, <paramref name="member"/>)
+    /// — ein zweites Melden desselben Untertitels ist eine Aktualisierung, keine zweite Zeile.
+    /// <para>
+    /// F-M679 (Betreiber-Entscheidung 22.11.2026, wörtlich: „Halt fuer subs einzeln und im pack"): der
+    /// <paramref name="member"/> gehört zum SCHLÜSSEL. Ein schlechter Download ist ein einzelner
+    /// Untertitel, nicht der fremde Eintrag, in dem er lag — sonst verbrannte ein kaputtes Sub aus einem
+    /// Staffelpack den ganzen Pack, und zwei kaputte Subs desselben Packs wären eine Zeile, die den
+    /// zweiten verliert. Leer heißt: Einzeldownload, der Eintrag war das Sub selbst.
+    /// </para>
     /// </summary>
     /// <param name="db">The plugin's data context.</param>
     /// <param name="subjectId">Die Datei, für die der Eintrag geholt wurde.</param>
@@ -1013,6 +1020,9 @@ public static class SourceStore
     /// <param name="releaseName">Der Releasename, wie die Quelle ihn führt (kann leer bleiben).</param>
     /// <param name="kind">qa oder empty.</param>
     /// <param name="reportedAt">Wann gemeldet wurde, oder null.</param>
+    /// <param name="member">
+    /// F-M679: der Name des Untertitels INNERHALB des fremden Eintrags; null/leer bei einem Einzeldownload.
+    /// </param>
     /// <returns>Die geschriebene Zeile, oder null wenn kein Subjekt bekannt ist.</returns>
     public static BadAppleEntity? RecordBadApple(
         ScribeDbContext db,
@@ -1025,19 +1035,22 @@ public static class SourceStore
         string? nId = null,
         string? releaseName = null,
         string kind = "qa",
-        DateTime? reportedAt = null)
+        DateTime? reportedAt = null,
+        string? member = null)
     {
         if (db == null || string.IsNullOrWhiteSpace(subjectId) || string.IsNullOrWhiteSpace(sourceId))
         {
             return null;
         }
 
-        string key = subjectId + "|" + source + "|" + sourceId;
+        string mitglied = member ?? string.Empty;
+        string key = subjectId + "|" + source + "|" + sourceId + "|" + mitglied;
         var row = db.BadApples.FindById(key) ?? new BadAppleEntity
         {
             SubjectId = subjectId!,
             Source = source,
             SourceId = sourceId,
+            Member = mitglied,
         };
 
         row.Language = (language ?? string.Empty).ToUpperInvariant();

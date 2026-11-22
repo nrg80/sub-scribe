@@ -530,7 +530,7 @@ internal static class Program
             // F-M670: 21 — die Alt-Tabelle `source_marks` und die Id-Spalte `SubdlId` sind entfallen.
             // F-M671: 22 — die eigenen Kennungen der vier Ebenen.
             && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/ScribeDbContext.cs"))
-                .Contains("CurrentSchemaVersion = 23", StringComparison.Ordinal));
+                .Contains("CurrentSchemaVersion = 24", StringComparison.Ordinal));
 
         // ---- 10. eigene Kennzeichen je Quelle und Richtung (F-M488) ---------------------------
         var entities = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/Entities.cs"));
@@ -546,7 +546,7 @@ internal static class Program
             // F-M668: Statt neun Spalten je Tabelle trägt die Matrix die Quelle im WERT — Schema 19
             // zieht die zwei Felder der Matrix nach und legt die Altspalten nieder.
             // F-M671: der Marker steht auf 22.
-            dbc.Contains("CurrentSchemaVersion = 23", StringComparison.Ordinal)
+            dbc.Contains("CurrentSchemaVersion = 24", StringComparison.Ordinal)
             && dbc.Contains("+ \"UploadedId TEXT NULL, \"", StringComparison.Ordinal)
             && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/SourceStore.cs"))
                 .Contains("public static void EnsureBadAppleColumns(", StringComparison.Ordinal)
@@ -653,7 +653,7 @@ internal static class Program
             // Zeile, statt einer Spalte je Quelle an jeder Untertitel-Zeile.
             entities.Contains("public DateTime? UploadedAt { get; set; }", StringComparison.Ordinal)
             && !entities.Contains("public DateTime? SubdlUploadedAt { get; set; }", StringComparison.Ordinal)
-            && dbc.Contains("CurrentSchemaVersion = 23", StringComparison.Ordinal)
+            && dbc.Contains("CurrentSchemaVersion = 24", StringComparison.Ordinal)
             && dbc.Contains("\"UploadedAt TEXT NULL, \"", StringComparison.Ordinal));
         Check("the timestamp is set for the source that took the upload, never for another",
             uploadSource.Contains("subdlUploadedAt: subdlMarke.At", StringComparison.Ordinal)
@@ -936,7 +936,7 @@ internal static class Program
         Check("F-M557: der Zugeh-Stempel steht JE QUELLE auf der Medienzeile (Schema 16)",
             // F-M668: der Stempel ist eine `file`-Zeile je (Medium, Quelle); die vier Medien-Spalten
             // gibt es nicht mehr, und die Signatur steht als `Fingerprint` daneben.
-            db557.Contains("CurrentSchemaVersion = 23", StringComparison.Ordinal)
+            db557.Contains("CurrentSchemaVersion = 24", StringComparison.Ordinal)
             && !db557.Contains("ADD COLUMN CompleteSubdl TEXT NULL", StringComparison.Ordinal)
             && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Data/SourceStore.cs"))
                 .Contains("public static void WriteFileMark(", StringComparison.Ordinal)
@@ -2520,7 +2520,7 @@ internal static class Program
                     && nachher?.TvstShowId == "512"
                     // F-M507: der Marker ist inzwischen 14 — die Datei wird auf den Stand DIESES Builds
                     // gehoben, und der Bestand muss das aushalten.
-                    && legacyDb.Meta.FindById("db")?.SchemaVersion == 23,
+                    && legacyDb.Meta.FindById("db")?.SchemaVersion == 24,
                     "bestand=" + (bestand?.ImdbId ?? "-") + "/" + (bestand?.TmdbId ?? "-")
                     + "/tvst=" + (vorherTvst ?? "<null>")
                     + " nachher=" + (nachher?.TvstShowId ?? "-")
@@ -2891,7 +2891,7 @@ internal static class Program
                     && filmAuf.Status == MsubMovieStatus.Found
                     && gespeichert == "102"
                     && zweiteRunde.Status == MsubMovieStatus.Stored
-                    && msubStore.Meta.FindById("db")?.SchemaVersion == 23,
+                    && msubStore.Meta.FindById("db")?.SchemaVersion == 24,
                     "id=" + (gespeichert ?? "<null>") + " status=" + filmAuf.Status + "/" + zweiteRunde.Status
                     + " marker=" + msubStore.Meta.FindById("db")?.SchemaVersion);
             }
@@ -2976,7 +2976,7 @@ internal static class Program
                 && alteTabellen == 0
                 // F-M670: der Marker steht auf 21 (Alt-Tabelle und Id-Spalte sind entfallen).
                 // F-M671: 22 — die eigenen Kennungen.
-                && marker == 23
+                && marker == 24
                 && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Data/ScribeDbContext.cs"))
                     .Contains("\"RefusalSignature TEXT NULL, \"", StringComparison.Ordinal),
                 "file=" + string.Join(",", medienSpalten.Where(x => x.StartsWith("Msub", StringComparison.Ordinal)))
@@ -2997,7 +2997,7 @@ internal static class Program
                 // Nachzieh-Listen; die Matrix führt die Quelle als Wert, und der Quellenname ist derselbe
                 // wie in der API (eine Schreibweise, zwei Schichten).
                 // F-M671: der Marker steht auf 22; die Nummer am Medium steht in der DDL der Datei.
-                dbSource.Contains("public const int CurrentSchemaVersion = 23;", StringComparison.Ordinal)
+                dbSource.Contains("public const int CurrentSchemaVersion = 24;", StringComparison.Ordinal)
                 && !dbSource.Contains("ALTER TABLE sidecars ADD COLUMN MoviesubtitlesDownloadId", StringComparison.Ordinal)
                 && !dbSource.Contains("ALTER TABLE embeds ADD COLUMN MoviesubtitlesUploadedAt", StringComparison.Ordinal)
                 && dbSource.Contains("+ \"MsubMovieId TEXT NULL, \"", StringComparison.Ordinal)

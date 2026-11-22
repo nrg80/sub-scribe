@@ -1110,6 +1110,22 @@ public class BadAppleEntity
     /// <summary>Die Nummer des fremden Eintrags — hier ausdrücklich erlaubt, weil die Meldung sie nennt.</summary>
     public string SourceId { get; set; } = string.Empty;
 
+    /// <summary>
+    /// F-M679: der Name des Untertitels INNERHALB des fremden Eintrags — leer bei einem Einzeldownload.
+    /// <para>
+    /// Betreiber-Entscheidung 22.11.2026, wörtlich: „Halt fuer subs einzeln und im pack". Ein schlechter
+    /// Download ist ein EINZELNER Untertitel, gleich ob er allein oder in einem Staffelpack kam: diese
+    /// Spalte nennt die Datei im fremden Behälter (z. B.
+    /// <c>MobLand - 2x05 - Birdland.WEB.NeoNoir.en.srt</c>), leer bei einem Einzeldownload.
+    /// </para>
+    /// <para>
+    /// WARUM SIE ZUM SCHLÜSSEL GEHÖRT: erst damit ist der Verbrauch je SUB möglich statt je EINTRAG —
+    /// zwei kaputte Untertitel desselben Packs sind zwei Zeilen, und ein schlechtes Sub verbrennt nur
+    /// sich selbst, nicht den ganzen Pack.
+    /// </para>
+    /// </summary>
+    public string Member { get; set; } = string.Empty;
+
     /// <summary>Die Sprache, für die der Eintrag geholt wurde (der Kandidat ist je Sprache verbraucht).</summary>
     public string Language { get; set; } = string.Empty;
 
@@ -1137,8 +1153,12 @@ public class BadAppleEntity
     /// <summary>Wann die Zeile zuletzt geschrieben wurde (UTC) — Diagnose.</summary>
     public DateTime Written { get; set; } = DateTime.UtcNow;
 
-    /// <summary>Der zusammengesetzte Schlüssel der Zeile (Subjekt, Quelle, fremde Kennung) — nur für den Speicher.</summary>
-    public string Key => SubjectId + "|" + Source + "|" + SourceId;
+    /// <summary>
+    /// Der zusammengesetzte Schlüssel der Zeile (Subjekt, Quelle, fremde Kennung, Member) — nur für den
+    /// Speicher. F-M679: der Member gehört dazu, sonst überschriebe ein schlechter Untertitel aus einem
+    /// Pack den nächsten desselben Eintrags.
+    /// </summary>
+    public string Key => SubjectId + "|" + Source + "|" + SourceId + "|" + Member;
 }
 
 /// <summary>

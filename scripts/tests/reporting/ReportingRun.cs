@@ -191,11 +191,12 @@ internal static class ReportingRun
         // `TrackId`, `PackId`); die Herkunft einer Spur ist der Quellen-NAME, eine Quellen-Id steht
         // in `reference`. Die alten Marken-Spalten an `sidecars` gibt es nicht mehr — und keine
         // Nachzieh-Anweisung dafür.
-        Check(db.Contains("CurrentSchemaVersion = 23", StringComparison.Ordinal)
+        // F-M679: 24 — `badapple` traegt den Member im Schluessel.
+        Check(db.Contains("CurrentSchemaVersion = 24", StringComparison.Ordinal)
               && db.Contains("CREATE TABLE IF NOT EXISTS file (", StringComparison.Ordinal)
               && db.Contains("+ \"FileId TEXT NOT NULL PRIMARY KEY, \"", StringComparison.Ordinal)
               && !db.Contains("ALTER TABLE sidecars ADD COLUMN TvSubtitlesUploadId", StringComparison.Ordinal),
-            "the schema version is bumped with the tables (23 carries the four entity levels, their readable ids and the three source tables)");
+            "the schema version is bumped with the tables (24 carries the four entity levels, their readable ids, the three source tables and the member key of badapple)");
 
         string api = Read(plugin, "Api/ScribeApiClient.cs");
         Check(api.Contains("\"subtitlePage\"", StringComparison.Ordinal) && api.Contains("c.NId = page[(slash + 1)..]", StringComparison.Ordinal),
