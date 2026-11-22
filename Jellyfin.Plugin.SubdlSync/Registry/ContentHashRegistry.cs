@@ -2085,6 +2085,8 @@ public sealed class ContentHashRegistry : IDisposable
             Season = season,
             Language = language,
             HearingImpaired = hearingImpaired,
+            // F-M681: eine Ablehnung oder ein neuer Pack-Beleg loescht eine bekannte TMDb-Kennung nicht.
+            TmdbId = existing?.TmdbId,
             ReleaseName = releaseName,
             Episodes = string.Join(",", episodes.OrderBy(e => e).Select(e => e.ToString(System.Globalization.CultureInfo.InvariantCulture))),
             AbsorbedIds = absorbedIds == null ? existing?.AbsorbedIds : string.Join(",", absorbedIds),
@@ -2107,6 +2109,49 @@ public sealed class ContentHashRegistry : IDisposable
             refusalReason: null,
             refusedAt: null,
             refusalSignature: null);
+    }
+
+    /// <summary>
+    /// F-M681: traegt die TMDb-Kennung des Titels an die Zeile eines PACKS nach.
+    /// <para>
+    /// WARUM EIN EIGENER SCHREIBER: `pack.TmdbId` war eine Spalte ohne Schreiber — die Matrix
+    /// „Quelle × Form × Sprache × Richtung" fand die Kennung an **jedem** Pack leer, obwohl Kapitel 14
+    /// die Titel-Ids an der Pack-Zeile fuehrt. `RecordPack` hat seinen Parametersatz (er wird von
+    /// Suiten und vom Koordinator positional gefuehrt), deshalb steht das Nachziehen hier: eine Zeile,
+    /// ein Feld, und nur wenn die Kennung wirklich bekannt ist. Ein leerer Wert loescht nichts.
+    /// </para>
+    /// </summary>
+    /// <param name="imdbId">Serie.</param>
+    /// <param name="season">Staffel.</param>
+    /// <param name="language">Sprache des Behälters.</param>
+    /// <param name="hearingImpaired">HI-Variante des Behälters.</param>
+    /// <param name="source">Die Quelle, deren Zeile spricht.</param>
+    /// <param name="tmdbId">Die TMDb-Kennung, oder null/leer wenn unbekannt.</param>
+    /// <returns>True, wenn die Zeile die Kennung jetzt traegt.</returns>
+    public bool SetPackTmdbId(
+        string? imdbId, int season, string? language, bool hearingImpaired, string source, string? tmdbId)
+    {
+        if (string.IsNullOrWhiteSpace(imdbId) || season < 1 || string.IsNullOrWhiteSpace(language)
+            || string.IsNullOrWhiteSpace(tmdbId))
+        {
+            return false;
+        }
+
+        string key = ScribeDbContext.PackKey(imdbId!, season, language!, hearingImpaired, source);
+        var row = _db.Packs.FindById(key);
+        if (row == null)
+        {
+            return false;
+        }
+
+        if (string.Equals(row.TmdbId, tmdbId, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        row.TmdbId = tmdbId;
+        _db.Packs.Upsert(row);
+        return true;
     }
 
     /// <summary>
@@ -2169,6 +2214,8 @@ public sealed class ContentHashRegistry : IDisposable
             Season = season,
             Language = language,
             HearingImpaired = hearingImpaired,
+            // F-M681: eine Absage loescht keine bekannte TMDb-Kennung der Zeile.
+            TmdbId = existing?.TmdbId,
             ReleaseName = existing?.ReleaseName,
             Episodes = existing?.Episodes ?? string.Empty,
             AbsorbedIds = existing?.AbsorbedIds,

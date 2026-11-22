@@ -523,6 +523,11 @@ public sealed class TvSubtitlesUploadEndpoint : IUploadEndpoint
                 absorbedIds: null,
                 fingerprint: null,
                 source: PackEntity.TvSubtitlesSource));
+
+            // F-M681: die TMDb-Kennung steht am Pack, nicht nur am Ticket (sie fehlte an jedem Pack).
+            _registry.MarkAndFlush(() => _registry.SetPackTmdbId(
+                imdb, ticket.Season, ticket.Language, ticket.HearingImpaired,
+                PackEntity.TvSubtitlesSource, ticket.TmdbId));
         }
 
         return new EndpointAnswer(

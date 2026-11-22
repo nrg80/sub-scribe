@@ -67,6 +67,12 @@
         "<root>"
       ]
     },
+    "matrix": {
+      "args": [
+        "<temp>/matrix",
+        "<root>"
+      ]
+    },
     "followup": {
       "python": "scripts/tests/followup/check.py",
       "file": "Jellyfin.Plugin.SubdlSync/ScheduledTasks/ScribeEventDispatcher.cs"
@@ -708,6 +714,10 @@
     "T337": {
       "suite": "storex",
       "checks": 15
+    },
+    "T338": {
+      "suite": "matrix",
+      "checks": 678
     }
   }
 }

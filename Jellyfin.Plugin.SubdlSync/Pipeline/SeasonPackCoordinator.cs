@@ -1156,6 +1156,11 @@ public sealed class SeasonPackCoordinator
             absorbedIds: null,
             plan.Fingerprint));
 
+        // F-M681: die TMDb-Kennung des Titels gehoert an die Pack-Zeile — sie fehlte an JEDEM Pack,
+        // weil `RecordPack` sie nie entgegennahm. Der Nachzug ist ein eigener Schreibvorgang.
+        _registry?.MarkAndFlush(() => _registry.SetPackTmdbId(
+            key.ImdbId, key.Season, key.Lang, key.Hi, source, first.TmdbId));
+
         _countUploaded($"{key.ImdbId} S{key.Season} [{key.Lang}]", ordered.Count);
         LogUtil.Normal(
             _logger,
