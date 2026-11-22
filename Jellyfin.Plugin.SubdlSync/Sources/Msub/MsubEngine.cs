@@ -86,16 +86,10 @@ public sealed class MsubEngine : ISourceEngine
         _client = client ?? new MovieSubtitlesClient(context.Http);
         _weg = new Api.Endpoints.MovieSubtitlesDownloadEndpoint(_client, context.Logger);
         Settings = settings ?? SourceSettings.Empty(SourceKey, Declared);
-        BaseUrl = Settings.Url(FieldBaseUrl);
         HasAccess = Settings.Has(FieldAccess);
 
-        if (!string.Equals(BaseUrl, MovieSubtitlesClient.BaseUrl, StringComparison.OrdinalIgnoreCase))
-        {
-            _context.Logger.LogWarning(
-                "[Sub Scribe] sources/moviesubtitles.json names the address {Address}; this build talks to {Built}.",
-                BaseUrl,
-                MovieSubtitlesClient.BaseUrl);
-        }
+        // F-M692: kein Adressvergleich mehr — die Adresse ist kein Feld. `Settings.Url` läse sonst den
+        // Vorgabewert eines nicht erklärten Feldes ("") und meldete bei jedem Aufruf eine leere Adresse.
 
         Capabilities = new SourceCapabilities
         {

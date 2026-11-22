@@ -446,6 +446,19 @@ internal static class Program
                   && !MsubEngine.Declared.Any(f => f.Key == MsubEngine.FieldBaseUrl),
                 "F-M692: keine Quelle erklärt die ADRESSE als Feld — sie ist fest im Client dieses Builds "
                 + "(Betreiberansage: Url is fixed, no gui need)");
+            // F-M692: und keine Meldung mehr ueber ein Feld, das es nicht gibt. Auf prod stand nach dem
+            // Deploy bei JEDEM Aufruf des Endpunkts dreimal "names the address \"\"" im Log — der Vergleich
+            // las den Vorgabewert eines nicht mehr erklaerten Feldes. Der Text darf nicht zurueckkommen.
+            string[] quellDateien = Directory.GetFiles(
+                Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Sources"), "*Engine.cs", SearchOption.AllDirectories);
+            var adressMeldungen = quellDateien
+                .SelectMany(f => TrefferZeilen(f, "names the address"))
+                .ToList();
+            Check(adressMeldungen.Count == 0,
+                "F-M692: keine Engine vergleicht die Adresse aus der Datei mit der Konstante des Builds — die "
+                + "Meldung ueber ein nicht erklartes Feld ist Rauschen",
+                string.Join(" | ", adressMeldungen));
+
             Check(registry.Engines.All(e => e.Fields.All(f => f.Kind != SourceFieldKind.Url)),
                 "F-M692: damit steht in keiner Karte ein Adressfeld",
                 string.Join(", ", registry.Engines.SelectMany(e => e.Fields)

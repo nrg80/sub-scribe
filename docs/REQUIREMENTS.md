@@ -1,7 +1,7 @@
 # Requirements Specification — Jellyfin Plugin "Sub Scribe" (Upload + Download)
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.3.
+**Status:** Implementation — v12.3.8.4.
 
 **Die Begründungen (warum eine Regel gilt, Messungen, Vorfälle) stehen nicht hier, sondern lokal in der Methodik-Ablage, nach Kapiteln sortiert und mit der Requirement-Nummer
 markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test — sonst nichts.**
@@ -2781,7 +2781,7 @@ Kein Grund, keine Vorgeschichte, keine Bitte, kein Vorschlag. Gebaut in `Pipelin
 
 **T349:** Die Seite führt keine eigenen Richtungsschalter mehr (F-M691), in `gui-structure` — **3 Prüfungen**: der Upload- und der Download-Reiter tragen kein Kästchen `*UploadEnabled`/`*DownloadEnabled` und verweisen stattdessen auf **Endpoints**, und das Speichern dieser Seite schreibt die Alt-Felder nicht mehr (sonst setzte jeder Klick in einem anderen Reiter die Richtungen zurück). Der Satz der Familie (Series go to tvsubtitles.net, films to moviesubtitles.org, TMDb decides) bleibt in beiden Reitern, weil er sagt, wohin eine Abgabe geht, nicht ob sie stattfindet.
 
-**T350:** Die Adresse ist kein Feld mehr (F-M692), in `sources` — **2 Prüfungen**: keine Engine erklärt `baseUrl`, und in keiner Karte steht ein Feld der Art `url`; die Erwartungsliste der Felder zieht mit (tvsubtitles führt nur noch seine beiden Richtungen).
+**T350:** Die Adresse ist kein Feld mehr (F-M692), in `sources` — **3 Prüfungen**: keine Engine erklärt `baseUrl`, in keiner Karte steht ein Feld der Art `url`, und **keine Engine vergleicht die Adresse aus der Datei mehr mit der Konstante des Builds**. Die dritte Prüfung kam nach dem Deploy von 12.3.8.3: dort stand bei jedem Aufruf des Endpunkts dreimal `names the address „"` im Log, weil der Vergleich den Vorgabewert eines nicht mehr erklärten Feldes las. Die Erwartungsliste der Felder zieht mit (tvsubtitles führt nur noch seine beiden Richtungen).
 
 **T351:** Die karge Karte (F-M692), in `gui-structure` — **3 Prüfungen**: die Kennzeichen sind EIN Text aus höchstens drei Wörtern (upload, report, packs) statt einer Reihe von Kästchen, ein Geheimfeld trägt einen Platzhalter statt eines leeren Kastens und **kein** totes `is="emby-input"`, und die Karte zeichnet kein Adressfeld mehr.
 

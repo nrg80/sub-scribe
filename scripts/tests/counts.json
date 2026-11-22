@@ -770,7 +770,7 @@
     },
     "T350": {
       "suite": "sources",
-      "checks": 2
+      "checks": 3
     },
     "T351": {
       "suite": "gui-structure",

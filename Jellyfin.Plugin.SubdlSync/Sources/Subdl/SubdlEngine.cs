@@ -128,18 +128,12 @@ public sealed class SubdlEngine : ISourceEngine
         }
 
         Account = Settings.Text(FieldAccount);
-        BaseUrl = Settings.Url(FieldBaseUrl);
         PreferSeasonZip = Settings.Switch(FieldPreferSeasonZip);
 
-        if (!string.Equals(BaseUrl, ScribeApiClient.ApiBase, StringComparison.OrdinalIgnoreCase))
-        {
-            // Die Adresse wird gelesen und ausgewiesen, aber die Clients dieses Builds tragen ihre
-            // Adresse als Konstante. Ein anderer Wert ist deshalb eine Meldung und keine stille Lüge.
-            _context.Logger.LogWarning(
-                "[Sub Scribe] sources/subdl.json names the address {Address}; this build talks to {Built}.",
-                BaseUrl,
-                ScribeApiClient.ApiBase);
-        }
+        // F-M692: kein Adressvergleich mehr. Seit die Adresse kein Feld ist, liest `Settings.Url` den
+        // Vorgabewert eines nicht erklärten Feldes — also "" — und meldete bei JEDEM Aufruf, die Datei
+        // nenne eine leere Adresse. Eine Meldung über ein Feld, das es nicht gibt, ist keine Warnung,
+        // sondern Rauschen (so auf prod gesehen, 22.11.2026).
 
         Capabilities = new SourceCapabilities
         {

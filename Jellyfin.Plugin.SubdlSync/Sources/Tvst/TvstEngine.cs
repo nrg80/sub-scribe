@@ -94,15 +94,8 @@ public sealed class TvstEngine : ISourceEngine
         _client = client ?? new TvSubtitlesClient(context.Http, context.ArchiveCache);
         _weg = new Api.Endpoints.TvSubtitlesDownloadEndpoint(_client);
         Settings = settings ?? SourceSettings.Empty(SourceKey, Declared);
-        BaseUrl = Settings.Url(FieldBaseUrl);
 
-        if (!string.Equals(BaseUrl, TvSubtitlesClient.BaseUrl, StringComparison.OrdinalIgnoreCase))
-        {
-            _context.Logger.LogWarning(
-                "[Sub Scribe] sources/tvsubtitles.json names the address {Address}; this build talks to {Built}.",
-                BaseUrl,
-                TvSubtitlesClient.BaseUrl);
-        }
+        // F-M692: kein Adressvergleich mehr — die Adresse ist kein Feld.
 
         Capabilities = new SourceCapabilities
         {
