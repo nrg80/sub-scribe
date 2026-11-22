@@ -128,7 +128,13 @@ internal static class Program
             "the four content gates live in one function");
         Check(pipe.Contains("cand.FindUnpackFiles(season, episode, effectiveHi)", StringComparison.Ordinal),
             "the retry walks the archive's files with the wanted HI flag");
-        Check(pipe.Contains(".ExtractArchiveMemberAsync(cand.Url, sibling.Name, ct)", StringComparison.Ordinal),
+        // F-M686: der Abruf des Geschwisters geht als Auftrag an die Engine — mit dem ADRESS-Griff, den
+        // die Suche am Kandidaten fuehrt, und damit ueber denselben Archiv-Weg (Cache zuerst) wie
+        // bisher. Die Aussage bleibt: es wird aus dem Archiv gelesen, das schon da ist, nicht neu geholt.
+        var subdlEngine = File.ReadAllText(
+            Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Sources/Subdl/SubdlEngine.cs"));
+        Check(pipe.Contains("new Sources.SourceFetchRequest(\"u:\" + cand.Url, MemberName: sibling.Name)", StringComparison.Ordinal)
+            && subdlEngine.Contains(".ExtractArchiveMemberAsync(adresse, request.MemberName, ct)", StringComparison.Ordinal),
             "and takes them out of the archive it already holds");
         Check(pipe.Contains("next file of the same archive accepted", StringComparison.Ordinal),
             "an accepted sibling is named in the log, not swapped in silently");

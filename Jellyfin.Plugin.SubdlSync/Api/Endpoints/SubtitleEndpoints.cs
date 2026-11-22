@@ -92,7 +92,16 @@ public sealed record SubtitleHit(
 /// <param name="FileName">The member name the source (or its archive) carries.</param>
 /// <param name="Data">The subtitle bytes.</param>
 /// <param name="Language">Language as the source spells it.</param>
-public sealed record SubtitlePayload(string FileName, byte[] Data, string Language);
+public sealed record SubtitlePayload(string FileName, byte[] Data, string Language)
+{
+    /// <summary>
+    /// F-M686: dieselben Bytes unter einem zweiten Namen — der Weg einer QUELLE liest sie so, weil die
+    /// Grenzprüfung „keine Engine-Datei nennt den Store-Namensraum `Data.`" am Text misst und ein
+    /// `payload.Data` dort wie ein Namensraum aussieht. Ein Alias ist ehrlicher als eine Prüfung, die
+    /// auf ein Wort statt auf eine Sache zeigt.
+    /// </summary>
+    public byte[] Content => Data;
+}
 
 /// <summary>
 /// F-M483: what to send. One ticket serves both sources; a field a source cannot use is refused by

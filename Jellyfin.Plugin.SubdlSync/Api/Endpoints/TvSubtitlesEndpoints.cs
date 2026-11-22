@@ -47,8 +47,17 @@ public sealed class TvSubtitlesDownloadEndpoint : IDownloadEndpoint
     /// F-M533: how many entries of the LAST search were dropped because a field contradicted the
     /// site's own vocabulary — the operator's rule (17.11.2026): report it, drop the entry, keep the
     /// run going.
+    /// <para>
+    /// F-M686: der Zähler lebt am CLIENT (<see cref="TvSubtitlesClient.LastRejectedByFormat"/>), weil
+    /// die Suche jetzt hinter der Engine liegt und der Lauf nur den Client in der Hand hat. Diese
+    /// Eigenschaft ist die alte Lesestelle und zählt denselben Wert.
+    /// </para>
     /// </summary>
-    public int LastRejectedByFormat { get; private set; }
+    public int LastRejectedByFormat
+    {
+        get => _client.LastRejectedByFormat;
+        private set => _client.LastRejectedByFormat = value;
+    }
 
     /// <inheritdoc />
     public SubtitleProvider Provider => SubtitleProvider.TvSubtitles;

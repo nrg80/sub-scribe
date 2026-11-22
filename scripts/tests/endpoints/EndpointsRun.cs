@@ -450,10 +450,17 @@ internal static class Program
             && downloadSource.IndexOf("ForeignCandidatesAsync(quelle, title", StringComparison.Ordinal)
                < downloadSource.IndexOf("no candidates for [{Langs}]", StringComparison.Ordinal),
             "the sources are asked before the empty exit");
-        Check("a candidate is fetched from its own endpoint, not over SubDL's routes",
+        // F-M686: der Holweg einer Zusatzquelle ist ihre ENGINE geworden — die Aussage bleibt dieselbe
+        // (ein Kandidat wird bei SEINER Quelle geholt, nicht über SubDLs Routen), und sie wird genauso
+        // am Quelltext gemessen: der Zweig fragt die Engine der Quelle, die der Kandidat trägt.
+        Check("a candidate is fetched at its own source, not over SubDL's routes (F-M686)",
             downloadSource.Contains("if (cand.Provider != MainSearchSource)", StringComparison.Ordinal)
-            && downloadSource.Contains("var endpoint = EndpointFor(cand.Provider);", StringComparison.Ordinal)
-            && downloadSource.Contains("Route = Api.Endpoints.Provenance.Name(cand.Provider)", StringComparison.Ordinal));
+            && downloadSource.Contains(
+                "Sources.ISourceEngine? fremdEngine = _sources.ByKey(Api.Endpoints.Provenance.Name(cand.Provider));",
+                StringComparison.Ordinal)
+            && downloadSource.Contains(
+                "OutcomeOf(fremd, Api.Endpoints.Provenance.Name(cand.Provider))", StringComparison.Ordinal)
+            && !downloadSource.Contains("endpoint.FetchAsync(", StringComparison.Ordinal));
         Check("the upload pipeline sends to the family address through the same gate, and its switch is asked (F-M485/F-M495/F-M509)",
             uploadSource.Contains("SourceAllowed(Configuration.SubtitleProvider.TvSubtitles)", StringComparison.Ordinal)
             && uploadSource.Contains("Configuration.SubtitleProvider.TvSubtitles => SendToTvSubtitlesAsync(", StringComparison.Ordinal)
@@ -2304,7 +2311,9 @@ internal static class Program
                     downloadSource.Split("TransferPauseMsLessFit()").Length - 1 == 0
                     && downloadSource.Split("await _limiter.WaitForTransferSlotAsync(ct)").Length - 1 == 1
                     && downloadSource.Contains("if (rawAttempt.Bytes is { Length: >= 100 })", StringComparison.Ordinal));
-                int abrufStelle594 = downloadSource.IndexOf("await endpoint.FetchAsync(", StringComparison.Ordinal);
+                // F-M686: der regulaere Abruf ist der Aufruf von FetchArchiveAsync (dort steht der
+                // Auftrag an die Engine) — gemessen wird die Stelle, an der er im Lauf steht.
+                int abrufStelle594 = downloadSource.IndexOf("await FetchArchiveAsync(cand.NId", StringComparison.Ordinal);
                 string vorDemAbruf594 = abrufStelle594 > 400
                     ? downloadSource.Substring(0, abrufStelle594)
                     : string.Empty;
@@ -2814,7 +2823,12 @@ internal static class Program
             && downloadSource.Contains("if (isSeries && (season <= 0 || episode <= 0))", StringComparison.Ordinal)
             && downloadSource.Contains(".ResolveForMediaAsync(Registry, mediaHash, movie, _config.DownloadDryRun, ct, mediaPath)", StringComparison.Ordinal)
             && downloadSource.Contains("var movie = await _tmdb.MovieInfoAsync(tmdbId!, ct)", StringComparison.Ordinal)
-            && downloadSource.Contains("MovieId: film.MovieId!.Value.ToString(", StringComparison.Ordinal)
+            // F-M686: Titel, Jahr und die Nummer des Films gehen als Felder der Suchanfrage hinaus —
+            // die Engine dieser Quelle braucht dafür keinen Store.
+            && downloadSource.Contains("filmNummer = film.MovieId!.Value.ToString(", StringComparison.Ordinal)
+            && downloadSource.Contains("mediaNumber: filmNummer,", StringComparison.Ordinal)
+            && downloadSource.Contains("year: filmYear,", StringComparison.Ordinal)
+            && downloadSource.Contains("MediaNumber = mediaNumber,", StringComparison.Ordinal)
             // F-M663: die Abbildung Treffer -> Kandidat steht jetzt in SplitByHearingImpaired; die
             // Medienart schneidet Staffel und Folge dort an der Aufrufstelle auf 0 — dieselbe Aussage
             // wie vorher, nur eine Ebene weiter vorn.

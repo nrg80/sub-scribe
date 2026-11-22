@@ -34,10 +34,13 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using System.Reflection;
+using System.Text;
+using System.Threading.Tasks;
 using System.Threading;
 using Jellyfin.Plugin.SubScribe.Configuration;
 using Jellyfin.Plugin.SubScribe.Sources;
 using Jellyfin.Plugin.SubScribe.Api;
+using Jellyfin.Plugin.SubScribe.Api.Endpoints;
 using Jellyfin.Plugin.SubScribe.Sources.Msub;
 using Jellyfin.Plugin.SubScribe.Sources.Subdl;
 using Jellyfin.Plugin.SubScribe.Sources.Tvst;
@@ -908,11 +911,19 @@ internal static class Program
             "F-M685 (g): Melden liefert denselben Ausgang wie Senden — Busy heißt hier wie dort „später nochmal“",
             meldung.Outcome.ToString());
 
+
+        // -----------------------------------------------------------------------------------------
+        // (f) F-M686: Suche und Holen — alter Weg gegen neuen Weg (eigene Methode, sie braucht await).
+        // -----------------------------------------------------------------------------------------
+        Console.WriteLine();
+        Console.WriteLine("(f) F-M686: der alte Weg (direkter Client) gegen den neuen (über den Auftrag)");
+        VergleichAsync(root).GetAwaiter().GetResult();
+
         // -----------------------------------------------------------------------------------------
         // Bericht.
         // -----------------------------------------------------------------------------------------
         Console.WriteLine();
-        Console.WriteLine("sources: " + _checks + " Prüfungen (T339/T340/T341/T342, F-M682/F-M683/F-M684/F-M685)");
+        Console.WriteLine("sources: " + _checks + " Prüfungen (T339/T340/T341/T342/T343, F-M682/F-M683/F-M684/F-M685/F-M686)");
         if (Failures.Count == 0)
         {
             Console.WriteLine(">>> SOURCES OK: " + _checks + " Prüfungen bestanden");
@@ -1011,6 +1022,387 @@ internal static class Program
                 yield return Path.GetFileName(datei) + ":" + (i + 1).ToString() + ": " + zeilen[i].Trim();
             }
         }
+    }
+
+
+
+    /// <summary>
+    /// F-M686: derselbe Sachverhalt auf zwei Wegen. Der alte Weg ist der, den der Ablauf bis zu diesem
+    /// Schritt selbst gegangen ist (Client bzw. Endpunkt direkt); der neue ist der Auftrag an die
+    /// Engine. Verglichen werden die Ergebnismengen, die Bytes und die fremde Kennung.
+    /// </summary>
+    /// <param name="root">Die Repo-Wurzel (für die aufgenommenen Seiten).</param>
+    /// <returns>Task.</returns>
+    private static async Task VergleichAsync(string root)
+    {
+        // -----------------------------------------------------------------------------------------
+        // (f) F-M686: SUCHE UND HOLEN — ALTER WEG GEGEN NEUEN WEG, DIESELBE FIXTURE
+        //
+        // Die Umstellung ist nur dann keine stille Verhaltensänderung, wenn beide Wege dieselbe Antwort
+        // geben: dieselben Kandidaten (Griff, Sprache, HI, Releasename und die Angaben, an denen der
+        // Ablauf rankt), dieselben Bytes beim Holen und dieselbe fremde Kennung. Genau das misst dieser
+        // Abschnitt — für jede der drei Quellen, gegen Fixtures, ohne Netz und ohne Zugangsdaten.
+        // -----------------------------------------------------------------------------------------
+
+        // ---- SubDL: Suche (JSON-Fixture) ---------------------------------------------------------
+        var subdlHandler = new SubdlFixture();
+        var subdlClient = new ScribeApiClient(new HttpClient(subdlHandler)) { ApiKey = "pruef-schluessel" };
+        var subdlEngine = new SubdlEngine(
+            subdlClient,
+            new SourceEngineContext(new HttpClient(), NullLogger.Instance, TimeProvider.System,
+                ArchiveCache: subdlClient.ArchiveDiskCache, Subdl: subdlClient),
+            seasonPacks: true);
+
+        List<SubtitleCandidate>? altSubdl = await subdlClient.SearchSubtitlesAsync(
+            "tt1234567", null, 1, 2, "EN,DE", 20, CancellationToken.None, 5, hearingImpaired: false)
+            .ConfigureAwait(false);
+        SourceSearchAnswer neuSubdl = await subdlEngine.SearchAsync(
+            new SourceSearchRequest
+            {
+                ImdbId = "tt1234567",
+                Name = "Show",
+                IsSeries = true,
+                Season = 1,
+                Episode = 2,
+                Languages = new[] { "EN", "DE" },
+                HearingImpaired = false,
+                EarlyStop = 5,
+            },
+            CancellationToken.None).ConfigureAwait(false);
+
+        static string KandidatText(string handle, string language, bool hi, string release, bool pack,
+            int season, int episode, string? entry, string? report, string? address, double fps, long downloads)
+            => string.Join("|",
+                handle, language, hi ? "HI" : "—", release, pack ? "PACK" : "EINZEL",
+                season.ToString(), episode.ToString(), entry ?? "—", report ?? "—",
+                address ?? "—", fps.ToString("0.###"), downloads.ToString());
+
+        var altSubdlZeilen = (altSubdl ?? new List<SubtitleCandidate>())
+            .Select(c => KandidatText(
+                string.IsNullOrEmpty(c.NId) ? "u:" + c.Url : "n:" + c.NId,
+                c.Language, c.HearingImpaired, c.ReleaseName, c.FullSeason || c.UnpackFiles.Count > 0,
+                c.Season, c.Episode, c.SubdlId, c.NId, c.Url, c.Fps, c.DownloadCount))
+            .ToList();
+        var neuSubdlZeilen = neuSubdl.Candidates
+            .Select(c => KandidatText(
+                c.Handle, c.Language, c.HearingImpaired, c.ReleaseName, c.IsPack,
+                c.Season, c.Episode, c.EntryId, c.ReportId, c.Address, c.Fps, c.Downloads))
+            .ToList();
+
+        Check(altSubdl is not null && neuSubdl.Fault is null,
+            "F-M686 (a): beide Wege kommen durch — kein Fehler auf einer Seite",
+            altSubdl is null ? "alter Weg: keine Antwort" : "alter Weg ok, neuer Weg ok");
+        Check(altSubdlZeilen.SequenceEqual(neuSubdlZeilen),
+            "F-M686 (a): die Suche liefert über die Engine DIESELBEN Kandidaten — Griff, Sprache, HI, Release, Pack, Staffel/Folge, Kennungen, Bildrate, Abrufe",
+            "alt " + altSubdlZeilen.Count + " / neu " + neuSubdlZeilen.Count
+            + (altSubdlZeilen.SequenceEqual(neuSubdlZeilen) ? string.Empty : " | " + string.Join(" || ", altSubdlZeilen.Zip(neuSubdlZeilen).Where(p => p.First != p.Second).Select(p => p.First + " ≠ " + p.Second))));
+
+        var altPack = (altSubdl ?? new List<SubtitleCandidate>())
+            .SelectMany(c => c.UnpackFiles.Select(f => f.Name + "/" + f.Season + "/" + f.Episode + "/" + f.HearingImpaired))
+            .ToList();
+        var neuPack = neuSubdl.Candidates
+            .SelectMany(c => c.Members.Select(f => f.FileName + "/" + f.Season + "/" + f.Episode + "/" + f.HearingImpaired))
+            .ToList();
+        Check(altPack.SequenceEqual(neuPack) && neuPack.Count == 2,
+            "F-M686 (a): die Mitglieder eines Behälters reisen vollständig mit — Name, Staffel, Folge und die HI-Marke der EINZELNEN Datei",
+            string.Join(", ", neuPack));
+
+        Check(neuSubdl.Candidates.Any(c => c.Handle.StartsWith("u:", StringComparison.Ordinal))
+              && neuSubdl.Candidates.Count == (altSubdl?.Count ?? 0),
+            "F-M686 (a): ein Eintrag ohne Kennung fällt NICHT weg — er bekommt den Adress-Griff",
+            string.Join(", ", neuSubdl.Candidates.Select(c => c.Handle)));
+
+        // ---- SubDL: Holen (ZIP-Fixture) ----------------------------------------------------------
+        DownloadOutcome altHolen = await subdlClient
+            .DownloadV2FileAsync("Nj3hP7BQDw", CancellationToken.None, 1, 2, null)
+            .ConfigureAwait(false);
+        SourceFetchAnswer neuHolen = await subdlEngine
+            .FetchAsync(new SourceFetchRequest("n:Nj3hP7BQDw", 2) { Season = 1 }, CancellationToken.None)
+            .ConfigureAwait(false);
+
+        Check(altHolen.Content is { Length: > 0 } altBytes
+              && neuHolen.HasBytes
+              && altBytes.AsSpan().SequenceEqual(neuHolen.Bytes),
+            "F-M686 (b): das Holen liefert über die Engine DIESELBEN Bytes",
+            altHolen.Content is null ? "alter Weg: nichts" : altHolen.Content.Length + " B / " + neuHolen.Bytes.Length + " B");
+        Check(string.Equals(altHolen.Member, neuHolen.FileName, StringComparison.Ordinal)
+              && string.Equals(neuHolen.RemoteId, "Nj3hP7BQDw", StringComparison.Ordinal),
+            "F-M686 (b): derselbe Name im Behälter und dieselbe fremde Kennung (für `reference`)",
+            (altHolen.Member ?? "—") + " / " + neuHolen.FileName + " / " + neuHolen.RemoteId);
+        Check(neuHolen.ContentHash == SourceNeutral.ContentHash(neuHolen.Bytes)
+              && neuHolen.Status == 200,
+            "F-M686 (b): der Inhalts-Hash beschreibt genau diese Bytes, der Status ist der der Quelle",
+            neuHolen.Status + "/" + neuHolen.ContentHash[..12] + "…");
+
+        // ---- tvsubtitles.net: Suche und Holen über die aufgenommenen Seiten ----------------------
+        string tvFixtures = Path.Combine(root, "scripts/tests/tvsubtitles/fixtures");
+        var tvAltClient = new TvSubtitlesClient(new HttpClient(new TvstFixture(tvFixtures)));
+        var tvAltWeg = new TvSubtitlesDownloadEndpoint(tvAltClient);
+        var tvNeuClient = new TvSubtitlesClient(new HttpClient(new TvstFixture(tvFixtures)));
+        var tvNeuEngine = new TvstEngine(
+            tvNeuClient,
+            new SourceEngineContext(new HttpClient(), NullLogger.Instance, TimeProvider.System, Tvst: tvNeuClient),
+            seasonPacks: true);
+
+        var tvQuery = new SubtitleQuery("The Middle", null, null, 2, 24, "en");
+        System.Collections.Generic.IReadOnlyList<SubtitleHit> tvAlt = await tvAltWeg
+            .SearchAsync(tvQuery, CancellationToken.None).ConfigureAwait(false);
+        SourceSearchAnswer tvNeu = await tvNeuEngine.SearchAsync(
+            new SourceSearchRequest
+            {
+                Name = "The Middle",
+                IsSeries = true,
+                Season = 2,
+                Episode = 24,
+                Languages = new[] { "EN" },
+            },
+            CancellationToken.None).ConfigureAwait(false);
+
+        Check(tvAlt.Count > 0 && tvAlt.Count == tvNeu.Candidates.Count
+              && tvAlt.Select(h => h.Id).SequenceEqual(tvNeu.Candidates.Select(c => c.Handle))
+              && tvAlt.Select(h => h.HearingImpaired).SequenceEqual(tvNeu.Candidates.Select(c => c.HearingImpaired))
+              && tvAlt.Select(h => h.Release).SequenceEqual(tvNeu.Candidates.Select(c => c.ReleaseName)),
+            "F-M686 (a): tvsubtitles.net liefert über die Engine dieselben Einträge — Kennung, HI-Marke und Releasename, in derselben Reihenfolge",
+            tvAlt.Count + " / " + tvNeu.Candidates.Count + ": "
+            + string.Join(", ", tvNeu.Candidates.Select(c => c.Handle + "/" + c.ReleaseName)));
+
+        SubtitlePayload? tvAltBytesGelesen = await tvAltWeg.FetchAsync(tvAlt[0], CancellationToken.None).ConfigureAwait(false);
+        SubtitlePayload tvAltBytes = tvAltBytesGelesen ?? new SubtitlePayload(string.Empty, Array.Empty<byte>(), string.Empty);
+        SourceFetchAnswer tvNeuBytes = await tvNeuEngine
+            .FetchAsync(new SourceFetchRequest(tvNeu.Candidates[0].Handle), CancellationToken.None)
+            .ConfigureAwait(false);
+        Check(tvAltBytes is not null && tvNeuBytes.HasBytes
+              && tvAltBytesGelesen is not null
+              && tvAltBytes.Data.AsSpan().SequenceEqual(tvNeuBytes.Bytes)
+              && string.Equals(tvAltBytes.FileName, tvNeuBytes.FileName, StringComparison.Ordinal)
+              && string.Equals(tvNeuBytes.RemoteId, tvNeu.Candidates[0].Handle, StringComparison.Ordinal),
+            "F-M686 (b): tvsubtitles.net liefert über die Engine dieselben Bytes, denselben Dateinamen und dieselbe Kennung",
+            (tvAltBytesGelesen?.FileName ?? "—") + " / " + tvNeuBytes.FileName + " / " + tvNeuBytes.Bytes.Length + " B");
+
+        // ---- moviesubtitles.org: die Suche des Films ---------------------------------------------
+        var msubAltEngine = new MovieSubtitlesDownloadEndpoint(
+            new MovieSubtitlesClient(new HttpClient(new MsubFixture())), NullLogger.Instance);
+        var msubClient = new MovieSubtitlesClient(new HttpClient(new MsubFixture()));
+        var msubNeuEngine = new MsubEngine(
+            msubClient,
+            new SourceEngineContext(new HttpClient(), NullLogger.Instance, TimeProvider.System, Msub: msubClient));
+
+        var msubAlt = await msubAltEngine.SearchAsync(
+            new SubtitleQuery("Dune: Part One", null, "438631", 0, 0, "EN", 2021, MovieId: "102"),
+            CancellationToken.None).ConfigureAwait(false);
+        SourceSearchAnswer msubNeu = await msubNeuEngine.SearchAsync(
+            new SourceSearchRequest
+            {
+                Name = "Dune: Part One",
+                TmdbId = "438631",
+                Year = 2021,
+                IsSeries = false,
+                Languages = new[] { "EN" },
+                MediaNumber = "102",
+            },
+            CancellationToken.None).ConfigureAwait(false);
+
+        Check(msubAlt.Count > 0 && msubAlt.Count == msubNeu.Candidates.Count
+              && msubAlt.Select(h => h.Id).SequenceEqual(msubNeu.Candidates.Select(c => c.Handle))
+              && msubAlt.Select(h => h.Release).SequenceEqual(msubNeu.Candidates.Select(c => c.ReleaseName)),
+            "F-M686 (a): moviesubtitles.org liefert über die Engine dieselben Einträge — Kennung und Releasename, in derselben Reihenfolge",
+            msubAlt.Count + " / " + msubNeu.Candidates.Count + ": "
+            + string.Join(", ", msubNeu.Candidates.Select(c => c.Handle + "/" + c.ReleaseName)));
+
+        Check(msubNeu.Candidates.All(c => !c.IsPack) && msubNeu.Candidates.All(c => c.EntryId == c.Handle),
+            "F-M686 (a): ein Film hat keine Behälter, und die Kennung, die der Bestand führt, ist die des Eintrags",
+            string.Join(", ", msubNeu.Candidates.Select(c => c.Handle)));
+
+    }
+
+    /// <summary>
+    /// F-M686: die Suchantwort von SubDL als Fixture — drei Einträge, die alle drei Gestalten abdecken,
+    /// die der Ablauf unterscheidet: eine Einzeldatei mit Kennung, ein Staffel-Behälter MIT
+    /// Mitgliedsliste und ein Eintrag OHNE Kennung (er wird an seiner Adresse geholt). Die Feldgestalt
+    /// ist die der API-Doku (F-M529/F-M530) — der Client verwirft alles, was ihr widerspricht.
+    /// </summary>
+    private sealed class SubdlFixture : HttpMessageHandler
+    {
+        /// <summary>Gets wie oft die Suche gefragt wurde.</summary>
+        public int Searches { get; private set; }
+
+        /// <summary>Gets wie oft ein Archiv geholt wurde.</summary>
+        public int Fetches { get; private set; }
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            await Task.Yield();
+            string url = request.RequestUri!.ToString();
+
+            if (url.Contains("/api/v1/subtitles", StringComparison.Ordinal))
+            {
+                Searches++;
+                return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                {
+                    Content = new StringContent(Json, Encoding.UTF8, "application/json"),
+                };
+            }
+
+            if (url.Contains("/api/v2/subtitles/", StringComparison.Ordinal))
+            {
+                Fetches++;
+                using var puffer = new MemoryStream();
+                using (var archiv = new System.IO.Compression.ZipArchive(
+                    puffer, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+                {
+                    var eintrag = archiv.CreateEntry("Show.S01E02.srt");
+                    using var strom = await eintrag.OpenAsync(cancellationToken).ConfigureAwait(false);
+                    byte[] inhalt = Encoding.UTF8.GetBytes("1\n00:00:01,000 --> 00:00:02,000\nHallo\n");
+                    await strom.WriteAsync(inhalt, cancellationToken).ConfigureAwait(false);
+                }
+
+                return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(puffer.ToArray()),
+                };
+            }
+
+            return new HttpResponseMessage(System.Net.HttpStatusCode.NotFound);
+        }
+
+        private const string Json = """
+        {"status": true, "totalPages": 1,
+         "results": [{"imdb_id": "tt1234567", "tmdb_id": 42}],
+         "subtitles": [
+           {"url": "/subtitle/3676577-8593549.zip", "release_name": "Show.S01E02.1080p.WEB-DL",
+            "language": "en", "season": 1, "episode": 2, "full_season": false, "hi": false,
+            "framerate": 3, "fps": "25", "download_count": 42, "name": "Show.S01E02.srt",
+            "author": "alice", "subtitlePage": "/s/info/Nj3hP7BQDw"},
+           {"url": "/subtitle/1111111-2222222.zip", "release_name": "Show.S01.1080p.WEB-DL",
+            "language": "de", "season": 1, "episode": 0, "full_season": true, "hi": false,
+            "download_count": 7, "name": "Show.S01.zip", "author": "bob",
+            "subtitlePage": "/s/info/PackA",
+            "unpack_files": [
+              {"url": "/subtitle/x/1", "name": "Show - S01E02.srt", "release_name": "Show.S01E02",
+               "language": "de", "season": 1, "episode": 2, "hi": false},
+              {"url": "/subtitle/x/2", "name": "Show - S01E03.srt", "release_name": "Show.S01E03",
+               "language": "de", "season": 1, "episode": 3, "hi": true}]},
+           {"url": "/subtitle/9999999-8888888.zip", "release_name": "Show.S01E02.GERMAN.DL",
+            "language": "de", "season": 1, "episode": 2, "hi": false, "download_count": 3,
+            "name": "Show.S01E02.GERMAN.DL.srt", "author": "carol"}
+         ]}
+        """;
+    }
+
+    /// <summary>
+    /// F-M686: die aufgenommenen Seiten von tvsubtitles.net (dieselben Fixtures, die die
+    /// tvsubtitles-Suite benutzt) — Serienliste, Staffelseite, Folgenseite und der Abruf.
+    /// </summary>
+    private sealed class TvstFixture : HttpMessageHandler
+    {
+        private readonly string _dir;
+
+        public TvstFixture(string dir) => _dir = dir;
+
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            await Task.Yield();
+            string url = request.RequestUri!.ToString();
+            string pfad = url.Split('?')[0].Replace("https://www.tvsubtitles.net/", string.Empty, StringComparison.Ordinal);
+
+            if (pfad == "add.html")
+            {
+                return Html(await File.ReadAllTextAsync(
+                    Path.Combine(_dir, "add-tvshow-select.html"), cancellationToken).ConfigureAwait(false));
+            }
+
+            if (pfad.StartsWith("download-", StringComparison.Ordinal))
+            {
+                using var puffer = new MemoryStream();
+                using (var archiv = new System.IO.Compression.ZipArchive(
+                    puffer, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
+                {
+                    var eintrag = archiv.CreateEntry("The Middle - 2x24 - Back To Summer.HDTV.FEVER.en.srt");
+                    using var strom = await eintrag.OpenAsync(cancellationToken).ConfigureAwait(false);
+                    byte[] inhalt = Encoding.UTF8.GetBytes("1\n00:00:01,000 --> 00:00:02,000\nhello\n");
+                    await strom.WriteAsync(inhalt, cancellationToken).ConfigureAwait(false);
+                }
+
+                return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+                {
+                    Content = new ByteArrayContent(puffer.ToArray()),
+                };
+            }
+
+            string? datei = pfad switch
+            {
+                "tvshow-512.html" => "tvshow-512.html",
+                "tvshow-512-2.html" => "tvshow-512-2.html",
+                _ when pfad.StartsWith("episode-", StringComparison.Ordinal) => "episode-31911.html",
+                _ when pfad.StartsWith("subtitle-", StringComparison.Ordinal) => "subtitle-page.html",
+                _ => null,
+            };
+
+            return datei is null
+                ? new HttpResponseMessage(System.Net.HttpStatusCode.NotFound)
+                : Html(await File.ReadAllTextAsync(Path.Combine(_dir, datei), cancellationToken).ConfigureAwait(false));
+        }
+
+        private static HttpResponseMessage Html(string body) =>
+            new(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(body, Encoding.UTF8, "text/html"),
+            };
+    }
+
+    /// <summary>
+    /// F-M686: die Seiten von moviesubtitles.org, die die Suche eines Films braucht — die Suchliste
+    /// (zwei Filme) und die Filmseite mit drei Einträgen (zwei englische, ein deutscher).
+    /// </summary>
+    private sealed class MsubFixture : HttpMessageHandler
+    {
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            string url = request.RequestUri!.AbsoluteUri;
+
+            if (url.Contains("/search.php", StringComparison.Ordinal))
+            {
+                return Html("<html><div class=\"movies\">"
+                    + "<a href=\"/movie-101.html\">Dune (1984)</a>"
+                    + "<a href=\"/movie-102.html\">Dune: Part One (2021)</a>"
+                    + "</div></html>");
+            }
+
+            if (url.EndsWith("movie-102.html", StringComparison.Ordinal))
+            {
+                return Html(Seite);
+            }
+
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.NotFound));
+        }
+
+        private static Task<HttpResponseMessage> Html(string body) =>
+            Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent(body, Encoding.UTF8, "text/html"),
+            });
+
+        private static readonly string Seite =
+            "<html><body><h2>Dune: Part One (2021)</h2>"
+            + Eintrag("5001", "en", "WEB-DL", "GROUPA")
+            + Eintrag("5002", "en", "BluRay", "GROUPB")
+            + Eintrag("5003", "de", "WEB-DL", "GROUPC")
+            + "</body></html>";
+
+        private static string Eintrag(string id, string lang, string rip, string release) =>
+            "<a href=\"/subtitle-" + id + ".html\" title=\"Download Dune: Part One (2021) subtitles\">"
+            + "<div class=\"subtitle\"><b>Dune: Part One 2021 " + lang + " subtitles (" + rip + "." + release
+            + ")</b><table><tr>"
+            + "<td title=\"lang\"><img src=\"images/flags/" + lang + ".gif\"></td>"
+            + "<td title=\"Rip\">" + rip + "</td>"
+            + "<td title=\"release\">" + release + "</td>"
+            + "<td title=\"parts\">1</td>"
+            + "<td title=\"uploaded\">2026-01-01</td>"
+            + "<td title=\"downloaded\">12</td>"
+            + "</tr></table></div></a>";
     }
 
     /// <summary>Zeilen einer Datei, die einen Text enthalten — mit Dateiname und Zeilennummer.</summary>

@@ -300,6 +300,13 @@ public sealed class DownloadPipeline : IDisposable
     private readonly DownloadSearchTracker _searchTracker;
 
     /// <summary>
+    /// F-M686: die Quellen dieses Laufs — Suche und Holen gehen über ihre vier Aufträge, nicht mehr an
+    /// ihnen vorbei. Gebaut EINMAL je Lauf, aus der Konfiguration und mit dem, was der Lauf schon hat
+    /// (HttpClient, gemeinsamer Archiv-Cache, Logger, Zeitgeber, die drei Clients samt Zugang).
+    /// </summary>
+    private readonly Sources.SourceRegistry _sources;
+
+    /// <summary>
     /// Directories proven read-only THIS run (probe cached per run — a share can
     /// be remounted writable between runs, so the verdict must never outlive the run).
     /// </summary>
@@ -544,6 +551,24 @@ public sealed class DownloadPipeline : IDisposable
                 (Api.Endpoints.IDownloadEndpoint)new Api.Endpoints.MovieSubtitlesDownloadEndpoint(_msubClient, _logger),
             },
             new[] { (Api.Endpoints.IUploadEndpoint)new Api.Endpoints.ScribeUploadEndpoint(api) });
+
+        // F-M686: die Grenze zur Quellen-Engine — gebaut wie auf der Upload-Seite, aus derselben
+        // Konfiguration und mit dem, was dieser Lauf schon hat: der HttpClient, der gemeinsame
+        // Archiv-Cache (EINE Ablage, kein zweiter Pflegeweg), der Logger, der Zeitgeber und die drei
+        // Clients samt Zugang. Suche und Holen rufen ab hier nur noch die vier Aufträge.
+        _sources = Sources.SourceRegistry.Build(
+            new Sources.SourceEngineContext(
+                // Der HttpClient des Kontexts ist der Rückfall für eine Engine, der keiner gereicht
+                // wurde; hier sind alle drei da, also wird er nicht benutzt.
+                ScribeApiClient.NewHttpClient(TimeSpan.FromSeconds(90)),
+                _logger,
+                TimeProvider.System,
+                ArchiveCache: _api.ArchiveDiskCache,
+                Subdl: _api,
+                Tvst: _tvClient,
+                Msub: _msubClient,
+                DataFolder: Plugin.Instance?.DataFolderPath),
+            config);
     }
 
     /// <summary>Gets the effective target languages (F-M42), parsed from config, ordered, deduped.</summary>
@@ -3109,8 +3134,19 @@ public sealed class DownloadPipeline : IDisposable
                             continue; // the file the gate just refused
                         }
 
-                        byte[]? siblingBytes = await _api
-                            .ExtractArchiveMemberAsync(cand.Url, sibling.Name, ct).ConfigureAwait(false);
+                        // F-M686: auch ein zweites Mitglied desselben Behälters wird über den Auftrag
+                        // geholt — mit dem Adress-Griff, den die Suche am Kandidaten führt (F-M386).
+                        Sources.ISourceEngine? eigeneQuelle = _sources.ByKey(
+                            Api.Endpoints.Provenance.Name(cand.Provider));
+                        byte[]? siblingBytes = eigeneQuelle is null
+                            ? null
+                            : (await eigeneQuelle.FetchAsync(
+                                new Sources.SourceFetchRequest("u:" + cand.Url, MemberName: sibling.Name) { Season = season },
+                                ct).ConfigureAwait(false)).Bytes;
+                        if (siblingBytes is { Length: 0 })
+                        {
+                            siblingBytes = null;
+                        }
                         if (siblingBytes == null || siblingBytes.Length < 100)
                         {
                             continue;
@@ -3998,16 +4034,25 @@ public sealed class DownloadPipeline : IDisposable
             // F-M282: the regular search runs only when a REGULAR file is open. When the variant is
             // the only thing missing, `langs` is empty and this call would be a search for nothing —
             // worse, it used to be the call that re-fetched a subtitle already on disk.
-            var main = langs.Length == 0
-                ? new List<SubtitleCandidate>()
-                : await _api.SearchSubtitlesAsync(
-                    string.IsNullOrWhiteSpace(imdbId) ? null : imdbId,
-                    string.IsNullOrWhiteSpace(tmdbId) ? null : tmdbId,
-                    season, episode, langs, 20, ct, earlyStop, hearingImpaired: false).ConfigureAwait(false);
-            if (main == null)
+            // F-M686: die Suche geht an die QUELLE — als Auftrag der Engine, mit allem, was dieser Lauf
+            // über den Titel weiß. Was hier bleibt, ist die Sprache dieser Zeile: welche Seiten des
+            // Pools gefragt werden (hi=0 hier, hi=1 unten), ist eine Aussage des Laufs.
+            var mainAnswer = langs.Length == 0
+                ? Sources.SourceSearchAnswer.Empty
+                : await SourceSearchAsync(
+                    MainSearchSource,
+                    SearchRequestFor(
+                        imdbId, tmdbId, filename, item is Episode, season, episode,
+                        missing, hearingImpaired: false, wantsPack: false, earlyStop),
+                    ct).ConfigureAwait(false);
+            if (mainAnswer is null)
             {
                 return (null, false, 0, noHi); // 429/5xx/403 → stop the run
             }
+
+            var main = mainAnswer.Candidates
+                .Select(c => CandidateOf(c, MainSearchSource))
+                .ToList();
 
             // F-M529: Treffer, deren Feldgestalt SubDLs eigene Doku nicht erlaubt (z. B. framerate
             // als Kommazahl 23.98), sind im Client schon verworfen worden. Der Zaehler geht in die
@@ -4046,10 +4091,15 @@ public sealed class DownloadPipeline : IDisposable
                 // asked SubDL for the regular side of a language whose variant was missing, and the
                 // result was a regular subtitle fetched over the file already on disk.
                 var hiLangs = string.Join(",", variantMissing);
-                var hi = await _api.SearchSubtitlesAsync(
-                    string.IsNullOrWhiteSpace(imdbId) ? null : imdbId,
-                    string.IsNullOrWhiteSpace(tmdbId) ? null : tmdbId,
-                    season, episode, hiLangs, 20, ct, earlyStop, hearingImpaired: true).ConfigureAwait(false);
+                var hiAnswer = await SourceSearchAsync(
+                    MainSearchSource,
+                    SearchRequestFor(
+                        imdbId, tmdbId, filename, item is Episode, season, episode,
+                        variantMissing, hearingImpaired: true, wantsPack: false, earlyStop),
+                    ct).ConfigureAwait(false);
+                var hi = hiAnswer?.Candidates
+                    .Select(c => CandidateOf(c, MainSearchSource))
+                    .ToList();
                 summary.RejectedCandidates += _api.LastRejectedByFormat; // F-M529, auch fuer den HI-Pool
                 if (hi != null && hi.Count > 0)
                 {
@@ -4157,7 +4207,21 @@ public sealed class DownloadPipeline : IDisposable
             return DownloadOutcome.None("no-entry-id");
         }
 
-        return await _api.DownloadV2FileAsync(nId, ct, season, episode, member).ConfigureAwait(false);
+        // F-M686: der Abruf geht an die QUELLE — als Auftrag der Engine, mit Griff, Staffel, Folge und
+        // (bei Behältern) dem gewählten Mitglied. Der Archiv-Cache, den die Engine dafür benutzt, ist
+        // DERSELBE, den dieser Lauf konfiguriert und trimmt (F-M370/F-M665): er wird nicht doppelt
+        // gepflegt, sondern durchgereicht.
+        Sources.ISourceEngine? engine = _sources.ByKey(Api.Endpoints.Provenance.Name(MainSearchSource));
+        if (engine is null)
+        {
+            return DownloadOutcome.None("no-source-engine");
+        }
+
+        Sources.SourceFetchAnswer answer = await engine.FetchAsync(
+            new Sources.SourceFetchRequest("n:" + nId, episode, member) { Season = season },
+            ct).ConfigureAwait(false);
+
+        return OutcomeOf(answer, Api.Endpoints.Provenance.Name(MainSearchSource));
     }
 
     /// <summary>
@@ -4176,34 +4240,29 @@ public sealed class DownloadPipeline : IDisposable
             return DownloadOutcome.None("no-source-endpoint");
         }
 
-        // Der Abruf steht absichtlich in ZWEI Zeilen: die Quelltext-Pruefung „der Slot steht VOR dem
-        // Abruf" (F-M548/F-M594) nimmt die erste Stelle des regulaeren Abrufs als Bezugspunkt — der
-        // steht hinter dem Takt-Slot. Ein gleichlautender zweiter Aufruf hier liesse die Pruefung auf
-        // diese (slot-lose) Stelle zeigen, ohne dass sich am Verhalten etwas aendert.
-        var abruf = endpoint.FetchAsync(
-            new Api.Endpoints.SubtitleHit(
-                hit.Provider, hit.Url, hit.Language, string.Empty, hit.ReleaseName, false, hit.HearingImpaired),
-            ct);
-        var payload = await abruf.ConfigureAwait(false);
+        // F-M686: der Abruf geht an die Engine DIESER Quelle — mit dem Griff, den ihre Suche ausgegeben
+        // hat. Der Takt-Anker (F-M594) sitzt unverändert hier und nicht in der Quelle.
+        Sources.ISourceEngine? engine = _sources.ByKey(Api.Endpoints.Provenance.Name(hit.Provider));
+        if (engine is null)
+        {
+            return DownloadOutcome.None("no-source-engine");
+        }
 
-        if (payload is null)
+        Sources.SourceFetchAnswer answer = await engine
+            .FetchAsync(new Sources.SourceFetchRequest(hit.Url) { Language = hit.Language }, ct)
+            .ConfigureAwait(false);
+
+        if (!answer.HasBytes)
         {
             return DownloadOutcome.None(Api.Endpoints.Provenance.Name(hit.Provider));
         }
 
-        if (payload.Data.Length >= 100)
+        if (answer.Bytes.Length >= 100)
         {
             _limiter.MarkTransferDone();
         }
 
-        return new DownloadOutcome
-        {
-            Status = 200,
-            Bytes = payload.Data.Length,
-            Route = Api.Endpoints.Provenance.Name(hit.Provider),
-            Content = payload.Data,
-            Member = payload.FileName,
-        };
+        return OutcomeOf(answer, Api.Endpoints.Provenance.Name(hit.Provider));
     }
 
     private async Task<CandidateAttempt> DownloadCandidateAsync(
@@ -4333,7 +4392,12 @@ public sealed class DownloadPipeline : IDisposable
             return leer;
         }
 
-        Api.Endpoints.SubtitleQuery abfrage;
+        // F-M686: was die Film-Adresse aus dem Bestand braucht (TMDb-Titel, TMDb-Jahr, die Nummer des
+        // Films). Für die Serien-Adresse bleiben sie leer — dort sucht der Name mit Staffel und Folge.
+        string? filmName = null;
+        int? filmYear = null;
+        string? filmNummer = null;
+
         if (quelle == Configuration.SubtitleProvider.MovieSubtitles)
         {
             // F-M591: der Filmweg fragt TMDb und dann die Filmnummer der Seite — beides VOR dem
@@ -4374,15 +4438,11 @@ public sealed class DownloadPipeline : IDisposable
                 return leer;
             }
 
-            abfrage = new Api.Endpoints.SubtitleQuery(
-                movie.Name,
-                null,
-                tmdbId,
-                Season: 0,
-                Episode: 0,
-                lang,
-                Year: movie.ReleaseYear ?? 0,
-                MovieId: film.MovieId!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture));
+            // F-M686: die Nummer, die der Bestand für dieses Medium führt (F-M507), geht als Teil der
+            // Anfrage an die Engine — sie muss den Store dafür nicht kennen.
+            filmName = movie.Name;
+            filmYear = movie.ReleaseYear;
+            filmNummer = film.MovieId!.Value.ToString(System.Globalization.CultureInfo.InvariantCulture);
             }
             catch (OperationCanceledException) when (!ct.IsCancellationRequested)
             {
@@ -4398,21 +4458,38 @@ public sealed class DownloadPipeline : IDisposable
                 throw;
             }
         }
-        else
-        {
-            abfrage = new Api.Endpoints.SubtitleQuery(title, null, tmdbId, season, episode, lang);
-        }
+        // F-M686: die Anfrage an DIESE Quelle — alles, was der Lauf über den Titel weiß, die eine
+        // gewünschte Sprache und der Medienweg. Für die Film-Adresse sind Titel und Jahr die des
+        // TMDb-Datensatzes (F-M507) und die Nummer die aus dem Bestand; die Serien-Adresse braucht
+        // Name, Staffel und Folge.
+        var abfrage = SearchRequestFor(
+            imdbId: null,
+            tmdbId: tmdbId,
+            name: filmName ?? title,
+            isSeries: isSeries,
+            season: season,
+            episode: episode,
+            languages: new[] { lang },
+            hearingImpaired: null,
+            wantsPack: false,
+            earlyStop: 0,
+            year: filmYear,
+            mediaNumber: filmNummer,
+            osHash: mediaHash);
 
         try
         {
-            var hits = await endpoint.SearchAsync(abfrage, ct).ConfigureAwait(false);
+            var antwort = await SourceSearchAsync(quelle, abfrage, ct).ConfigureAwait(false);
+            var hits = antwort?.Candidates ?? Array.Empty<Sources.SourceCandidate>();
 
             // F-M533: hat die tvst-Naht Eintraege wegen einer falschen Feldangabe verworfen, gehoert
-            // die Zahl in dieselbe Schlusszeile wie bei SubDL (F-M529). Diese Methode fuehrt keine
-            // Zusammenfassung, deshalb sammelt das Feld und die Schlusszeile addiert.
-            if (endpoint is Api.Endpoints.TvSubtitlesDownloadEndpoint tvstNaht)
+            // die Zahl in dieselbe Schlusszeile wie bei SubDL (F-M529). Seit F-M686 liegt die Suche
+            // hinter der Engine; der Zaehler steht am gemeinsamen Client (F-M686), den dieser Lauf
+            // ohnehin haelt. Diese Methode fuehrt keine Zusammenfassung, deshalb sammelt das Feld und
+            // die Schlusszeile addiert.
+            if (quelle == Configuration.SubtitleProvider.TvSubtitles && _tvClient is not null)
             {
-                _tvstFormatRejected += tvstNaht.LastRejectedByFormat;
+                _tvstFormatRejected += _tvClient.LastRejectedByFormat;
             }
 
             // F-M663: ist die Staffel-ZIP (Stufe 1) ausgefallen — keine ZIP, kaputte ZIP, Timeout —,
@@ -4539,6 +4616,36 @@ public sealed class DownloadPipeline : IDisposable
     }
 
     /// <summary>
+    /// F-M686: dieselbe Regel für die Kandidaten, die die ENGINE gemeldet hat — ein Kandidat mit
+    /// HI-Marke geht auf die HI-Seite, jeder andere auf die regulaere. Die Entscheidung bleibt damit
+    /// im Ablauf (sie ist übergeordnet, nicht Quellenwissen); sie steht nur ein zweites Mal hier, weil
+    /// die Antwort seit F-M686 in unserer Form ankommt.
+    /// </summary>
+    /// <param name="hits">Die Kandidaten der Engine, in ihrer Reihenfolge.</param>
+    /// <param name="quelle">Die Quelle, die sie geliefert hat.</param>
+    /// <param name="lang">Zielsprache (wird gross geschrieben, wie die SubDL-Schreibweise).</param>
+    /// <param name="season">Staffel, 0 bei einem Film.</param>
+    /// <param name="episode">Folge, 0 bei einem Film.</param>
+    /// <returns>Die regulaeren Kandidaten und die HI-Kandidaten — getrennt, in Eingabereihenfolge.</returns>
+    public static (List<SubtitleCandidate> Regular, List<SubtitleCandidate> HearingImpaired) SplitByHearingImpaired(
+        IEnumerable<Sources.SourceCandidate> hits,
+        Configuration.SubtitleProvider quelle,
+        string lang,
+        int season,
+        int episode)
+    {
+        var regulaer = new List<SubtitleCandidate>();
+        var hi = new List<SubtitleCandidate>();
+        foreach (Sources.SourceCandidate c in hits ?? Array.Empty<Sources.SourceCandidate>())
+        {
+            SubtitleCandidate cand = CandidateOf(c, quelle, lang, season, episode);
+            (cand.HearingImpaired ? hi : regulaer).Add(cand);
+        }
+
+        return (regulaer, hi);
+    }
+
+    /// <summary>
     /// F-M664: die HI-Seite EINER Sprache — Engine fuer Engine, in der Reihenfolge, in der die Engines
     /// gefragt wurden.
     /// <para>
@@ -4649,6 +4756,204 @@ public sealed class DownloadPipeline : IDisposable
     private static int QuellenRang(IReadOnlyDictionary<Configuration.SubtitleProvider, int> rang, Configuration.SubtitleProvider provider) =>
         rang.TryGetValue(provider, out int index) ? index : int.MaxValue;
 
+    /// <summary>
+    /// F-M686: fragt EINE Quelle — und sagt mit <c>null</c>, dass sie nicht durchkam (429, 403, 5xx,
+    /// Timeout des Clients). Genau diese Unterscheidung braucht der Lauf: „keine Kandidaten" ist ein
+    /// Ergebnis, „keine Antwort" ist ein Grund, den Vorgang zu beenden (F-M48).
+    /// <para>
+    /// Die Anfrage geht an die Engine dieser Quelle; ihr Name steht hier nur, um sie in der Registry
+    /// zu finden. Sortiert, gefiltert und beurteilt wird danach im Ablauf — Sprache, HI und Rang sind
+    /// seine Aussagen, nicht die der Quelle.
+    /// </para>
+    /// </summary>
+    /// <param name="quelle">Die Quelle, die gefragt wird.</param>
+    /// <param name="request">Was sie hören soll.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Die Antwort; null, wenn die Quelle nicht geantwortet hat.</returns>
+    private async Task<Sources.SourceSearchAnswer?> SourceSearchAsync(
+        Configuration.SubtitleProvider quelle,
+        Sources.SourceSearchRequest request,
+        CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        Sources.ISourceEngine? engine = _sources.ByKey(Api.Endpoints.Provenance.Name(quelle));
+        if (engine is null)
+        {
+            // Keine Engine, keine Frage: der Vorgang fährt mit den anderen Quellen fort.
+            return Sources.SourceSearchAnswer.Empty;
+        }
+
+        Sources.SourceSearchAnswer answer = await engine.SearchAsync(request, ct).ConfigureAwait(false);
+
+        // F-M686: „nicht durchgekommen" bleibt „nicht durchgekommen". Ein Fehler, der die ganze Quelle
+        // betrifft (Bremse, Zugang, Netz), endet wie bisher in der Antwort „keine Suchantwort"; ein
+        // Ergebnis ohne Treffer ist eine leere Liste.
+        if (answer.Fault is { } grund
+            && grund.Kind is Sources.SourceFault.RateLimited
+                or Sources.SourceFault.AuthFailed
+                or Sources.SourceFault.Transient)
+        {
+            LogUtil.PerItem(_config.LogMode, _logger,
+                "[Sub Scribe-D] {Source} search did not come through ({Reason}) — {File}",
+                Api.Endpoints.Provenance.Name(quelle), grund.Reason ?? grund.Kind.ToString(), Path.GetFileName(request.Name));
+            return null;
+        }
+
+        if (answer.Fault is { Kind: Sources.SourceFault.NoSearchBase })
+        {
+            LogUtil.Detail(_config.LogMode, _logger,
+                "[Sub Scribe-D] {Source} was not asked — {Reason}",
+                Api.Endpoints.Provenance.Name(quelle), answer.Fault.Reason ?? "no search base");
+        }
+
+        return answer;
+    }
+
+    /// <summary>
+    /// F-M686: die Suchanfrage an EINE Quelle — alles, was dieser Ablauf über den Titel weiß, in
+    /// unserem Wortschatz. Die Reihenfolge der QUELLEN bleibt Sache der Konfiguration
+    /// (<see cref="DownloadQueryOrder"/>); hier steht nur, was DIESE Quelle zu hören bekommt.
+    /// </summary>
+    /// <param name="imdbId">Die IMDb-Kennung, wenn bekannt.</param>
+    /// <param name="tmdbId">Die TMDb-Nummer, wenn bekannt.</param>
+    /// <param name="name">Der Name des Titels, wie die Quelle ihn sucht.</param>
+    /// <param name="isSeries">Wahr für eine Serie, falsch für einen Film.</param>
+    /// <param name="season">Die Staffel (0 = keine).</param>
+    /// <param name="episode">Die Folge (0 = keine).</param>
+    /// <param name="languages">Die gewünschten Sprachen, in der Reihenfolge des Laufs.</param>
+    /// <param name="hearingImpaired">Wahr = nur HI, falsch = nur normal, null = egal.</param>
+    /// <param name="wantsPack">Sucht der Lauf einen Behälter?</param>
+    /// <param name="earlyStop">Die Suchbreite (F-M95), 0 wenn sie nicht gilt.</param>
+    /// <param name="year">Das Jahr, wenn bekannt.</param>
+    /// <param name="mediaNumber">F-M507: die Nummer, die das Medium bei dieser Quelle schon hat.</param>
+    /// <param name="osHash">Der Inhalts-Hash der Datei, wenn die Quelle damit sucht.</param>
+    /// <returns>Die Anfrage.</returns>
+    private static Sources.SourceSearchRequest SearchRequestFor(
+        string? imdbId,
+        string? tmdbId,
+        string name,
+        bool isSeries,
+        int season,
+        int episode,
+        IEnumerable<string> languages,
+        bool? hearingImpaired,
+        bool wantsPack,
+        int earlyStop,
+        int? year = null,
+        string? mediaNumber = null,
+        string? osHash = null)
+        => new()
+        {
+            ImdbId = string.IsNullOrWhiteSpace(imdbId) ? null : imdbId,
+            TmdbId = string.IsNullOrWhiteSpace(tmdbId) ? null : tmdbId,
+            Name = name ?? string.Empty,
+            IsSeries = isSeries,
+            Season = isSeries && season > 0 ? season : null,
+            Episode = isSeries && episode > 0 ? episode : null,
+            Languages = languages.ToList(),
+            HearingImpaired = hearingImpaired,
+            WantsPack = wantsPack,
+            EarlyStop = earlyStop,
+            Year = year,
+            MediaNumber = mediaNumber,
+            OsHash = osHash,
+        };
+
+    /// <summary>
+    /// F-M686: ein Kandidat der Grenze in der Form, die dieser Ablauf schon kennt — mit SEINEN
+    /// Angaben (Staffel und Folge, wie die Quelle sie nennt). Keine Kennung wird hier gebaut oder
+    /// ausgelegt: was die Quelle führt, wird durchgereicht.
+    /// </summary>
+    /// <param name="c">Der Kandidat der Engine.</param>
+    /// <param name="quelle">Die Quelle, die ihn geliefert hat.</param>
+    /// <returns>Der Kandidat des Laufs.</returns>
+    private static SubtitleCandidate CandidateOf(Sources.SourceCandidate c, Configuration.SubtitleProvider quelle)
+    {
+        ArgumentNullException.ThrowIfNull(c);
+        return new SubtitleCandidate
+        {
+            Provider = quelle,
+            ReleaseName = c.ReleaseName,
+            Language = c.Language,
+            Url = c.Address ?? c.Handle,
+            Season = c.Season,
+            Episode = c.Episode,
+            EpisodeFrom = c.EpisodeFrom,
+            EpisodeEnd = c.EpisodeEnd,
+            FullSeason = c.IsPack,
+            FpsLiteral = c.Fps > 0 ? c.Fps : null,
+            HearingImpaired = c.HearingImpaired,
+            DownloadCount = c.Downloads,
+            NId = c.ReportId ?? string.Empty,
+            OriginalName = c.OriginalName ?? string.Empty,
+            SubdlId = c.EntryId ?? string.Empty,
+            Author = c.Author ?? string.Empty,
+            UnpackFiles = c.Members
+                .Select(m => new SubtitleUnpackFile
+                {
+                    Name = m.FileName,
+                    Season = m.Season,
+                    Episode = m.Episode,
+                    HearingImpaired = m.HearingImpaired,
+                })
+                .ToList(),
+        };
+    }
+
+    /// <summary>
+    /// F-M686: derselbe Kandidat, aber mit den Angaben, die DIESER Lauf gefragt hat — der Weg der
+    /// Zusatzquellen. Dort steht die Sprache des Laufs am Kandidaten (so war es immer), und Staffel
+    /// und Folge sind die der Frage, nicht die einer Behälterliste.
+    /// </summary>
+    /// <param name="c">Der Kandidat der Engine.</param>
+    /// <param name="quelle">Die Quelle, die ihn geliefert hat.</param>
+    /// <param name="language">Die Sprache, die dieser Lauf gefragt hat.</param>
+    /// <param name="season">Die Staffel der Frage.</param>
+    /// <param name="episode">Die Folge der Frage.</param>
+    /// <returns>Der Kandidat des Laufs.</returns>
+    private static SubtitleCandidate CandidateOf(
+        Sources.SourceCandidate c, Configuration.SubtitleProvider quelle, string language, int season, int episode)
+    {
+        SubtitleCandidate cand = CandidateOf(c, quelle);
+        cand.Language = (language ?? string.Empty).ToUpperInvariant();
+        cand.Season = season;
+        cand.Episode = episode;
+        return cand;
+    }
+
+    /// <summary>
+    /// F-M686: die Antwort der Grenze auf einen Abruf in der Form, die dieser Ablauf kennt — Bytes,
+    /// Name im Behälter, Urteil dieses Versuchs. Der Status der Quelle reist mit, damit eine echte
+    /// leere Antwort (<see cref="DownloadOutcome.GenuineEmpty"/>) von „kein Abruf" zu unterscheiden
+    /// bleibt (F-M455).
+    /// </summary>
+    /// <param name="answer">Die Antwort der Engine.</param>
+    /// <param name="route">Die Route für die Diagnose (Name der Quelle).</param>
+    /// <returns>Das Urteil dieses Versuchs.</returns>
+    private static DownloadOutcome OutcomeOf(Sources.SourceFetchAnswer answer, string route)
+    {
+        ArgumentNullException.ThrowIfNull(answer);
+        if (answer.HasBytes)
+        {
+            return new DownloadOutcome
+            {
+                Status = answer.Status == 0 ? 200 : answer.Status,
+                Bytes = answer.Bytes.Length,
+                Route = route,
+                Content = answer.Bytes,
+                Member = string.IsNullOrWhiteSpace(answer.FileName) ? null : answer.FileName,
+            };
+        }
+
+        return new DownloadOutcome
+        {
+            Status = answer.Status,
+            Route = route,
+            Error = answer.Fault?.Reason,
+        };
+    }
+
     private async Task<CandidateAttempt> DownloadCandidateRawAsync(
         SubtitleCandidate cand, int season, int episode, CancellationToken ct)
     {
@@ -4690,23 +4995,24 @@ public sealed class DownloadPipeline : IDisposable
                 return new CandidateAttempt(null, null, DownloadOutcome.None("no-source-endpoint"));
             }
 
-            var fremd = await endpoint.FetchAsync(
-                new Api.Endpoints.SubtitleHit(
-                    cand.Provider, cand.Url, cand.Language, string.Empty, cand.ReleaseName, false), ct)
-                .ConfigureAwait(false);
+            // F-M686: geholt wird über den Auftrag der Engine — mit dem Griff, den ihre Suche ausgegeben
+            // hat. Bytes, Name im Behälter und Status kommen zurück; was der Lauf damit tut, ist unverändert.
+            Sources.ISourceEngine? fremdEngine = _sources.ByKey(Api.Endpoints.Provenance.Name(cand.Provider));
+            if (fremdEngine is null)
+            {
+                return new CandidateAttempt(null, null, DownloadOutcome.None("no-source-engine"));
+            }
 
-            return fremd is null
-                ? new CandidateAttempt(null, null, DownloadOutcome.None("second-source-empty"))
-                : new CandidateAttempt(
-                    fremd.Data,
+            Sources.SourceFetchAnswer fremd = await fremdEngine.FetchAsync(
+                new Sources.SourceFetchRequest(cand.Url) { Season = season, Language = cand.Language },
+                ct).ConfigureAwait(false);
+
+            return fremd.HasBytes
+                ? new CandidateAttempt(
+                    fremd.Bytes,
                     null,
-                    new DownloadOutcome
-                    {
-                        Status = 200,
-                        Bytes = fremd.Data.Length,
-                        Route = Api.Endpoints.Provenance.Name(cand.Provider),
-                        Content = fremd.Data,
-                    });
+                    OutcomeOf(fremd, Api.Endpoints.Provenance.Name(cand.Provider)))
+                : new CandidateAttempt(null, null, DownloadOutcome.None("second-source-empty"));
         }
 
         // F-M464: the verdict of this attempt travels WITH the attempt (CandidateAttempt.Outcome).

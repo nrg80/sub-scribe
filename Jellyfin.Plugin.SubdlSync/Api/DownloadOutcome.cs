@@ -17,7 +17,14 @@ public sealed record DownloadOutcome
     /// <summary>HTTP status of this attempt; 0 means no request was made.</summary>
     public required int Status { get; init; }
 
-    /// <summary>Bytes the attempt carried (archive size, not the unpacked member).</summary>
+    /// <summary>
+    /// Bytes the attempt carried (archive size, not the unpacked member).
+    /// <para>
+    /// F-M686: der Abruf über die Engine liefert die Bytes des EINTRAGS (bei einem Behälter also die des
+    /// gewählten Mitglieds) — für die eine Frage, die dieser Wert beantwortet („kam überhaupt etwas?",
+    /// <see cref="GenuineEmpty"/>), ist das dieselbe Aussage.
+    /// </para>
+    /// </summary>
     public int Bytes { get; init; }
 
     /// <summary>SubDL error name of this attempt, if it answered with one.</summary>

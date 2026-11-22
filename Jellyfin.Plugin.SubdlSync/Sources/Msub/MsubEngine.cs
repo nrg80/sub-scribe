@@ -60,6 +60,13 @@ public sealed class MsubEngine : ISourceEngine
     private readonly SourceEngineContext _context;
 
     /// <summary>
+    /// F-M686: der Such- und Holweg dieser Quelle — SIE hält ihn, nicht mehr der Ablauf. Die Instanz
+    /// lebt so lange wie die Engine, damit ihr Seitenmerker (15 Minuten, F-M507) für den ganzen Lauf
+    /// gilt und eine Seite je Film EINMAL geholt wird, auch wenn sechs Sprachen fehlen.
+    /// </summary>
+    private readonly Api.Endpoints.MovieSubtitlesDownloadEndpoint _weg;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="MsubEngine"/> class.
     /// </summary>
     /// <param name="client">Der Film-Client des Laufs, oder null — dann baut ihn die Engine über den
@@ -70,6 +77,7 @@ public sealed class MsubEngine : ISourceEngine
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _client = client ?? new MovieSubtitlesClient(context.Http);
+        _weg = new Api.Endpoints.MovieSubtitlesDownloadEndpoint(_client, context.Logger);
         Settings = settings ?? SourceSettings.Empty(SourceKey, Declared);
         BaseUrl = Settings.Url(FieldBaseUrl);
         HasAccess = Settings.Has(FieldAccess);
@@ -139,46 +147,68 @@ public sealed class MsubEngine : ISourceEngine
                 "moviesubtitles.org is searched by name — the request carries none"));
         }
 
-        try
+        // F-M686: EIN Auftrag, je gewünschter Sprache EIN Abruf über den Weg dieser Quelle. Die Nummer
+        // des Films, wenn der Bestand sie schon kennt (<see cref="SourceSearchRequest.MediaNumber"/>),
+        // führt — dann wird nicht gesucht; sonst löst der Weg sie über Titel und Jahr auf.
+        var kandidaten = new List<SourceCandidate>();
+        foreach (string sprache in request.Languages.Count > 0 ? request.Languages : new[] { string.Empty })
         {
-            // Ein Auftrag, mehrere Abrufe: den Film eng auflösen (Titel UND Jahr), dann seine Seite
-            // lesen.
-            int? film = await _client.FindMovieAsync(request.Name, request.Year, ct).ConfigureAwait(false);
-            if (film is null)
+            string? code = MovieSubtitlesClient.SiteLanguage(sprache);
+            if (code is null)
             {
-                return SourceSearchAnswer.Because(SourceFaultInfo.NotFound(
-                    "no film entry for '" + request.Name + "'"));
+                // Führt die Seite die Sprache nicht, hat sie nichts anzubieten — ein Ergebnis, kein Fehler.
+                continue;
             }
 
-            MovieSubtitlesMoviePage seite = await _client.MovieAsync(film.Value, ct).ConfigureAwait(false);
-            var kandidaten = new List<SourceCandidate>(seite.Entries.Count);
-            foreach (MovieSubtitlesEntry e in seite.Entries)
+            IReadOnlyList<Api.Endpoints.SubtitleHit> treffer;
+            try
             {
-                if (!int.TryParse(e.SubtitleId, NumberStyles.Integer, CultureInfo.InvariantCulture, out int eintrag)
-                    || eintrag <= 0)
-                {
-                    continue;
-                }
+                treffer = await _weg.SearchAsync(
+                    new Api.Endpoints.SubtitleQuery(
+                        request.Name,
+                        null,
+                        request.TmdbId,
+                        Season: 0,
+                        Episode: 0,
+                        sprache,
+                        Year: request.Year ?? 0,
+                        MovieId: request.MediaNumber),
+                    ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                return SourceSearchAnswer.Because(SourceFaultInfo.Transient(ex.Message));
+            }
 
+            foreach (Api.Endpoints.SubtitleHit h in treffer)
+            {
                 kandidaten.Add(new SourceCandidate(
-                    HandlePrefix + film.Value.ToString(CultureInfo.InvariantCulture) + ":" +
-                        e.SubtitleId,
-                    SourceNeutral.CandidateLanguage(e.Language),
+                    h.Id,
+                    SourceNeutral.CandidateLanguage(h.Language),
                     false,
-                    e.Release,
-                    false));
+                    h.Release,
+                    false)
+                {
+                    EntryId = h.Id,
+                    Address = h.Id,
+                    ReportId = h.Id,
+                });
             }
+        }
 
-            return new SourceSearchAnswer(kandidaten);
-        }
-        catch (OperationCanceledException)
+        if (kandidaten.Count == 0 && request.MediaNumber is null)
         {
-            throw;
+            // Ohne Nummer und ohne Treffer: die Quelle kennt den Film nicht. Der Grund ist eine Aussage
+            // über die Quelle, keine über die Anfrage.
+            return SourceSearchAnswer.Because(SourceFaultInfo.NotFound(
+                "no film record for '" + request.Name + "' at moviesubtitles.org"));
         }
-        catch (Exception ex)
-        {
-            return SourceSearchAnswer.Because(SourceFaultInfo.Transient(ex.Message));
-        }
+
+        return new SourceSearchAnswer(kandidaten);
     }
 
     /// <inheritdoc />
@@ -186,15 +216,22 @@ public sealed class MsubEngine : ISourceEngine
     {
         ArgumentNullException.ThrowIfNull(request);
 
-        if (string.IsNullOrWhiteSpace(request.Handle)
-            || !request.Handle.StartsWith(HandlePrefix, StringComparison.Ordinal))
+        if (string.IsNullOrWhiteSpace(request.Handle))
         {
             return SourceFetchAnswer.Because(SourceFaultInfo.NotFound("no handle of this source"));
         }
 
-        string[] teile = request.Handle[HandlePrefix.Length..].Split(':');
-        if (teile.Length != 2
-            || !int.TryParse(teile[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out int eintrag)
+        // F-M686: der Griff ist die Kennung, die die Suche ausgegeben hat (die Eintragsnummer der
+        // Seite). Die alte Schreibweise <c>m:film:eintrag</c> wird weiter gelesen — sie nennt dieselbe
+        // Nummer, und ein Griff von vorher soll nicht plötzlich unlesbar sein.
+        string kennung = request.Handle;
+        if (request.Handle.StartsWith(HandlePrefix, StringComparison.Ordinal))
+        {
+            string[] teile = request.Handle[HandlePrefix.Length..].Split(':');
+            kennung = teile.Length == 2 ? teile[1] : string.Empty;
+        }
+
+        if (!int.TryParse(kennung, NumberStyles.Integer, CultureInfo.InvariantCulture, out int eintrag)
             || eintrag <= 0)
         {
             return SourceFetchAnswer.Because(SourceFaultInfo.NotFound("unreadable handle"));
@@ -202,20 +239,34 @@ public sealed class MsubEngine : ISourceEngine
 
         try
         {
-            MovieSubtitlesDownload geladen = await _client.DownloadAsync(eintrag, null, ct)
-                .ConfigureAwait(false);
+            // F-M686: derselbe Holweg wie bisher — die Filmseite braucht die Eintragsnummer, nicht die
+            // Filmnummer.
+            Api.Endpoints.SubtitlePayload? payload = await _weg.FetchAsync(
+                new Api.Endpoints.SubtitleHit(
+                    Configuration.SubtitleProvider.MovieSubtitles,
+                    kennung,
 
-            byte[] inhalt = geladen.Data;
-            if (inhalt.Length == 0)
+                    // F-M686: die Sprache der Frage reist mit — bei einer geschnittenen Datei wählt die
+                    // Quelle danach ihren Teil (F-M507).
+                    request.Language,
+                    string.Empty,
+                    string.Empty,
+                    false),
+                ct).ConfigureAwait(false);
+
+            if (payload is null || payload.Content.Length == 0)
             {
                 return SourceFetchAnswer.Because(SourceFaultInfo.NotFound("the download delivered nothing"));
             }
 
             return new SourceFetchAnswer(
-                inhalt,
-                geladen.Name,
-                teile[1],
-                SourceNeutral.ContentHash(geladen.Data));
+                payload.Content,
+                payload.FileName,
+                kennung,
+                SourceNeutral.ContentHash(payload.Content))
+            {
+                Status = _client.LastStatus,
+            };
         }
         catch (OperationCanceledException)
         {

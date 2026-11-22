@@ -412,6 +412,14 @@ public sealed class TvSubtitlesClient
     public int LastStatus { get; private set; }
 
     /// <summary>
+    /// F-M686: wie viele Einträge der LETZTEN Suche verworfen wurden, weil ein Feld dem Vokabular der
+    /// Seite widersprach (F-M533). Der Zähler steht am CLIENT und nicht am Suchendpunkt, weil die Suche
+    /// seit F-M686 hinter der Engine liegt: der Lauf liest ihn über denselben Client, den er der Engine
+    /// reicht — eine zweite Zählstelle gäbe es sonst nicht mehr zu lesen.
+    /// </summary>
+    public int LastRejectedByFormat { get; set; }
+
+    /// <summary>
     /// F-M522: the show list, remembered for as long as this client lives — one fetch per run instead of
     /// one per search. Measured on prod, 16.11.2026: a single download run asked <c>/add.html</c> 53 times
     /// for a list that cannot change within a run.

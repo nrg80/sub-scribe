@@ -62,6 +62,13 @@ public sealed class TvstEngine : ISourceEngine
     private readonly SourceEngineContext _context;
 
     /// <summary>
+    /// F-M686: der Such- und Holweg dieser Quelle — SIE hält ihn, nicht mehr der Ablauf. Die Instanz
+    /// lebt so lange wie die Engine, damit ihr Merker (die Staffel-ZIP, F-M663) und ihre Zähler für den
+    /// ganzen Lauf gelten; der Ablauf sieht sie nie.
+    /// </summary>
+    private readonly Api.Endpoints.TvSubtitlesDownloadEndpoint _weg;
+
+    /// <summary>
     /// Initializes a new instance of the <see cref="TvstEngine"/> class.
     /// </summary>
     /// <param name="client">Der tvst-Client des Laufs, oder null — dann baut ihn die Engine über den
@@ -74,6 +81,7 @@ public sealed class TvstEngine : ISourceEngine
     {
         _context = context ?? throw new ArgumentNullException(nameof(context));
         _client = client ?? new TvSubtitlesClient(context.Http, context.ArchiveCache);
+        _weg = new Api.Endpoints.TvSubtitlesDownloadEndpoint(_client);
         Settings = settings ?? SourceSettings.Empty(SourceKey, Declared);
         BaseUrl = Settings.Url(FieldBaseUrl);
 
@@ -154,55 +162,70 @@ public sealed class TvstEngine : ISourceEngine
                 TvSubtitlesClient.MaxEpisode.ToString(CultureInfo.InvariantCulture)));
         }
 
-        try
+        // F-M686: EIN Auftrag, je gewünschter Sprache EIN Abruf — und zwar durch den Weg, den diese
+        // Quelle schon hatte (Staffel-ZIP, Folgenseite, HI; F-M663/F-M664). Die Reihenfolge der Sprachen
+        // ist die der Anfrage, und innerhalb einer Sprache bleibt die Reihenfolge der Seite. Was der
+        // Ablauf je Sprache bekommt, hängt an GENAU dieser Sprache: er fragt, er gruppiert, und keine
+        // Sprache füllt die Liste einer anderen.
+        var kandidaten = new List<SourceCandidate>();
+        foreach (string sprache in request.Languages.Count > 0 ? request.Languages : new[] { string.Empty })
         {
-            // Ein Auftrag, mehrere Abrufe: die Serie über die Liste (und, wenn die Liste sie nicht
-            // nennt, über die Seitensuche), dann die Folgenseite, dann ihre Einträge.
-            int? showId = await ResolveShowAsync(request.Name, ct).ConfigureAwait(false);
-            if (showId is null)
+            string code = SourceNeutral.MapLanguages(new[] { sprache }, TvSubtitlesClient.SiteLanguage)
+                .FirstOrDefault() ?? string.Empty;
+            if (code.Length == 0)
             {
-                return SourceSearchAnswer.Because(SourceFaultInfo.NotFound(
-                    "'" + request.Name + "' is not a show on tvsubtitles.net"));
+                // Führt die Seite die Sprache nicht, ist das ein ERGEBNIS und kein Fehler — genau der
+                // Satz, den der Weg dieser Quelle schon wirft.
+                return SourceSearchAnswer.Because(SourceFaultInfo.NoSearchBase(
+                    "tvsubtitles.net has no language '" + sprache + "'"));
             }
 
-            int? page = await _client.FindEpisodePageAsync(showId.Value, staffel, nummer, ct)
-                .ConfigureAwait(false);
-            if (page is null)
+            IReadOnlyList<Api.Endpoints.SubtitleHit> treffer;
+            try
             {
-                return SourceSearchAnswer.Because(SourceFaultInfo.NotFound(
-                    "no episode page for season " + staffel.ToString(CultureInfo.InvariantCulture) +
-                    ", episode " + nummer.ToString(CultureInfo.InvariantCulture)));
+                treffer = await _weg.SearchAsync(
+                    new Api.Endpoints.SubtitleQuery(
+                        request.Name, null, request.TmdbId, staffel, nummer, code,
+                        Year: request.Year ?? 0),
+                    ct).ConfigureAwait(false);
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                // F-M591: ein Ausfall DIESER Quelle ist ihre eigene Zeile; der Ablauf führt die
+                // Fehlerart weiter und fragt die anderen.
+                return SourceSearchAnswer.Because(SourceFaultInfo.Transient(ex.Message));
             }
 
-            IReadOnlyList<TvSubtitlesEntry> eintraege = await _client.EntriesAsync(page.Value, ct)
-                .ConfigureAwait(false);
-
-            var kandidaten = new List<SourceCandidate>(eintraege.Count);
-            foreach (TvSubtitlesEntry e in eintraege)
+            foreach (Api.Endpoints.SubtitleHit h in treffer)
             {
-                if (string.IsNullOrWhiteSpace(e.SubtitleId))
-                {
-                    continue;
-                }
+                // F-M686: der Releasename mit demselben Rückfall wie bisher (Rip), die Sprache in
+                // unserer Schreibweise, die Behälter-Marke aus der Kennung selbst.
+                string release = h.Release.Length > 0
+                    ? h.Release
+                    : Api.Endpoints.Provenance.Name(Configuration.SubtitleProvider.TvSubtitles) + " " + h.Rip;
 
                 kandidaten.Add(new SourceCandidate(
-                    HandlePrefix + e.SubtitleId,
-                    SourceNeutral.CandidateLanguage(e.Language, IsoOf),
-                    e.HearingImpaired,
-                    e.Release,
-                    false));
+                    h.Id,
+                    SourceNeutral.CandidateLanguage(h.Language, IsoOf),
+                    h.HearingImpaired,
+                    release,
+                    Api.Endpoints.TvSubtitlesDownloadEndpoint.TryParseSeasonPackId(
+                        h.Id, out _, out _, out _, out _))
+                {
+                    Season = staffel,
+                    Episode = nummer,
+                    EntryId = h.Id,
+                    Address = h.Id,
+                    ReportId = h.Id,
+                });
             }
+        }
 
-            return new SourceSearchAnswer(kandidaten);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            return SourceSearchAnswer.Because(SourceFaultInfo.Transient(ex.Message));
-        }
+        return new SourceSearchAnswer(kandidaten);
     }
 
     /// <inheritdoc />
@@ -215,28 +238,39 @@ public sealed class TvstEngine : ISourceEngine
             return SourceFetchAnswer.Because(SourceFaultInfo.NotFound("no handle"));
         }
 
-        if (!request.Handle.StartsWith(HandlePrefix, StringComparison.Ordinal))
-        {
-            // Behälter kommen bei dieser Quelle nicht aus der Suche — den Pack baut der Ablauf selbst,
-            // und ein Griff, den diese Engine nicht ausgegeben hat, wird nicht gedeutet.
-            return SourceFetchAnswer.Because(SourceFaultInfo.NotFound(
-                "this source's search yields no container handles"));
-        }
+        // F-M686: der Griff ist die Kennung, die die Suche ausgegeben hat — ein Eintrag der Folgenseite
+        // oder ein Mitglied der Staffel-ZIP. Beide gehen durch DENSELBEN Weg wie bisher; die alte
+        // Schreibweise mit <c>s:</c> wird weiter gelesen, damit ein Griff von vorher nicht plötzlich
+        // unlesbar ist.
+        string kennung = request.Handle.StartsWith(HandlePrefix, StringComparison.Ordinal)
+            ? request.Handle[HandlePrefix.Length..]
+            : request.Handle;
 
-        string kennung = request.Handle[HandlePrefix.Length..];
         try
         {
-            (string name, byte[] daten) = await _client.DownloadAsync(kennung, ct).ConfigureAwait(false);
-            if (daten.Length == 0)
+            Api.Endpoints.SubtitlePayload? payload = await _weg.FetchAsync(
+                new Api.Endpoints.SubtitleHit(
+                    Configuration.SubtitleProvider.TvSubtitles,
+                    kennung,
+                    string.Empty,
+                    string.Empty,
+                    string.Empty,
+                    false),
+                ct).ConfigureAwait(false);
+
+            if (payload is null || payload.Content.Length == 0)
             {
                 return SourceFetchAnswer.Because(SourceFaultInfo.NotFound("the download delivered nothing"));
             }
 
             return new SourceFetchAnswer(
-                daten,
-                name,
+                payload.Content,
+                payload.FileName,
                 kennung,
-                SourceNeutral.ContentHash(daten));
+                SourceNeutral.ContentHash(payload.Content))
+            {
+                Status = _client.LastStatus,
+            };
         }
         catch (OperationCanceledException)
         {

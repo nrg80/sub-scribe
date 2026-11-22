@@ -39,6 +39,9 @@ public sealed class SubdlEngine : ISourceEngine
     /// <summary>Der Griff trägt seine Herkunft: <c>n:</c> + Eintrags-Kennung.</summary>
     private const string HandlePrefix = "n:";
 
+    /// <summary>F-M686: der zweite Griff — <c>u:</c> + Adresse des Eintrags (Archiv-Weg, F-M471).</summary>
+    private const string AddressPrefix = "u:";
+
     /// <summary>F-M450: die Seitenzahl-Obergrenze der Suche (Sicherheit, nicht Takt).</summary>
     private const int MaxSearchPages = 20;
 
@@ -203,7 +206,10 @@ public sealed class SubdlEngine : ISourceEngine
                 sprachen.Count == 0 ? null : string.Join(",", sprachen),
                 MaxSearchPages,
                 ct,
-                0,
+
+                // F-M686: die Suchbreite kommt aus der Anfrage (F-M95) — sie ist der eine Einstellwert,
+                // der Suche UND Auswahl begrenzt.
+                request.EarlyStop,
                 request.HearingImpaired).ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -228,18 +234,44 @@ public sealed class SubdlEngine : ISourceEngine
         var kandidaten = new List<SourceCandidate>(gefunden.Count);
         foreach (SubtitleCandidate c in gefunden)
         {
-            if (string.IsNullOrWhiteSpace(c.NId))
-            {
-                // Ohne Kennung ist der Kandidat nicht abholbar — er wird nicht angeboten.
-                continue;
-            }
+            // F-M686: kein Kandidat fällt hier weg. Zwei Griffe gibt es: der Eintrags-Griff
+            // (<c>n:</c> + Kennung, der v2-Weg) und der Adress-Griff (<c>u:</c> + Adresse, der
+            // Archiv-Weg über die alte Adresse). Ein Eintrag ohne Kennung ist NICHT verschwunden —
+            // er wird angeboten und beim Holen an seiner Adresse geholt, genau wie vorher.
+            string griff = !string.IsNullOrWhiteSpace(c.NId)
+                ? HandlePrefix + c.NId
+                : AddressPrefix + c.Url;
 
             kandidaten.Add(new SourceCandidate(
-                HandlePrefix + c.NId,
-                SourceNeutral.CandidateLanguage(c.Language),
+                griff,
+
+                // F-M686: die Sprache in der Schreibweise, die der BESTAND für diese Quelle führt — das
+                // Kürzel der API, groß geschrieben. Sie hier auf ISO umzuschreiben hiesse, jede
+                // Sprachangabe im Bestand umzuschreiben: die Suche des Laufs fragt „EN", und genau
+                // dieser Wert steht heute an jeder Zeile.
+                (c.Language ?? string.Empty).Trim().ToUpperInvariant(),
                 c.HearingImpaired,
                 c.ReleaseName,
-                c.FullSeason || c.UnpackFiles.Count > 0));
+                c.FullSeason || c.UnpackFiles.Count > 0)
+            {
+                // F-M686: was der Ablauf zum Ranken, Melden und Buchen braucht — gefüllt von der
+                // Quelle, neutral benannt. EntryId ist die Marke des Bestands, Address die Adresse
+                // des Eintrags, ReportId die Kennung des Meldewegs.
+                Season = c.Season,
+                Episode = c.Episode,
+                EpisodeFrom = c.EpisodeFrom,
+                EpisodeEnd = c.EpisodeEnd,
+                Fps = c.Fps,
+                Downloads = c.DownloadCount,
+                Author = c.Author,
+                OriginalName = c.OriginalName,
+                EntryId = c.SubdlId,
+                Address = c.Url,
+                ReportId = c.NId,
+                Members = c.UnpackFiles
+                    .Select(m => new SourceMember(m.Name, m.Season, m.Episode, m.HearingImpaired))
+                    .ToList(),
+            });
         }
 
         // F-M683: „Staffel zips bevorzugen" ist eine Eigenschaft DIESER Quelle. Gefragt ist ein
@@ -263,14 +295,47 @@ public sealed class SubdlEngine : ISourceEngine
             return SourceFetchAnswer.Because(SourceFaultInfo.NotFound("no handle"));
         }
 
+        // F-M686: der Adress-Griff holt aus dem Archiv, das hinter SEINER Adresse liegt (F-M386/F-M471)
+        // — derselbe Cache, derselbe Weg wie der Eintrags-Griff.
+        if (request.Handle.StartsWith(AddressPrefix, StringComparison.Ordinal))
+        {
+            string adresse = request.Handle[AddressPrefix.Length..];
+            try
+            {
+                byte[]? mitglied = await _client
+                    .ExtractArchiveMemberAsync(adresse, request.MemberName, ct).ConfigureAwait(false);
+                return mitglied is { Length: > 0 } mitgliedInhalt
+                    ? new SourceFetchAnswer(
+                        mitgliedInhalt,
+                        request.MemberName ?? string.Empty,
+                        adresse,
+                        SourceNeutral.ContentHash(mitgliedInhalt))
+                    : SourceFetchAnswer.Because(SourceFaultInfo.NotFound("the archive delivered no such member"));
+            }
+            catch (OperationCanceledException)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                return SourceFetchAnswer.Because(SourceFaultInfo.Transient(ex.Message));
+            }
+        }
+
         string nId = request.Handle.StartsWith(HandlePrefix, StringComparison.Ordinal)
             ? request.Handle[HandlePrefix.Length..]
             : request.Handle;
 
+        if (string.IsNullOrWhiteSpace(nId))
+        {
+            return SourceFetchAnswer.Because(SourceFaultInfo.NotFound("no entry id"));
+        }
+
         DownloadOutcome outcome;
         try
         {
-            outcome = await _client.DownloadV2FileAsync(nId, ct, 0, request.Episode ?? 0, request.MemberName)
+            outcome = await _client.DownloadV2FileAsync(
+                nId, ct, request.Season, request.Episode ?? 0, request.MemberName)
                 .ConfigureAwait(false);
         }
         catch (OperationCanceledException)
@@ -284,16 +349,21 @@ public sealed class SubdlEngine : ISourceEngine
 
         if (!outcome.HasContent || outcome.Content is not { Length: > 0 } inhalt)
         {
+            // F-M686: der Status der Quelle reist mit — ein echtes 200 ohne Inhalt (GenuineEmpty) ist
+            // etwas anderes als eine Absage, und der Ablauf wiederholt genau diesen Fall (F-M455).
             return SourceFetchAnswer.Because(
                 SourceNeutral.FaultForStatus(outcome.Status, _client.RateLimitResetUtc, _context.Clock)
-                ?? SourceFaultInfo.NotFound(outcome.Label));
+                ?? SourceFaultInfo.NotFound(outcome.Label)) with { Status = outcome.Status };
         }
 
-        string name = string.IsNullOrWhiteSpace(outcome.Member)
-            ? nId + ".srt"
-            : outcome.Member!;
+        // F-M686: der Name, den die Quelle nennt — und KEIN erfundener, wenn sie keinen nennt. Ein
+        // „<kennung>.srt" aus unserer Hand landete sonst als Dateiname in einem Bericht an die Quelle.
+        string name = outcome.Member ?? string.Empty;
 
-        return new SourceFetchAnswer(inhalt, name, nId, SourceNeutral.ContentHash(inhalt));
+        return new SourceFetchAnswer(inhalt, name, nId, SourceNeutral.ContentHash(inhalt))
+        {
+            Status = outcome.Status,
+        };
     }
 
     /// <inheritdoc />

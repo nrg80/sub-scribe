@@ -267,6 +267,23 @@ public sealed record SourceSearchRequest
     /// <summary>Gets der Inhalts-Hash der Datei (osHash), wenn die Quelle damit sucht.</summary>
     public string? OsHash { get; init; }
 
+    /// <summary>
+    /// F-M686: die Nummer, die DIESES Medium bei DIESER Quelle schon hat (Bestand), wenn bekannt.
+    /// <para>
+    /// Sie ist der Grund, warum die Suche nicht raten muss: der Ablauf liest sie aus seinem eigenen
+    /// Bestand (F-M507) und reicht sie als Zeichenkette herüber — die Engine vergleicht sie mit ihrer
+    /// eigenen Form und sucht nur, wenn sie fehlt. Keine Quelle muss dafür den Store kennen.
+    /// </para>
+    /// </summary>
+    public string? MediaNumber { get; init; }
+
+    /// <summary>
+    /// F-M686: die Suchbreite — wie viele Treffer die Quelle je Sprache höchstens beisteuern soll
+    /// (0 = die Quelle entscheidet selbst). Sie ist der EINE Einstellwert der Korrekturversuche
+    /// (F-M95/F-M331): wie viele Kandidaten gesucht werden und wie viele der Lauf höchstens zieht.
+    /// </summary>
+    public int EarlyStop { get; init; }
+
     /// <summary>Gets die gewünschten Sprachen in unserer ISO-639-2-Schreibweise; leer heißt „egal".</summary>
     public IReadOnlyList<string> Languages { get; init; } = Array.Empty<string>();
 
@@ -280,14 +297,90 @@ public sealed record SourceSearchRequest
 /// <summary>
 /// F-M682, Auftrag 1: ein Kandidat der Quelle. Der Griff ist undurchsichtig — nur die Engine, die ihn
 /// ausgegeben hat, weiß, was darin steht.
+/// <para>
+/// F-M686: die Felder NACH den vier Pflichtangaben sind das, was der Ablauf zum Ranken, Melden und
+/// Buchen braucht — und allein die QUELLE füllt sie. Sie sind neutral benannt, weil der Ablauf sie
+/// liest, ohne zu wissen, wer sie hergibt: <see cref="EntryId"/> ist die Kennung, unter der der
+/// Bestand den Eintrag führt, <see cref="Address"/> die Adresse, unter der er bei der Quelle liegt,
+/// <see cref="ReportId"/> die Kennung seines Meldewegs, und <see cref="Members"/> der Inhalt eines
+/// Behälters. Eine Quelle, die etwas davon nicht hat, lässt es leer — geraten wird nichts.
+/// </para>
 /// </summary>
 /// <param name="Handle">Undurchsichtiger Griff für <see cref="ISourceEngine.FetchAsync"/>.</param>
-/// <param name="Language">Sprache in unserer ISO-639-2-Schreibweise.</param>
+/// <param name="Language">
+/// Sprache des Eintrags in der Schreibweise, die DIESE Quelle führt, groß geschrieben (SubDL: sein
+/// Kürzel <c>EN</c>, tvsubtitles.net: ISO 639-2 <c>ENG</c>). F-M686: der Ablauf prüft sie gegen seine
+/// eigene Sprachliste — die Schreibweise einer Quelle nachträglich zu vereinheitlichen hieße, jede
+/// Sprachangabe im Bestand umzuschreiben.
+/// </param>
 /// <param name="HearingImpaired">Wahr für die gehörlosenfreundliche Fassung.</param>
 /// <param name="ReleaseName">Der Releasename, wie die Quelle ihn schreibt.</param>
 /// <param name="IsPack">Wahr, wenn der Kandidat ein Behälter ist (mehrere Folgen in einer Datei).</param>
 public sealed record SourceCandidate(
-    string Handle, string Language, bool HearingImpaired, string ReleaseName, bool IsPack);
+    string Handle, string Language, bool HearingImpaired, string ReleaseName, bool IsPack)
+{
+    /// <summary>Gets die Staffel, wenn die Quelle sie nennt (0 = keine).</summary>
+    public int Season { get; init; }
+
+    /// <summary>Gets die Folge, wenn die Quelle sie nennt (0 = keine).</summary>
+    public int Episode { get; init; }
+
+    /// <summary>Gets F-M686: die erste Folge eines Bereichs-Behälters (0 = keine Angabe).</summary>
+    public int EpisodeFrom { get; init; }
+
+    /// <summary>Gets F-M686: die letzte Folge eines Bereichs-Behälters (0 = keine Angabe).</summary>
+    public int EpisodeEnd { get; init; }
+
+    /// <summary>Gets F-M686: die Bildrate, die der Eintrag nennt (0 = keine Angabe).</summary>
+    public double Fps { get; init; }
+
+    /// <summary>Gets F-M686: die Zahl der Abrufe, die die Quelle nennt (0 = keine Angabe; Tie-Breaker).</summary>
+    public long Downloads { get; init; }
+
+    /// <summary>Gets F-M686: der Uploader, wenn die Quelle ihn nennt (nur für Logzeilen).</summary>
+    public string? Author { get; init; }
+
+    /// <summary>Gets F-M686: der Name der Datei bei der Quelle, wenn er sich vom Releasenamen unterscheidet.</summary>
+    public string? OriginalName { get; init; }
+
+    /// <summary>
+    /// Gets F-M686: die Kennung, unter der der Bestand diesen Eintrag führt (<c>originId</c>,
+    /// <c>subdlDownloadId</c>, <c>tvSubtitlesDownloadId</c>, <c>moviesubtitlesDownloadId</c>). Sie ist
+    /// damit die Marke, an der QA und Bericht denselben Eintrag wiedererkennen.
+    /// </summary>
+    public string? EntryId { get; init; }
+
+    /// <summary>
+    /// Gets F-M686: die Adresse, unter der der Eintrag bei der Quelle liegt. Der Ablauf benutzt sie
+    /// nur als Schlüssel („diesen Eintrag habe ich schon versucht") und reicht sie als Griff zurück —
+    /// er baut sie nicht und legt sie nicht aus.
+    /// </summary>
+    public string? Address { get; init; }
+
+    /// <summary>
+    /// Gets F-M686: die Kennung, die der MELDEWEG der Quelle braucht (der Ablauf meldet über
+    /// <see cref="ISourceEngine.ReportAsync"/> mit genau dieser Zeichenkette). Leer, wenn die Quelle
+    /// keinen Meldeweg mit Kennung hat.
+    /// </summary>
+    public string? ReportId { get; init; }
+
+    /// <summary>
+    /// Gets F-M686: die Mitglieder eines Behälters, in der Reihenfolge der Quelle. Nur diese Liste
+    /// erlaubt es dem Ablauf, den BEHÄLTER gegen den Einzelabruf zu rechnen (F-M384) und die eine
+    /// Folge daraus zu wählen (F-M215), ohne die fremde Adresse je zu sehen.
+    /// </summary>
+    public IReadOnlyList<SourceMember> Members { get; init; } = Array.Empty<SourceMember>();
+}
+
+/// <summary>
+/// F-M686: ein Mitglied eines Behälters, wie die Suche ihn meldet — Name, Staffel, Folge und die
+/// HI-Marke DIESER Datei (sie ist oft die andere als die des Behälters, F-M260).
+/// </summary>
+/// <param name="FileName">Der Name der Datei im Behälter.</param>
+/// <param name="Season">Die Staffel, zu der das Mitglied gehört (0 = keine Angabe).</param>
+/// <param name="Episode">Die Folge, zu der das Mitglied gehört (0 = keine Angabe).</param>
+/// <param name="HearingImpaired">Wahr, wenn DIESE Datei die gehörlosenfreundliche Fassung ist.</param>
+public sealed record SourceMember(string FileName, int Season, int Episode, bool HearingImpaired);
 
 /// <summary>F-M682, Auftrag 1: die Antwort der Suche — Kandidaten und, wenn es schiefging, der Grund.</summary>
 /// <param name="Candidates">Die Kandidaten in der Reihenfolge der Quelle.</param>
@@ -309,7 +402,21 @@ public sealed record SourceSearchAnswer(
 /// <param name="Handle">Der undurchsichtige Griff.</param>
 /// <param name="Episode">Bei Behältern die gewünschte Folge, sonst null.</param>
 /// <param name="MemberName">Bei Behältern der Mitgliedsname, sonst null.</param>
-public sealed record SourceFetchRequest(string Handle, int? Episode = null, string? MemberName = null);
+public sealed record SourceFetchRequest(string Handle, int? Episode = null, string? MemberName = null)
+{
+    /// <summary>
+    /// F-M686: die Staffel, wenn der Behälter über Staffel UND Folge aufgelöst werden muss — dieselbe
+    /// Angabe, die der Abruf bisher mitgab.
+    /// </summary>
+    public int Season { get; init; }
+
+    /// <summary>
+    /// F-M686: die Sprache, für die geholt wird — für Quellen, die in EINER Datei mehrere Fassungen
+    /// führen und die richtige über ihr Sprachkürzel im Dateinamen wählen (moviesubtitles.org bei
+    /// geschnittenen Filmen). Leer heißt „egal, die Quelle nimmt die erste".
+    /// </summary>
+    public string Language { get; init; } = string.Empty;
+}
 
 /// <summary>
 /// F-M682, Auftrag 2: die Bytes hinter einem Griff.
@@ -327,6 +434,16 @@ public sealed record SourceFetchAnswer(
     /// <returns>Die Antwort.</returns>
     public static SourceFetchAnswer Because(SourceFaultInfo fault)
         => new(Array.Empty<byte>(), string.Empty, string.Empty, string.Empty, fault);
+
+    /// <summary>Gets der Status, den die Quelle auf den Abruf genannt hat (0 = kein Abruf).</summary>
+    public int Status { get; init; }
+
+    /// <summary>
+    /// F-M686: eine echte leere Antwort der Quelle — ein 200, das nichts trug. Sie ist von „kein
+    /// Abruf" (Status 0) und von einer Absage zu unterscheiden; der Ablauf wiederholt genau diesen
+    /// Fall (F-M455).
+    /// </summary>
+    public bool GenuineEmpty => Status == 200 && Bytes.Length == 0;
 
     /// <summary>Hat die Antwort verwertbare Bytes?</summary>
     public bool HasBytes => Bytes.Length > 0 && Fault is null;
