@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.0",
-        "changelog": "v12.3.8.0: the settings page now has a sources section — one card per engine, built from what the engine itself declares. The page asks GET Plugins/SubdlSync/Sources and draws, in the order of the answer, the display name, the key, the state (aktiv/aus), the capabilities as plain display and then the declared fields in their declared order: text and url as an input, secret as a password field that says only gesetzt or nicht gesetzt and is never filled, number with its bounds, switch as a checkbox, choice as a list of the declared options; help stands under the field and required is marked on it. A field that carries a condition appears only while the field it names holds the expected value — typing a key reveals the account at once, without a reload. Each card has its own Speichern button that writes exactly one source (POST Plugins/SubdlSync/Sources/<key>), refills itself from the answer and names the fields it wrote; a refusal is shown at the card in the endpoint's own words. The three old SubDL fields (username, password, API key) have left the page — their values live in sources/subdl.json as account and apiKey, and the page no longer writes the old configuration fields at all, so one value has one place. Languages, cadence, direction switches, pack switch, HI, order and LogMode stay where they were, and the page-wide save still saves them. Proven by the page's structural check, which grew from 335 to 356 checks (F-M688).",
+        "version": "12.3.8.1",
+        "changelog": "v12.3.8.1: the sources cards render again — the page now reads the endpoint in both spellings, so a card shows its name, capabilities and fields instead of a bare Save button.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.0-dev/Jellyfin.Plugin.SubdlSync_12.3.8.0.zip",
-        "checksum": "2ddef89911c2e5f363ae5c2256ddb0ba",
-        "timestamp": "2026-11-22T10:39:16Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.1-dev/Jellyfin.Plugin.SubdlSync_12.3.8.1.zip",
+        "checksum": "3460a518ea6410757151e0219b37ecab",
+        "timestamp": "2026-11-22T11:06:36Z"
       }
     ]
   }
