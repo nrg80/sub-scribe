@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.3",
-        "changelog": "v12.3.8.3: the source cards stay lean — no address field (the URL lives in the build), one short capability line instead of badges, and a secret field that looks filled and is typeable.",
+        "version": "12.3.8.4",
+        "changelog": "v12.3.8.4: no more address warnings — the source files no longer declare an address, so the leftover comparison logged an empty address on every request.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.3-dev/Jellyfin.Plugin.SubdlSync_12.3.8.3.zip",
-        "checksum": "216007760a6bd07a81a93583321bd9da",
-        "timestamp": "2026-11-22T11:38:31Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.4-dev/Jellyfin.Plugin.SubdlSync_12.3.8.4.zip",
+        "checksum": "19e1961c081ad42c0fc5749cf656733f",
+        "timestamp": "2026-11-22T11:45:12Z"
       }
     ]
   }
