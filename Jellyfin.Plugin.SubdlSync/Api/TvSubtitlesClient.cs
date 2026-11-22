@@ -15,6 +15,7 @@ using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -50,6 +51,13 @@ public sealed class TvSubtitlesClient
 {
     /// <summary>The site root. https only — the http endpoint redirects.</summary>
     public const string BaseUrl = "https://www.tvsubtitles.net";
+
+    /// <summary>
+    /// F-M678: die Browser-Kennung, die dieses Modul auch in einer eigenen Sitzung mitschickt. Die
+    /// Seite liefert ohne sie keine Formularseiten aus.
+    /// </summary>
+    private const string UserAgentString =
+        "Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36";
 
     /// <summary>
     /// F-M516: das Formular, mit dem eine Serie angelegt wird. Am 16.11.2026 wörtlich abgelesen:
@@ -469,8 +477,7 @@ public sealed class TvSubtitlesClient
         _archives = archiveCache;
         if (_http.DefaultRequestHeaders.UserAgent.Count == 0)
         {
-            _http.DefaultRequestHeaders.UserAgent.ParseAdd(
-                "Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36");
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgentString);
         }
     }
 
@@ -1204,7 +1211,14 @@ public sealed class TvSubtitlesClient
         string page = string.Format(
             CultureInfo.InvariantCulture, "{0}/subtitle-{1}-{2}-{3}.html", BaseUrl, showId, season, lang);
 
-        var html = await GetStringAsync(page, null, cancellationToken).ConfigureAwait(false);
+        // F-M678: die Download-Seite verlangt ein Cookie, das die Staffelseite setzt; ohne Sitzung
+        // antwortet sie mit 171 Bytes "Your request could not be served … cookies disabled". Der
+        // gemeinsame HttpClient dieses Clients haelt keine Cookies, deshalb lieferte Stufe 1 fuer JEDE
+        // Sprache nichts und der Einzelweg der Folgenseite musste einspringen. Die Cookies der
+        // Staffelseite werden darum aus ihren Set-Cookie-Koepfen gelesen und beim Download
+        // mitgeschickt — ueber DENSELBEN Client, damit der Abruf im selben Handler bleibt.
+        var staffel = await GetWithCookiesAsync(page, null, null, cancellationToken).ConfigureAwait(false);
+        var html = Encoding.UTF8.GetString(staffel.Body);
         if (string.IsNullOrEmpty(html))
         {
             return null;
@@ -1226,7 +1240,7 @@ public sealed class TvSubtitlesClient
         }
 
         string downloadPage = BaseUrl + "/" + Uri.EscapeUriString(link);
-        var answer = await GetBytesAsync(downloadPage, page, cancellationToken).ConfigureAwait(false);
+        var answer = (await GetWithCookiesAsync(downloadPage, page, staffel.Cookies, cancellationToken).ConfigureAwait(false)).Body;
         if (IsZip(answer))
         {
             return answer;
@@ -1239,7 +1253,7 @@ public sealed class TvSubtitlesClient
         }
 
         string url = BaseUrl + "/" + Uri.EscapeUriString(name).Replace("?", "%3F", StringComparison.Ordinal);
-        var zip = await GetBytesAsync(url, downloadPage, cancellationToken).ConfigureAwait(false);
+        var zip = (await GetWithCookiesAsync(url, downloadPage, staffel.Cookies, cancellationToken).ConfigureAwait(false)).Body;
         return IsZip(zip) ? zip : null;
     }
 
@@ -2063,6 +2077,54 @@ public sealed class TvSubtitlesClient
         DebugTrace?.Invoke(SiteTrace.Response("GET", ziel, LastStatus));
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+    }
+
+    /// <summary>
+    /// F-M678: derselbe GET wie <see cref="GetBytesAsync"/>, aber er liefert die Cookies zurueck, die
+    /// die Antwort gesetzt hat, und schickt uebergebene Cookies mit — die Staffel-ZIP gibt es nur,
+    /// wenn die Cookies der Staffelseite mitgehen.
+    /// </summary>
+    /// <param name="url">Absolute URL.</param>
+    /// <param name="referer">Referer to send, or <c>null</c>.</param>
+    /// <param name="cookies">Cookie header from the previous step, or <c>null</c>.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The body and the cookie header the answer carries.</returns>
+    private async Task<(byte[] Body, string Cookies)> GetWithCookiesAsync(
+        string url, string? referer, string? cookies, CancellationToken cancellationToken)
+    {
+        var ziel = WithClient(url);
+        using var request = new HttpRequestMessage(HttpMethod.Get, ziel);
+        if (!string.IsNullOrEmpty(referer))
+        {
+            request.Headers.Referrer = new Uri(referer);
+        }
+
+        if (!string.IsNullOrEmpty(cookies))
+        {
+            request.Headers.TryAddWithoutValidation("Cookie", cookies);
+        }
+
+        DebugTrace?.Invoke(SiteTrace.Call("GET", ziel));
+        using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        LastStatus = (int)response.StatusCode;
+        DebugTrace?.Invoke(SiteTrace.Response("GET", ziel, LastStatus));
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+
+        var jar = new List<string>();
+        if (response.Headers.TryGetValues("Set-Cookie", out var setCookies))
+        {
+            foreach (var raw in setCookies)
+            {
+                var pair = raw.Split(';')[0];
+                if (pair.Contains('=', StringComparison.Ordinal))
+                {
+                    jar.Add(pair);
+                }
+            }
+        }
+
+        return (body, string.Join("; ", jar));
     }
 }
 
