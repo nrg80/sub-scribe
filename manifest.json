@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.3.0",
-        "changelog": "v12.3.3.0: the season archive of tvsubtitles.net is fetched in a session that keeps the site's cookies, so a whole season comes as one ZIP instead of one request per episode.",
+        "version": "12.2.0.28",
+        "changelog": "v12.2.0.28: the season archive of tvsubtitles.net is fetched in a session that keeps the site's cookies, so a whole season comes as one ZIP instead of one request per episode.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.3.0-dev/Jellyfin.Plugin.SubdlSync_12.3.3.0.zip",
-        "checksum": "080ad17d3a9dbe05a899a008dadb9c9e",
-        "timestamp": "2026-11-22T06:31:36Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.2.0.28-dev/Jellyfin.Plugin.SubdlSync_12.2.0.28.zip",
+        "checksum": "ff4661afeac9679866740a18821e1126",
+        "timestamp": "2026-11-22T06:47:00Z"
       }
     ]
   }
