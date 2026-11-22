@@ -63,6 +63,9 @@ public sealed class SubdlEngine : ISourceEngine
     /// <summary>F-M683: der Schlüssel des Kontonamens in der eigenen Datei dieser Quelle.</summary>
     public const string FieldAccount = "account";
 
+    /// <summary>F-M694: der Schlüssel des Kontopassworts in der eigenen Datei dieser Quelle.</summary>
+    public const string FieldPassword = "password";
+
     /// <summary>F-M683: der Schlüssel der Adresse in der eigenen Datei dieser Quelle.</summary>
     public const string FieldBaseUrl = "baseUrl";
 
@@ -100,8 +103,15 @@ public sealed class SubdlEngine : ISourceEngine
             Help: "Tell this source when one of its subtitles was unusable."),
         new(FieldApiKey, "API key", SourceFieldKind.Secret, Default: string.Empty, Required: true,
             Help: "Sent as a bearer token. Without a key SubDL neither searches nor downloads."),
-        new(FieldAccount, "Account", SourceFieldKind.Text,
-            Help: "The SubDL account name — used to sign in and in the report text.",
+        // F-M694 (Betreiberansage 22.11.2026: „Subdl... Api key, email, password."): die drei Zugänge,
+        // die ein Mensch bei SubDL einträgt. Bis hierher stand hier „Account"; die Seite sagte damit
+        // nicht, was hineingehört (nämlich die E-Mail-Adresse des Kontos). Der Schlüssel in der Datei
+        // bleibt `account` — er ist der stabile Name, an dem der Bestand hängt.
+        new(FieldAccount, "Email", SourceFieldKind.Text,
+            Help: "The email address of the SubDL account — used to sign in and in the report text.",
+            VisibleWhen: new SourceFieldVisibility(FieldApiKey, "set")),
+        new(FieldPassword, "Password", SourceFieldKind.Secret,
+            Help: "The account password. Only needed for uploads — sign-in happens with email and password.",
             VisibleWhen: new SourceFieldVisibility(FieldApiKey, "set")),
         // F-M692: die Adresse ist KEIN Feld mehr (Betreiberansage 22.11.2026: „Well address is not
         // needed … Url is fixed, no gui need"). Sie steht als Konstante im Client dieses Builds; eine
@@ -141,6 +151,19 @@ public sealed class SubdlEngine : ISourceEngine
 
         Account = Settings.Text(FieldAccount);
         PreferSeasonZip = Settings.Switch(FieldPreferSeasonZip);
+
+        // F-M694: E-Mail und Passwort aus der Datei an DENSELBEN Client, den der Lauf benutzt (die
+        // Registry reicht eine Instanz an alle Etagen). Die Datei antwortet zuerst; steht dort nichts,
+        // bleibt der Zugang stehen, den der Client schon trägt (Alt-Wert aus der Plugin-Konfiguration).
+        if (Account.Length > 0)
+        {
+            _client.Username = Account;
+        }
+
+        if (Settings.Secret(FieldPassword) is { Length: > 0 } passwort)
+        {
+            _client.Password = passwort;
+        }
 
         // F-M692: kein Adressvergleich mehr. Seit die Adresse kein Feld ist, liest `Settings.Url` den
         // Vorgabewert eines nicht erklärten Feldes — also "" — und meldete bei JEDEM Aufruf, die Datei

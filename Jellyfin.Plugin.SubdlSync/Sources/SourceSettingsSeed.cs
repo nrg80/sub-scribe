@@ -218,6 +218,83 @@ public static class SourceSettingsSeed
         return ergaenzt;
     }
 
+    /// <summary>F-M694: die eigene Marke des Nachtrags für das Kontopasswort.</summary>
+    public const string CredentialMarkerName = ".seed-credentials-1";
+
+    /// <summary>
+    /// F-M694: schreibt das Kontopasswort EINMAL in die Datei der Quelle, die es erklärt und noch nicht
+    /// führt — aus dem Alt-Wert der Plugin-Konfiguration. Betreiberansage 22.11.2026: „Subdl... Api key,
+    /// email, password." Seit F-M688 schreibt die Seite die alten Zugangsfelder nicht mehr; ohne diesen
+    /// Nachtrag stünde auf der Karte „not set", obwohl der Lauf sehr wohl mit einem Passwort arbeitet —
+    /// die Oberfläche würde über den Zugang lügen. Ist kein Alt-Wert da, wird nichts geschrieben.
+    /// </summary>
+    /// <param name="dataDir">Der Datenordner des Plugins (null/leer = nichts tun).</param>
+    /// <param name="config">Die Konfiguration dieses Laufs.</param>
+    /// <returns>Die Schlüssel der Quellen, deren Datei in DIESEM Aufruf ergänzt wurde.</returns>
+    public static IReadOnlyList<string> EnsureCredentials(string? dataDir, PluginConfiguration? config)
+    {
+        var ergaenzt = new List<string>();
+        if (string.IsNullOrWhiteSpace(dataDir) || config is null)
+        {
+            return ergaenzt;
+        }
+
+        string ordner = SourceSettingsFile.DirIn(dataDir);
+        string marke = Path.Combine(ordner, CredentialMarkerName);
+        if (File.Exists(marke))
+        {
+            return ergaenzt;
+        }
+
+        foreach ((SubtitleProvider provider, string key, IReadOnlyList<SourceField> schema) in DirectionPlan)
+        {
+            if (!schema.Any(f => f.Key == SubdlEngine.FieldPassword))
+            {
+                // Nur die Quelle, die ein Passwort erklärt (heute SubDL).
+                continue;
+            }
+
+            string datei = SourceSettingsFile.PathIn(dataDir, key);
+            if (!File.Exists(datei))
+            {
+                continue;
+            }
+
+            SourceSettings vorhanden = SourceSettingsFile.Load(dataDir, key, schema);
+            if (vorhanden.Problem is not null)
+            {
+                continue;
+            }
+
+            if (vorhanden.Has(SubdlEngine.FieldPassword))
+            {
+                continue;
+            }
+
+            string? alt = config.Password;
+            if (string.IsNullOrWhiteSpace(alt))
+            {
+                continue;
+            }
+
+            var werte = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (KeyValuePair<string, string> paar in vorhanden.Stored)
+            {
+                werte[paar.Key] = paar.Value;
+            }
+
+            werte[SubdlEngine.FieldPassword] = alt;
+            SourceSettingsFile.Save(dataDir, key, schema, werte);
+            ergaenzt.Add(key);
+        }
+
+        Directory.CreateDirectory(ordner);
+        SourceSettingsFile.RestrictFolderToOwner(ordner);
+        File.WriteAllText(marke, "credentials " + SourceSettingsFile.SchemaNumber);
+        SourceSettingsFile.RestrictToOwner(marke);
+        return ergaenzt;
+    }
+
     /// <summary>F-M693: die eigene Marke des Nachtrags für Packs und Meldung.</summary>
     public const string CapabilityMarkerName = ".seed-badges-1";
 

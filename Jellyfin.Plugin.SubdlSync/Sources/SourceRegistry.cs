@@ -86,6 +86,17 @@ public sealed class SourceRegistry
                 string.Join(", ", richtungen));
         }
 
+        // F-M694: das Kontopasswort nachtragen (Alt-Wert aus der Plugin-Konfiguration), eigene Marke.
+        var zugang = SourceSettingsSeed.EnsureCredentials(context.DataFolder, config);
+        if (zugang.Count > 0)
+        {
+            context.Logger?.LogInformation(
+                "[Sub Scribe] the account password of {Count} source(s) now lives in their own file "
+                + "(F-M694): {Keys}",
+                zugang.Count,
+                string.Join(", ", zugang));
+        }
+
         // F-M693: derselbe Nachtrag für Packs und Meldung, eigene Marke.
         var faehigkeiten = SourceSettingsSeed.EnsureCapabilitySwitches(context.DataFolder, config);
         if (faehigkeiten.Count > 0)

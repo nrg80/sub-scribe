@@ -100,6 +100,17 @@ public class Plugin : BasePlugin<Configuration.PluginConfiguration>, IHasWebPage
                     string.Join(", ", uebernommen));
             }
 
+            // F-M694: das Kontopasswort nachtragen — eigene Marke.
+            var zugang = Sources.SourceSettingsSeed.EnsureCredentials(DataFolderPath, Configuration);
+            if (zugang.Count > 0)
+            {
+                _loggerFactory?.CreateLogger("SubDL-Start")?.LogInformation(
+                    "[Sub Scribe] the account password of {Count} source(s) now lives in their own file: "
+                    + "{Keys} (F-M694).",
+                    zugang.Count,
+                    string.Join(", ", zugang));
+            }
+
             // F-M693: derselbe Nachtrag für Packs und Meldung — eigene Marke.
             var faehigkeiten = Sources.SourceSettingsSeed.EnsureCapabilitySwitches(DataFolderPath, Configuration);
             if (faehigkeiten.Count > 0)

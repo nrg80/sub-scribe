@@ -59,8 +59,10 @@ public sealed class MsubEngine : ISourceEngine
         new(FieldDownloadEnabled, "Download", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
             Help: "Search and fetch subtitles from this site."),
         // F-M692: die Adresse ist kein Feld mehr — sie steht fest im Client dieses Builds.
-        new(FieldAccess, "Access", SourceFieldKind.Secret,
-            Help: "Not used today — the site asks for no access."),
+        // F-M695 (Betreiberbefund 22.11.2026: „Not sure what access means for mst."): auch das Feld
+        // "Access" ist weg. Es war von Anfang an leer und sein Hilfetext sagte selbst, dass die Seite
+        // keinen Zugang verlangt (gemessen 15.11.2026: /login.php, /panel.php und /upload.php antworten
+        // mit 302 auf /). Ein Feld, das nichts abfragt und nichts bewirkt, ist eine Frage ohne Antwort.
     };
 
     private readonly MovieSubtitlesClient _client;
@@ -86,7 +88,8 @@ public sealed class MsubEngine : ISourceEngine
         _client = client ?? new MovieSubtitlesClient(context.Http);
         _weg = new Api.Endpoints.MovieSubtitlesDownloadEndpoint(_client, context.Logger);
         Settings = settings ?? SourceSettings.Empty(SourceKey, Declared);
-        HasAccess = Settings.Has(FieldAccess);
+        // F-M695: die Seite verlangt keinen Zugang — es gibt nichts zu lesen.
+        HasAccess = false;
 
         // F-M692: kein Adressvergleich mehr — die Adresse ist kein Feld. `Settings.Url` läse sonst den
         // Vorgabewert eines nicht erklärten Feldes ("") und meldete bei jedem Aufruf eine leere Adresse.

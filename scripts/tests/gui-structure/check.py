@@ -2010,6 +2010,19 @@ def main():
     nxt = [n for n in nxt if n > 0]
     down_part = rest[:min(nxt)] if nxt else rest
 
+    # Der Reiter "download" ist der LETZTE — sein Ausschnitt laeuft sonst bis ins Seitenende und damit
+    # durch den ganzen JavaScript-Block. Geprueft wird das MARKUP eines Reiters, nicht der Code: ein
+    # Kommentar im Skript ist kein Text, den der Betreiber liest (F-M694).
+    for name in ('up_part', 'down_part'):
+        teil = locals()[name]
+        schnitt = teil.find('<script')
+        if schnitt != -1:
+            teil = teil[:schnitt]
+        if name == 'up_part':
+            up_part = teil
+        else:
+            down_part = teil
+
     # F-M691 (Operator-Anweisung 22.11.2026: „Enable upload/download pro source dann bitte auch ins
     # source feld"): die Richtungsschalter standen bis hier als Kaestchen in diesen beiden Reitern. Jetzt
     # fuehrt sie die Karte ihrer Quelle unter „Endpoints" — ein Kaestchen hier waere ein zweiter Ort, an
@@ -2019,17 +2032,19 @@ def main():
               not re.search(r'id="(Subdl|Tvst|TvSubtitles|MovieSubtitles)(Upload|Download)Enabled"', part),
               "Kaestchen im Reiter: %d" % len(re.findall(
                   r'id="(Subdl|Tvst|TvSubtitles|MovieSubtitles)(Upload|Download)Enabled"', part)))
-        check("F-M691: the %s tab points at the source cards instead" % tab_name,
-              "Endpoints" in part,
-              "Hinweis auf Endpoints fehlt")
-
-    for tab_name, part in (("upload", up_part), ("download", down_part)):
-        # Der Satz der Familie („Series … tvsubtitles.net, films … moviesubtitles.org. TMDb decides.")
-        # bleibt, wo er steht — er erklaert, WOHIN eine Abgabe geht, nicht OB sie stattfindet.
-        check("F-M520: the %s tab still names both addresses and says who decides" % tab_name,
-              part.count("tvsubtitles.net") >= 1
-              and part.count("moviesubtitles.org") >= 1
-              and part.count("TMDb decides") >= 1)
+        # F-M694 (Betreiberbefund 22.11.2026: "Auf download und upload gui hast die Beschreibungen nicht
+        # vollstaendig entfernt"): die Reiter nennen die Quellen GAR NICHT mehr — auch nicht im Satz.
+        # Was eine Quelle angeht, steht in ihrer Karte unter Endpoints; eine Zeile hier waere eine
+        # zweite Beschreibung derselben Sache.
+        check("F-M694: the %s tab no longer describes the sources or their switches" % tab_name,
+              "belongs to" not in part
+              and "tvsubtitles.net" not in part
+              and "moviesubtitles.org" not in part
+              and "TMDb decides" not in part
+              and "Endpoints" not in part,
+              "Reste: Quellen=%d Schalter=%d Endpoints=%d"
+              % (part.count("tvsubtitles.net") + part.count("moviesubtitles.org"),
+                 part.count("belongs to"), part.count("Endpoints")))
 
     check("F-M525: the tvst heading is gone from the DOWNLOAD tab (operator order 17.11.2026)",
           down_part.count("<h3>tvst</h3>") == 0,
@@ -2360,11 +2375,20 @@ def main():
           "if (list[i].badge) { continue; }" in quellen
           and "row.classList.add('subdl-badge')" in quellen,
           "derselbe Feld-Renderer, kein zweiter Weg durch die Werte")
-    check("F-M693: the Save button wears the same classes as every other button on the page",
-          "save.className = 'raised button-submit subdl-source-save'" in quellen
-          and "save.setAttribute('is', 'emby-button')" not in quellen
+    # F-M695 (Betreiberbefund 22.11.2026: "Save Button still not the blue type elsewhere used in the gui"):
+    # Der Knopf muss ein AUFGEWERTETES emby-button sein — die Kennung gehoert in den createElement-Aufruf,
+    # ein spaeter gesetztes is="..." bleibt wirkungslos. Deshalb: subdlSourceButton('button','emby-button').
+    check("F-M695: the Save button is an upgraded emby-button, like every other button on the page",
+          "subdlSourceButton('button', 'emby-button')" in quellen
+          and "save.className = 'raised button-submit emby-button subdl-source-save'" in quellen
+          and 'document.createElement(tag, { is: isName })' in quellen
           and "class=\"raised button-submit" in page_src,
-          "raised + button-submit wie die uebrigen Knoepfe")
+          "createElement mit is-Option, sonst keine Aufwertung")
+    check("F-M695: inputs and checkboxes of a card are created the same way",
+          "subdlSourceButton('input', 'emby-input')" in quellen
+          and "subdlSourceButton('input', 'emby-checkbox')" in quellen
+          and "subdlSourceButton('select', 'emby-select')" in quellen,
+          "dieselbe Aufwertung fuer Felder, Kaestchen und Auswahl")
 
     probe_ok, probe_detail = run_case_probe(page_src)
     check("F-M689: the translation runs against a real endpoint answer (all six field kinds)",

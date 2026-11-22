@@ -439,13 +439,12 @@ internal static class Program
             {
                 "subdl uploadEnabled = false", "subdl downloadEnabled = true",
                 "subdl packsEnabled = true", "subdl reportEnabled = true",
-                "subdl apiKey = [leer]", "subdl account = [leer]",
+                "subdl apiKey = [leer]", "subdl account = [leer]", "subdl password = [leer]",
                 "subdl preferSeasonZip = true",
                 "tvsubtitles uploadEnabled = false", "tvsubtitles downloadEnabled = true",
                 "tvsubtitles packsEnabled = true", "tvsubtitles reportEnabled = true",
                 "tvsubtitles preferSeasonZip = true",
                 "moviesubtitles downloadEnabled = true",
-                "moviesubtitles access = [leer]",
             };
             Check(!SubdlEngine.Declared.Any(f => f.Key == SubdlEngine.FieldBaseUrl)
                   && !TvstEngine.Declared.Any(f => f.Key == TvstEngine.FieldBaseUrl)
@@ -464,6 +463,53 @@ internal static class Program
                 "F-M692: keine Engine vergleicht die Adresse aus der Datei mit der Konstante des Builds — die "
                 + "Meldung ueber ein nicht erklartes Feld ist Rauschen",
                 string.Join(" | ", adressMeldungen));
+
+            // F-M695 (Betreiberbefund 22.11.2026: „Not sure what access means for mst."): kein Feld, das
+            // nichts abfragt. moviesubtitles verlangt keinen Zugang — also erklaert die Engine keinen.
+            Check(MsubEngine.Declared.All(f => f.Key != MsubEngine.FieldAccess)
+                  && registry.Engines.SelectMany(e => e.Fields).All(f => f.Key != "access"),
+                "F-M695: moviesubtitles fuehrt kein Feld Access mehr — die Seite verlangt keinen Zugang",
+                "Felder: " + string.Join(", ", MsubEngine.Declared.Select(f => f.Key)));
+
+            // F-M694: API key, Email, Password — und das Passwort kommt auch AN.
+            var zugang = SubdlEngine.Declared.Where(f => f.Key is "apiKey" or "account" or "password").ToList();
+            Check(zugang.Count == 3
+                  && zugang[0].Kind == SourceFieldKind.Secret
+                  && zugang[1].Kind == SourceFieldKind.Text && zugang[1].Label == "Email"
+                  && zugang[2].Kind == SourceFieldKind.Secret && zugang[2].Label == "Password",
+                "F-M694: die Karte fuehrt API key, Email und Password — so, wie der Betreiber sie nennt",
+                string.Join(" | ", zugang.Select(f => f.Key + "/" + f.Label + "/" + f.Kind)));
+
+            string zugangDir = Path.Combine(Path.GetTempPath(), "sub-scribe-zugang-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Path.Combine(zugangDir, "sources"));
+            Func<string?> vorherZugang = SourceSwitches.DataFolder;
+            SourceSwitches.DataFolder = () => zugangDir;
+            try
+            {
+                QuelleSchreiben(zugangDir, SubdlEngine.SourceKey, SubdlEngine.Declared, new()
+                {
+                    [SubdlEngine.FieldAccount] = "konto@example.org",
+                    [SubdlEngine.FieldPassword] = "geheim-123",
+                });
+                var zugangClient = new Jellyfin.Plugin.SubScribe.Api.ScribeApiClient(new HttpClient())
+                {
+                    Username = "alt@example.org",
+                    Password = "altes-passwort",
+                };
+                _ = new SubdlEngine(
+                    zugangClient, kontext, seasonPacks: true,
+                    SourceSettingsFile.Load(zugangDir, SubdlEngine.SourceKey, SubdlEngine.Declared));
+                Check(zugangClient.Username == "konto@example.org" && zugangClient.Password == "geheim-123",
+                    "F-M694: Email und Passwort aus der Datei stehen am Client, den der Lauf benutzt — die "
+                    + "Datei schlaegt den Alt-Wert",
+                    "Benutzer=" + zugangClient.Username + " Passwort gesetzt="
+                    + (zugangClient.Password is { Length: > 0 }));
+            }
+            finally
+            {
+                SourceSwitches.DataFolder = vorherZugang;
+                try { Directory.Delete(zugangDir, true); } catch (IOException) { }
+            }
 
             // F-M693: die beiden neuen Schalter WIRKEN auch — die Datei antwortet vor dem Alt-Wert. Ein
             // Schalter, der nur auf der Karte steht, waere eine Behauptung.

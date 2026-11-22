@@ -419,11 +419,11 @@
                     </div>
 
 
-<div class="subdl-tab" data-tab-content="upload" style="display:none">
-                        <div class="fieldDescription">Series go to tvsubtitles.net, films to
-                            moviesubtitles.org. TMDb decides.</div>
-                        <div class="fieldDescription" style="margin-bottom:0.9em;">The upload switch belongs to
-                            the source: one card per source under <strong>Endpoints</strong> below.</div>
+<!-- F-M694 (Betreiberansage 22.11.2026: "Auf download und upload gui hast die Beschreibungen nicht
+     vollstaendig entfernt"): die beiden Hinweise auf die Quellen und ihre Schalter stehen hier NICHT
+     mehr — auch nicht als Satz. Die Reiter Download und Upload tragen nur noch, was den Lauf betrifft;
+     alles, was eine Quelle angeht, steht in ihrer Karte unter Endpoints. -->
+                    <div class="subdl-tab" data-tab-content="upload" style="display:none">
 
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
@@ -495,10 +495,6 @@
                                                                                                                                                                     </div>
 
                     <div class="subdl-tab" data-tab-content="download" style="display:none">
-                        <div class="fieldDescription">Series come from tvsubtitles.net, films from
-                            moviesubtitles.org. TMDb decides.</div>
-                        <div class="fieldDescription" style="margin-bottom:0.9em;">The download switch belongs to
-                            the source: one card per source under <strong>Endpoints</strong> below.</div>
 
                         <div class="selectContainer">
                             <label class="selectLabel" for="DownloadOrder">Download order</label>
@@ -1940,6 +1936,20 @@ workers.forEach(function (w) {
 
             function subdlSourceId(prefix, key) { return prefix + '-' + key; }
 
+            // F-M695: ein Element erzeugen, das der Browser als Emby-Element AUFWERTET. Die Kennung muss
+            // beim Erzeugen dabei sein; ein spaeter gesetztes is="..." bleibt wirkungslos.
+            function subdlSourceButton(tag, isName) {
+                var el = null;
+                try { el = document.createElement(tag, { is: isName }); } catch (e) { el = null; }
+                if (!el) { el = document.createElement(tag); }
+                el.setAttribute('is', isName);
+                el.classList.add(isName);
+                if (window.customElements && window.customElements.get(isName)) {
+                    try { window.customElements.upgrade(el); } catch (e) { /* nicht schlimm */ }
+                }
+                return el;
+            }
+
             function subdlSourceEl(tag, cls, text) {
                 var el = document.createElement(tag);
                 if (cls) { el.className = cls; }
@@ -2083,7 +2093,7 @@ workers.forEach(function (w) {
                 if (field.kind === 'switch') {
                     var wrap = subdlSourceEl('div', 'checkboxContainer checkboxContainer-withDescription');
                     var label = subdlSourceEl('label', 'emby-checkbox-label');
-                    var box = document.createElement('input');
+                    var box = subdlSourceButton('input', 'emby-checkbox');
                     box.type = 'checkbox';
                     box.setAttribute('is', 'emby-checkbox');
                     box.id = id;
@@ -2111,7 +2121,7 @@ workers.forEach(function (w) {
                         selLabel.appendChild(subdlSourceEl('span', 'subdl-required', 'Required'));
                     }
                     selWrap.appendChild(selLabel);
-                    var select = document.createElement('select');
+                    var select = subdlSourceButton('select', 'emby-select');
                     select.id = id;
                     select.name = field.key;
                     select.className = 'emby-select-withcolor emby-select';
@@ -2136,7 +2146,9 @@ workers.forEach(function (w) {
                 }
                 boxWrap.appendChild(inputLabel);
 
-                var input = document.createElement('input');
+                // F-M695: die Kennung beim Erzeugen mitgeben — nur so wertet der Browser das Element auf
+                // (das galt fuer das Geheimfeld genauso: es blieb ohne Aufwertung unformatiert).
+                var input = subdlSourceButton('input', 'emby-input');
                 input.id = id;
                 input.name = field.key;
                 input.className = 'emby-input';
@@ -2281,14 +2293,14 @@ workers.forEach(function (w) {
                 }
                 card.appendChild(fields);
 
-                var save = document.createElement('button');
+                // F-M695 (Betreiberbefund 22.11.2026: "Save Button still not the blue type elsewhere used in
+                // the gui"): der Knopf muss ein AUFGEWERTETES emby-button sein. Ein per createElement
+                // erzeugtes Element mit nachtraeglich gesetztem is="emby-button" wird NICHT aufgewertet —
+                // die Kennung muss schon beim Erzeugen mitgegeben werden ({ is: 'emby-button' }). Erst die
+                // Aufwertung bringt die Gestalt, die jeder andere Knopf dieser Seite traegt.
+                var save = subdlSourceButton('button', 'emby-button');
                 save.type = 'button';
-
-                // F-M693 (Betreiberansage: "Save Button similar to the other look and feel"): derselbe
-                // Satz Klassen wie jeder andere Knopf dieser Seite. Das fruehere is="emby-input"/"emby-button"
-                // half nichts — ein per JS erzeugtes Element wird nicht aufgewertet; gestalt gab allein die
-                // Klasse "raised", und die trug keinen Text-Knopf.
-                save.className = 'raised button-submit subdl-source-save';
+                save.className = 'raised button-submit emby-button subdl-source-save';
                 save.id = subdlSourceId('SourceSave', entry.key);
                 save.textContent = 'Save';
                 save.addEventListener('click', function () { subdlSourceSave(entry.key); });
