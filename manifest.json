@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.4",
-        "changelog": "v12.3.8.4: no more address warnings — the source files no longer declare an address, so the leftover comparison logged an empty address on every request.",
+        "version": "12.3.8.5",
+        "changelog": "v12.3.8.5: upload, download, packs and report are switches on each source card, the season-ZIP preference reaches every source that has one, and the card saves with the same button as the rest of the page.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.4-dev/Jellyfin.Plugin.SubdlSync_12.3.8.4.zip",
-        "checksum": "19e1961c081ad42c0fc5749cf656733f",
-        "timestamp": "2026-11-22T11:45:12Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.5-dev/Jellyfin.Plugin.SubdlSync_12.3.8.5.zip",
+        "checksum": "d0b071d6f4bbd7f8816b12de96dca5e3",
+        "timestamp": "2026-11-22T11:58:13Z"
       }
     ]
   }
