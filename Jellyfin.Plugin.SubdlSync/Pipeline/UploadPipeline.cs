@@ -2395,10 +2395,10 @@ public sealed class UploadPipeline : IPackFiller
                     dryHerkunft,
                     // F-M669: das Tor fragt die Marke DIESER Position, nicht die irgendeiner Spur
                     // derselben Sprache — sonst gälte die zweite Spur als erledigt.
-                    Registry.IsUploadedToPosition(mediaHash!, SourceMatrix.PositionOf(cand.IsLoose, cand.SubPos), cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.Subdl),
-                    Registry.IsUploadedToPosition(mediaHash!, SourceMatrix.PositionOf(cand.IsLoose, cand.SubPos), cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.TvSubtitles),
+                    Registry.IsUploadedToPosition(mediaHash!, SourceStore.PositionOf(cand.IsLoose, cand.SubPos), cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.Subdl),
+                    Registry.IsUploadedToPosition(mediaHash!, SourceStore.PositionOf(cand.IsLoose, cand.SubPos), cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.TvSubtitles),
                     SourceAllowed(Configuration.SubtitleProvider.MovieSubtitles),
-                    Registry.IsUploadedToPosition(mediaHash!, SourceMatrix.PositionOf(cand.IsLoose, cand.SubPos), cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.MovieSubtitles));
+                    Registry.IsUploadedToPosition(mediaHash!, SourceStore.PositionOf(cand.IsLoose, cand.SubPos), cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.MovieSubtitles));
                 foreach (var quelle in UploadSourceOrder(isSeries))
                 {
                     // F-M496: der Toggle JE QUELLE, vor ihrer Zeile — dieselbe Frage, die die Kette
@@ -2508,13 +2508,13 @@ public sealed class UploadPipeline : IPackFiller
                     SourceAllowed(Configuration.SubtitleProvider.TvSubtitles),
                     Registry.GetOrigin(contentHash).Origin,
                     // F-M669: je POSITION — zwei Spuren derselben Sprache sind zwei Marken.
-                    Registry.IsUploadedToPosition(mediaHash, SourceMatrix.PositionOf(cand.IsLoose, cand.SubPos), cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.Subdl),
-                    Registry.IsUploadedToPosition(mediaHash, SourceMatrix.PositionOf(cand.IsLoose, cand.SubPos), cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.TvSubtitles),
+                    Registry.IsUploadedToPosition(mediaHash, SourceStore.PositionOf(cand.IsLoose, cand.SubPos), cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.Subdl),
+                    Registry.IsUploadedToPosition(mediaHash, SourceStore.PositionOf(cand.IsLoose, cand.SubPos), cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.TvSubtitles),
                     // F-M656: die Filmquelle fehlte hier. Das fruehe Tor antwortete damit fuer einen FILM
                     // "nichts zu tun", sobald SubDL und tvst nichts wollten — moviesubtitles wurde still
                     // uebergangen, obwohl es die Sprache nicht hatte (F-M489, F-M509).
                     SourceAllowed(Configuration.SubtitleProvider.MovieSubtitles) && !isSeries,
-                    !isSeries && Registry.IsUploadedToPosition(mediaHash, SourceMatrix.PositionOf(cand.IsLoose, cand.SubPos), cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.MovieSubtitles));
+                    !isSeries && Registry.IsUploadedToPosition(mediaHash, SourceStore.PositionOf(cand.IsLoose, cand.SubPos), cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.MovieSubtitles));
                 if (gateFrueh.SkipReason is not null)
                 {
                     // F-M581: das Tor kann aus drei Gruenden schweigen — Schalter aus, Herkunft bekannt,
@@ -2522,7 +2522,7 @@ public sealed class UploadPipeline : IPackFiller
                     // INHALT und darf als `duplicate-self-echo` im Store stehen; die anderen beiden sind
                     // Umstaende des Laufs und bekommen keine Zeile, sonst waere das Paar fuer immer zu.
                     if (IrgendeineQuelleHat(mediaHash, cand.Lang, cand.HearingImpaired, isSeries,
-                            SourceMatrix.PositionOf(cand.IsLoose, cand.SubPos)))
+                            SourceStore.PositionOf(cand.IsLoose, cand.SubPos)))
                     {
                         summary.RejectedCandidates++; // F-M286
                         if (cand.IsLoose)
@@ -3545,10 +3545,10 @@ public sealed class UploadPipeline : IPackFiller
             herkunft,
             // F-M669: die Marke dieser Spur-Position — ein Seitenwagen fragt unter seiner festen
             // Position, eine eingebettete Spur unter ihrer Stream-Position.
-            Registry.IsUploadedToPosition(mediaHash, SourceMatrix.PositionOf(loosePath != null, subPos), lang, hearingImpaired, Configuration.SubtitleProvider.Subdl),
-            Registry.IsUploadedToPosition(mediaHash, SourceMatrix.PositionOf(loosePath != null, subPos), lang, hearingImpaired, Configuration.SubtitleProvider.TvSubtitles),
+            Registry.IsUploadedToPosition(mediaHash, SourceStore.PositionOf(loosePath != null, subPos), lang, hearingImpaired, Configuration.SubtitleProvider.Subdl),
+            Registry.IsUploadedToPosition(mediaHash, SourceStore.PositionOf(loosePath != null, subPos), lang, hearingImpaired, Configuration.SubtitleProvider.TvSubtitles),
             SourceAllowed(Configuration.SubtitleProvider.MovieSubtitles),
-            Registry.IsUploadedToPosition(mediaHash, SourceMatrix.PositionOf(loosePath != null, subPos), lang, hearingImpaired, Configuration.SubtitleProvider.MovieSubtitles));
+            Registry.IsUploadedToPosition(mediaHash, SourceStore.PositionOf(loosePath != null, subPos), lang, hearingImpaired, Configuration.SubtitleProvider.MovieSubtitles));
         if (gate.SkipReason is not null)
         {
             LogUtil.PerItem(_config.LogMode, _logger, "[Sub Scribe] {Name} [{Lang}] — skipped: {Reason}",

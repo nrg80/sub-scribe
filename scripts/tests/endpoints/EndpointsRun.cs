@@ -511,9 +511,13 @@ internal static class Program
             uploadSource.Contains("Registry.GetOrigin(contentHashEarly)", StringComparison.Ordinal)
             && uploadSource.Contains("UploadGate.Decide(", StringComparison.Ordinal)
             && uploadSource.Contains("herkunft,", StringComparison.Ordinal));
-        Check("the store schema carries the two columns and a migration step",
+        Check("the store schema carries the origin and a place for the foreign id",
+            // F-M672: die fremde Id steht seit Schema 23 in `reference` (DownloadSourceId), nicht mehr
+            // als Spalte an der Zeile — die Herkunft (der Quellen-NAME) bleibt, wo sie war.
             ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/Entities.cs"))
-                .Contains("public string? OriginId { get; set; }", StringComparison.Ordinal)
+                .Contains("public string? Origin { get; set; }", StringComparison.Ordinal)
+            && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/Entities.cs"))
+                .Contains("public string? DownloadSourceId { get; set; }", StringComparison.Ordinal)
             // F-M671: die Spalte steht nicht mehr in einem ALTER-Nachzug, sondern in der DDL der
             // Entity-Tabelle — ein Bestand wird beim Öffnen vollständig übernommen, nicht Spalte für
             // Spalte nachgezogen.
@@ -526,7 +530,7 @@ internal static class Program
             // F-M670: 21 — die Alt-Tabelle `source_marks` und die Id-Spalte `SubdlId` sind entfallen.
             // F-M671: 22 — die eigenen Kennungen der vier Ebenen.
             && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/ScribeDbContext.cs"))
-                .Contains("CurrentSchemaVersion = 22", StringComparison.Ordinal));
+                .Contains("CurrentSchemaVersion = 23", StringComparison.Ordinal));
 
         // ---- 10. eigene Kennzeichen je Quelle und Richtung (F-M488) ---------------------------
         var entities = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/Entities.cs"));
@@ -534,20 +538,20 @@ internal static class Program
         Check("four own fields exist, one per source and direction",
             // F-M668: die vier Spaltenpaare sind EINE Matrix-Zeile je Quelle und Richtung geworden —
             // `SourceId` (Abruf) und `UploadId` (Einsendung) nebeneinander, die Quelle als Wert.
-            entities.Contains("public string? SourceId { get; set; }", StringComparison.Ordinal)
-            && entities.Contains("public string? UploadId { get; set; }", StringComparison.Ordinal)
+            entities.Contains("public string? DownloadSourceId { get; set; }", StringComparison.Ordinal)
+            && entities.Contains("public string? UploadedId { get; set; }", StringComparison.Ordinal)
             && !entities.Contains("public string? SubdlDownloadId { get; set; }", StringComparison.Ordinal)
             && !entities.Contains("public string? TvSubtitlesUploadId { get; set; }", StringComparison.Ordinal));
         Check("schema 11 adds them to sidecars AND embeds",
             // F-M668: Statt neun Spalten je Tabelle trägt die Matrix die Quelle im WERT — Schema 19
             // zieht die zwei Felder der Matrix nach und legt die Altspalten nieder.
             // F-M671: der Marker steht auf 22.
-            dbc.Contains("CurrentSchemaVersion = 22", StringComparison.Ordinal)
-            && dbc.Contains("+ \"UploadId TEXT NULL, \"", StringComparison.Ordinal)
-            && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/SourceMatrix.cs"))
-                .Contains("ALTER TABLE source_matrix ADD COLUMN UploadId TEXT NULL;", StringComparison.Ordinal)
-            && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/SourceMatrix.cs"))
-                .Contains("ALTER TABLE source_matrix ADD COLUMN RefusalSignature TEXT NULL;", StringComparison.Ordinal));
+            dbc.Contains("CurrentSchemaVersion = 23", StringComparison.Ordinal)
+            && dbc.Contains("+ \"UploadedId TEXT NULL, \"", StringComparison.Ordinal)
+            && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/SourceStore.cs"))
+                .Contains("public static void EnsureBadAppleColumns(", StringComparison.Ordinal)
+            && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/SourceStore.cs"))
+                .Contains("ALTER TABLE badapple ADD COLUMN ReportState", StringComparison.Ordinal));
         Check("the download writes the field of its own source",
             downloadSource.Contains("subdlDownloadId: cand.Provider == Configuration.SubtitleProvider.Subdl ? cand.SubdlId : null", StringComparison.Ordinal)
             && downloadSource.Contains("tvSubtitlesDownloadId: cand.Provider == Configuration.SubtitleProvider.TvSubtitles ? cand.Url : null", StringComparison.Ordinal));
@@ -639,7 +643,7 @@ internal static class Program
             uploadSource.Contains("UploadGate.Decide(", StringComparison.Ordinal)
             && uploadSource.Split("UploadGate.Decide(").Length - 1 >= 2
             // F-M669: das Tor fragt die Marke DIESER POSITION, nicht die des Paares.
-            && uploadSource.Contains("Registry.IsUploadedToPosition(mediaHash, SourceMatrix.PositionOf(loosePath != null, subPos), lang, hearingImpaired, Configuration.SubtitleProvider.TvSubtitles)", StringComparison.Ordinal)
+            && uploadSource.Contains("Registry.IsUploadedToPosition(mediaHash, SourceStore.PositionOf(loosePath != null, subPos), lang, hearingImpaired, Configuration.SubtitleProvider.TvSubtitles)", StringComparison.Ordinal)
             && !uploadSource.Contains("Registry.IsUploaded(mediaHash, cand.Lang", StringComparison.Ordinal));
 
         // ---- 12. "hochgeladen" je Quelle (F-M490) ---------------------------------------------
@@ -647,10 +651,10 @@ internal static class Program
         Check("each source has its own uploaded timestamp, sidecars and embeds alike",
             // F-M668: „hochgeladen je Quelle" ist das Feld `ClosedAt` der Matrix-Zeile — je Quelle eine
             // Zeile, statt einer Spalte je Quelle an jeder Untertitel-Zeile.
-            entities.Contains("public DateTime? ClosedAt { get; set; }", StringComparison.Ordinal)
+            entities.Contains("public DateTime? UploadedAt { get; set; }", StringComparison.Ordinal)
             && !entities.Contains("public DateTime? SubdlUploadedAt { get; set; }", StringComparison.Ordinal)
-            && dbc.Contains("CurrentSchemaVersion = 22", StringComparison.Ordinal)
-            && dbc.Contains("\"ClosedAt TEXT NULL, \"", StringComparison.Ordinal));
+            && dbc.Contains("CurrentSchemaVersion = 23", StringComparison.Ordinal)
+            && dbc.Contains("\"UploadedAt TEXT NULL, \"", StringComparison.Ordinal));
         Check("the timestamp is set for the source that took the upload, never for another",
             uploadSource.Contains("subdlUploadedAt: subdlMarke.At", StringComparison.Ordinal)
             && uploadSource.Contains("tvSubtitlesUploadedAt: tvstMarke.At", StringComparison.Ordinal)
@@ -660,13 +664,13 @@ internal static class Program
         Check("\"uploaded to this source\" is read from its own timestamp first",
             // F-M668: eine Frage an die Matrix, je Quelle eine Zeile — `IsClosed` = Zeitpunkt oder
             // Einsende-Id. Kein Spaltenpaar mehr, das die Antwort der anderen Quelle vortäuschen könnte.
-            registrySource.Contains("SourceMatrix.TrackMark(_db, mediaHash, Quelle(provider), language, hearingImpaired).IsClosed", StringComparison.Ordinal)
+            registrySource.Contains("SourceStore.TrackMark(_db, mediaHash, Quelle(provider), language, hearingImpaired).IsClosed", StringComparison.Ordinal)
             && !registrySource.Contains("x.TvSubtitlesUploadedAt != null", StringComparison.Ordinal));
         Check("a timestamp is never overwritten with nothing",
             // dieselbe Regel, jetzt an der einen Schreibstelle der Matrix: was leer hereinkommt, löscht nichts.
-            ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/SourceMatrix.cs"))
+            ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/SourceStore.cs"))
                 .Contains("if (closedAt.HasValue)", StringComparison.Ordinal)
-            && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/SourceMatrix.cs"))
+            && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/SourceStore.cs"))
                 .Contains("if (!string.IsNullOrEmpty(uploadId))", StringComparison.Ordinal));
 
         // ---- 13. Reihenfolge und Erfolgsbegriff (F-M491, F-M494) -----------------------------
@@ -932,9 +936,9 @@ internal static class Program
         Check("F-M557: der Zugeh-Stempel steht JE QUELLE auf der Medienzeile (Schema 16)",
             // F-M668: der Stempel ist eine `file`-Zeile je (Medium, Quelle); die vier Medien-Spalten
             // gibt es nicht mehr, und die Signatur steht als `Fingerprint` daneben.
-            db557.Contains("CurrentSchemaVersion = 22", StringComparison.Ordinal)
+            db557.Contains("CurrentSchemaVersion = 23", StringComparison.Ordinal)
             && !db557.Contains("ADD COLUMN CompleteSubdl TEXT NULL", StringComparison.Ordinal)
-            && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Data/SourceMatrix.cs"))
+            && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Data/SourceStore.cs"))
                 .Contains("public static void WriteFileMark(", StringComparison.Ordinal)
             // und die Altspalten stehen in der Liste, die der Übernahmelauf niederlegt
             && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Data/SourceMatrixMigration.cs"))
@@ -1642,7 +1646,7 @@ internal static class Program
             // F-M670: nachgetragen wird sie an der MARKEN-Zeile (`SetDeferredUploadId`), nicht mehr an
             // einer Id-Spalte der Spur — der Schluessel ist derselbe wie beim Upload.
             registrySource588.Contains("public int SetDeferredSubdlId(", StringComparison.Ordinal)
-            && registrySource588.Contains("SourceMatrix.SetDeferredUploadId(", StringComparison.Ordinal)
+            && registrySource588.Contains("SourceStore.SetDeferredUploadId(", StringComparison.Ordinal)
             && uploadSource588.Contains("Registry.SetDeferredSubdlId(", StringComparison.Ordinal)
             && uploadSource588.Contains("ListMyPublishedSubtitlesAsync(ct, maxPages: 2)", StringComparison.Ordinal)
             && uploadSource588.Contains("their singles stay beside a pack that replaces them", StringComparison.Ordinal));
@@ -1975,10 +1979,10 @@ internal static class Program
                     // F-M668: die zwei Marken stehen als ZWEI Zeilen derselben Spur in der Matrix — je
                     // Quelle eine, jede mit ihrer eigenen Einsende-Id (vorher: zwei Spalten einer Zeile).
                     && beideRow != null
-                    && Jellyfin.Plugin.SubScribe.Data.SourceMatrix.TrackMark(
-                        settleDb, "eeee5555ffff6666", Jellyfin.Plugin.SubScribe.Data.SourceMatrix.Subdl, de, false).UploadId == "sd-1"
-                    && Jellyfin.Plugin.SubScribe.Data.SourceMatrix.TrackMark(
-                        settleDb, "eeee5555ffff6666", Jellyfin.Plugin.SubScribe.Data.SourceMatrix.TvSubtitles, de, false).UploadId == "tv-1"
+                    && Jellyfin.Plugin.SubScribe.Data.SourceStore.TrackMark(
+                        settleDb, "eeee5555ffff6666", Jellyfin.Plugin.SubScribe.Data.SourceStore.Subdl, de, false).UploadId == "sd-1"
+                    && Jellyfin.Plugin.SubScribe.Data.SourceStore.TrackMark(
+                        settleDb, "eeee5555ffff6666", Jellyfin.Plugin.SubScribe.Data.SourceStore.TvSubtitles, de, false).UploadId == "tv-1"
                     && settleReg.IsUploadedTo("eeee5555ffff6666", de, false, SubtitleProvider.Subdl)
                     && settleReg.IsUploadedTo("eeee5555ffff6666", de, false, SubtitleProvider.TvSubtitles)
                     && uploadSource.Contains("foreach (var quelle in quellenReihenfolge)", StringComparison.Ordinal),
@@ -2516,7 +2520,7 @@ internal static class Program
                     && nachher?.TvstShowId == "512"
                     // F-M507: der Marker ist inzwischen 14 — die Datei wird auf den Stand DIESES Builds
                     // gehoben, und der Bestand muss das aushalten.
-                    && legacyDb.Meta.FindById("db")?.SchemaVersion == 22,
+                    && legacyDb.Meta.FindById("db")?.SchemaVersion == 23,
                     "bestand=" + (bestand?.ImdbId ?? "-") + "/" + (bestand?.TmdbId ?? "-")
                     + "/tvst=" + (vorherTvst ?? "<null>")
                     + " nachher=" + (nachher?.TvstShowId ?? "-")
@@ -2887,7 +2891,7 @@ internal static class Program
                     && filmAuf.Status == MsubMovieStatus.Found
                     && gespeichert == "102"
                     && zweiteRunde.Status == MsubMovieStatus.Stored
-                    && msubStore.Meta.FindById("db")?.SchemaVersion == 22,
+                    && msubStore.Meta.FindById("db")?.SchemaVersion == 23,
                     "id=" + (gespeichert ?? "<null>") + " status=" + filmAuf.Status + "/" + zweiteRunde.Status
                     + " marker=" + msubStore.Meta.FindById("db")?.SchemaVersion);
             }
@@ -2972,7 +2976,7 @@ internal static class Program
                 && alteTabellen == 0
                 // F-M670: der Marker steht auf 21 (Alt-Tabelle und Id-Spalte sind entfallen).
                 // F-M671: 22 — die eigenen Kennungen.
-                && marker == 22
+                && marker == 23
                 && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Data/ScribeDbContext.cs"))
                     .Contains("\"RefusalSignature TEXT NULL, \"", StringComparison.Ordinal),
                 "file=" + string.Join(",", medienSpalten.Where(x => x.StartsWith("Msub", StringComparison.Ordinal)))
@@ -2993,11 +2997,11 @@ internal static class Program
                 // Nachzieh-Listen; die Matrix führt die Quelle als Wert, und der Quellenname ist derselbe
                 // wie in der API (eine Schreibweise, zwei Schichten).
                 // F-M671: der Marker steht auf 22; die Nummer am Medium steht in der DDL der Datei.
-                dbSource.Contains("public const int CurrentSchemaVersion = 22;", StringComparison.Ordinal)
+                dbSource.Contains("public const int CurrentSchemaVersion = 23;", StringComparison.Ordinal)
                 && !dbSource.Contains("ALTER TABLE sidecars ADD COLUMN MoviesubtitlesDownloadId", StringComparison.Ordinal)
                 && !dbSource.Contains("ALTER TABLE embeds ADD COLUMN MoviesubtitlesUploadedAt", StringComparison.Ordinal)
                 && dbSource.Contains("+ \"MsubMovieId TEXT NULL, \"", StringComparison.Ordinal)
-                && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Data/SourceMatrix.cs"))
+                && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Data/SourceStore.cs"))
                     .Contains("public const string MovieSubtitles = \"moviesubtitles\";", StringComparison.Ordinal)
                 && provenanceSource.Contains("public const string MovieSubtitles = \"moviesubtitles\";", StringComparison.Ordinal));
         }
@@ -3069,14 +3073,14 @@ internal static class Program
                     Jellyfin.Plugin.SubScribe.Data.RejectReason.DuplicateContent,
                     new[] { SubtitleProvider.MovieSubtitles });
                 var zeile = markReg.GetEmbed("eeee000033334444", 1);
-                var msubMarke = Jellyfin.Plugin.SubScribe.Data.SourceMatrix.TrackMark(
-                    markDb, "eeee000033334444", Jellyfin.Plugin.SubScribe.Data.SourceMatrix.MovieSubtitles, "DE", false);
+                var msubMarke = Jellyfin.Plugin.SubScribe.Data.SourceStore.TrackMark(
+                    markDb, "eeee000033334444", Jellyfin.Plugin.SubScribe.Data.SourceStore.MovieSubtitles, "DE", false);
                 Check("das Settle setzt den Zeitstempel der Film-Adresse, und nur ihn (F-M508)",
                     gesetzt && msubMarke.ClosedAt != null
-                    && Jellyfin.Plugin.SubScribe.Data.SourceMatrix.TrackMark(
-                        markDb, "eeee000033334444", Jellyfin.Plugin.SubScribe.Data.SourceMatrix.TvSubtitles, "DE", false).ClosedAt is null
-                    && Jellyfin.Plugin.SubScribe.Data.SourceMatrix.TrackMark(
-                        markDb, "eeee000033334444", Jellyfin.Plugin.SubScribe.Data.SourceMatrix.Subdl, "DE", false).ClosedAt is null
+                    && Jellyfin.Plugin.SubScribe.Data.SourceStore.TrackMark(
+                        markDb, "eeee000033334444", Jellyfin.Plugin.SubScribe.Data.SourceStore.TvSubtitles, "DE", false).ClosedAt is null
+                    && Jellyfin.Plugin.SubScribe.Data.SourceStore.TrackMark(
+                        markDb, "eeee000033334444", Jellyfin.Plugin.SubScribe.Data.SourceStore.Subdl, "DE", false).ClosedAt is null
                     && zeile?.Status == Jellyfin.Plugin.SubScribe.Data.SubtitleStatus.Uploaded,
                     "settled=" + gesetzt + " msub=" + (msubMarke.ClosedAt?.ToString() ?? "<null>"));
             }
@@ -3584,7 +3588,7 @@ internal static class Program
             registryDatei.Contains("public (int Stamps, int Verdicts) ReopenForRetry(", StringComparison.Ordinal)
             // F-M668: die Stempel sind `file`-Zeilen der Matrix — sie fallen mit ihrer Signatur, weil die
             // Signatur ihr Fingerabdruck ist.
-            && registryDatei.Contains("stempel = SourceMatrix.ClearFileMarks(_db, mediaHash);", StringComparison.Ordinal)
+            && registryDatei.Contains("stempel = SourceStore.ClearFileMarks(_db, mediaHash);", StringComparison.Ordinal)
             && !registryDatei.Contains("m.CompleteSubdl = null", StringComparison.Ordinal));
         int reopenStart = registryDatei.IndexOf(
             "public (int Stamps, int Verdicts) ReopenForRetry(", StringComparison.Ordinal);

@@ -133,12 +133,24 @@ public sealed class ScribeDbContext : IDisposable
     // Quellen-Id steht danach GENAU EINMAL in `source_matrix` (`SourceId` = Eintrag/Fund, `UploadId` =
     // Einsendung). Der Marker steigt, weil die Datei danach eine Tabelle und zwei Spalten NICHT mehr hat,
     // die ein älterer Build liest bzw. schreibt.
-    public const int CurrentSchemaVersion = 22;
+    /// <summary>
+    /// F-M671/F-M672 (22.11.2026): raised to 23 mit Schritt B. Der Aufstieg hat zwei Hälften, und beide
+    /// sind EIN Stand: (a) die drei Quellen-Tabellen `upload`/`reference`/`badapple` ersetzen die
+    /// Marken-Matrix `source_matrix` und die Tabelle `rejected_candidates`, und die letzte fremde
+    /// Id-Spalte `OriginId` fällt aus `track`/`sidecar` (sie steht danach in `reference`); (b) die
+    /// Betreiber-Korrekturen am Kennungs-Modell — das Pack hängt an der SPUR statt an der Datei
+    /// (F-M677: `pack_track`), die Id selbst ist der lesbare Text mit ihrer Marke (F-M676), und der
+    /// Seitenwagen trägt im dritten Feld ein `&amp;` (F-M674). Der Marker steigt, weil die
+    /// Datei danach Tabellen und Spalten NICHT mehr hat, die ein älterer Build liest bzw. schreibt.
+    /// Beide Hälften laufen im selben Lauf (`IdModel`), hängen aber am BESTAND, nicht am Marker — ein
+    /// Zwischenstand in einer Datei wird beim nächsten Start nachgeholt.
+    /// </summary>
+    public const int CurrentSchemaVersion = 23;
 
     /// <summary>
-    /// F-M671: die DDL der vier Entity-Tabellen. Sie steht hier, wo die anderen Tabellen entstehen, und
-    /// wird von <see cref="IdModel.EnsureTables"/> ausgeführt — der Migrationslauf braucht sie schon VOR
-    /// dem Öffnen des Stores, also bevor es einen Kontext gibt, der sie anlegen könnte.
+    /// F-M671/F-M672: die DDL der vier Entity-Tabellen. Sie steht hier, wo die anderen Tabellen
+    /// entstehen, und wird von <see cref="IdModel.EnsureTables"/> ausgeführt — der Migrationslauf braucht
+    /// sie schon VOR dem Öffnen des Stores, also bevor es einen Kontext gibt, der sie anlegen könnte.
     /// <para>
     /// Der Name der Tabellen IST die Ebene: <c>pack</c>, <c>file</c>, <c>track</c>, <c>sidecar</c>. Die
     /// Schlüssel heißen wie ihre Kennung (<c>PackId</c>, <c>FileId</c>, <c>TrackId</c>) — es gibt keine
@@ -147,8 +159,10 @@ public sealed class ScribeDbContext : IDisposable
     /// </summary>
     public const string FileTableDdl =
         "CREATE TABLE IF NOT EXISTS file ("
+        // F-M676: die Id IST der Text — `#yyyyy`.
         + "FileId TEXT NOT NULL PRIMARY KEY, "
-        + "PackId TEXT NULL, "
+        // F-M673/F-M677: KEIN PackId — die Mitgliedschaft hält der Behälter (`pack_track`).
+
         + "OsHash TEXT NULL, "
         + "FileName TEXT NULL, "
         + "Size INTEGER NULL, "
@@ -171,12 +185,14 @@ public sealed class ScribeDbContext : IDisposable
         + "Created TEXT NOT NULL DEFAULT '', "
         + "LastSeen TEXT NOT NULL DEFAULT '');";
 
-    /// <summary>F-M671: die DDL der Spurtabelle — Kennung, Datei und Pack, Spurnummer, Inhalt, Herkunft.</summary>
+    /// <summary>
+    /// F-M671/F-M673: die DDL der Spurtabelle — Kennung, Datei, Pack der SPUR, Spurnummer, Inhalt,
+    /// Herkunft. Die fremde Id (<c>OriginId</c>) steht seit F-M672 in <c>reference</c>.
+    /// </summary>
     public const string TrackTableDdl =
         "CREATE TABLE IF NOT EXISTS track ("
-        + "TrackId TEXT NOT NULL, "
-        + "FileId TEXT NOT NULL, "
-        + "PackId TEXT NULL, "
+        // F-M676: `#yyyyy#zzz` — die Datei steht IN der Id. F-M677: kein PackId, kein Display.
+        + "TrackId TEXT NOT NULL PRIMARY KEY, "
         + "TrackNumber INTEGER NOT NULL DEFAULT 0, "
         + "MediaHash TEXT NOT NULL DEFAULT '', "
         + "SubPos INTEGER NOT NULL DEFAULT 0, "
@@ -188,21 +204,16 @@ public sealed class ScribeDbContext : IDisposable
         + "Reason TEXT NULL, "
         + "StatusAt TEXT NOT NULL DEFAULT '', "
         + "Origin TEXT NULL, "
-        // F-M672 (Schritt B): die fremde Id gehört nach `reference`. Solange die Tabelle nicht steht,
-        // wird die Spalte mitgeführt, damit kein Bestand stillschweigend verloren geht.
-        + "OriginId TEXT NULL, "
         + "DetectionAttemptedAt TEXT NULL, "
         + "DetectionOutcome TEXT NULL, "
         + "Created TEXT NOT NULL DEFAULT '', "
-        + "LastSeen TEXT NOT NULL DEFAULT '', "
-        + "PRIMARY KEY (TrackId, FileId));";
+        + "LastSeen TEXT NOT NULL DEFAULT '');";
 
-    /// <summary>F-M671: die DDL der Seitenwagen-Tabelle — dieselben Ebenen, aber ohne Pack.</summary>
+    /// <summary>F-M671/F-M676: die DDL der Seitenwagen-Tabelle — dieselben Ebenen, aber ohne Pack.</summary>
     public const string SidecarTableDdl =
         "CREATE TABLE IF NOT EXISTS sidecar ("
-        + "TrackId TEXT NOT NULL, "
-        + "FileId TEXT NOT NULL, "
-        // F-M671: KEIN PackId — ein Seitenwagen ist `0000-yyyyy-zzz` und gehört zu keinem Pack.
+        // F-M676: `#yyyyy&zzz` — die Datei steht IN der Id. F-M671: kein Pack, also kein PackId.
+        + "TrackId TEXT NOT NULL PRIMARY KEY, "
         + "TrackNumber INTEGER NOT NULL DEFAULT 0, "
         + "MediaHash TEXT NOT NULL DEFAULT '', "
         + "ContentHash TEXT NULL, "
@@ -215,20 +226,18 @@ public sealed class ScribeDbContext : IDisposable
         + "Reason TEXT NULL, "
         + "StatusAt TEXT NOT NULL DEFAULT '', "
         + "Origin TEXT NULL, "
-        // F-M672 (Schritt B): siehe `track` — die fremde Id wandert nach `reference`.
-        + "OriginId TEXT NULL, "
         + "ImdbId TEXT NULL, "
         + "TmdbId TEXT NULL, "
         + "IsSeries INTEGER NOT NULL DEFAULT 0, "
         + "Season INTEGER NULL, "
         + "Episode INTEGER NULL, "
         + "Created TEXT NOT NULL DEFAULT '', "
-        + "LastSeen TEXT NOT NULL DEFAULT '', "
-        + "PRIMARY KEY (TrackId, FileId));";
+        + "LastSeen TEXT NOT NULL DEFAULT '');";
 
-    /// <summary>F-M671: die DDL der Pack-Tabelle — Kennung, Staffelschlüssel, Mitglieder, Signatur.</summary>
+    /// <summary>F-M671/F-M676: die DDL der Pack-Tabelle — Kennung, Staffelschlüssel, Mitglieder, Signatur.</summary>
     public const string PackTableDdl =
         "CREATE TABLE IF NOT EXISTS pack ("
+        // F-M676: `[xxxx]`.
         + "PackId TEXT NOT NULL PRIMARY KEY, "
         + "SeasonKey TEXT NOT NULL DEFAULT '', "
         + "Source TEXT NOT NULL DEFAULT 'subdl', "
@@ -246,26 +255,125 @@ public sealed class ScribeDbContext : IDisposable
         + "Created TEXT NOT NULL DEFAULT '', "
         + "Updated TEXT NOT NULL DEFAULT '');";
 
+    /// <summary>
+    /// F-M677: die DDL der Zuordnungstabelle <c>pack_track</c> — die Mitglieder eines Behälters. Beide
+    /// Spalten sind echte Kennungen und echte Fremdschlüssel: eine Mitgliedschaft ohne Behälter oder ohne
+    /// Spur ist keine, und SQLite setzt das durch (Fremdschlüssel sind eingeschaltet, siehe
+    /// <c>ConfigurePragmas</c>).
+    /// </summary>
+    public const string PackTrackTableDdl =
+        "CREATE TABLE IF NOT EXISTS pack_track ("
+        + "PackId TEXT NOT NULL, "
+        + "TrackId TEXT NOT NULL, "
+        + "Added TEXT NOT NULL DEFAULT '', "
+        + "PRIMARY KEY (PackId, TrackId), "
+        + "FOREIGN KEY (PackId) REFERENCES pack (PackId) ON DELETE CASCADE, "
+        + "FOREIGN KEY (TrackId) REFERENCES track (TrackId) ON DELETE CASCADE);";
+
     /// <summary>F-M671: die Indizes der vier Entity-Tabellen (Adressen, nicht Identitäten).</summary>
     public static readonly string[] IdModelIndexDdl =
     {
         "CREATE UNIQUE INDEX IF NOT EXISTS IX_file_OsHash ON file (OsHash);",
-        "CREATE INDEX IF NOT EXISTS IX_file_PackId ON file (PackId);",
         "CREATE INDEX IF NOT EXISTS IX_file_ImdbId ON file (ImdbId);",
         "CREATE INDEX IF NOT EXISTS IX_file_Path ON file (Path);",
-        "CREATE INDEX IF NOT EXISTS IX_track_FileId ON track (FileId);",
+        "CREATE INDEX IF NOT EXISTS IX_file_JellyfinItemId ON file (JellyfinItemId);",
+        // F-M677: der Fremdschlüssel von `pack_track` zeigt auf `track (TrackId)`. SQLite verlangt dafür
+        // einen UNIQUE-Index auf der Zielspalte — bei einer Datei aus Schema 22 trägt `track` noch den
+        // zusammengesetzten Schlüssel (TrackId, FileId), und ohne diesen Index wäre die Mitgliedschaft
+        // nicht anlegbar ("foreign key mismatch").
+        "CREATE UNIQUE INDEX IF NOT EXISTS IX_track_TrackId ON track (TrackId);",
         "CREATE INDEX IF NOT EXISTS IX_track_MediaHash ON track (MediaHash);",
         "CREATE INDEX IF NOT EXISTS IX_track_ContentHash ON track (ContentHash);",
-        "CREATE INDEX IF NOT EXISTS IX_sidecar_FileId ON sidecar (FileId);",
         "CREATE INDEX IF NOT EXISTS IX_sidecar_ContentHash ON sidecar (ContentHash);",
         "CREATE UNIQUE INDEX IF NOT EXISTS IX_pack_SeasonKey ON pack (SeasonKey);",
         "CREATE INDEX IF NOT EXISTS IX_pack_ImdbId ON pack (ImdbId);",
     };
 
     /// <summary>
+    /// F-M677: die Indizes der Mitgliedschaft. Sie stehen NICHT in <see cref="IdModelIndexDdl"/>, weil die
+    /// Tabelle erst entsteht, wenn die vier Entity-Tabellen ihre endgültige Form haben — vorher zeigt ihr
+    /// Fremdschlüssel auf einen Zwischennamen.
+    /// </summary>
+    public static readonly string[] PackTrackIndexDdl =
+    {
+        "CREATE UNIQUE INDEX IF NOT EXISTS IX_pack_track_PackTrack ON pack_track (PackId, TrackId);",
+        "CREATE INDEX IF NOT EXISTS IX_pack_track_TrackId ON pack_track (TrackId);",
+    };
+
+    /// <summary>
+    /// F-M672: die DDL der drei Quellen-Tabellen. Sie stehen hier, wo die anderen Tabellen entstehen,
+    /// und werden von <see cref="SourceStore.EnsureTables"/> angelegt — der Migrationslauf braucht sie
+    /// schon VOR dem Öffnen des Stores.
+    /// <para>
+    /// DIE QUELLE IST EIN WERT, KEINE TABELLE: §5 des Konzepts. Eine vierte Quelle erzeugt Zeilen in
+    /// diesen drei Tabellen, keine Spalte an jeder Zeile des Stores.
+    /// </para>
+    /// </summary>
+    public const string UploadTableDdl =
+        "CREATE TABLE IF NOT EXISTS upload ("
+        + "SubjectId TEXT NOT NULL, "
+        + "Source TEXT NOT NULL, "
+        + "UploadedAt TEXT NULL, "
+        + "RefusedAt TEXT NULL, "
+        + "RefusedReason TEXT NULL, "
+        + "RefusalSignature TEXT NULL, "
+        + "Fingerprint TEXT NULL, "
+        + "MtimeUnix INTEGER NULL, "
+        + "Written TEXT NOT NULL DEFAULT '', "
+        + "PRIMARY KEY (SubjectId, Source));";
+
+    /// <summary>F-M672: die DDL der Belege — der einzige Ort für eine fremde Kennung.</summary>
+    public const string ReferenceTableDdl =
+        "CREATE TABLE IF NOT EXISTS reference ("
+        + "SubjectId TEXT NOT NULL, "
+        + "Source TEXT NOT NULL, "
+        + "DownloadSourceId TEXT NULL, "
+        + "UploadedId TEXT NULL, "
+        + "ItemId TEXT NULL, "
+        + "SdId TEXT NULL, "
+        + "Url TEXT NULL, "
+        + "Written TEXT NOT NULL DEFAULT '', "
+        + "PRIMARY KEY (SubjectId, Source));";
+
+    /// <summary>F-M672: die DDL der schlechten Downloads — die fremde Kennung, die eine Meldung braucht.</summary>
+    public const string BadAppleTableDdl =
+        "CREATE TABLE IF NOT EXISTS badapple ("
+        + "SubjectId TEXT NOT NULL, "
+        + "Source TEXT NOT NULL, "
+        + "SourceId TEXT NOT NULL DEFAULT '', "
+        + "Language TEXT NOT NULL DEFAULT '', "
+        + "Reason TEXT NOT NULL DEFAULT '', "
+        + "Finding TEXT NOT NULL DEFAULT '', "
+        + "NId TEXT NOT NULL DEFAULT '', "
+        + "ReleaseName TEXT NOT NULL DEFAULT '', "
+        + "Kind TEXT NOT NULL DEFAULT 'qa', "
+        + "ReportedAt TEXT NULL, "
+        + "ReportState TEXT NOT NULL DEFAULT 'open', "
+        + "Written TEXT NOT NULL DEFAULT '', "
+        + "PRIMARY KEY (SubjectId, Source, SourceId));";
+
+    /// <summary>F-M672: die Indizes der drei Quellen-Tabellen.</summary>
+    public static readonly string[] SourceTableIndexDdl =
+    {
+        "CREATE INDEX IF NOT EXISTS IX_upload_Source ON upload (Source);",
+        "CREATE INDEX IF NOT EXISTS IX_reference_Source ON reference (Source);",
+        "CREATE INDEX IF NOT EXISTS IX_reference_DownloadSourceId ON reference (DownloadSourceId);",
+        "CREATE INDEX IF NOT EXISTS IX_reference_UploadedId ON reference (UploadedId);",
+        "CREATE INDEX IF NOT EXISTS IX_badapple_Source ON badapple (Source);",
+        "CREATE INDEX IF NOT EXISTS IX_badapple_SubjectLanguage ON badapple (SubjectId, Language);",
+    };
+
+    /// <summary>
     /// F-M667: die DDL der Marken-Matrix. Sie steht hier, wo die anderen Tabellen entstehen, und wird
-    /// von <see cref="SourceMatrix.EnsureTable"/> ausgeführt — der Migrationslauf braucht sie schon
+    /// von <see cref="SourceMatrixMigration"/> ausgeführt — der Migrationslauf braucht sie schon
     /// VOR dem Öffnen des Stores, also bevor es einen Kontext gibt, der sie anlegen könnte.
+    /// <para>
+    /// F-M672: DIESE TABELLE IST EIN ZWISCHENSCHRITT GEWORDEN. Sie existiert nur noch für den einen
+    /// Moment, in dem eine Datei aus Schema 17 ihre Marken noch in breiten Spalten führt: der
+    /// Übernahmelauf schreibt sie dorthin und <see cref="IdModel"/> löst sie im selben Start in
+    /// <c>upload</c>/<c>reference</c> auf und legt sie nieder. Ein Store, den dieser Build schreibt,
+    /// kennt sie nicht mehr.
+    /// </para>
     /// </summary>
     public const string SourceMatrixDdl =
         "CREATE TABLE IF NOT EXISTS source_matrix ("
@@ -373,8 +481,11 @@ public sealed class ScribeDbContext : IDisposable
         EnsurePackSeasonsTable();
         EnsureSourceRefusalsTable();
         EnsureTitleFailuresTable();
-        EnsureSourceMatrixTable();
+        // F-M672: die drei Quellen-Tabellen (upload, reference, badapple) stehen ab Schema 23 dort, wo
+        // die Marken-Matrix stand. Sie werden VOR dem Modell angelegt, weil der Kontext sie liest.
+        SourceStore.EnsureTables(_db, logger);
         EnsureReportColumns();
+
         EnsureStatusColumns();
         NormaliseLanguages();
         _db.ConfigurePragmas();
@@ -384,13 +495,15 @@ public sealed class ScribeDbContext : IDisposable
         Files = new ScribeSet<FileEntity>(_db, e => e.OsHash ?? string.Empty, onNew: AssignNewFile);
         Tracks = new ScribeSet<TrackEntity>(_db, e => e.MediaHash + "|" + e.SubPos, onNew: AssignNewTrack);
         Sidecars = new ScribeSet<SidecarEntity>(_db, e => e.ContentHash ?? string.Empty, onNew: AssignNewSidecar);
-        RejectedCandidates = new ScribeSet<RejectedCandidateEntity>(_db, e => e.Id);
         Counters = new ScribeSet<CounterEntity>(_db, e => e.Key);
         Runs = new ScribeSet<PipelineRunEntity>(_db, e => e.Id.ToString(CultureInfo.InvariantCulture));
         StatusStats = new ScribeSet<StatusStatsEntity>(_db, e => e.Id);
         WorkerRuns = new ScribeSet<WorkerRunEntity>(_db, e => e.Id);
         Packs = new ScribeSet<PackEntity>(_db, e => e.SeasonKey, onNew: AssignNewPack);
-        Matrix = new ScribeSet<SourceMatrixEntity>(_db, e => e.Id);
+        PackTracks = new ScribeSet<PackTrackEntity>(_db, e => e.Key);
+        Uploads = new ScribeSet<UploadEntity>(_db, e => e.Key);
+        References = new ScribeSet<ReferenceEntity>(_db, e => e.Key);
+        BadApples = new ScribeSet<BadAppleEntity>(_db, e => e.Key);
 
         CheckSchemaVersion();
     }
@@ -404,7 +517,8 @@ public sealed class ScribeDbContext : IDisposable
     {
         if (string.IsNullOrEmpty(file.FileId))
         {
-            file.FileId = ScribeIds.NewFileId(id => Files.FindAll().Any(f => f.FileId == id));
+            // F-M676: die Id IST der Text — `#yyyyy`, geprüft gegen den Bestand.
+            file.FileId = ScribeIds.FileIdOf(ScribeIds.NewFileId(id => Files.FindAll().Any(f => f.FileId == ScribeIds.FileIdOf(id))));
         }
 
         if (file.Created == default)
@@ -426,23 +540,37 @@ public sealed class ScribeDbContext : IDisposable
     /// <param name="track">The new row, its <c>MediaHash</c> and <c>SubPos</c> already set.</param>
     private void AssignNewTrack(TrackEntity track)
     {
-        var datei = string.IsNullOrEmpty(track.FileId)
-            ? Files.FindAll().FirstOrDefault(f => string.Equals(f.OsHash, track.MediaHash, StringComparison.Ordinal))
-            : Files.FindAll().FirstOrDefault(f => string.Equals(f.FileId, track.FileId, StringComparison.Ordinal));
+        // F-M676: die Datei steht IN der Spur-Id. Die Adresse, unter der der Aufrufer die Spur führt, ist
+        // (Medien-Hash, Position) — daraus wird die Datei und aus ihr die Id.
+        string? fileId = string.IsNullOrEmpty(track.MediaHash)
+            ? ScribeIds.FileOf(track.TrackId)
+            : Files.FindAll().FirstOrDefault(f => string.Equals(f.OsHash, track.MediaHash, StringComparison.Ordinal))?.FileId;
+        fileId ??= ScribeIds.FileOf(track.TrackId);
 
-        track.FileId = datei?.FileId ?? track.FileId;
-        track.PackId ??= datei?.PackId;
-
-        if (track.TrackNumber <= 0 || TrackNumbers.IsTaken(TracksOf(track.FileId), SidecarsOf(track.FileId), track.TrackNumber))
+        if (string.IsNullOrEmpty(fileId))
         {
-            track.TrackNumber = TrackNumbers.NextFree(TracksOf(track.FileId), SidecarsOf(track.FileId));
+            // Ohne Datei gibt es keine Spur-Id — dieselbe Regel wie „keine Marke ohne Subjekt".
+            return;
         }
 
-        if (string.IsNullOrEmpty(track.TrackId))
+        var datei = Files.FindById(fileId);
+        string? segment = ScribeIds.TrackPartOf(track.TrackId);
+
+        if (track.TrackNumber <= 0 || TrackNumbers.IsTaken(TracksOf(fileId), SidecarsOf(fileId), track.TrackNumber))
         {
-            track.TrackId = ScribeIds.NewTrackId(
-                id => TracksOf(track.FileId).Any(t => t.TrackId == id) || SidecarsOf(track.FileId).Any(s => s.TrackId == id));
+            track.TrackNumber = TrackNumbers.NextFree(TracksOf(fileId), SidecarsOf(fileId));
         }
+
+        if (string.IsNullOrEmpty(segment)
+            || TracksOf(fileId).Any(t => string.Equals(ScribeIds.TrackPartOf(t.TrackId), segment, StringComparison.Ordinal))
+            || SidecarsOf(fileId).Any(s => string.Equals(ScribeIds.TrackPartOf(s.TrackId), segment, StringComparison.Ordinal)))
+        {
+            segment = ScribeIds.NewTrackId(id =>
+                TracksOf(fileId).Any(t => string.Equals(ScribeIds.TrackPartOf(t.TrackId), id, StringComparison.Ordinal))
+                || SidecarsOf(fileId).Any(s => string.Equals(ScribeIds.TrackPartOf(s.TrackId), id, StringComparison.Ordinal)));
+        }
+
+        track.TrackId = ScribeIds.TrackIdOf(fileId, segment);
 
         if (track.Created == default)
         {
@@ -450,6 +578,14 @@ public sealed class ScribeDbContext : IDisposable
         }
 
         track.LastSeen = DateTime.UtcNow;
+
+        // F-M677: die MITGLIEDSCHAFT hält der Behälter. Passt ein Pack zu (Serie, Staffel, Sprache,
+        // Variante) dieser Spur, bekommt es eine Zeile in `pack_track`.
+        string? packId = SourceStore.PackForTrack(datei, track.Language, track.HearingImpaired == true);
+        if (!string.IsNullOrEmpty(packId))
+        {
+            PackTracks.Upsert(new PackTrackEntity { PackId = packId!, TrackId = track.TrackId });
+        }
     }
 
     /// <summary>
@@ -460,22 +596,33 @@ public sealed class ScribeDbContext : IDisposable
     /// <param name="sidecar">The new row, its <c>MediaHash</c> and <c>ContentHash</c> already set.</param>
     private void AssignNewSidecar(SidecarEntity sidecar)
     {
-        var datei = string.IsNullOrEmpty(sidecar.FileId)
-            ? Files.FindAll().FirstOrDefault(f => string.Equals(f.OsHash, sidecar.MediaHash, StringComparison.Ordinal))
-            : Files.FindAll().FirstOrDefault(f => string.Equals(f.FileId, sidecar.FileId, StringComparison.Ordinal));
+        string? fileId = string.IsNullOrEmpty(sidecar.MediaHash)
+            ? ScribeIds.FileOf(sidecar.TrackId)
+            : Files.FindAll().FirstOrDefault(f => string.Equals(f.OsHash, sidecar.MediaHash, StringComparison.Ordinal))?.FileId;
+        fileId ??= ScribeIds.FileOf(sidecar.TrackId);
 
-        sidecar.FileId = datei?.FileId ?? sidecar.FileId;
-
-        if (sidecar.TrackNumber <= 0 || TrackNumbers.IsTaken(TracksOf(sidecar.FileId), SidecarsOf(sidecar.FileId), sidecar.TrackNumber))
+        if (string.IsNullOrEmpty(fileId))
         {
-            sidecar.TrackNumber = TrackNumbers.NextFree(TracksOf(sidecar.FileId), SidecarsOf(sidecar.FileId));
+            return;
         }
 
-        if (string.IsNullOrEmpty(sidecar.TrackId))
+        string? segment = ScribeIds.TrackPartOf(sidecar.TrackId);
+
+        if (sidecar.TrackNumber <= 0 || TrackNumbers.IsTaken(TracksOf(fileId), SidecarsOf(fileId), sidecar.TrackNumber))
         {
-            sidecar.TrackId = ScribeIds.NewTrackId(
-                id => TracksOf(sidecar.FileId).Any(t => t.TrackId == id) || SidecarsOf(sidecar.FileId).Any(s => s.TrackId == id));
+            sidecar.TrackNumber = TrackNumbers.NextFree(TracksOf(fileId), SidecarsOf(fileId));
         }
+
+        if (string.IsNullOrEmpty(segment)
+            || TracksOf(fileId).Any(t => string.Equals(ScribeIds.TrackPartOf(t.TrackId), segment, StringComparison.Ordinal))
+            || SidecarsOf(fileId).Any(s => string.Equals(ScribeIds.TrackPartOf(s.TrackId), segment, StringComparison.Ordinal)))
+        {
+            segment = ScribeIds.NewTrackId(id =>
+                TracksOf(fileId).Any(t => string.Equals(ScribeIds.TrackPartOf(t.TrackId), id, StringComparison.Ordinal))
+                || SidecarsOf(fileId).Any(s => string.Equals(ScribeIds.TrackPartOf(s.TrackId), id, StringComparison.Ordinal)));
+        }
+
+        sidecar.TrackId = ScribeIds.SidecarIdOf(fileId, segment);
 
         if (sidecar.Created == default)
         {
@@ -491,7 +638,9 @@ public sealed class ScribeDbContext : IDisposable
     {
         if (string.IsNullOrEmpty(pack.PackId))
         {
-            pack.PackId = ScribeIds.NewPackId(id => Packs.FindAll().Any(p => p.PackId == id));
+            // F-M676: `[xxxx]`, geprüft gegen den Bestand.
+            pack.PackId = ScribeIds.PackIdOf(ScribeIds.NewPackId(
+                id => Packs.FindAll().Any(p => p.PackId == ScribeIds.PackIdOf(id))));
         }
 
         if (pack.Created == default)
@@ -525,9 +674,6 @@ public sealed class ScribeDbContext : IDisposable
     /// <summary>Area 3: sidecar subtitle files, keyed by content hash.</summary>
     public ScribeSet<SidecarEntity> Sidecars { get; }
 
-    /// <summary>Area 4: download candidates that were fetched and discarded.</summary>
-    public ScribeSet<RejectedCandidateEntity> RejectedCandidates { get; }
-
     /// <summary>Retry and fail-budget counters, keyed by the namespaced counter key.</summary>
     public ScribeSet<CounterEntity> Counters { get; }
 
@@ -554,12 +700,24 @@ public sealed class ScribeDbContext : IDisposable
     public ScribeSet<PackEntity> Packs { get; }
 
     /// <summary>
-    /// F-M667: die Marken-Matrix — eine Zeile je (Medium, Quelle, Art). Ziel-Struktur fuer Schritt B
-    /// (12.3.0.0); in diesem Schritt fuellt sie nur der Migrationslauf, und jeder Leser kommt ueber
-    /// <see cref="SourceMatrix"/> herein, damit der Rueckfall auf die breiten Spalten an EINER Stelle
-    /// steht.
+    /// F-M677: die Mitglieder der Behälter — eine Zeile je (Pack, Spur). Der Weg „welche Spuren gehören zu
+    /// diesem Pack" und seine Umkehrung; aus Seitenwagen wird keine Zeile gebaut.
     /// </summary>
-    public ScribeSet<SourceMatrixEntity> Matrix { get; }
+    public ScribeSet<PackTrackEntity> PackTracks { get; }
+
+    /// <summary>
+    /// F-M672: die drei Quellen-Tabellen. <c>Uploads</c> führt die URTEILE (eine Zeile je Subjekt und
+    /// Quelle), <c>References</c> die BELEGE (die fremden Kennungen) und <c>BadApples</c> die schlechten
+    /// Downloads samt der Nummer, die eine Meldung an die Quelle braucht. Gelesen und geschrieben wird
+    /// über <see cref="SourceStore"/> — hier stehen nur die Bereiche.
+    /// </summary>
+    public ScribeSet<UploadEntity> Uploads { get; }
+
+    /// <summary>F-M672: die Belege je Subjekt und Quelle — der einzige Ort für eine fremde Kennung.</summary>
+    public ScribeSet<ReferenceEntity> References { get; }
+
+    /// <summary>F-M672: die schlechten Downloads (vormals <c>rejected_candidates</c>).</summary>
+    public ScribeSet<BadAppleEntity> BadApples { get; }
 
     /// <summary>
     /// F-M668: was die Übernahme in die Marken-Matrix bei DIESEM Öffnen getan hat — Zeilen gelesen,
@@ -685,39 +843,13 @@ public sealed class ScribeDbContext : IDisposable
     /// </summary>
     private void EnsureReportColumns()
     {
+        // F-M672: die Melde-Felder (NId, ReleaseName, Finding, Kind, ReportedUtc) standen an
+        // `rejected_candidates`. Diese Tabelle gibt es nicht mehr — sie sind Spalten von `badapple` und
+        // entstehen mit ihrer DDL. Der Nachzug für eine Datei aus Schema 20/21 bleibt trotzdem nötig,
+        // weil sie die Tabelle noch MIT diesen Spalten führt und sie gleich darauf fällt.
         try
         {
-            var existing = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            using (var cmd = _db.Database.GetDbConnection().CreateCommand())
-            {
-                if (cmd.Connection!.State != System.Data.ConnectionState.Open)
-                {
-                    cmd.Connection.Open();
-                }
-
-                cmd.CommandText = "PRAGMA table_info(rejected_candidates);";
-                using var reader = cmd.ExecuteReader();
-                while (reader.Read())
-                {
-                    existing.Add(reader.GetString(1));
-                }
-            }
-
-            foreach (var (name, ddl) in new[]
-                     {
-                         ("NId", "ALTER TABLE rejected_candidates ADD COLUMN NId TEXT NOT NULL DEFAULT '';"),
-                         ("ReleaseName", "ALTER TABLE rejected_candidates ADD COLUMN ReleaseName TEXT NOT NULL DEFAULT '';"),
-                         ("Finding", "ALTER TABLE rejected_candidates ADD COLUMN Finding TEXT NOT NULL DEFAULT '';"),
-                         ("Kind", "ALTER TABLE rejected_candidates ADD COLUMN Kind TEXT NOT NULL DEFAULT 'qa';"),
-                         ("ReportedUtc", "ALTER TABLE rejected_candidates ADD COLUMN ReportedUtc TEXT NULL;")
-                     })
-            {
-                if (!existing.Contains(name))
-                {
-                    _db.Database.ExecuteSqlRaw(ddl);
-                    LogUtil.Normal(_logger, "[Sub Scribe] data file: column {Column} added to rejected_candidates.", name);
-                }
-            }
+            SourceStore.EnsureBadAppleColumns(_db, _logger);
         }
         catch (Exception ex)
         {
@@ -753,11 +885,6 @@ public sealed class ScribeDbContext : IDisposable
     /// der zweite, harmlose Weg fuer einen Store, der ohne Migration geoeffnet wurde (ausdrueckliche
     /// Datei), und fuer eine Datei, deren Uebernahme abgebrochen ist.
     /// </summary>
-    private void EnsureSourceMatrixTable()
-    {
-        SourceMatrix.EnsureTable(_db, _logger);
-    }
-
     private void EnsureSourceRefusalsTable()
     {
         try
@@ -1250,16 +1377,6 @@ public sealed class ScribeDbContext : IDisposable
            + "|" + language + "|" + (hearingImpaired ? "hi" : "plain")
            + "|" + (string.IsNullOrWhiteSpace(source) ? PackEntity.SubdlSource : source);
 
-    /// <summary>
-    /// Builds the primary key of a rejected download candidate.
-    /// </summary>
-    /// <param name="itemId">Jellyfin item id.</param>
-    /// <param name="language">Language code.</param>
-    /// <param name="subdlId">SubDL release id.</param>
-    /// <returns>The composite key.</returns>
-    public static string CandidateKey(string itemId, string language, string subdlId)
-        => itemId + "|" + language.ToUpperInvariant() + "|" + subdlId;
-
     /// <inheritdoc />
     public void Dispose()
     {
@@ -1517,8 +1634,6 @@ public sealed class ScribeSqliteContext : DbContext
     public DbSet<SidecarEntity> SidecarRows => Set<SidecarEntity>();
 
     /// <summary>Area 4: burned download candidates.</summary>
-    public DbSet<RejectedCandidateEntity> RejectedRows => Set<RejectedCandidateEntity>();
-
     /// <summary>Retry and fail-budget counters.</summary>
     public DbSet<CounterEntity> CounterRows => Set<CounterEntity>();
 
@@ -1604,7 +1719,11 @@ public sealed class ScribeSqliteContext : DbContext
             ("file", FileRows.LongCount()),
             ("track", TrackRows.LongCount()),
             ("sidecar", SidecarRows.LongCount()),
-            ("rejected_candidates", RejectedRows.LongCount()),
+            // F-M672: die drei Quellen-Tabellen stehen an der Stelle der Matrix und der verworfenen
+            // Kandidaten — die Diagnose zählt sie einzeln, weil ihre Zeilen verschiedene Dinge sind.
+            ("upload", UploadRows.LongCount()),
+            ("reference", ReferenceRows.LongCount()),
+            ("badapple", BadAppleRows.LongCount()),
             ("counters", CounterRows.LongCount()),
             ("runs", RunRows.LongCount()),
             ("status_stats", StatusRows.LongCount()),
@@ -1640,8 +1759,14 @@ public sealed class ScribeSqliteContext : DbContext
         optionsBuilder.EnableSensitiveDataLogging(false);
     }
 
-    /// <summary>F-M667: das Modell der Marken-Matrix.</summary>
-    public DbSet<SourceMatrixEntity> SourceMatrixRows => Set<SourceMatrixEntity>();
+    /// <summary>F-M672: das Modell der drei Quellen-Tabellen.</summary>
+    public DbSet<UploadEntity> UploadRows => Set<UploadEntity>();
+
+    /// <summary>F-M672: das Modell der Belege.</summary>
+    public DbSet<ReferenceEntity> ReferenceRows => Set<ReferenceEntity>();
+
+    /// <summary>F-M672: das Modell der schlechten Downloads.</summary>
+    public DbSet<BadAppleEntity> BadAppleRows => Set<BadAppleEntity>();
 
     /// <inheritdoc />
     protected override void OnModelCreating(ModelBuilder modelBuilder)
@@ -1665,7 +1790,6 @@ public sealed class ScribeSqliteContext : DbContext
             // F-M671: der Hash ist die ADRESSE, unter der die Datei wiedergefunden wird — eindeutig, aber
             // nicht die Identität. Ein zweiter Datensatz mit demselben Hash wäre dieselbe Datei.
             e.HasIndex(x => x.OsHash).IsUnique();
-            e.HasIndex(x => x.PackId);
             e.HasIndex(x => x.ImdbId);
             e.HasIndex(x => x.TmdbId);
             e.HasIndex(x => x.Path);
@@ -1675,9 +1799,10 @@ public sealed class ScribeSqliteContext : DbContext
         modelBuilder.Entity<TrackEntity>(e =>
         {
             e.ToTable("track");
-            // F-M671: der Schlüssel ist (Datei, Spur) — die Spur ist je Datei eindeutig, nicht global.
-            e.HasKey(x => new { x.TrackId, x.FileId });
-            e.HasIndex(x => x.FileId);
+            // F-M676: der Schlüssel ist die ID SELBST (`#yyyyy#zzz`); die Datei steht darin. Das abgeleitete
+            // `FileId` gehört nicht in die Tabelle — eine zweite Spalte wäre dieselbe Aussage doppelt.
+            e.HasKey(x => x.TrackId);
+            e.Ignore(x => x.FileId);
             e.HasIndex(x => x.MediaHash);
             e.HasIndex(x => x.ContentHash);
             e.HasIndex(x => x.Status);
@@ -1686,20 +1811,23 @@ public sealed class ScribeSqliteContext : DbContext
         modelBuilder.Entity<SidecarEntity>(e =>
         {
             e.ToTable("sidecar");
-            e.HasKey(x => new { x.TrackId, x.FileId });
-            e.HasIndex(x => x.FileId);
+            e.HasKey(x => x.TrackId);
+            e.Ignore(x => x.FileId);
             e.HasIndex(x => x.ContentHash);
             e.HasIndex(x => x.MediaHash);
             e.HasIndex(x => x.Status);
             e.HasIndex(x => x.Language);
         });
 
-        modelBuilder.Entity<RejectedCandidateEntity>(e =>
+        // F-M677: die Mitgliedschaft eines Behälters — das Array, zeilenweise.
+        modelBuilder.Entity<PackTrackEntity>(e =>
         {
-            e.ToTable("rejected_candidates");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => x.ItemId);
-            e.HasIndex(x => x.SubdlId);
+            e.ToTable("pack_track");
+            e.HasKey(x => new { x.PackId, x.TrackId });
+            e.HasIndex(x => x.PackId);
+            e.HasIndex(x => x.TrackId);
+            e.HasOne<PackEntity>().WithMany().HasForeignKey(x => x.PackId).OnDelete(DeleteBehavior.Cascade);
+            e.HasOne<TrackEntity>().WithMany().HasForeignKey(x => x.TrackId).OnDelete(DeleteBehavior.Cascade);
         });
 
         modelBuilder.Entity<CounterEntity>(e =>
@@ -1764,17 +1892,31 @@ public sealed class ScribeSqliteContext : DbContext
             e.HasKey(x => x.Id);
         });
 
-        // F-M667: die Marken-Matrix. Der Tabellenname ist derselbe, den EnsureSourceMatrixTable (und
-        // der Migrationslauf davor) anlegt — sonst schriebe der eine Teil in eine Tabelle, die der
-        // andere nie liest.
-        modelBuilder.Entity<SourceMatrixEntity>(e =>
+        // F-M672: die drei Quellen-Tabellen. Die Tabellennamen sind dieselben, die
+        // SourceStore.EnsureTables (und der Migrationslauf davor) anlegen — sonst schriebe der eine Teil
+        // in eine Tabelle, die der andere nie liest.
+        modelBuilder.Entity<UploadEntity>(e =>
         {
-            e.ToTable("source_matrix");
-            e.HasKey(x => x.Id);
-            e.HasIndex(x => x.MediaHash);
-            e.HasIndex(x => x.ImdbId);
-            e.HasIndex(x => x.TmdbId);
-            e.HasIndex(x => new { x.Source, x.Kind });
+            e.ToTable("upload");
+            e.HasKey(x => new { x.SubjectId, x.Source });
+            e.HasIndex(x => x.Source);
+        });
+
+        modelBuilder.Entity<ReferenceEntity>(e =>
+        {
+            e.ToTable("reference");
+            e.HasKey(x => new { x.SubjectId, x.Source });
+            e.HasIndex(x => x.Source);
+            e.HasIndex(x => x.DownloadSourceId);
+            e.HasIndex(x => x.UploadedId);
+        });
+
+        modelBuilder.Entity<BadAppleEntity>(e =>
+        {
+            e.ToTable("badapple");
+            e.HasKey(x => new { x.SubjectId, x.Source, x.SourceId });
+            e.HasIndex(x => x.Source);
+            e.HasIndex(x => new { x.SubjectId, x.Language });
         });
 
         // F-M604: same contract for the pack verdicts.

@@ -27,17 +27,16 @@ namespace Jellyfin.Plugin.SubScribe.Data;
 /// während das Ding bleibt, ist keine Kennung. Ab Schema 22 ist sie zufällig, einmalig und unveränderlich.
 /// </para>
 /// <para>
-/// DER ANZEIGE-STRING TRÄGT DIE EBENE: <c>xxxx-yyyyy-zzz</c>. <c>xxxx</c> ist der Pack (4 Zeichen, leer
-/// als <c>0000</c>), <c>yyyyy</c> die Datei (5 Zeichen, leer als <c>00000</c>), <c>zzz</c> die Spur
-/// (3 Zeichen, leer als <c>000</c>). Die drei Segmente sind die drei SPALTEN <see cref="PackSegment"/>,
-/// <see cref="FileSegment"/> und <see cref="TrackSegment"/>; der String ist nur ihre Anzeige und wird
-/// nirgends gespeichert. Kapazität: 61^4 = 13 845 841 Packs, 61^5 = 844 596 301 Dateien, 61^3 = 226 981
-/// Spuren je Datei.
+/// F-M676 (Betreiber-Korrektur 22.11.2026): DIE ID IST EINE LESBARE TEXTSÄULE, und ihre MARKE sagt die
+/// Ebene — <c>[xxxx]</c> Pack, <c>#yyyyy</c> Datei, <c>#yyyyy#zzz</c> eingebettete Spur,
+/// <c>#yyyyy&amp;zzz</c> Seitenwagen. Die Datei-Id steckt in der Spur-Id, ein zweites Feld daneben wäre
+/// eine zweite Aussage über dieselbe Sache. Kapazität: 61^4 = 13 845 841 Packs, 61^5 = 844 596 301
+/// Dateien, 61^3 = 226 981 Spuren je Datei.
 /// </para>
 /// <para>
 /// DAS ALPHABET: <c>1-9a-zA-Z</c> — 61 Zeichen. Die <c>0</c> fehlt ABSICHTLICH: sie ist reiner Füller für
 /// ein leeres Segment. Damit ist „leer" von „vergeben" unterscheidbar, ohne dass eine Null in einem
-/// echten Segment stehen kann, und ein Anzeige-String lässt sich eindeutig zurücklesen.
+/// echten Segment stehen kann, und eine Id lässt sich eindeutig zurücklesen.
 /// </para>
 /// </summary>
 public static class ScribeIds
@@ -53,6 +52,21 @@ public static class ScribeIds
 
     /// <summary>Länge des Spur-Segments (<c>zzz</c>).</summary>
     public const int TrackSegment = 3;
+
+    /// <summary>
+    /// F-M676: die drei Marken, die eine Id traegt. Keine von ihnen steht im Alphabet <c>1-9a-zA-Z</c>,
+    /// also ist keine Form mit einer anderen verwechselbar.
+    /// </summary>
+    public const char PackOpen = '[';
+
+    /// <summary>F-M676: die schliessende Klammer einer Pack-Id.</summary>
+    public const char PackClose = ']';
+
+    /// <summary>F-M676: die Marke der Datei-Ebene und der eingebetteten Spur.</summary>
+    public const char FileMark = '#';
+
+    /// <summary>F-M676: das Zeichen, das im dritten Feld eine Spur als SEITENWAGEN ausweist.</summary>
+    public const char SidecarMark = '&';
 
     /// <summary>Der Füller eines leeren Segments (ein ganzes Segment aus Nullen).</summary>
     public const char Filler = '0';
@@ -107,15 +121,169 @@ public static class ScribeIds
         => string.IsNullOrEmpty(segment) || segment == new string(Filler, length);
 
     /// <summary>
-    /// Der Anzeige-String aus den drei Segmenten. Leere Segmente werden gefüllt, damit die Form immer
-    /// <c>xxxx-yyyyy-zzz</c> ist und ein Leser die Ebene an der Position erkennt.
+    /// F-M676 (Betreiber-Korrektur 22.11.2026): DIE ID IST DER TEXT — vier Formen, und die Marken
+    /// <c>[ ] # &amp;</c> sagen die Ebene:
+    /// <list type="bullet">
+    /// <item><description>Pack: <c>[xxxx]</c> — vier Zeichen in eckigen Klammern.</description></item>
+    /// <item><description>Datei: <c>#yyyyy</c> — fünf Zeichen mit vorangestelltem <c>#</c>.</description></item>
+    /// <item><description>Eingebettete Spur: <c>#yyyyy#zzz</c> — Datei-Id, <c>#</c>, drei Zeichen.</description></item>
+    /// <item><description>Seitenwagen: <c>#yyyyy&amp;zzz</c> — Datei-Id, <c>&amp;</c>, drei Zeichen.</description></item>
+    /// </list>
+    /// <para>
+    /// WARUM DIE FORM SELBST SPRICHT: eine Kennung, die man nicht lesen kann, braucht ein zweites Feld,
+    /// das sie erklärt — und das zweite Feld ist eine zweite Wahrheit über dieselbe Sache. Hier steht die
+    /// Ebene in der Id, die Datei-Id steckt in Spur- und Seitenwagen-Id, und ein <c>FileId</c>-Feld daneben
+    /// wäre eine Wiederholung. <c>#</c> und <c>&amp;</c> sind nicht im Alphabet <c>1-9a-zA-Z</c>, also
+    /// können sie nie mit einem echten Zeichen verwechselt werden.
+    /// </para>
     /// </summary>
-    /// <param name="packId">Pack segment, or null/empty.</param>
-    /// <param name="fileId">File segment, or null/empty.</param>
-    /// <param name="trackId">Track segment, or null/empty.</param>
-    /// <returns>The display string.</returns>
-    public static string Display(string? packId, string? fileId, string? trackId)
-        => Fill(packId, PackSegment) + "-" + Fill(fileId, FileSegment) + "-" + Fill(trackId, TrackSegment);
+    /// <param name="packId">The four-character pack segment.</param>
+    /// <returns>The pack id, <c>[xxxx]</c>.</returns>
+    public static string PackIdOf(string? packId) => "[" + Fill(packId, PackSegment) + "]";
+
+    /// <summary>F-M676: die Id einer DATEI — <c>#yyyyy</c>.</summary>
+    /// <param name="fileId">The five-character file segment, or a full file id.</param>
+    /// <returns>The file id.</returns>
+    public static string FileIdOf(string? fileId) => "#" + FilePart(fileId);
+
+    /// <summary>F-M676: die Id einer eingebetteten SPUR — <c>#yyyyy#zzz</c>.</summary>
+    /// <param name="fileId">Das Datei-Segment oder eine volle Datei-Id.</param>
+    /// <param name="trackId">Das Spur-Segment oder eine volle Spur-Id (dann wird ihr Segment genommen).</param>
+    /// <returns>The track id.</returns>
+    public static string TrackIdOf(string? fileId, string? trackId)
+        => "#" + FilePart(fileId) + "#" + TrackPart(trackId);
+
+    /// <summary>F-M676: die Id eines SEITENWAGENS — <c>#yyyyy&amp;zzz</c>.</summary>
+    /// <param name="fileId">Das Datei-Segment oder eine volle Datei-Id.</param>
+    /// <param name="trackId">Das Spur-Segment oder eine volle Id.</param>
+    /// <returns>The sidecar id.</returns>
+    public static string SidecarIdOf(string? fileId, string? trackId)
+        => "#" + FilePart(fileId) + "&" + TrackPart(trackId);
+
+    /// <summary>
+    /// Das DATEI-SEGMENT einer Angabe, die ein Segment oder schon eine volle Id sein darf. Wer eine Id
+    /// hineingibt, bekommt ihr Segment — so entsteht aus <c>#yyyyy</c> nicht <c>##yyyyy</c>.
+    /// </summary>
+    /// <param name="fileId">Segment or full file id.</param>
+    /// <returns>The five-character segment.</returns>
+    private static string FilePart(string? fileId)
+    {
+        string wert = fileId ?? string.Empty;
+        if (wert.Length == FileSegment + 1 && wert[0] == FileMark)
+        {
+            wert = wert.Substring(1);
+        }
+
+        return Fill(wert, FileSegment);
+    }
+
+    /// <summary>Das SPUR-SEGMENT einer Angabe, die ein Segment oder schon eine volle Id sein darf.</summary>
+    /// <param name="trackId">Segment or full track id.</param>
+    /// <returns>The three-character segment.</returns>
+    private static string TrackPart(string? trackId)
+    {
+        string wert = trackId ?? string.Empty;
+        string teil = TrackPartOf(wert);
+        return Fill(string.IsNullOrEmpty(teil) ? wert : teil, TrackSegment);
+    }
+
+    /// <summary>
+    /// F-M676: die DATEI-ID, die in einer Spur- oder Seitenwagen-Id steckt (<c>#yyyyy</c>) — oder die Id
+    /// selbst, wenn sie schon eine Datei-Id ist. Leer, wenn die Form nicht passt.
+    /// </summary>
+    /// <param name="id">A track, sidecar or file id.</param>
+    /// <returns>The file id, or an empty string.</returns>
+    public static string FileOf(string? id)
+    {
+        if (string.IsNullOrEmpty(id) || id.Length < FileSegment + 1 || id[0] != '#')
+        {
+            return string.Empty;
+        }
+
+        return id.Substring(0, FileSegment + 1);
+    }
+
+    /// <summary>
+    /// F-M676: das SPUR-SEGMENT einer Spur- oder Seitenwagen-Id (<c>zzz</c>), leer für eine Datei-Id.
+    /// </summary>
+    /// <param name="id">A track or sidecar id.</param>
+    /// <returns>The three-character segment, or an empty string.</returns>
+    public static string TrackPartOf(string? id)
+    {
+        if (string.IsNullOrEmpty(id) || id.Length != 2 + FileSegment + TrackSegment || id[0] != '#')
+        {
+            return string.Empty;
+        }
+
+        char marke = id[FileSegment + 1];
+        return marke == '#' || marke == SidecarMark ? id.Substring(FileSegment + 2) : string.Empty;
+    }
+
+    /// <summary>F-M676: wahr, wenn die Id die Form eines Seitenwagens hat (<c>#yyyyy&amp;zzz</c>).</summary>
+    /// <param name="id">A track or sidecar id.</param>
+    /// <returns>True for a sidecar id.</returns>
+    public static bool IsSidecarId(string? id)
+        => !string.IsNullOrEmpty(id) && id.Length == 2 + FileSegment + TrackSegment
+           && id[0] == '#' && id[FileSegment + 1] == SidecarMark;
+
+    /// <summary>F-M676: wahr, wenn die Id die Form einer eingebetteten Spur hat (<c>#yyyyy#zzz</c>).</summary>
+    /// <param name="id">A track or sidecar id.</param>
+    /// <returns>True for an embedded track id.</returns>
+    public static bool IsTrackId(string? id)
+        => !string.IsNullOrEmpty(id) && id.Length == 2 + FileSegment + TrackSegment
+           && id[0] == '#' && id[FileSegment + 1] == '#';
+
+    /// <summary>F-M676: wahr, wenn die Id die Form eines Packs hat (<c>[xxxx]</c>).</summary>
+    /// <param name="id">A pack id.</param>
+    /// <returns>True for a pack id.</returns>
+    public static bool IsPackId(string? id)
+        => !string.IsNullOrEmpty(id) && id.Length == PackSegment + 2
+           && id[0] == '[' && id[^1] == ']'
+           && IsSegment(id.Substring(1, PackSegment), PackSegment);
+
+    /// <summary>F-M676: wahr, wenn die Id die Form einer Datei hat (<c>#yyyyy</c>).</summary>
+    /// <param name="id">A file id.</param>
+    /// <returns>True for a file id.</returns>
+    public static bool IsFileId(string? id)
+        => !string.IsNullOrEmpty(id) && id.Length == FileSegment + 1
+           && id[0] == '#' && IsSegment(id.Substring(1), FileSegment);
+
+    /// <summary>
+    /// F-M676: liest eine Spur- oder Seitenwagen-Id in ihre Teile. Eine Datei-Id liefert Datei und eine
+    /// leere Spur; ein Pack liefert nichts.
+    /// </summary>
+    /// <param name="id">The id.</param>
+    /// <param name="fileId">The file part, empty when the id is not of that shape.</param>
+    /// <param name="trackId">The track part, empty for a file id.</param>
+    /// <param name="isSidecar">True when the id carried the sidecar mark.</param>
+    /// <returns>True when the id has one of the four shapes.</returns>
+    public static bool TryParse(string? id, out string fileId, out string trackId, out bool isSidecar)
+    {
+        fileId = string.Empty;
+        trackId = string.Empty;
+        isSidecar = false;
+
+        if (string.IsNullOrEmpty(id))
+        {
+            return false;
+        }
+
+        if (IsFileId(id))
+        {
+            fileId = id.Substring(1);
+            return true;
+        }
+
+        if (!IsTrackId(id) && !IsSidecarId(id))
+        {
+            return false;
+        }
+
+        fileId = id.Substring(1, FileSegment);
+        trackId = id.Substring(FileSegment + 2);
+        isSidecar = id[FileSegment + 1] == SidecarMark;
+        return true;
+    }
 
     /// <summary>Füllt ein Segment auf seine Breite; ein leeres wird zur Nullenfolge.</summary>
     /// <param name="segment">The segment.</param>
@@ -123,49 +291,6 @@ public static class ScribeIds
     /// <returns>The padded segment.</returns>
     public static string Fill(string? segment, int length)
         => string.IsNullOrEmpty(segment) ? new string(Filler, length) : segment;
-
-    /// <summary>
-    /// Liest einen Anzeige-String zurück in seine drei Segmente. Leere Segmente kommen als leerer
-    /// String zurück (nicht als Nullenfolge), damit ein Aufrufer „kein Pack" nicht als Kennung nimmt.
-    /// </summary>
-    /// <param name="display">The display string.</param>
-    /// <param name="packId">The pack segment, empty when absent.</param>
-    /// <param name="fileId">The file segment, empty when absent.</param>
-    /// <param name="trackId">The track segment, empty when absent.</param>
-    /// <returns>True when the string has the right shape.</returns>
-    public static bool TryParse(string? display, out string packId, out string fileId, out string trackId)
-    {
-        packId = string.Empty;
-        fileId = string.Empty;
-        trackId = string.Empty;
-        if (string.IsNullOrEmpty(display))
-        {
-            return false;
-        }
-
-        var teile = display.Split('-');
-        if (teile.Length != 3
-            || teile[0].Length != PackSegment
-            || teile[1].Length != FileSegment
-            || teile[2].Length != TrackSegment)
-        {
-            return false;
-        }
-
-        for (int i = 0; i < teile.Length; i++)
-        {
-            int width = i == 0 ? PackSegment : i == 1 ? FileSegment : TrackSegment;
-            if (teile[i] != new string(Filler, width) && !IsSegment(teile[i], width))
-            {
-                return false;
-            }
-        }
-
-        packId = IsEmptySegment(teile[0], PackSegment) ? string.Empty : teile[0];
-        fileId = IsEmptySegment(teile[1], FileSegment) ? string.Empty : teile[1];
-        trackId = IsEmptySegment(teile[2], TrackSegment) ? string.Empty : teile[2];
-        return true;
-    }
 
     /// <summary>Ein zufälliges Segment der genannten Breite aus dem Alphabet (kryptografisch).</summary>
     /// <param name="length">Segment width.</param>

@@ -52,6 +52,14 @@ public sealed class QaFailTracker
     /// <returns>Discarded release ids.</returns>
     public List<string> GetSkippedCandidates(string itemId, string language)
     {
+        // F-M672: das Subjekt ist die DATEI des Items — die verbrauchten Kandidaten hängen an ihr
+        // (Tabelle `badapple`), nicht an einer Item-Id. Ist die Datei unbekannt, ist nichts verbraucht.
+        var subjekt = SourceStore.FileSubjectOfItem(_db, itemId);
+        if (subjekt == null)
+        {
+            return new List<string>();
+        }
+
         // The language comparison runs in LINQ-to-objects, NOT pushed down as SQL.
         // No provider can translate string.Equals(..., StringComparison.OrdinalIgnoreCase) and
         // emitted `(($.ItemId = @p0) AND (( = $.Language) = true))`, which failed the entire
@@ -64,11 +72,9 @@ public sealed class QaFailTracker
         // fetch costs a quota unit — so a row blocks as soon as it carries a report. An "empty"
         // row without a report still blocks nothing: that is the case where the switch was off,
         // and a single hiccup must not burn a candidate for good.
-        return _db.RejectedCandidates
-            .Find(x => x.ItemId == itemId)
-            .Where(x => string.Equals(x.Language, language, StringComparison.OrdinalIgnoreCase))
-            .Where(x => !string.Equals(x.Kind, "empty", StringComparison.Ordinal) || x.ReportedUtc != null)
-            .Select(x => x.SubdlId)
+        return SourceStore.BadApplesOf(_db, subjekt, language)
+            .Where(x => !string.Equals(x.Kind, "empty", StringComparison.Ordinal) || x.ReportedAt != null)
+            .Select(x => x.SourceId)
             .Distinct()
             .ToList();
     }
@@ -80,20 +86,16 @@ public sealed class QaFailTracker
     /// <param name="itemId">Jellyfin item id.</param>
     /// <param name="language">Language code.</param>
     /// <returns>Stored rows.</returns>
-    public List<RejectedCandidateEntity> GetRows(string itemId, string language)
-        => _db.RejectedCandidates
-            .Find(x => x.ItemId == itemId)
-            .Where(x => string.Equals(x.Language, language, StringComparison.OrdinalIgnoreCase))
-            .ToList();
+    public List<BadAppleEntity> GetRows(string itemId, string language)
+        => SourceStore.BadApplesOf(_db, SourceStore.FileSubjectOfItem(_db, itemId), language);
 
     /// <summary>
     /// F-M450: marks one row as reported, so no second report is ever sent for it.
     /// </summary>
     /// <param name="row">The row that was accepted by SubDL.</param>
-    public void MarkReported(RejectedCandidateEntity row)
+    public void MarkReported(BadAppleEntity row)
     {
-        row.ReportedUtc = DateTime.UtcNow;
-        _db.RejectedCandidates.Upsert(row);
+        SourceStore.MarkBadAppleReported(_db, row);
     }
 
     /// <summary>
@@ -109,6 +111,15 @@ public sealed class QaFailTracker
                                         IReadOnlyDictionary<string, ReportFacts>? details = null,
                                         string kind = "qa")
     {
+        // F-M672: ohne Datei gibt es kein Subjekt. Der Pfad läuft immer über ein Item, dessen Datei der
+        // Store kennt; fehlt sie, wird nichts behauptet (und nichts verbrannt) — das wird geloggt.
+        var subjekt = SourceStore.FileSubjectOfItem(_db, itemId);
+        if (subjekt == null)
+        {
+            LogUtil.Detail(_logger, "[Sub Scribe-DB] burned candidates {Item}|{Lang}: no file row, nothing recorded", itemId, language);
+            return;
+        }
+
         int recorded = 0;
         foreach (var id in subdlIds.Where(IsUploadId).Distinct())
         {
@@ -127,9 +138,11 @@ public sealed class QaFailTracker
             // F-M450: the row may already carry a report timestamp. Upsert replaces the whole row,
             // so it is read first — otherwise every further failure would erase "already reported"
             // and the same broken package would be reported again and again.
-            string key = ScribeDbContext.CandidateKey(itemId, language, id);
-            var previous = _db.RejectedCandidates.Find(x => x.Id == key).FirstOrDefault();
-            DateTime? reportedUtc = previous?.ReportedUtc;
+            // F-M672: gelesen und geschrieben wird die Zeile in `badapple`, adressiert über
+            // (Datei, Quelle, Kandidaten-Id).
+            var previous = SourceStore.BadApplesOf(_db, subjekt, language)
+                .FirstOrDefault(x => string.Equals(x.SourceId, id, StringComparison.Ordinal));
+            DateTime? reportedAt = previous?.ReportedAt;
             if (string.IsNullOrEmpty(nId))
             {
                 nId = previous?.NId ?? string.Empty;
@@ -145,21 +158,9 @@ public sealed class QaFailTracker
                 release = previous?.ReleaseName ?? string.Empty;
             }
 
-            // F-M200: the verdict is burned here, keyed by item + language + SubDL id.
-            _db.RejectedCandidates.Upsert(new RejectedCandidateEntity
-            {
-                Id = key,
-                ItemId = itemId,
-                Language = language.ToUpperInvariant(),
-                SubdlId = id,
-                Reason = reason,
-                NId = nId,
-                Finding = finding,
-                ReleaseName = release,
-                Kind = kind,
-                ReportedUtc = reportedUtc,
-                Updated = DateTime.UtcNow
-            });
+            // F-M200: the verdict is burned here, keyed by file + source + candidate id.
+            SourceStore.RecordBadApple(
+                _db, subjekt, SourceStore.Subdl, id, language, reason, finding, nId, release, kind, reportedAt);
             recorded++;
         }
 
@@ -181,8 +182,8 @@ public sealed class QaFailTracker
         // The stored language is the UPPER-CASE form the key builder wrote, so the comparison is
         // ordinal and exact. It must not become a case-insensitive one: OrdinalIgnoreCase would also
         // match a row stored in another case, which the previous engine's exact EQ never did.
-        var upper = language.ToUpperInvariant();
-        _db.RejectedCandidates.DeleteMany(c => c.ItemId == itemId && c.Language == upper);
+        // F-M672: der Beleg hängt an der Datei; ohne sie gibt es nichts zurückzunehmen.
+        SourceStore.ClearBadApples(_db, SourceStore.FileSubjectOfItem(_db, itemId), language);
         LogUtil.Detail(_logger, "[Sub Scribe-DB] burned candidates reset {Item}|{Lang}", itemId, language);
     }
 
@@ -191,16 +192,16 @@ public sealed class QaFailTracker
     /// <returns>Number of removed rows.</returns>
     public int PruneDeadItems(Func<string, bool> itemExists)
     {
-        var deadItemIds = _db.RejectedCandidates.FindAll()
-            .Where(c => !itemExists(c.ItemId))
-            .Select(c => c.ItemId)
-            .Distinct()
-            .ToList();
-
+        // F-M672: „tot" heißt: das Subjekt (die Datei) ist fort oder sein Jellyfin-Item gibt es nicht
+        // mehr. Die Zeile fällt mit ihrem Subjekt — sie nennt sonst eine Datei, die niemand mehr kennt.
         int removed = 0;
-        foreach (var itemId in deadItemIds)
+        foreach (var subjekt in _db.BadApples.FindAll().Select(c => c.SubjectId).Distinct(StringComparer.Ordinal).ToList())
         {
-            removed += _db.RejectedCandidates.DeleteMany(c => c.ItemId == itemId);
+            var datei = _db.Files.FindOne(f => string.Equals(f.FileId, subjekt, StringComparison.Ordinal));
+            if (datei == null || !itemExists(datei.JellyfinItemId ?? string.Empty))
+            {
+                removed += SourceStore.ForgetSubject(_db, subjekt);
+            }
         }
 
         if (removed > 0)
@@ -225,10 +226,14 @@ public sealed class QaFailTracker
     private void PruneOldest(string itemId, string language)
     {
         // Language filtered in LINQ-to-objects — see GetSkippedCandidates for why.
-        var all = _db.RejectedCandidates
-            .Find(x => x.ItemId == itemId)
-            .Where(x => string.Equals(x.Language, language, StringComparison.OrdinalIgnoreCase))
-            .OrderByDescending(x => x.Updated)
+        var subjekt = SourceStore.FileSubjectOfItem(_db, itemId);
+        if (subjekt == null)
+        {
+            return;
+        }
+
+        var all = SourceStore.BadApplesOf(_db, subjekt, language)
+            .OrderByDescending(x => x.Written)
             .ToList();
 
         if (all.Count <= 50)
@@ -238,7 +243,7 @@ public sealed class QaFailTracker
 
         foreach (var old in all.Skip(50))
         {
-            _db.RejectedCandidates.Delete(old.Id);
+            _db.BadApples.Delete(old.Key);
         }
     }
 

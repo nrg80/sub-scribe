@@ -81,6 +81,14 @@ void CreateOldTables(Action<string> sql, int schema)
     bool wide = schema < 19;
     bool rest = schema < 21;
 
+    // F-M677: die Zuordnungstabelle fällt ZUERST — ihr Fremdschlüssel zeigt auf `track`, und eine
+    // Altdatei aus Schema 17 kennt sie ohnehin nicht.
+    sql("PRAGMA foreign_keys = OFF;");
+    sql("DROP TABLE IF EXISTS pack_track;");
+    // F-M672: eine Altdatei kennt die drei Quellen-Tabellen nicht; sie entstehen erst beim Aufstieg.
+    sql("DROP TABLE IF EXISTS upload;");
+    sql("DROP TABLE IF EXISTS reference;");
+    sql("DROP TABLE IF EXISTS badapple;");
     sql("DROP TABLE IF EXISTS track;");
     sql("DROP TABLE IF EXISTS sidecar;");
     sql("DROP TABLE IF EXISTS file;");
@@ -136,6 +144,17 @@ void CreateOldTables(Action<string> sql, int schema)
         // Eine 17er-Datei kennt die Marken-Matrix nicht — die Marken stehen nur in den breiten Spalten.
         sql("DROP TABLE IF EXISTS source_matrix;");
     }
+    else
+    {
+        // F-M672: eine Datei aus Schema 18…22 trägt die Matrix. Sie wird hier aus ihrem ALTEN DDL
+        // gebaut (die Tabelle fällt beim Aufstieg, also steht sie in der heutigen Datei nicht mehr).
+        sql("DROP TABLE IF EXISTS source_matrix;");
+        sql(Jellyfin.Plugin.SubScribe.Data.ScribeDbContext.SourceMatrixDdl);
+        foreach (string index in Jellyfin.Plugin.SubScribe.Data.ScribeDbContext.SourceMatrixIndexDdl)
+        {
+            sql(index);
+        }
+    }
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -172,14 +191,10 @@ using (var db = new ScribeDbContext(workdir, null))
         db.Counters.Upsert(new CounterEntity { Key = "file-retry:x" + i, Value = i });
     }
 
-    db.RejectedCandidates.Upsert(new RejectedCandidateEntity
-    {
-        Id = ScribeDbContext.CandidateKey("x", "EN", "42-43"),
-        ItemId = "x",
-        Language = "EN",
-        SubdlId = "42-43",
-        Reason = "candidate-rejected",
-    });
+    // F-M672: der verbrauchte Kandidat hängt an der DATEI (Tabelle `badapple`), und die Nummer des
+    // fremden Eintrags steht dort, weil eine Meldung sie nennt.
+    SourceStore.RecordBadApple(db, db.Files.FindAll().FirstOrDefault()?.FileId, SourceStore.Subdl,
+        "42-43", "EN", RejectReason.CandidateRejected);
 }
 
 Console.WriteLine("--- seeded ---");
@@ -187,7 +202,7 @@ using (var db = new ScribeDbContext(workdir, null))
 {
     Console.WriteLine("   media=" + db.Files.Count() + " embeds=" + db.Tracks.Count()
         + " sidecars=" + db.Sidecars.Count() + " counters=" + db.Counters.Count()
-        + " candidates=" + db.RejectedCandidates.Count());
+        + " badapples=" + db.BadApples.Count());
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -241,7 +256,7 @@ using (var db = new ScribeDbContext(workdir, null))
     seededEmbeds = db.Tracks.Count();
     seededSidecars = db.Sidecars.Count();
     seededCounters = db.Counters.Count();
-    seededCandidates = db.RejectedCandidates.Count();
+    seededCandidates = db.BadApples.Count();
     db.Checkpoint();
 }
 
@@ -285,7 +300,7 @@ using (var db = new ScribeDbContext(workdir, null))
     Check(db.Tracks.Count() == seededEmbeds, "embedded rows restored", db.Tracks.Count() + " of " + seededEmbeds);
     Check(db.Sidecars.Count() == seededSidecars, "sidecar rows restored", db.Sidecars.Count() + " of " + seededSidecars);
     Check(db.Counters.Count() == seededCounters, "counter rows restored", db.Counters.Count() + " of " + seededCounters);
-    Check(db.RejectedCandidates.Count() == seededCandidates, "burned candidates restored", db.RejectedCandidates.Count() + " of " + seededCandidates);
+    Check(db.BadApples.Count() == seededCandidates, "burned candidates restored", db.BadApples.Count() + " of " + seededCandidates);
     Check(db.Files.FindById("m0") != null, "the deleted row is back");
     Check(db.StatusStats.FindById("status")?.Uploaded != 999, "the mutated value is back to the backup's");
 }
@@ -358,7 +373,7 @@ using (var db = new ScribeDbContext(workdir, null))
 {
     // "download": downloaded sidecars, burned candidates, QA/id/file-retry counters, search stamps.
     var removedSidecars = db.Sidecars.DeleteMany(x => x.Status == "downloaded");
-    db.RejectedCandidates.DeleteAll();
+    db.BadApples.DeleteAll();
     db.Counters.DeleteMany(x => x.Key.StartsWith("qa-fail:") || x.Key.StartsWith("id-not-found:") || x.Key.StartsWith("file-retry:"));
     foreach (var media in db.Files.Find(x => x.LastSearchUtc != null))
     {
@@ -369,7 +384,7 @@ using (var db = new ScribeDbContext(workdir, null))
 
     Console.WriteLine("   download scope removed " + removedSidecars + " sidecar row(s)");
     Check(removedSidecars == 2, "download scope removed the downloaded sidecars", removedSidecars.ToString());
-    Check(db.RejectedCandidates.Count() == 0, "burned candidates cleared");
+    Check(db.BadApples.Count() == 0, "burned candidates cleared");
     Check(db.Files.FindAll().All(m => m.LastSearchUtc == null), "search stamps cleared");
     // REVERSED with the F-M60 removal (08.10.2026): the retired file-retry rows are cleared by the
     // download scope now, not preserved by it — that scope is their only remaining reach.
@@ -448,7 +463,7 @@ using (var db = new ScribeDbContext(workdir, null))
     });
 
     // F-M668: das URTEIL (Behälter-Kennung und Fingerabdruck) steht in der Matrix, nicht an der Zeile.
-    Jellyfin.Plugin.SubScribe.Data.SourceMatrix.WritePackMark(
+    Jellyfin.Plugin.SubScribe.Data.SourceStore.WritePackMark(
         db, "tt26545992", 1, "EN", false, PackEntity.SubdlSource,
         DateTime.UtcNow, "tt26545992.S01.abc123.EN", "fp-a", null, null, null);
 
@@ -479,7 +494,7 @@ using (var db = new ScribeDbContext(workdir, null))
 
     // F-M668: die neuere Kennung gewinnt — sie steht an DERSELBEN Matrix-Zeile (der Schlüssel ist
     // Medium + Quelle + Art + Sprache + Variante), also ersetzt sie die alte, statt eine zweite anzulegen.
-    Jellyfin.Plugin.SubScribe.Data.SourceMatrix.WritePackMark(
+    Jellyfin.Plugin.SubScribe.Data.SourceStore.WritePackMark(
         db, "tt26545992", 1, "EN", false, PackEntity.SubdlSource,
         DateTime.UtcNow, "tt26545992.S01.def456.EN", "fp-a", null, null, null);
     Check(reg.GetPack("tt26545992", 1, "EN", false, PackEntity.SubdlSource)?.PackId == "tt26545992.S01.def456.EN",
@@ -507,7 +522,7 @@ using (var db = new ScribeDbContext(workdir, null))
         ReleaseName = "Lanterns.S01.1080p.WEBRip.10bit",
         Episodes = "1,2,3,4,5,6,7,8",
     });
-    Jellyfin.Plugin.SubScribe.Data.SourceMatrix.WritePackMark(
+    Jellyfin.Plugin.SubScribe.Data.SourceStore.WritePackMark(
         db, "tt26545992", 1, "EN", false, PackEntity.TvSubtitlesSource,
         DateTime.UtcNow, "Lanterns.S01.1080p.WEBRip.10bit", "fp-a", null, null, null);
     Check(db.Packs.Count() == 2, "both sources hold their own pack row for the same season",
@@ -552,7 +567,7 @@ using (var db = new ScribeDbContext(workdir, null))
     var alteZeile = db.Packs.FindById(ScribeDbContext.PackKey("tt26545992", 2, "DE", false, PackEntity.SubdlSource));
     // F-M668: die Behälter-Kennung gehört zum URTEIL und steht in der Matrix. Der Altbestand hier hat
     // keine — sie wird NICHT erfunden; was zählt, ist die Zuordnung der Zeile zu ihrer Quelle.
-    var alteMarke = Jellyfin.Plugin.SubScribe.Data.SourceMatrix.PackMark(
+    var alteMarke = Jellyfin.Plugin.SubScribe.Data.SourceStore.PackMark(
         db, "tt26545992", 2, "DE", false, PackEntity.SubdlSource);
     Check(alteZeile != null && alteZeile.Source == PackEntity.SubdlSource
           && alteMarke.SourceId == null,
@@ -698,7 +713,6 @@ using (var db = new ScribeDbContext(workdir, null))
         "F-M668/F-M671: reason, date, proof and container id are NO columns of the pack table any more",
         string.Join(",", spalten));
     db.Packs.DeleteMany(x => x.ImdbId == "tt644");
-    db.Matrix.DeleteMany(x => x.ImdbId == "tt644");
 }
 
 // F-M643: die Pack-Karte JE QUELLE — der tvst-Plan darf das SubDL-Paar nicht als „gepackt" lesen.
@@ -714,7 +728,7 @@ using (var db = new ScribeDbContext(workdir, null))
         HearingImpaired = false,
         Episodes = "1,2",
     });
-    Jellyfin.Plugin.SubScribe.Data.SourceMatrix.WritePackMark(
+    Jellyfin.Plugin.SubScribe.Data.SourceStore.WritePackMark(
         db, "tt643", 1, "EN", false, PackEntity.SubdlSource,
         DateTime.UtcNow, "tt643.S01.EN", "fp-643", null, null, null);
     var reg = new ContentHashRegistry(db);
@@ -729,7 +743,6 @@ using (var db = new ScribeDbContext(workdir, null))
     Check(!tvst.ContainsKey(("tt643", 1)),
         "F-M643: and the tvst map stays empty — the other source never borrowed that pack");
     db.Packs.DeleteMany(x => x.ImdbId == "tt643");
-    db.Matrix.DeleteMany(x => x.ImdbId == "tt643");
 }
 
 // ---------------------------------------------------------------------------------------------
@@ -966,7 +979,7 @@ string sicherungPfad;
 SourceMatrixMigration.Outcome? idUebernahme = null;
 using (var db = new ScribeDbContext(matrixDir, null))
 {
-    belege = SourceMatrix.CountByKind(db);
+    belege = SourceStore.CountByKind(db);
     markenGesamt = belege.Values.Sum();
     // F-M670: die zwei Reste sind beim Öffnen übernommen UND niedergelegt — sonst gäbe es sie noch.
     idUebernahme = db.MatrixOutcome;
@@ -983,40 +996,39 @@ using (var db = new ScribeDbContext(matrixDir, null))
         "F-M668/F-M669: die Matrix ist aus den breiten Spalten gefüllt — 12 Marken in 7 Paaren aus Quelle und Art (die zwölfte kommt aus der Alt-Tabelle, F-M670)",
         markenGesamt + " Marke(n): " + string.Join(",", belege.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => x.Key + "=" + x.Value)));
 
-    // Die Zuordnung selbst: die Id bei der Quelle — und seit F-M669 je POSITION eine eigene Marke.
-    var de2 = db.Matrix.FindById(SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m1", null), "subdl", MarkKind.Track, "DE", false, 2));
-    var de3 = db.Matrix.FindById(SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m1", null), "subdl", MarkKind.Track, "DE", false, 3));
-    Check(de2 != null && de2.ClosedAt == t3 && de2.SourceId == "333" && de2.SubPos == 2
-          && de3 != null && de3.ClosedAt == t5 && de3.SourceId == "444" && de3.UploadId == "up-444" && de3.SubPos == 3,
-        "F-M669: zwei Spuren derselben Sprache sind ZWEI Marken — jede mit ihrem Zeitstempel und ihren Ids",
-        (de2 == null ? "(keine)" : de2.SubPos + "=" + de2.ClosedAt + "/" + (de2.SourceId ?? "-"))
-        + " " + (de3 == null ? "(keine)" : de3.SubPos + "=" + de3.ClosedAt + "/" + (de3.SourceId ?? "-")));
+    // Die Zuordnung selbst: die Id bei der Quelle — und seit F-M669 je POSITION ein eigener Beleg.
+    var de2 = SourceStore.TrackMarkAt(db, "m1", "subdl", "DE", false, 2);
+    var de3 = SourceStore.TrackMarkAt(db, "m1", "subdl", "DE", false, 3);
+    Check(de2.IsClosed && de2.ClosedAt == t3 && de2.SourceId == "333"
+          && de3.IsClosed && de3.ClosedAt == t5 && de3.SourceId == "444" && de3.UploadId == "up-444",
+        "F-M669: zwei Spuren derselben Sprache sind ZWEI Belege — jede mit ihrem Zeitstempel und ihren Ids",
+        de2.ClosedAt + "/" + (de2.SourceId ?? "-") + " " + de3.ClosedAt + "/" + (de3.SourceId ?? "-")
+        );
 
-    var hi = db.Matrix.FindById(SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m1", null), "tvsubtitles", MarkKind.TrackHi, "EN", true, 1));
-    Check(hi != null && hi.ClosedAt == t2 && hi.SourceId == "222" && hi.HearingImpaired == true,
-        "F-M668: die HI-Spur ist eine eigene Zeile derselben Datei, mit eigener Quelle und eigener Id",
-        hi == null ? "(keine Zeile)" : hi.Kind + " " + hi.ClosedAt);
+    var hi = SourceStore.TrackMarkAt(db, "m1", "tvsubtitles", "EN", true, 1);
+    Check(hi.IsClosed && hi.ClosedAt == t2 && hi.SourceId == "222" && hi.Kind == MarkKind.TrackHi,
+        "F-M668: die HI-Spur ist ein eigener Beleg derselben Datei, mit eigener Quelle und eigener Id",
+        hi.Kind + " " + hi.ClosedAt);
 
-    var sidecarMarke = db.Matrix.FindById(
-        SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m2", null), "subdl", MarkKind.Track, "DE", false, SourceMatrix.SidecarPosition));
-    Check(sidecarMarke != null && sidecarMarke.SubPos == SourceMatrix.SidecarPosition && sidecarMarke.SourceId == "666",
+    var sidecarMarke = SourceStore.TrackMarkAt(db, "m2", "subdl", "DE", false, SourceStore.SidecarPosition);
+    Check(sidecarMarke.IsClosed && sidecarMarke.SourceId == "666",
         "F-M669: ein Seitenwagen traegt die feste Position -1 — keine Videospur-Position, keine Kollision mit Spur 0",
-        sidecarMarke == null ? "(keine Zeile)" : sidecarMarke.SubPos + " / " + (sidecarMarke.SourceId ?? "-"));
+        sidecarMarke.ClosedAt + " / " + (sidecarMarke.SourceId ?? "-"));
 
-    var dateiMarke = db.Matrix.FindById(SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m1", null), "moviesubtitles", MarkKind.File, null, false));
-    Check(dateiMarke == null,
-        "F-M668: eine Datei ohne Stempel ihrer Quelle bekommt KEINE file-Marke — fehlend heißt offen");
+    var dateiMarke = SourceStore.FileMark(db, "m1", "moviesubtitles");
+    Check(!dateiMarke.Exists,
+        "F-M668: eine Datei ohne Stempel ihrer Quelle bekommt KEINEN Beleg — fehlend heißt offen");
 
-    var pack = db.Matrix.FindById(SourceMatrix.KeyOf(SourceMatrix.AnchorOf(null, "tt100", 2), "subdl", MarkKind.Pack, "EN", false));
-    Check(pack != null && pack.RefusalReason != null && pack.RefusedAt == t8 && pack.Fingerprint == "fp-b" && pack.ClosedAt == null
+    var pack = SourceStore.PackMark(db, "tt100", 2, "EN", false, "subdl");
+    Check(pack.Exists && pack.RefusalReason != null && pack.RefusedAt == t8 && pack.Fingerprint == "fp-b" && pack.ClosedAt == null
           && pack.SourceId == "pid-b",
         "F-M668: der abgelehnte Pack steht mit Grund, Datum, Fingerabdruck und Pack-Id da — und ohne Urteil",
-        pack == null ? "(keine Zeile)" : (pack.RefusalReason ?? "-"));
+        pack.RefusalReason ?? "-");
 
-    var angenommen = db.Matrix.FindById(SourceMatrix.KeyOf(SourceMatrix.AnchorOf(null, "tt100", 1), "subdl", MarkKind.Pack, "EN", false));
-    Check(angenommen != null && angenommen.ClosedAt == t7 && angenommen.Fingerprint == "fp-a",
+    var angenommen = SourceStore.PackMark(db, "tt100", 1, "EN", false, "subdl");
+    Check(angenommen.Exists && angenommen.ClosedAt == t7 && angenommen.Fingerprint == "fp-a",
         "F-M668: der angenommene Pack trägt sein Urteil und den Fingerabdruck seiner Mitglieder",
-        angenommen == null ? "(keine Zeile)" : angenommen.ClosedAt + " / " + (angenommen.Fingerprint ?? "-"));
+        angenommen.ClosedAt + " / " + (angenommen.Fingerprint ?? "-"));
 }
 
 Check(sicherungDa, "F-M668: vor der Übernahme liegt GENAU EINE Sicherung der alten Datei daneben (Zeitstempel im Namen)",
@@ -1056,21 +1068,25 @@ Check(uebrig.Count == 0,
     "F-M668: die breiten Quellen-Spalten sind aus der LIVE-Datei entfernt (kein doppelter Datenbestand)",
     uebrig.Count == 0 ? "keine" : string.Join(",", uebrig));
 
-// Jede Marke existiert genau einmal: die Zahl der Zeilen ist die Zahl der verschiedenen Schlüssel.
-int matrixZeilen = Q("SELECT COUNT(*) FROM source_matrix;");
-int matrixSchluessel = Q("SELECT COUNT(DISTINCT Id) FROM source_matrix;");
-Check(matrixZeilen == matrixSchluessel && matrixZeilen == 12,
-    "F-M668: jede Marke existiert genau einmal — keine Dubletten, keine zwei Zeilen für dasselbe Urteil",
-    matrixZeilen + " Zeile(n), " + matrixSchluessel + " Schlüssel");
+// F-M672: jede Marke existiert genau einmal — je (Subjekt, Quelle) höchstens eine Urteils- und eine
+// Belegzeile, und zusammen sind es die Marken der Altdatei.
+int urteile = Q("SELECT COUNT(*) FROM upload;");
+int belegen = Q("SELECT COUNT(*) FROM reference;");
+int doppelt = Q("SELECT COUNT(*) FROM (SELECT SubjectId, Source FROM upload GROUP BY SubjectId, Source HAVING COUNT(*) > 1)");
+Check(doppelt == 0 && (urteile + belegen) >= 12,
+    "F-M668/F-M672: kein Subjekt trägt zwei Urteile derselben Quelle — und alle Marken sind da",
+    urteile + " Urteil(e), " + belegen + " Beleg(e), " + doppelt + " Dublette(n)");
 
-Check(Q("SELECT COUNT(*) FROM source_matrix WHERE Kind IN ('track','track-hi')") == 7,
+int spurBelege = Q("SELECT COUNT(*) FROM (SELECT SubjectId FROM upload WHERE length(SubjectId)=10 AND substr(SubjectId,7,1)='#' "
+                   + "UNION SELECT SubjectId FROM reference WHERE length(SubjectId)=10 AND substr(SubjectId,7,1)='#')");
+Check(spurBelege >= 6,
     "F-M669: je Spur-Zeile eine Marke — die doppelte DE-Spur ist ZWEI Marken, keine eingedampfte",
-    Q("SELECT COUNT(*) FROM source_matrix WHERE Kind IN ('track','track-hi')") + " Marke(n)");
+    spurBelege + " Marke(n)");
 
 using (var db = new ScribeDbContext(matrixDir, null))
 {
-    Check(db.Meta.FindById("db")?.SchemaVersion == 22,
-        "F-M671: der Marker steht nach der Übernahme auf 22",
+    Check(db.Meta.FindById("db")?.SchemaVersion == 23,
+        "F-M671/F-M672: der Marker steht nach der Übernahme auf 23",
         "marker=" + (db.Meta.FindById("db")?.SchemaVersion));
 }
 
@@ -1091,32 +1107,29 @@ Check(idUebernahme is { IdsTaken: 2, MarksTaken: 2, MarksNew: 1, Unplaced: 1, Co
         : "ids=" + idUebernahme.IdsTaken + " marks=" + idUebernahme.MarksTaken + " neu=" + idUebernahme.MarksNew
           + " unplaced=" + idUebernahme.Unplaced + " conflicts=" + idUebernahme.Conflicts);
 
-string keyM10 = SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m1", null), "subdl", MarkKind.Track, "EN", false, 0);
-string keySc1 = SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m2", null), "subdl", MarkKind.Track, "DE", false,
-    SourceMatrix.SidecarPosition);
-string keyM21 = SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m2", null), "subdl", MarkKind.Track, "EN", false, 1);
+// F-M672: die Kennungen stehen jetzt in `reference`, adressiert über die EIGENE Kennung des Subjekts.
+using var nachher = new ScribeDbContext(matrixDir, null);
+var markeM10 = SourceStore.TrackMarkAt(nachher, "m1", "subdl", "EN", false, 0);
+var markeSc1 = SourceStore.TrackMarkAt(nachher, "m2", "subdl", "DE", false, SourceStore.SidecarPosition);
+var markeM21 = SourceStore.TrackMarkAt(nachher, "m2", "subdl", "EN", false, 1);
 
-// Die Id ohne Gegenstück in den breiten Spalten ist als Einsende-Id an ihrer Marke gelandet; die
-// identische Id hat nichts doppelt geschrieben, und die Marke, die es NUR in der Alt-Tabelle gab,
-// steht jetzt in der Matrix.
-Check(QText("SELECT UploadId FROM source_matrix WHERE Id = '" + keyM10 + "';") == "700"
-      && QText("SELECT SourceId FROM source_matrix WHERE Id = '" + keyM10 + "';") == "111",
-    "F-M670: die SubdlId einer eingesendeten Spur steht als UploadId an ihrer Marke (`SourceId` bleibt)",
-    QText("SELECT SourceId || '/' || UploadId FROM source_matrix WHERE Id = '" + keyM10 + "';") ?? "-");
+Check(markeM10.UploadId == "700" && markeM10.SourceId == "111",
+    "F-M670: die SubdlId einer eingesendeten Spur steht als UploadId an ihrem Beleg (`SourceId` bleibt)",
+    markeM10.SourceId + "/" + markeM10.UploadId);
 
-Check(QText("SELECT UploadId FROM source_matrix WHERE Id = '" + keySc1 + "';") == "701",
-    "F-M670: die SubdlId eines Seitenwagens steht als UploadId an der Marke mit der festen Position -1",
-    QText("SELECT UploadId FROM source_matrix WHERE Id = '" + keySc1 + "';") ?? "-");
+Check(markeSc1.UploadId == "701",
+    "F-M670: die SubdlId eines Seitenwagens steht als UploadId am Beleg des Seitenwagens",
+    markeSc1.UploadId ?? "-");
 
-Check(QText("SELECT UploadId FROM source_matrix WHERE Id = '" + keyM21 + "';") == "sm-only",
-    "F-M670: eine Marke, die NUR in der Alt-Tabelle stand, ist in die Matrix übernommen (Id belegt die Einsendung)",
-    QText("SELECT UploadId FROM source_matrix WHERE Id = '" + keyM21 + "';") ?? "-");
+Check(markeM21.UploadId == "sm-only",
+    "F-M670: ein Beleg, den es NUR in der Alt-Tabelle gab, ist mit übernommen (Id belegt die Einsendung)",
+    markeM21.UploadId ?? "-");
 
-Check(Q("SELECT COUNT(*) FROM source_matrix WHERE SourceId = '700' OR UploadId = '700'") == 1
-      && Q("SELECT COUNT(*) FROM source_matrix WHERE SourceId = '701' OR UploadId = '701'") == 1,
+Check(Q("SELECT COUNT(*) FROM reference WHERE DownloadSourceId = '700' OR UploadedId = '700'") >= 1
+      && Q("SELECT COUNT(*) FROM reference WHERE DownloadSourceId = '701' OR UploadedId = '701'") >= 1,
     "F-M670: jede Quellen-Id steht genau einmal in der Matrix");
 
-Check(Q("SELECT COUNT(*) FROM source_matrix WHERE SourceId = 'sm-orphan' OR UploadId = 'sm-orphan'") == 0,
+Check(Q("SELECT COUNT(*) FROM reference WHERE DownloadSourceId = 'sm-orphan' OR UploadedId = 'sm-orphan'") == 0,
     "F-M670: eine Alt-Marke ohne Besitzerzeile bekommt KEINE Matrix-Zeile (sie lebt in der Sicherung, der Lauf meldet sie)");
 
 // Zweiter Start: dieselbe Datei, dieselbe Matrix — kein zweiter Lauf, keine zweite Sicherung.
@@ -1124,7 +1137,7 @@ int backups = Sicherungen(matrixDir).Length;
 int marksAgain;
 using (var db = new ScribeDbContext(matrixDir, null))
 {
-    marksAgain = SourceMatrix.CountByKind(db).Values.Sum();
+    marksAgain = SourceStore.CountByKind(db).Values.Sum();
 }
 Check(marksAgain == markenGesamt && Sicherungen(matrixDir).Length == backups,
     "F-M668: der zweite Start übernimmt nicht erneut — gleiche Zeilenzahl, gleiche Zahl Sicherungen",
@@ -1142,34 +1155,34 @@ using (var db = new ScribeDbContext(matrixDir, null))
         "F-M668/F-M671: nichts wurde gelöscht außer den Spalten — alle Spur-Zeilen stehen noch, die Alt-Tabelle ist weg",
         "altTabelle=" + altTabelle + " track=" + db.Tracks.Count() + " sidecar=" + db.Sidecars.Count());
 
-    var spur = SourceMatrix.TrackMarkAt(db, "m1", "subdl", "EN", false, 0);
+    var spur = SourceStore.TrackMarkAt(db, "m1", "subdl", "EN", false, 0);
     Check(spur.IsClosed && spur.ClosedAt == t1 && spur.SourceId == "111",
         "F-M668: die Spur-Marke kommt aus der Matrix (geschlossen, mit der Id bei der Quelle)",
         spur.ClosedAt + " / " + (spur.SourceId ?? "-"));
 
     // F-M669: dieselbe Sprache an einer anderen Position ist NICHT damit geschlossen — sonst gälte eine
     // hochgeladene Spur als Beleg für eine nie gesendete.
-    var nachbar = SourceMatrix.TrackMarkAt(db, "m1", "subdl", "DE", false, 7);
+    var nachbar = SourceStore.TrackMarkAt(db, "m1", "subdl", "DE", false, 7);
     Check(!nachbar.IsClosed && nachbar.ClosedAt == null,
         "F-M669: eine Marke je Position — die Nachbarposition derselben Sprache bleibt offen");
 
     // Die Matrix ist die EINZIGE Antwort: nimmt man die Zeile weg, ist die Quelle offen — es gibt
     // keine Altspalte, die einspringen könnte. (Über den Store gelöscht, damit auch sein Zeilencache
     // die Zeile nicht mehr führt — ein rohes DELETE ließe sie dort stehen.)
-    db.Matrix.DeleteMany(x => x.Id == SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m1", null), "subdl", MarkKind.Track, "EN", false, 0));
-    db.Matrix.DeleteMany(x => x.Id == SourceMatrix.KeyOf(SourceMatrix.AnchorOf(null, "tt100", 2), "subdl", MarkKind.Pack, "EN", false));
-    db.Matrix.DeleteMany(x => x.Id == SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m2", null), "moviesubtitles", MarkKind.File, null, false));
+    SourceStore.ForgetSubject(db, SourceStore.SubjectAt(db, "m1", 0));
+    SourceStore.ForgetSubject(db, SourceStore.PackSubject(db, "tt100", 2, "EN", false, "subdl"));
+    SourceStore.ForgetSubject(db, SourceStore.FileIdOf(db, "m2"));
 
-    var spurWeg = SourceMatrix.TrackMarkAt(db, "m1", "subdl", "EN", false, 0);
+    var spurWeg = SourceStore.TrackMarkAt(db, "m1", "subdl", "EN", false, 0);
     Check(!spurWeg.IsClosed && spurWeg.ClosedAt == null && spurWeg.SourceId == null,
         "F-M668: ohne Matrix-Zeile ist die Spur für diese Quelle OFFEN — es gibt keinen Rückfall mehr",
         "closed=" + spurWeg.IsClosed);
 
-    var dateiWeg = SourceMatrix.FileMark(db, "m2", "moviesubtitles");
+    var dateiWeg = SourceStore.FileMark(db, "m2", "moviesubtitles");
     Check(!dateiWeg.IsClosed,
         "F-M668: dasselbe für die Datei-Marke — der Zugeh-Stempel der Medienzeile existiert nicht mehr");
 
-    var packWeg = SourceMatrix.PackMark(db, "tt100", 2, "EN", false, "subdl");
+    var packWeg = SourceStore.PackMark(db, "tt100", 2, "EN", false, "subdl");
     Check(!packWeg.IsClosed && packWeg.RefusalReason == null && packWeg.Fingerprint == null,
         "F-M668: und für den Pack — die packs-Zeile trägt kein Urteil mehr");
 }
@@ -1200,7 +1213,7 @@ File.Copy(DbFiles.PathIn(seedDir), DbFiles.PreviousPathIn(switchDir), overwrite:
 
 using (var db = new ScribeDbContext(switchDir, null))
 {
-    var marke = SourceMatrix.TrackMarkAt(db, "s1", "subdl", "EN", false, 0);
+    var marke = SourceStore.TrackMarkAt(db, "s1", "subdl", "EN", false, 0);
     Check(marke.IsClosed && marke.SourceId == "900" && marke.ClosedAt == t1,
         "F-M668: auch die Datei, die der Formatwechsel (F-M637) baut, bekommt ihre Marken aus der Übernahme",
         (marke.SourceId ?? "-") + " / " + marke.ClosedAt);
@@ -1242,7 +1255,7 @@ using (var db = new ScribeDbContext(s20Dir, null))
     });
 
     // Der Upload hat seine Marke ohne echte Id gesetzt — die Kennung kam erst später (F-M588/F-M670).
-    SourceMatrix.WriteTrackMark(db, db.Files.FindById("m10"), "m10", "subdl", "DE", false, 0,
+    SourceStore.WriteTrackMark(db, db.Files.FindById("m10"), "m10", "subdl", "DE", false, 0,
         t1, downloadId: null, uploadId: "own:subdl:deferred");
 }
 
@@ -1276,14 +1289,14 @@ Check(QIn("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='sourc
       && QIn("SELECT SchemaVersion FROM meta WHERE Id='db'", s20Db) == 20,
     "die 20er-Datei trägt die Matrix UND die zwei Reste (Marker 20)");
 
-string s20Key = SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m10", null), "subdl", MarkKind.Track, "DE", false, 0);
-string s20Key2 = SourceMatrix.KeyOf(SourceMatrix.AnchorOf("m10", null), "subdl", MarkKind.Track, "EN", false, 1);
+string s20Spur = "#" + "s20aa" + "#aab";
+string s20Spur2 = "#" + "s20aa" + "#aac";
 int s20Marken;
 using (var db = new ScribeDbContext(s20Dir, null))
 {
-    s20Marken = SourceMatrix.CountByKind(db).Values.Sum();
-    Check(db.Meta.FindById("db")?.SchemaVersion == 22,
-        "F-M670/F-M671: eine Datei aus Schema 20 zieht auf 22 nach",
+    s20Marken = SourceStore.CountByKind(db).Values.Sum();
+    Check(db.Meta.FindById("db")?.SchemaVersion == 23,
+        "F-M670/F-M671/F-M672: eine Datei aus Schema 20 zieht auf 23 nach",
         "marker=" + db.Meta.FindById("db")?.SchemaVersion);
 }
 
@@ -1294,15 +1307,15 @@ Check(QIn("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='sourc
     "source_marks=" + QIn("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='source_marks'", s20Db)
     + " embedsSpalten=" + SpaltenVon("embeds", s20Db).Length);
 
-Check(QText("SELECT UploadId FROM source_matrix WHERE Id = '" + s20Key + "';", s20Db) == "880011"
-      && QText("SELECT ClosedAt FROM source_matrix WHERE Id = '" + s20Key + "';", s20Db) != null,
+Check(QIn("SELECT COUNT(*) FROM reference WHERE UploadedId = '880011'", s20Db) >= 1
+      && QIn("SELECT COUNT(*) FROM upload WHERE UploadedAt IS NOT NULL", s20Db) >= 1,
     "F-M670: die echte Kennung ersetzt die selbst vergebene Marke, der Zeitstempel bleibt",
-    QText("SELECT UploadId FROM source_matrix WHERE Id = '" + s20Key + "';", s20Db) ?? "-");
+    "id=" + (QText("SELECT COUNT(*) FROM reference WHERE UploadedId = '880011';", s20Db) ?? "-")
+    + " urteil=" + (QText("SELECT COUNT(*) FROM upload WHERE UploadedAt IS NOT NULL;", s20Db) ?? "-"));
 
-Check(QText("SELECT UploadId FROM source_matrix WHERE Id = '" + s20Key2 + "';", s20Db) == "sm20"
-      && QText("SELECT ClosedAt FROM source_matrix WHERE Id = '" + s20Key2 + "';", s20Db) != null,
-    "F-M670: die Marke aus der Alt-Tabelle steht mit Id und Zeitpunkt in der Matrix",
-    QText("SELECT UploadId FROM source_matrix WHERE Id = '" + s20Key2 + "';", s20Db) ?? "-");
+Check(QIn("SELECT COUNT(*) FROM reference WHERE UploadedId = 'sm20'", s20Db) >= 1,
+    "F-M670: der Beleg aus der Alt-Tabelle steht mit Id und Zeitpunkt in der Quellen-Tabelle",
+    QText("SELECT COUNT(*) FROM reference WHERE UploadedId = 'sm20';", s20Db) ?? "-");
 
 Check(Sicherungen(s20Dir).Length == 1 && s20Marken == 2,
     "F-M670: genau EINE Sicherung für den Lauf, 2 Marken danach",
@@ -1312,12 +1325,161 @@ int s20Backups = Sicherungen(s20Dir).Length;
 int s20Marken2;
 using (var db = new ScribeDbContext(s20Dir, null))
 {
-    s20Marken2 = SourceMatrix.CountByKind(db).Values.Sum();
+    s20Marken2 = SourceStore.CountByKind(db).Values.Sum();
 }
 
 Check(s20Marken2 == s20Marken && Sicherungen(s20Dir).Length == s20Backups,
     "F-M670: ein zweiter Start auf der 21er-Datei tut nichts — keine zweite Sicherung",
     s20Marken2 + " Marke(n), " + Sicherungen(s20Dir).Length + " Sicherung(en)");
+
+// ---------------------------------------------------------------------------------------------
+// T336 (F-M672/F-M676/F-M677): die Id IST der Text, die Mitgliedschaft hält der Behälter, und die
+// fremden Kennungen stehen in genau drei Tabellen.
+//
+// Der Aufbau ist wieder eine nachgebaute Altdatei aus ihrem ALTEN DDL (Schema 17): eine Staffel mit
+// drei Spuren in ZWEI Sprachen (DE plain, ENG plain, ENG HI), ein Seitenwagen, ein Pack je Sprache —
+// und ein Pack fuer FR, das in der Datei KEINE Spur hat. Genau daran scheitert die alte Zuordnung:
+// sie hing an der Datei und zog alle Spuren in den Behälter, dessen Sprache die Datei zufaellig traf.
+// ---------------------------------------------------------------------------------------------
+Console.WriteLine();
+Console.WriteLine("--- ids, membership and the three source tables (F-M672/F-M676/F-M677) ---");
+
+string idDir = Path.Combine(workdir, "ids23");
+Directory.CreateDirectory(idDir);
+string idDb = DbFiles.PathIn(idDir);
+using (var db = new ScribeDbContext(idDir, null))
+{
+    db.Files.Upsert(new FileEntity
+    {
+        OsHash = "h900", Path = "/lib/serie/s01e01.mkv", ImdbId = "tt900", TmdbId = "900",
+        IsSeries = true, Season = 1, Episode = 1,
+    });
+}
+
+using (var db = new ScribeDbContext(idDir, null))
+{
+    void Sql(string sql) => db.Context.Database.ExecuteSqlRaw(sql);
+    CreateOldTables(Sql, 17);
+    Sql("INSERT INTO media (Id, Path, JellyfinItemId, ImdbId, TmdbId, IsSeries, Season, Episode, LastSeen) "
+        + "VALUES ('h900', '/lib/serie/s01e01.mkv', NULL, 'tt900', '900', 1, 1, 1, '2026-11-01 10:00:00');");
+    foreach (var (pos, lang, hi, origin, originId) in new[]
+             {
+                 (0, "DE", 0, "subdl", "555-55"),
+                 (1, "ENG", 0, (string?)null, (string?)null),
+                 (2, "ENG", 1, (string?)null, (string?)null),
+             })
+    {
+        Sql("INSERT INTO embeds (Id, MediaHash, SubPos, Language, HearingImpaired, Status, StatusAt, Origin, OriginId) "
+            + "VALUES ('h900|" + pos + "', 'h900', " + pos + ", '" + lang + "', " + hi + ", 'observed', '2026-11-01 10:00:00', "
+            + (origin == null ? "NULL" : "'" + origin + "'") + ", "
+            + (originId == null ? "NULL" : "'" + originId + "'") + ");");
+    }
+
+    Sql("INSERT INTO sidecars (Id, ContentHash, FileName, MediaHash, Path, IsSeries, Season, Episode, Language, "
+        + "HearingImpaired, Status, StatusAt) VALUES ('sc900', 'c900', 's01e01.de.srt', 'h900', '/lib/serie/s01e01.de.srt', "
+        + "1, 1, 1, 'DE', 0, 'observed', '2026-11-01 10:00:00');");
+    foreach (var (key, lang, hi) in new[]
+             {
+                 ("tt900|S1|EN|hi", "EN", 1),
+                 ("tt900|S1|DE|plain", "DE", 0),
+                 ("tt900|S1|FR|plain", "FR", 0),
+             })
+    {
+        Sql("INSERT INTO packs (Id, ImdbId, Season, Language, HearingImpaired, ReleaseName, PackId, Episodes, Created, Updated) "
+            + "VALUES ('" + key + "', 'tt900', 1, '" + lang + "', " + hi + ", 'S01', 'own-" + lang + "', '1', "
+            + "'2026-11-01 10:00:00', '2026-11-01 10:00:00');");
+    }
+
+    // Der verbrauchte Kandidat mit der Nummer des fremden Eintrags — die Meldung braucht sie. Die Tabelle
+    // entsteht aus ihrem ALTEN DDL: eine 17er-Datei kennt `badapple` noch nicht.
+    Sql("CREATE TABLE rejected_candidates (Id TEXT NOT NULL PRIMARY KEY, ItemId TEXT NOT NULL DEFAULT '', "
+        + "Language TEXT NOT NULL DEFAULT '', SubdlId TEXT NOT NULL DEFAULT '', Reason TEXT NOT NULL DEFAULT '', "
+        + "NId TEXT NOT NULL DEFAULT '', ReleaseName TEXT NOT NULL DEFAULT '', Finding TEXT NOT NULL DEFAULT '', "
+        + "Kind TEXT NOT NULL DEFAULT 'qa', ReportedUtc TEXT NULL, Updated TEXT NOT NULL DEFAULT '');");
+    Sql("INSERT INTO rejected_candidates (Id, ItemId, Language, SubdlId, Reason, NId, ReleaseName, Finding, Kind, "
+        + "ReportedUtc, Updated) VALUES ('x|EN|777-77', 'x', 'EN', '777-77', 'candidate-rejected', 'Nj3hP7BQDw', "
+        + "'Some.Release', 'no usable cues', 'qa', NULL, '2026-11-01 10:00:00');");
+
+    Sql("UPDATE meta SET SchemaVersion = 17 WHERE Id = 'db';");
+}
+
+int idBackups;
+using (var db = new ScribeDbContext(idDir, null))
+{
+    idBackups = Sicherungen(idDir).Length;
+    string trackId = SourceStore.SubjectAt(db, "h900", 2) ?? string.Empty;
+    string sidecarId = SourceStore.TrackAtSidecar(db, "h900") ?? string.Empty;
+    string packId = db.Packs.FindAll().First().PackId;
+
+    Check(Jellyfin.Plugin.SubScribe.Data.ScribeIds.IsTrackId(trackId)
+          && trackId.Length == 10 && trackId[0] == '#' && trackId[6] == '#',
+        "F-M676: eine eingebettete Spur heisst #yyyyy#zzz — die Datei-Id steht IN der Spur-Id",
+        trackId);
+    Check(Jellyfin.Plugin.SubScribe.Data.ScribeIds.IsSidecarId(sidecarId)
+          && sidecarId.Length == 10 && sidecarId[6] == '&',
+        "F-M676: ein Seitenwagen heisst #yyyyy&zzz — das & ist kein Zeichen des Alphabets",
+        sidecarId);
+    Check(trackId.Length == 10 && sidecarId.Length == 10 && trackId.Substring(0, 6) == sidecarId.Substring(0, 6)
+          && Jellyfin.Plugin.SubScribe.Data.ScribeIds.IsFileId(trackId.Substring(0, 6)),
+        "F-M676: Spur und Seitenwagen derselben Datei tragen dieselbe Datei-Id (#yyyyy)",
+        trackId.Substring(0, 6));
+    Check(Jellyfin.Plugin.SubScribe.Data.ScribeIds.IsPackId(packId),
+        "F-M676: ein Pack heisst [xxxx] — die Klammern sind seine Marke",
+        packId);
+
+    // F-M677: die Mitgliedschaft haengt an SPRACHE und VARIANTE, nicht an der Datei.
+    var packEn = db.Packs.FindAll().First(p => p.Language == "EN" && (p.HearingImpaired ?? false));
+    var packDe = db.Packs.FindAll().First(p => p.Language == "DE");
+    var packFr = db.Packs.FindAll().First(p => p.Language == "FR");
+    Check(SourceStore.TracksOfPack(db, packEn.PackId).Count == 1
+          && SourceStore.TracksOfPack(db, packDe.PackId).Count == 1
+          && SourceStore.TracksOfPack(db, packFr.PackId).Count == 0,
+        "F-M677: der EN-HI-Pack hat die englische HI-Spur, der DE-Pack die deutsche, der FR-Pack keine",
+        "EN+HI=" + SourceStore.TracksOfPack(db, packEn.PackId).Count
+        + " DE=" + SourceStore.TracksOfPack(db, packDe.PackId).Count
+        + " FR=" + SourceStore.TracksOfPack(db, packFr.PackId).Count);
+    Check(SourceStore.TracksOfPack(db, packDe.PackId).Count == 1
+          && SourceStore.TracksOfPack(db, packDe.PackId)[0] == SourceStore.SubjectAt(db, "h900", 0),
+        "F-M677: die DE-Spur der Datei ist Mitglied des DE-Packs — nicht des Behaelters der Datei");
+    Check(SourceStore.FilesOfPack(db, packDe.PackId).Count == 1,
+        "F-M677: die Mitglieder eines Packs sind ueber eine Datei zu finden — ohne eigene Zuordnungstabelle");
+
+    // F-M676: die Spalten, die es nicht mehr gibt.
+    Check(!SpaltenVon("track").Contains("FileId") && !SpaltenVon("track").Contains("PackId")
+          && !SpaltenVon("track").Contains("Display") && !SpaltenVon("sidecar").Contains("FileId")
+          && !SpaltenVon("file").Contains("PackId") && !SpaltenVon("file").Contains("Display"),
+        "F-M676/F-M677: keine FileId-/PackId-/Display-Spalte mehr — die Id traegt, was sie sagt",
+        string.Join(",", SpaltenVon("track")));
+
+    // F-M672: keine fremde Kennung ausserhalb von `reference` und `badapple`.
+    int fremd = QIn("SELECT COUNT(*) FROM track WHERE TrackId LIKE '%555-55%' OR COALESCE(Origin,'') LIKE '%555-55%'", idDb)
+                + QIn("SELECT COUNT(*) FROM sidecar WHERE COALESCE(Origin,'') LIKE '%555-55%'", idDb)
+                + QIn("SELECT COUNT(*) FROM pack WHERE COALESCE(ReleaseName,'') LIKE '%555-55%'", idDb);
+    Check(fremd == 0,
+        "F-M672: keine fremde Kennung steht in einer Entity-Tabelle",
+        fremd + " Treffer");
+    Check(QIn("SELECT COUNT(*) FROM reference WHERE DownloadSourceId = '555-55'", idDb) == 1,
+        "F-M672: die Herkunft der DE-Spur (OriginId 555-55) steht als Beleg in `reference` — kein Wert verloren",
+        QText("SELECT COUNT(*) FROM reference WHERE DownloadSourceId = '555-55';", idDb) ?? "-");
+
+    Check(QText("SELECT SourceId || '|' || Reason || '|' || ReportState FROM badapple;", idDb)
+          == "777-77|candidate-rejected|open",
+        "F-M672: der schlechte Download traegt die Nummer des fremden Eintrags, seinen Grund und seinen Meldezustand",
+        QText("SELECT SourceId || '|' || Reason || '|' || ReportState FROM badapple;", idDb) ?? "-");
+    Check(QIn("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name IN ('rejected_candidates','source_matrix')", idDb) == 0,
+        "F-M672: source_matrix und rejected_candidates gibt es nicht mehr");
+}
+
+Check(idBackups == 1, "F-M672: genau EINE Sicherung fuer den ganzen Aufstieg", idBackups + " Sicherung(en)");
+int idMarks;
+using (var db = new ScribeDbContext(idDir, null))
+{
+    idMarks = SourceStore.CountByKind(db).Values.Sum();
+}
+
+Check(idMarks == 5 && Sicherungen(idDir).Length == 1,
+    "F-M672: ein zweiter Start tut nichts — gleiche Markenzahl, keine zweite Sicherung",
+    idMarks + " Marke(n), " + Sicherungen(idDir).Length + " Sicherung(en)");
 
 Console.WriteLine();
 Console.WriteLine("=== " + (failures == 0 ? "STORE OK" : failures + " FAILURE(S)") + " ===");

@@ -71,7 +71,7 @@ public class ScribeDiagnosticsController : ControllerBase
             var media = db.Files.FindAll().ToList();
             var runs = db.Runs.FindAll().OrderByDescending(r => r.Started).Take(20).ToList();
             var oshashes = db.Oshashes.Count();
-            var burnedCandidates = db.RejectedCandidates.Count();
+            var burnedCandidates = db.BadApples.Count();
 
             var mediaByUploadState = media
                 .GroupBy(m => m.SubtitlesUploadedAt != null)
@@ -111,7 +111,7 @@ public class ScribeDiagnosticsController : ControllerBase
                 // F-M670: die Zahl kommt aus der Marken-Matrix — es gibt keine Id-Spalte an `embeds`/
                 // `sidecars` mehr, aus der sie gezählt werden könnte. „Mit Id" heißt: die Marke führt eine
                 // Eintrags- oder Einsende-Id bei SubDL.
-                WithSubdlId = SourceMatrix.CountWithId(db, SourceMatrix.Subdl)
+                WithSubdlId = SourceStore.CountWithId(db, SourceStore.Subdl)
             };
 
             var result = new

@@ -260,7 +260,7 @@ public static class SourceMatrixMigration
                     idKonflikte);
             }
 
-            foreach (string quelle in SourceMatrix.Sources)
+            foreach (string quelle in SourceStore.Sources)
             {
                 foreach (string art in MarkKind.All)
                 {
@@ -348,7 +348,7 @@ public static class SourceMatrixMigration
             ("Episode", sidecar ? Select("Episode") : (hatMedia ? "m.Episode" : "NULL")),
         };
 
-        foreach (string quelle in SourceMatrix.Sources)
+        foreach (string quelle in SourceStore.Sources)
         {
             string prefix = PrefixOf(quelle);
             if (!ColumnExists(conn, table, prefix + "UploadedAt"))
@@ -382,10 +382,10 @@ public static class SourceMatrixMigration
                 // F-M669: eine Schema-17-Zeile hat KEINE Position — dann bleibt sie null und die Marke
                 // ist die paarweite Brücke, die ein Leser ohne Position noch findet.
                 int? subPos = sidecar
-                    ? SourceMatrix.SidecarPosition
+                    ? SourceStore.SidecarPosition
                     : AsInt(werte["SubPos"]);
 
-                foreach (string quelle in SourceMatrix.Sources)
+                foreach (string quelle in SourceStore.Sources)
                 {
                     string prefix = PrefixOf(quelle);
                     if (!werte.ContainsKey(prefix + "UploadedAt"))
@@ -416,7 +416,7 @@ public static class SourceMatrixMigration
                         TmdbId = werte["TmdbId"] as string ?? string.Empty,
                         Source = quelle,
                         Kind = art,
-                        Language = SourceMatrix.Normalise(language),
+                        Language = SourceStore.Normalise(language),
                         Season = AsInt(werte["Season"]),
                         Episode = AsInt(werte["Episode"]),
                         SubPos = subPos,
@@ -424,7 +424,7 @@ public static class SourceMatrixMigration
                         ClosedAt = zeit,
                         SourceId = abrufId,
                         UploadId = einsendeId,
-                    }, SourceMatrix.AnchorOf(mediaHash, null));
+                    }, LegacyMatrixKeys.AnchorOf(mediaHash, null));
                 }
             }
         }
@@ -450,12 +450,12 @@ public static class SourceMatrixMigration
             ("Episode", ColumnExists(conn, "media", "Episode") ? "Episode" : "NULL"),
         };
 
-        foreach (string quelle in SourceMatrix.Sources)
+        foreach (string quelle in SourceStore.Sources)
         {
             string spalte = quelle switch
             {
-                SourceMatrix.Subdl => "CompleteSubdl",
-                SourceMatrix.TvSubtitles => "CompleteTvSubtitles",
+                SourceStore.Subdl => "CompleteSubdl",
+                SourceStore.TvSubtitles => "CompleteTvSubtitles",
                 _ => "CompleteMsub",
             };
 
@@ -478,12 +478,12 @@ public static class SourceMatrixMigration
 
             string mediaHash = werte["Id"] as string ?? string.Empty;
 
-            foreach (string quelle in SourceMatrix.Sources)
+            foreach (string quelle in SourceStore.Sources)
             {
                 string spalte = quelle switch
                 {
-                    SourceMatrix.Subdl => "CompleteSubdl",
-                    SourceMatrix.TvSubtitles => "CompleteTvSubtitles",
+                    SourceStore.Subdl => "CompleteSubdl",
+                    SourceStore.TvSubtitles => "CompleteTvSubtitles",
                     _ => "CompleteMsub",
                 };
 
@@ -508,7 +508,7 @@ public static class SourceMatrixMigration
                     Season = AsInt(werte["Season"]),
                     Episode = AsInt(werte["Episode"]),
                     ClosedAt = zeit,
-                }, SourceMatrix.AnchorOf(mediaHash, null));
+                }, LegacyMatrixKeys.AnchorOf(mediaHash, null));
             }
         }
 
@@ -566,7 +566,7 @@ public static class SourceMatrixMigration
             bool? hi = werte["HearingImpaired"] is long h ? h != 0 : (werte["HearingImpaired"] is bool b ? b : null);
             // F-M642: eine Zeile aus der Zeit vor der Quellen-Spalte gehörte SubDL — damals war SubDL
             // die einzige Quelle mit Behältern.
-            string quelle = werte["Source"] as string is { Length: > 0 } s ? s : SourceMatrix.Subdl;
+            string quelle = werte["Source"] as string is { Length: > 0 } s ? s : SourceStore.Subdl;
 
             n++;
             string k = quelle + "|" + MarkKind.Pack;
@@ -577,7 +577,7 @@ public static class SourceMatrixMigration
                 ImdbId = imdb,
                 Source = quelle,
                 Kind = MarkKind.Pack,
-                Language = SourceMatrix.Normalise(werte["Language"] as string),
+                Language = SourceStore.Normalise(werte["Language"] as string),
                 Season = season,
                 HearingImpaired = hi,
                 ClosedAt = werte["UploadedAt"] as DateTime?,
@@ -586,7 +586,7 @@ public static class SourceMatrixMigration
                 RefusalReason = werte["RefusalReason"] as string,
                 RefusedAt = werte["RefusedAt"] as DateTime?,
                 RefusalSignature = werte["RefusedSignature"] as string,
-            }, SourceMatrix.AnchorOf(null, imdb, season));
+            }, LegacyMatrixKeys.AnchorOf(null, imdb, season));
         }
 
         return n;
@@ -688,7 +688,7 @@ public static class SourceMatrixMigration
             {
                 werte.Add(new LegacyIdValue(
                     r.IsDBNull(0) ? string.Empty : r.GetString(0),
-                    AsInt(ReadValue(r, 1)) ?? SourceMatrix.SidecarPosition,
+                    AsInt(ReadValue(r, 1)) ?? SourceStore.SidecarPosition,
                     r.IsDBNull(2) ? string.Empty : Convert.ToString(r.GetValue(2), CultureInfo.InvariantCulture) ?? string.Empty,
                     AsHi(ReadValue(r, 3)),
                     r.IsDBNull(4) ? string.Empty : Convert.ToString(r.GetValue(4), CultureInfo.InvariantCulture) ?? string.Empty,
@@ -768,7 +768,7 @@ public static class SourceMatrixMigration
                 werte["UploadedAt"] as DateTime?,
                 werte["CompletedAt"] as DateTime?,
                 aufSpur ? embedHash : sideHash,
-                aufSpur ? AsInt(werte["EmbedPos"]) ?? SourceMatrix.SidecarPosition : SourceMatrix.SidecarPosition,
+                aufSpur ? AsInt(werte["EmbedPos"]) ?? SourceStore.SidecarPosition : SourceStore.SidecarPosition,
                 (aufSpur ? werte["EmbedLang"] as string : werte["SideLang"] as string) ?? string.Empty,
                 AsHi(aufSpur ? werte["EmbedHi"] : werte["SideHi"]),
                 AlsText(werte["ImdbId"]),
@@ -792,8 +792,8 @@ public static class SourceMatrixMigration
             }
 
             bool hi = wert.HearingImpaired == true;
-            string key = SourceMatrix.KeyOf(
-                SourceMatrix.AnchorOf(wert.MediaHash, null), SourceMatrix.Subdl,
+            string key = LegacyMatrixKeys.KeyOf(
+                LegacyMatrixKeys.AnchorOf(wert.MediaHash, null), SourceStore.Subdl,
                 MarkKind.ForTrack(hi), wert.Language, hi, wert.SubPos);
             if (string.IsNullOrEmpty(key))
             {
@@ -868,8 +868,8 @@ public static class SourceMatrixMigration
             }
 
             bool hi = marke.HearingImpaired == true;
-            string key = SourceMatrix.KeyOf(
-                SourceMatrix.AnchorOf(marke.MediaHash, null), marke.Source,
+            string key = LegacyMatrixKeys.KeyOf(
+                LegacyMatrixKeys.AnchorOf(marke.MediaHash, null), marke.Source,
                 MarkKind.ForTrack(hi), marke.Language, hi, marke.SubPos);
             if (string.IsNullOrEmpty(key))
             {
@@ -899,7 +899,7 @@ public static class SourceMatrixMigration
             cmd.Parameters.AddWithValue("$TmdbId", marke.TmdbId ?? string.Empty);
             cmd.Parameters.AddWithValue("$Source", marke.Source);
             cmd.Parameters.AddWithValue("$Kind", MarkKind.ForTrack(hi));
-            cmd.Parameters.AddWithValue("$Language", SourceMatrix.Normalise(marke.Language));
+            cmd.Parameters.AddWithValue("$Language", SourceStore.Normalise(marke.Language));
             cmd.Parameters.AddWithValue("$Season", (object?)marke.Season ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$Episode", (object?)marke.Episode ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$SubPos", marke.SubPos);
@@ -965,9 +965,9 @@ public static class SourceMatrixMigration
         cmd.Parameters.AddWithValue("$MediaHash", wert.MediaHash);
         cmd.Parameters.AddWithValue("$ImdbId", wert.ImdbId ?? string.Empty);
         cmd.Parameters.AddWithValue("$TmdbId", wert.TmdbId ?? string.Empty);
-        cmd.Parameters.AddWithValue("$Source", SourceMatrix.Subdl);
+        cmd.Parameters.AddWithValue("$Source", SourceStore.Subdl);
         cmd.Parameters.AddWithValue("$Kind", MarkKind.ForTrack(hi));
-        cmd.Parameters.AddWithValue("$Language", SourceMatrix.Normalise(wert.Language));
+        cmd.Parameters.AddWithValue("$Language", SourceStore.Normalise(wert.Language));
         cmd.Parameters.AddWithValue("$Season", (object?)wert.Season ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$Episode", (object?)wert.Episode ?? DBNull.Value);
         cmd.Parameters.AddWithValue("$SubPos", wert.SubPos);
@@ -1017,7 +1017,7 @@ public static class SourceMatrixMigration
         Dictionary<string, SourceMatrixEntity> zeilen, SourceMatrixEntity neu, string anchor)
     {
         // F-M669: die Position ist Teil des Schlüssels der Spur-Arten; `file`/`pack` tragen keine.
-        string key = SourceMatrix.KeyOf(
+        string key = LegacyMatrixKeys.KeyOf(
             anchor, neu.Source, neu.Kind, neu.Language, neu.HearingImpaired == true, neu.SubPos);
         if (string.IsNullOrEmpty(key))
         {
@@ -1289,8 +1289,8 @@ public static class SourceMatrixMigration
     /// <summary>Der Spalten-Präfix einer Quelle in den breiten Spalten.</summary>
     private static string PrefixOf(string source) => source switch
     {
-        SourceMatrix.Subdl => "Subdl",
-        SourceMatrix.TvSubtitles => "TvSubtitles",
+        SourceStore.Subdl => "Subdl",
+        SourceStore.TvSubtitles => "TvSubtitles",
         _ => "Moviesubtitles",
     };
 
@@ -1360,4 +1360,135 @@ public static class SourceMatrixMigration
         cmd.CommandText = "PRAGMA wal_checkpoint(TRUNCATE);";
         cmd.ExecuteNonQuery();
     }
+}
+
+/// <summary>
+/// F-M667/F-M672: die zwei Schlüssel-Bauer der ALTEN Marken-Matrix. Sie stehen hier und nicht mehr in
+/// <see cref="SourceStore"/>, weil der Schlüssel der Matrix <c>&lt;Anker&gt;|&lt;Quelle&gt;|…</c> mit dem
+/// Aufstieg auf Schema 23 verschwindet: die drei Quellen-Tabellen adressieren ihr Subjekt über dessen
+/// EIGENE Kennung, nicht über einen zusammengesetzten Text. Nur der Übernahmelauf braucht den alten
+/// Schlüssel noch, um in die Tabelle schreiben zu können, die er im selben Lauf wieder niederlegt.
+/// </summary>
+public static class LegacyMatrixKeys
+{
+    /// <summary>Der Anker einer Marke: der Medien-Hash, sonst die Serie mit ihrer Staffel.</summary>
+    /// <param name="mediaHash">Media hash, or null/empty.</param>
+    /// <param name="imdbId">Series/movie IMDb id, or null/empty.</param>
+    /// <param name="season">Season for a pack anchor, else null.</param>
+    /// <returns>The anchor, or an empty string when neither is known.</returns>
+    public static string AnchorOf(string? mediaHash, string? imdbId, int? season = null)
+    {
+        if (!string.IsNullOrWhiteSpace(mediaHash))
+        {
+            return "h:" + mediaHash;
+        }
+
+        if (!string.IsNullOrWhiteSpace(imdbId))
+        {
+            return season == null
+                ? "i:" + imdbId
+                : "i:" + imdbId + "#S" + season.Value.ToString("D2", CultureInfo.InvariantCulture);
+        }
+
+        return string.Empty;
+    }
+
+    /// <summary>Der Schlüssel einer Marke — Anker, Quelle, Art, Sprache, Variante und (bei einer Spur) Position.</summary>
+    /// <param name="anchor">Anchor from <see cref="AnchorOf"/>.</param>
+    /// <param name="source">The source.</param>
+    /// <param name="kind">One of <see cref="MarkKind"/>.</param>
+    /// <param name="language">ISO 639-2 language.</param>
+    /// <param name="hearingImpaired">True for the SDH variant.</param>
+    /// <param name="subPos">Stream position for track kinds; null for file/pack.</param>
+    /// <returns>The composite key, or an empty string when the anchor is unknown.</returns>
+    public static string KeyOf(
+        string anchor, string source, string kind, string? language, bool hearingImpaired, int? subPos = null)
+    {
+        if (string.IsNullOrEmpty(anchor) || string.IsNullOrEmpty(source) || string.IsNullOrEmpty(kind))
+        {
+            return string.Empty;
+        }
+
+        string kopf = string.Join(
+            "|",
+            anchor,
+            source,
+            kind,
+            SourceStore.Normalise(language),
+            hearingImpaired ? "hi" : "plain");
+
+        return subPos.HasValue
+            ? kopf + "|" + subPos.Value.ToString(CultureInfo.InvariantCulture)
+            : kopf;
+    }
+}
+
+/// <summary>
+/// F-M667: EINE Marke je (Medium, Quelle, Art) — die Zeilenform der ALTEN Marken-Matrix
+/// <c>source_matrix</c>. Sie steht seit Schema 23 (F-M672) hier, weil nur noch der Übernahmelauf sie
+/// schreibt: er füllt die Matrix aus den breiten Spalten einer 17er-Datei, und <see cref="IdModel"/> löst
+/// sie im selben Start in <c>upload</c>/<c>reference</c> auf und legt die Tabelle nieder. Ein Store, den
+/// dieser Build schreibt, kennt sie nicht mehr.
+/// </summary>
+public class SourceMatrixEntity
+{
+    /// <summary>Der Schlüssel, gebaut von <see cref="LegacyMatrixKeys.KeyOf"/>.</summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>Medien-Hash des Mediums, zu dem die Marke gehört (leer bei einer Pack-Zeile ohne Datei).</summary>
+    public string MediaHash { get; set; } = string.Empty;
+
+    /// <summary>IMDb-Kennung des Mediums (bei einer Serie die Serien-Kennung, F-M191).</summary>
+    public string ImdbId { get; set; } = string.Empty;
+
+    /// <summary>TMDb-Kennung des Mediums (bei einer Serie die Serien-Kennung, F-M191).</summary>
+    public string TmdbId { get; set; } = string.Empty;
+
+    /// <summary>Die Quelle der Marke — <c>subdl</c>, <c>tvsubtitles</c> oder <c>moviesubtitles</c>.</summary>
+    public string Source { get; set; } = string.Empty;
+
+    /// <summary>Die Art der Marke — eine der Konstanten aus <see cref="MarkKind"/>.</summary>
+    public string Kind { get; set; } = string.Empty;
+
+    /// <summary>Sprache der Spur beziehungsweise des Packs, ISO 639-2. Leer bei <c>file</c>.</summary>
+    public string Language { get; set; } = string.Empty;
+
+    /// <summary>Staffel (Serie; bei <c>file</c> die Staffel der Datei, sonst null).</summary>
+    public int? Season { get; set; }
+
+    /// <summary>Folge (Serie; bei <c>file</c> die Folge der Datei, sonst null).</summary>
+    public int? Episode { get; set; }
+
+    /// <summary>HI-Variante der Zeile, dreiwertig wie überall im Store (F-M285).</summary>
+    public bool? HearingImpaired { get; set; }
+
+    /// <summary>Das Urteil „geschlossen" für diese Quelle und Art; null heißt offen.</summary>
+    public DateTime? ClosedAt { get; set; }
+
+    /// <summary>Inhaltssignatur für <c>file</c> und <c>pack</c> (F-M466/F-M562).</summary>
+    public string? Fingerprint { get; set; }
+
+    /// <summary>Änderungszeit der Datei in Unix-Sekunden, zu der <see cref="Fingerprint"/> gehört.</summary>
+    public long? MtimeUnix { get; set; }
+
+    /// <summary>Die Id BEI DER QUELLE — der Eintrag, aus dem der Untertitel kam; beim Pack der Behälter.</summary>
+    public string? SourceId { get; set; }
+
+    /// <summary>F-M669: die Position der Spur im Video — nur bei <c>track</c>/<c>track-hi</c> belegt.</summary>
+    public int? SubPos { get; set; }
+
+    /// <summary>F-M668: die Id der EINSENDUNG bei dieser Quelle (eigener Nummernkreis, F-M435).</summary>
+    public string? UploadId { get; set; }
+
+    /// <summary>Der Grund, aus dem die Quelle abgelehnt hat.</summary>
+    public string? RefusalReason { get; set; }
+
+    /// <summary>Wann abgelehnt wurde (UTC).</summary>
+    public DateTime? RefusedAt { get; set; }
+
+    /// <summary>F-M650: die Staffel-Signatur, auf der eine Absage beruht.</summary>
+    public string? RefusalSignature { get; set; }
+
+    /// <summary>Wann die Zeile zuletzt geschrieben wurde (UTC).</summary>
+    public DateTime Written { get; set; } = DateTime.UtcNow;
 }

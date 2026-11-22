@@ -155,7 +155,7 @@ public class ScribeReset : ControllerBase
             {
                 // Download side = downloaded sidecars and burned candidates.
                 db.Sidecars.DeleteMany(x => x.Status == SubtitleStatus.Downloaded);
-                db.RejectedCandidates.DeleteAll();
+                db.BadApples.DeleteAll();
                 // `id-not-found:` AND `file-retry:` are cleaned as RETIRED keys: the give-up budgets
                 // went with IdRetryLimit and with the file-missing counter (both 08.10.2026), so no code
                 // writes or reads either one any more — a database carried over from before still holds

@@ -690,10 +690,11 @@ internal static class Program
               && reg.Contains("&& string.IsNullOrWhiteSpace(row.RefusalReason);", StringComparison.Ordinal),
             "F-M644: a refused row is not a pack — \"is this season packed?\" says no");
 
-        // F-M668: beide Pack-Karten lesen die Matrix (je Quelle gefiltert) und lassen eine Absage aus —
-        // die Bedingung steht dort neben `ClosedAt`, weil ein gescheiterter Behälter kein Urteil hat.
-        Check(reg.Contains("if (!string.IsNullOrWhiteSpace(row.RefusalReason) || row.ClosedAt == null)", StringComparison.Ordinal)
-              && reg.Split("if (!string.IsNullOrWhiteSpace(row.RefusalReason) || row.ClosedAt == null)").Length - 1 >= 2,
+        // F-M668/F-M677: beide Pack-Karten lesen die Quelle-Tabelle (je Quelle gefiltert) und lassen eine
+        // Absage aus — die Bedingung steht dort neben `ClosedAt`, weil ein gescheiterter Behälter kein
+        // Urteil hat. Seit Schema 23 heißt die gelesene Marke `marke` (vorher `row`).
+        Check(reg.Contains("if (!string.IsNullOrWhiteSpace(marke.RefusalReason) || marke.ClosedAt == null)", StringComparison.Ordinal)
+              && reg.Split("if (!string.IsNullOrWhiteSpace(marke.RefusalReason) || marke.ClosedAt == null)").Length - 1 >= 2,
             "F-M644: and the pack maps of both sources leave it out, so a changed content is planned again");
 
         Console.WriteLine();

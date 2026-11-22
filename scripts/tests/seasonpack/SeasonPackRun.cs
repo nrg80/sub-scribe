@@ -754,7 +754,7 @@ internal static class Program
         // F-M668/F-M670: BEIDE Kennungen stehen in der Matrix — die Behälter-Kennung an der `pack`-Zeile,
         // die Untertitel-Kennung an der Spur-Marke. `RemapId` schreibt beide Zellen EINER Marke um
         // (`SourceId` und `UploadId`), also braucht es keinen zweiten Schreibweg und keine Id-Spalte mehr.
-        Check(registrySrc.Contains("return SourceMatrix.RemapId(_db, uploadId, entryId);")
+        Check(registrySrc.Contains("return SourceStore.RemapId(_db, uploadId, entryId);")
               && !registrySrc.Contains("x.SubdlId, uploadId"),
             "F-M435: subtitle rows AND pack rows are rewritten — one call, both cells of the mark");
         var coordinatorSrc = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Pipeline/SeasonPackCoordinator.cs"));

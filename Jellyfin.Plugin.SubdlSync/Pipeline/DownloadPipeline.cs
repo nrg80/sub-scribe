@@ -277,7 +277,7 @@ public sealed class DownloadPipeline : IDisposable
     /// runs AFTER the walk, never inside a download unit, so a slow or failing report cannot delay,
     /// fail or reorder anything the pipeline is doing.
     /// </summary>
-    private readonly List<RejectedCandidateEntity> _pendingReports = new();
+    private readonly List<BadAppleEntity> _pendingReports = new();
 
     /// <summary>
     /// F-M472: what the last processed item got out of a season pack, or null. Read by the run
@@ -2234,10 +2234,10 @@ public sealed class DownloadPipeline : IDisposable
                     {
                         foreach (var row in _qaFails.GetRows(item.Id.ToString(), lang))
                         {
-                            if (row.ReportedUtc != null
+                            if (row.ReportedAt != null
                                 || string.IsNullOrWhiteSpace(row.NId)
                                 || !string.Equals(row.Kind, "qa", StringComparison.Ordinal)
-                                || !qaKnownRejected.Contains(row.SubdlId, StringComparer.Ordinal))
+                                || !qaKnownRejected.Contains(row.SourceId, StringComparer.Ordinal))
                             {
                                 continue;
                             }
@@ -2702,9 +2702,9 @@ public sealed class DownloadPipeline : IDisposable
 
                                     foreach (var row in _qaFails.GetRows(item.Id.ToString(), lang))
                                     {
-                                        if (row.ReportedUtc == null
+                                        if (row.ReportedAt == null
                                             && string.Equals(row.Kind, "qa", StringComparison.Ordinal)
-                                            && string.Equals(row.SubdlId, hi.SubdlId, StringComparison.Ordinal))
+                                            && string.Equals(row.SourceId, hi.SubdlId, StringComparison.Ordinal))
                                         {
                                             QueueReport(row);
                                         }
@@ -3158,9 +3158,9 @@ public sealed class DownloadPipeline : IDisposable
 
                             foreach (var row in _qaFails.GetRows(item.Id.ToString(), lang))
                             {
-                                if (row.ReportedUtc == null
+                                if (row.ReportedAt == null
                                     && string.Equals(row.Kind, "qa", StringComparison.Ordinal)
-                                    && string.Equals(row.SubdlId, cand.SubdlId, StringComparison.Ordinal))
+                                    && string.Equals(row.SourceId, cand.SubdlId, StringComparison.Ordinal))
                                 {
                                     QueueReport(row);
                                 }
@@ -3735,9 +3735,9 @@ public sealed class DownloadPipeline : IDisposable
                     {
                         foreach (var row in _qaFails.GetRows(item.Id.ToString(), lang))
                         {
-                            if (row.ReportedUtc == null
+                            if (row.ReportedAt == null
                                 && string.Equals(row.Kind, "qa", StringComparison.Ordinal)
-                                && qaRejectedReleases.Contains(row.SubdlId, StringComparer.Ordinal))
+                                && qaRejectedReleases.Contains(row.SourceId, StringComparer.Ordinal))
                             {
                                 QueueReport(row);
                             }
@@ -5147,9 +5147,9 @@ public sealed class DownloadPipeline : IDisposable
         }
 
         var row = _qaFails.GetRows(itemId, lang)
-            .FirstOrDefault(r => string.Equals(r.SubdlId, cand.SubdlId, StringComparison.Ordinal)
+            .FirstOrDefault(r => string.Equals(r.SourceId, cand.SubdlId, StringComparison.Ordinal)
                                  && string.Equals(r.Kind, kind, StringComparison.Ordinal));
-        if (row != null && row.ReportedUtc == null)
+        if (row != null && row.ReportedAt == null)
         {
             QueueReport(row);
         }
@@ -5306,10 +5306,10 @@ public sealed class DownloadPipeline : IDisposable
     /// here can slow down or break a download unit.
     /// </summary>
     /// <param name="row">Confirmed defect.</param>
-    private void QueueReport(RejectedCandidateEntity row)
+    private void QueueReport(BadAppleEntity row)
     {
         if (string.IsNullOrWhiteSpace(row.NId)
-            || _pendingReports.Any(r => string.Equals(r.Id, row.Id, StringComparison.Ordinal)))
+            || _pendingReports.Any(r => string.Equals(r.Key, row.Key, StringComparison.Ordinal)))
         {
             return;
         }
@@ -5360,10 +5360,10 @@ public sealed class DownloadPipeline : IDisposable
         _pendingReports.Clear();
     }
 
-    private async Task FileReportAsync(RejectedCandidateEntity row, string lang, DownloadRunSummary summary, CancellationToken ct)
+    private async Task FileReportAsync(BadAppleEntity row, string lang, DownloadRunSummary summary, CancellationToken ct)
     {
         string version = typeof(DownloadPipeline).Assembly.GetName().Version?.ToString() ?? string.Empty;
-        var text = BrokenSubtitleReports.Build(row.SubdlId, row.ReleaseName, lang, row.Finding, version, _api.AccountName);
+        var text = BrokenSubtitleReports.Build(row.SourceId, row.ReleaseName, lang, row.Finding, version, _api.AccountName);
         if (text == null || string.IsNullOrWhiteSpace(row.NId))
         {
             return;
