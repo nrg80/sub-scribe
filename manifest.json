@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.2",
-        "changelog": "v12.3.8.2: the upload and download switch of every source moved into its own source file — one card per source under \"Endpoints\", and no duplicate switches on the upload and download tabs.",
+        "version": "12.3.8.3",
+        "changelog": "v12.3.8.3: the source cards stay lean — no address field (the URL lives in the build), one short capability line instead of badges, and a secret field that looks filled and is typeable.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.2-dev/Jellyfin.Plugin.SubdlSync_12.3.8.2.zip",
-        "checksum": "8713e136f08c3531f558a75e64382946",
-        "timestamp": "2026-11-22T11:22:26Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.3-dev/Jellyfin.Plugin.SubdlSync_12.3.8.3.zip",
+        "checksum": "216007760a6bd07a81a93583321bd9da",
+        "timestamp": "2026-11-22T11:38:31Z"
       }
     ]
   }
