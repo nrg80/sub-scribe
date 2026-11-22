@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.5",
-        "changelog": "v12.3.8.5: upload, download, packs and report are switches on each source card, the season-ZIP preference reaches every source that has one, and the card saves with the same button as the rest of the page.",
+        "version": "12.3.8.6",
+        "changelog": "v12.3.8.6: the SubDL card carries the three credentials — API key, email, password —, the download and upload tabs no longer describe the sources at all, no source carries a field that asks nothing, and the card buttons and inputs are real Emby elements.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.5-dev/Jellyfin.Plugin.SubdlSync_12.3.8.5.zip",
-        "checksum": "d0b071d6f4bbd7f8816b12de96dca5e3",
-        "timestamp": "2026-11-22T11:58:13Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.6-dev/Jellyfin.Plugin.SubdlSync_12.3.8.6.zip",
+        "checksum": "9f0456dc20e5ae6b932fcac26eaac529",
+        "timestamp": "2026-11-22T19:16:12Z"
       }
     ]
   }
