@@ -50,10 +50,10 @@ public sealed class MsubEngine : ISourceEngine
     /// </summary>
     public static IReadOnlyList<SourceField> Declared { get; } = new SourceField[]
     {
-        new(FieldBaseUrl, "Adresse", SourceFieldKind.Url, Default: MovieSubtitlesClient.BaseUrl,
-            Help: "Die Seitenadresse. Dieser Build benutzt sie fest eingebaut; ein abweichender Wert wird gemeldet."),
-        new(FieldAccess, "Zugang", SourceFieldKind.Secret,
-            Help: "Wird heute nicht benutzt — die Seite verlangt keinen Zugang."),
+        new(FieldBaseUrl, "Address", SourceFieldKind.Url, Default: MovieSubtitlesClient.BaseUrl,
+            Help: "The site address. This build uses the built-in one; a differing value is reported."),
+        new(FieldAccess, "Access", SourceFieldKind.Secret,
+            Help: "Not used today — the site asks for no access."),
     };
 
     private readonly MovieSubtitlesClient _client;

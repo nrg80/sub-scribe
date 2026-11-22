@@ -750,7 +750,15 @@
     },
     "T345": {
       "suite": "gui-structure",
-      "checks": 21
+      "checks": 25
+    },
+    "T346": {
+      "suite": "gui-structure",
+      "checks": 4
+    },
+    "T347": {
+      "suite": "gui-structure",
+      "checks": 2
     }
   }
 }

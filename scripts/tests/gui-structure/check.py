@@ -30,6 +30,7 @@ Run: python3 scripts/tests/gui-structure/check.py [path/to/configPage.html]
 Exit code 0 = all checks pass.
 """
 
+import json
 import os
 import re
 import subprocess
@@ -61,6 +62,132 @@ def read_source(*parts):
             return fh.read()
     except OSError:
         return ""
+
+def run_case_probe(page_src):
+    """F-M689: fahre die Uebersetzungsfunktionen der Seite gegen eine Endpunkt-Antwort.
+
+    Warum echt und nicht per Textsuche: der Fehler vom 22.11.2026 war syntaktisch einwandfreies
+    JavaScript, das nur die falsche Schreibweise las — eine Textpruefung haette ihn nie gesehen.
+    Hier laeuft derselbe Code, den der Browser laeuft, gegen eine Antwort, wie der Endpunkt sie
+    wirklich liefert (PascalCase, DEU/ENG-Schluessel als Daten), und die Pruefung vergleicht das
+    Ergebnis Feld fuer Feld.
+
+    Gibt (ok, detail) zurueck. Fehlt node, ist das ein Fehlschlag mit klarem Grund — nicht still.
+    """
+    start = page_src.find("function subdlSourceWert")
+    end = page_src.find("function subdlSourceCaps")
+    if start == -1 or end == -1 or end <= start:
+        return False, "Uebersetzungsfunktionen nicht gefunden"
+    block = page_src[start:end]
+
+    # Die Antwort, wie GET Plugins/SubdlSync/Sources sie am 22.11.2026 auf prod geliefert hat:
+    # Huelle klein ("sources"), Eintraege und Felder in .NET-Schreibweise, Sprachtafel DEU/ENG.
+    fixture = r"""
+{
+  "sources": [
+    {
+      "Key": "subdl", "DisplayName": "SubDL", "Configured": true,
+      "File": "sources/subdl.json",
+      "Capabilities": {
+        "CanUpload": true, "CanSeasonPacks": true, "CanQuota": true,
+        "SearchesByImdb": true, "SearchesByTmdb": false,
+        "Pace": { "UploadsPerHour": 500, "MinCallPauseSeconds": 0 },
+        "Languages": { "DEU": "DE", "ENG": "EN" }
+      },
+      "Fields": [
+        { "Key": "apiKey", "Label": "API-Schluessel", "Kind": "secret", "Required": true,
+          "Help": "Bearer", "Gesetzt": true, "Options": [] },
+        { "Key": "account", "Label": "Konto", "Kind": "text", "Required": false,
+          "Gesetzt": false, "Options": [],
+          "VisibleWhen": { "Field": "apiKey", "Value": "set" } },
+        { "Key": "baseUrl", "Label": "Basis-Adresse", "Kind": "url", "Value": "https://api.subdl.com",
+          "Gesetzt": false, "Options": [] },
+        { "Key": "preferSeasonZip", "Label": "Staffel-ZIP bevorzugen", "Kind": "switch",
+          "Value": true, "Gesetzt": false, "Options": [] },
+        { "Key": "menge", "Label": "Menge", "Kind": "number", "Value": 3, "Min": 1, "Max": 9,
+          "Gesetzt": false, "Options": [] },
+        { "Key": "art", "Label": "Art", "Kind": "choice", "Value": "b",
+          "Options": ["a", "b"], "Gesetzt": false }
+      ]
+    },
+    {
+      "Key": "tvsubtitles", "DisplayName": "tvsubtitles.net", "Configured": "false",
+      "Capabilities": { "CanSeasonPacks": true, "Languages": { "ENG": "en" } },
+      "Fields": [ { "Key": "baseUrl", "Label": "Basis-Adresse", "Kind": "url", "Value": "x",
+                    "Options": [] } ]
+    }
+  ]
+}
+"""
+
+    js = (
+        "var SUBDL_SOURCE_CAP_KEYS = ['canUpload','canReport','canHearingImpaired',"
+        "'canOfferSeasonPacks','canSeasonPacks','canCreateTitle','canQuota','takesPrebuiltPack',"
+        "'searchesByImdb','searchesByTmdb','searchesByName','searchesByHash'];\n"
+        + block
+        + "\nvar a = subdlSourceAntwort(" + fixture + ");\n"
+        + "if (!a) { console.log('KEINE_ANTWORT'); } else {\n"
+        + "  console.log(JSON.stringify(a));\n"
+        + "}\n"
+    )
+
+    node = None
+    for kandidat in ("node", "nodejs"):
+        if subprocess.call(["which", kandidat], stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL) == 0:
+            node = kandidat
+            break
+    if node is None:
+        return False, "node fehlt — die Uebersetzung kann nicht ausgefahren werden"
+
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as fh:
+        fh.write(js)
+        pfad = fh.name
+    try:
+        out = subprocess.run([node, pfad], capture_output=True, text=True, timeout=60)
+    finally:
+        os.unlink(pfad)
+
+    if out.returncode != 0:
+        return False, "node brach ab: %s" % (out.stderr.strip().splitlines()[:1] or ["?"])
+    try:
+        antwort = json.loads(out.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        return False, "keine Antwort: %s" % out.stdout.strip()[:80]
+
+    quellen = antwort.get("quellen") or []
+    if len(quellen) != 2:
+        return False, "Quellen=%d statt 2" % len(quellen)
+
+    subdl, tvst = quellen[0], quellen[1]
+    fehler = []
+    if subdl.get("displayName") != "SubDL":
+        fehler.append("displayName=%r" % subdl.get("displayName"))
+    if subdl.get("configured") is not True:
+        fehler.append("configured=%r" % subdl.get("configured"))
+    if tvst.get("configured") is not False:
+        fehler.append("configured(tvst)=%r" % tvst.get("configured"))
+    felder = subdl.get("fields") or []
+    arten = [f.get("kind") for f in felder]
+    if arten != ["secret", "text", "url", "switch", "number", "choice"]:
+        fehler.append("Arten=%s" % arten)
+    if felder and felder[1].get("visibleWhen", {}) and \
+            felder[1]["visibleWhen"].get("field") != "apiKey":
+        fehler.append("visibleWhen=%r" % felder[1].get("visibleWhen"))
+    if felder and felder[0].get("gesetzt") is not True:
+        fehler.append("gesetzt=%r" % felder[0].get("gesetzt"))
+    caps = subdl.get("capabilities") or {}
+    if caps.get("canSeasonPacks") is not True or caps.get("searchesByTmdb") is not False:
+        fehler.append("Faehigkeiten=%r" % caps)
+    if (caps.get("languages") or {}).get("DEU") != "DE":
+        fehler.append("Sprachtafel=%r" % caps.get("languages"))
+    if (caps.get("pace") or {}).get("uploadsPerHour") != 500:
+        fehler.append("Takt=%r" % caps.get("pace"))
+
+    if fehler:
+        return False, "; ".join(fehler)
+    return True, "2 Quellen, 6 Feldarten, Faehigkeiten, Takt und Sprachtafel richtig uebersetzt"
+
 
 def main():
     path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT
@@ -1724,7 +1851,7 @@ def main():
         nxt = page_src_f497.find('<h3>', start + len(heading))
         return page_src_f497[start:nxt if nxt != -1 else len(page_src_f497)]
 
-    subdl_block = _section('<h3>Quellen</h3>')
+    subdl_block = _section('<h3>Endpoints</h3>')
     tmdb_block = _section('<h3>TMDb (')
     subdl_engine_src = read_source("Sources", "Subdl", "SubdlEngine.cs")
     # F-M688: der Block heisst jetzt "Quellen" und traegt die Karten; die Pflicht der Quelle
@@ -1743,7 +1870,7 @@ def main():
     # Nur die beiden Blöcke sind getauscht; geladen und gespeichert wird über die Feld-IDs
     # (querySelector('#…')), die von ihrer Position nichts wissen — der Tausch darf dort nichts ändern.
     check("F-M497: the TMDb block stands BEFORE the sources section, and only TMDb is bound to the form",
-          page_src_f497.index('<h3>TMDb (') < page_src_f497.index('<h3>Quellen</h3>')
+          page_src_f497.index('<h3>TMDb (') < page_src_f497.index('<h3>Endpoints</h3>')
           and page_src_f497.index('id="TmdbApiKey"') < page_src_f497.index('id="SourceCards"')
           and "document.querySelector('#TmdbApiKey').value = config.TmdbApiKey || '';" in page_src_f497
           and "config.TmdbApiKey = tmdbKey;" in page_src_f497
@@ -1999,8 +2126,8 @@ def main():
     quellen = page_src[quellen_start:quellen_ende] if (quellen_start != -1 and quellen_ende > quellen_start) else ""
 
     check("F-M688: the page carries ONE sources section, and it is a real heading",
-          page_src.count('<h3>Quellen</h3>') == 1 and page_src.count('id="SourceCards"') == 1,
-          "h3=%d cards=%d" % (page_src.count('<h3>Quellen</h3>'), page_src.count('id="SourceCards"')))
+          page_src.count('<h3>Endpoints</h3>') == 1 and page_src.count('id="SourceCards"') == 1,
+          "h3=%d cards=%d" % (page_src.count('<h3>Endpoints</h3>'), page_src.count('id="SourceCards"')))
 
     gen_q = html.find('data-tab-content="general"')
     gen_end_q = html.find('data-tab-content=', gen_q + 1) if gen_q != -1 else -1
@@ -2049,8 +2176,8 @@ def main():
           and "subdlSourceApplyVisibility(card)" in quellen,
           "a condition read only at page build would leave 'account' hidden after entering a key")
 
-    check("F-M688: a secret reads as 'gesetzt' / 'nicht gesetzt', and a secret in the box counts as set",
-          "'gesetzt'" in quellen and "'nicht gesetzt'" in quellen
+    check("F-M688: a secret reads as 'set' / 'not set', and a secret in the box counts as set",
+          "'set' : 'not set'" in quellen
           and "(abgelegt || ctrl.value.length > 0)" in quellen,
           "typing a key must reveal the field that depends on it, without a save first")
 
@@ -2075,15 +2202,15 @@ def main():
           "row.style.display === 'none'" in quellen and "subdlSourceBody" in quellen,
           "a hidden account would otherwise be overwritten with an empty string")
 
-    check("F-M688: the card has its OWN 'Speichern' button, and it writes exactly one source",
-          "save.textContent = 'Speichern';" in quellen
+    check("F-M688: the card has its OWN 'Save' button, and it writes exactly one source",
+          "save.textContent = 'Save';" in quellen
           and "'Plugins/SubdlSync/Sources/' + encodeURIComponent(key)" in quellen
           and "method: 'POST'" in quellen
           and 'ApiClient.updatePluginConfiguration' not in quellen,
           "one button per card; the page-wide save must stay out of the card's path")
 
-    check("F-M688: the state word is 'aktiv' or 'aus', taken from the endpoint's configured flag",
-          "entry.configured ? 'aktiv' : 'aus'" in quellen,
+    check("F-M688: the state word is 'on' or 'off', taken from the endpoint's configured flag",
+          "entry.configured ? 'on' : 'off'" in quellen,
           "the operator named the two states himself")
 
     _caps_fn = quellen[quellen.find('function subdlSourceCaps'):quellen.find('function subdlSourceField')] \
@@ -2095,7 +2222,7 @@ def main():
           "a capability the operator could switch would be a second place for a decision")
 
     check("F-M688: after a save the card is refilled from the answer, and the written fields are named",
-          "if (res && res.source)" in quellen and "card.parentNode.replaceChild(neu, card)" in quellen
+          "if (ant && ant.quelle)" in quellen and "card.parentNode.replaceChild(neu, card)" in quellen
           and "subdlSourceApplyValues(neu)" in quellen and "'✔ '" in quellen,
           "the card must show the state AFTER the write, not the one before it")
 
@@ -2120,6 +2247,49 @@ def main():
     check("F-M688: the card takes its values from the source's file, not from the plugin configuration",
           quellen != "" and 'entry.fields' in quellen and 'getPluginConfiguration' not in quellen,
           "the values arrived in sources/<key>.json (F-M683); reading the old fields would be a second place")
+
+    # ---- F-M689: die Schreibweise des Endpunkts ------------------------------------------------
+    # Der Betreiber meldete am 22.11.2026 drei LEERE Karten mit "aus" und "Speichern": der
+    # Endpunkt antwortet in der Schreibweise von .NET (DisplayName, Configured, Fields, Key …),
+    # der Zeichner las die von JavaScript. Jedes Feld war undefined. Die Pruefung hier faehrt die
+    # Uebersetzungsfunktionen der Seite ECHT gegen eine Antwort in der Endpunkt-Schreibweise —
+    # ein Rueckfall auf nur-kleine-Schreibweise faellt damit auf, statt im Browser zu landen.
+    check("F-M689: the page translates the endpoint's spelling before drawing",
+          "function subdlSourceWert" in page_src and "function subdlSourceAntwort" in page_src,
+          "subdlSourceWert / subdlSourceAntwort")
+    check("F-M689: the renderer takes the translated answer, not the raw 'sources' key",
+          "payload.quellen" in page_src and "payload.sources" not in page_src,
+          "payload.quellen / payload.sources")
+    check("F-M689: the save answer goes through the same translation",
+          page_src.count("subdlSourceAntwort(") >= 3,
+          "count=%d" % page_src.count("subdlSourceAntwort("))
+
+    # ---- F-M690: die Seite spricht ENGLISCH, auch im Abschnitt Endpoints ----------------------
+    # Betreiber-Anweisung 22.11.2026, woertlich: "Und Quellen ist Sources or better Endpoints auf
+    # Englisch" — die Seite ist durchgehend englisch (Libraries, Target languages, Status,
+    # Statistics, Workers, Media files); ein deutscher Abschnittstonfall waere der einzige.
+    check("F-M690: the section heading is English ('Endpoints'), not 'Quellen'",
+          '<h3>Endpoints</h3>' in page_src and '<h3>Quellen</h3>' not in page_src,
+          "h3 Endpoints=%d, h3 Quellen=%d"
+          % (page_src.count('<h3>Endpoints</h3>'), page_src.count('<h3>Quellen</h3>')))
+
+    # Die Woerter, die eine Karte selbst schreibt: on/off, Save, set/not set. Der Bedingungswert
+    # im Schema ist sprachneutral ("set"), damit die Engine nicht die Sprache der Oberflaeche kennt.
+    check("F-M690: the card's own words are English (on/off, Save, set/not set) and the schema's "
+          "condition value is language-neutral",
+          "entry.configured ? 'on' : 'off'" in quellen
+          and "save.textContent = 'Save';" in quellen
+          and "field.gesetzt ? 'set' : 'not set'" in quellen
+          # Die Anzeige ist englisch — der FELDNAME 'gesetzt'/'Gesetzt' bleibt, er ist der
+          # Schluessel im Endpunkt (Gesetzt), kein angezeigtes Wort.
+          and "'nicht gesetzt'" not in quellen
+          and "field.gesetzt ? 'gesetzt'" not in quellen
+          and '"set")' in read_source("Sources", "Subdl", "SubdlEngine.cs"),
+          "on/off, Save, set/not set; VisibleWhen = \"set\"")
+
+    probe_ok, probe_detail = run_case_probe(page_src)
+    check("F-M689: the translation runs against a real endpoint answer (all six field kinds)",
+          probe_ok, probe_detail)
 
 
     # Die Zaehlung gehoert ans ENDE: stand sie mitten in der Datei, waren alle spaeteren Pruefungen

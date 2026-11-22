@@ -54,8 +54,8 @@ public sealed class TvstEngine : ISourceEngine
     /// </summary>
     public static IReadOnlyList<SourceField> Declared { get; } = new SourceField[]
     {
-        new(FieldBaseUrl, "Adresse", SourceFieldKind.Url, Default: TvSubtitlesClient.BaseUrl,
-            Help: "Die Seitenadresse. Dieser Build benutzt sie fest eingebaut; ein abweichender Wert wird gemeldet."),
+        new(FieldBaseUrl, "Address", SourceFieldKind.Url, Default: TvSubtitlesClient.BaseUrl,
+            Help: "The site address. This build uses the built-in one; a differing value is reported."),
     };
 
     private readonly TvSubtitlesClient _client;

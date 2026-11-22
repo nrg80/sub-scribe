@@ -74,14 +74,14 @@ public sealed class SubdlEngine : ISourceEngine
     /// </summary>
     public static IReadOnlyList<SourceField> Declared { get; } = new SourceField[]
     {
-        new(FieldApiKey, "API-Schlüssel", SourceFieldKind.Secret, Default: string.Empty, Required: true,
-            Help: "Wird als Bearer-Token gesendet. Ohne Schlüssel sucht und lädt SubDL nicht."),
-        new(FieldAccount, "Konto", SourceFieldKind.Text,
-            Help: "Benutzername des SubDL-Kontos — er wird zur Anmeldung und für den Meldetext gebraucht.",
-            VisibleWhen: new SourceFieldVisibility(FieldApiKey, "gesetzt")),
-        new(FieldBaseUrl, "Adresse", SourceFieldKind.Url, Default: ScribeApiClient.ApiBase,
-            Help: "Die API-Adresse. Dieser Build benutzt sie fest eingebaut; ein abweichender Wert wird gemeldet."),
-        new(FieldPreferSeasonZip, "Staffel-ZIPs bevorzugen", SourceFieldKind.Switch, Default: "true",
+        new(FieldApiKey, "API key", SourceFieldKind.Secret, Default: string.Empty, Required: true,
+            Help: "Sent as a bearer token. Without a key SubDL neither searches nor downloads."),
+        new(FieldAccount, "Account", SourceFieldKind.Text,
+            Help: "The SubDL account name — used to sign in and in the report text.",
+            VisibleWhen: new SourceFieldVisibility(FieldApiKey, "set")),
+        new(FieldBaseUrl, "Address", SourceFieldKind.Url, Default: ScribeApiClient.ApiBase,
+            Help: "The API address. This build uses the built-in one; a differing value is reported."),
+        new(FieldPreferSeasonZip, "Prefer season ZIPs", SourceFieldKind.Switch, Default: "true",
             Help: "Bei gewünschtem Behälter zuerst die Staffel-ZIPs anbieten (weniger Abrufe je Staffel)."),
     };
 

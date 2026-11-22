@@ -120,7 +120,7 @@
                              Die drei alten SubDL-Felder (Username, Password, ApiKey) sind damit von
                              dieser Seite verschwunden: ihr Wert lebt in sources/subdl.json als
                              account und apiKey (F-M683, Uebernahme beim ersten Start). -->
-                        <h3>Quellen</h3>
+                        <h3>Endpoints</h3>
                         <div id="SourceCards"></div>
 
                         <h3>Media files</h3>
@@ -1990,6 +1990,96 @@ workers.forEach(function (w) {
 
             // Die Faehigkeiten sind reine ANZEIGE: je wahrer Faehigkeit ein Wort des Kontrakts, dazu
             // Takt und Sprachbruecke, wie die Engine sie nennt. Kein Schalter, kein Eingabefeld.
+            // F-M689 (Betreiber-Befund 22.11.2026, Bildschirmfoto der Prod-Oberflaeche: drei leere
+            // Karten mit „aus" und „Speichern", also ohne Inhalt): Der Endpunkt antwortet in der Schreibweise von
+            // .NET (DisplayName, Configured, Fields, Key …), der Zeichner liest die von JavaScript
+            // (displayName, configured, fields, key). Jedes Feld war damit undefined, die Karten
+            // blieben leer — und weil `configured` fehlte, stand jede Quelle auf „aus".
+            // Deshalb wird die Antwort EINMAL hier auf die kleine Schreibweise gebracht; die
+            // Sprachtafel (DEU/ENG …) bleibt dabei unberuehrt, ihre Schluessel sind Daten.
+            function subdlSourceWert(obj, name) {
+                if (!obj) { return undefined; }
+                if (Object.prototype.hasOwnProperty.call(obj, name)) { return obj[name]; }
+                var gross = name.charAt(0).toUpperCase() + name.slice(1);
+                if (Object.prototype.hasOwnProperty.call(obj, gross)) { return obj[gross]; }
+                return undefined;
+            }
+
+            function subdlSourceFeld(feld) {
+                if (!feld) { return null; }
+                var vw = subdlSourceWert(feld, 'visibleWhen');
+                return {
+                    key: subdlSourceWert(feld, 'key'),
+                    label: subdlSourceWert(feld, 'label'),
+                    kind: subdlSourceWert(feld, 'kind'),
+                    required: subdlSourceWert(feld, 'required') === true,
+                    help: subdlSourceWert(feld, 'help'),
+                    'default': subdlSourceWert(feld, 'default'),
+                    value: subdlSourceWert(feld, 'value'),
+                    gesetzt: subdlSourceWert(feld, 'gesetzt') === true,
+                    min: subdlSourceWert(feld, 'min'),
+                    max: subdlSourceWert(feld, 'max'),
+                    options: subdlSourceWert(feld, 'options') || [],
+                    visibleWhen: vw ? {
+                        field: subdlSourceWert(vw, 'field'),
+                        value: subdlSourceWert(vw, 'value')
+                    } : null
+                };
+            }
+
+            function subdlSourceFaehigkeiten(caps) {
+                if (!caps) { return null; }
+                var pace = subdlSourceWert(caps, 'pace');
+                var sprachen = subdlSourceWert(caps, 'languages') || {};
+                var neu = { pace: pace ? {
+                    uploadsPerHour: subdlSourceWert(pace, 'uploadsPerHour'),
+                    minCallPauseSeconds: subdlSourceWert(pace, 'minCallPauseSeconds')
+                } : null, languages: sprachen };
+                for (var i = 0; i < SUBDL_SOURCE_CAP_KEYS.length; i++) {
+                    var name = SUBDL_SOURCE_CAP_KEYS[i];
+                    neu[name] = subdlSourceWert(caps, name) === true;
+                }
+                return neu;
+            }
+
+            function subdlSourceEintrag(eintrag) {
+                if (!eintrag) { return null; }
+                var felder = subdlSourceWert(eintrag, 'fields') || [];
+                var liste = [];
+                for (var i = 0; i < felder.length; i++) {
+                    var f = subdlSourceFeld(felder[i]);
+                    if (f && f.key) { liste.push(f); }
+                }
+                return {
+                    key: subdlSourceWert(eintrag, 'key'),
+                    displayName: subdlSourceWert(eintrag, 'displayName'),
+                    configured: subdlSourceWert(eintrag, 'configured') === true,
+                    hint: subdlSourceWert(eintrag, 'hint'),
+                    file: subdlSourceWert(eintrag, 'file'),
+                    capabilities: subdlSourceFaehigkeiten(subdlSourceWert(eintrag, 'capabilities')),
+                    counters: subdlSourceWert(eintrag, 'counters'),
+                    fields: liste
+                };
+            }
+
+            // Die Antwort des Endpunkts, in beiden Schreibweisen lesbar.
+            function subdlSourceAntwort(res) {
+                if (!res) { return null; }
+                var roh = subdlSourceWert(res, 'sources') || [];
+                var liste = [];
+                for (var i = 0; i < roh.length; i++) {
+                    var e = subdlSourceEintrag(roh[i]);
+                    if (e && e.key) { liste.push(e); }
+                }
+                return {
+                    quellen: liste,
+                    fehler: subdlSourceWert(res, 'error'),
+                    unbekannt: subdlSourceWert(res, 'unknown') || [],
+                    geschrieben: subdlSourceWert(res, 'written') || [],
+                    quelle: subdlSourceEintrag(subdlSourceWert(res, 'source'))
+                };
+            }
+
             function subdlSourceCaps(caps) {
                 var box = subdlSourceEl('div', 'subdl-source-caps');
                 if (!caps) { return box; }
@@ -2017,7 +2107,7 @@ workers.forEach(function (w) {
 
             // Ein Feld, so wie die Engine es erklaert: Beschriftung, Pflicht, Hilfetext, Grenzen,
             // Auswahl. Die ART entscheidet ueber das Steuerelement; ein Geheimnis bekommt NIE einen
-            // Wert ins DOM — nur die Auskunft "gesetzt" / "nicht gesetzt".
+            // Wert ins DOM — nur die Auskunft "set" / "not set".
             function subdlSourceField(entry, field) {
                 var id = 'SourceField-' + entry.key + '-' + field.key;
                 var row = document.createElement('div');
@@ -2107,7 +2197,7 @@ workers.forEach(function (w) {
                     // Der EINZIGE Ausdruck ueber den Inhalt: ob eines abgelegt ist.
                     row.setAttribute('data-gesetzt', field.gesetzt ? 'true' : 'false');
                     var state = subdlSourceEl('span', 'subdl-source-secret-state',
-                        field.gesetzt ? 'gesetzt' : 'nicht gesetzt');
+                        field.gesetzt ? 'set' : 'not set');
                     state.id = 'SourceSecret-' + entry.key + '-' + field.key;
                     boxWrap.appendChild(state);
                 } else {
@@ -2154,7 +2244,7 @@ workers.forEach(function (w) {
 
             // Der WIRKSAME Zustand eines Felds, wie die Bedingung eines anderen Felds ihn liest:
             // Text und Zahl aus dem Feld, ein Schalter als true/false, ein Geheimnis als
-            // "gesetzt"/"nicht gesetzt" (ein abgelegtes ODER ein gerade eingetipptes).
+            // "set"/"not set" (ein abgelegtes ODER ein gerade eingetipptes).
             function subdlSourceFieldState(card, key) {
                 var row = card.querySelector('[data-source-field-row="' + key + '"]');
                 if (!row) { return null; }
@@ -2163,7 +2253,7 @@ workers.forEach(function (w) {
                 var kind = row.getAttribute('data-source-field-kind');
                 if (kind === 'secret') {
                     var abgelegt = row.getAttribute('data-gesetzt') === 'true';
-                    return (abgelegt || ctrl.value.length > 0) ? 'gesetzt' : 'nicht gesetzt';
+                    return (abgelegt || ctrl.value.length > 0) ? 'set' : 'not set';
                 }
                 if (kind === 'switch') { return ctrl.checked ? 'true' : 'false'; }
                 return String(ctrl.value);
@@ -2194,7 +2284,7 @@ workers.forEach(function (w) {
                 head.appendChild(subdlSourceEl('span', 'subdl-source-name', entry.displayName));
                 head.appendChild(subdlSourceEl('span', 'subdl-source-key', entry.key));
                 head.appendChild(subdlSourceEl('span', 'subdl-source-state ' + (entry.configured ? 'on' : 'off'),
-                    entry.configured ? 'aktiv' : 'aus'));
+                    entry.configured ? 'on' : 'off'));
                 card.appendChild(head);
 
                 card.appendChild(subdlSourceCaps(entry.capabilities));
@@ -2215,7 +2305,7 @@ workers.forEach(function (w) {
                 save.setAttribute('is', 'emby-button');
                 save.className = 'raised subdl-source-save';
                 save.id = subdlSourceId('SourceSave', entry.key);
-                save.textContent = 'Speichern';
+                save.textContent = 'Save';
                 save.addEventListener('click', function () { subdlSourceSave(entry.key); });
                 card.appendChild(save);
 
@@ -2281,15 +2371,18 @@ workers.forEach(function (w) {
                         return res;
                     });
                 }).then(function (res) {
+                    // F-M689: auch die Antwort auf das Schreiben kommt in der Schreibweise des
+                    // Endpunkts — einmal uebersetzen, dann weiter wie gehabt.
+                    var ant = subdlSourceAntwort(res);
                     // Erfolg: die Karte wird mit dem Stand NACH dem Schreiben neu befuellt und nennt
                     // die Felder, die wirklich geschrieben wurden.
-                    if (res && res.source) {
-                        var neu = subdlSourceRenderCard(res.source);
+                    if (ant && ant.quelle) {
+                        var neu = subdlSourceRenderCard(ant.quelle);
                         card.parentNode.replaceChild(neu, card);
                         subdlSourceApplyValues(neu);
                         subdlSourceApplyVisibility(neu);
                     }
-                    var geschrieben = (res && res.written && res.written.length) ? res.written.join(', ') : '—';
+                    var geschrieben = (ant && ant.geschrieben.length) ? ant.geschrieben.join(', ') : '—';
                     subdlSourceResult(key, 'ok', '✔ ' + geschrieben);
                 }).catch(function (err) {
                     // Eine Abweisung steht im KLARTEXT der Antwort an der Karte (400, unbekanntes
@@ -2302,7 +2395,9 @@ workers.forEach(function (w) {
                 var box = document.getElementById('SourceCards');
                 if (!box) { return; }
                 box.innerHTML = '';
-                var list = (payload && payload.sources) ? payload.sources : [];
+                // F-M689: `payload` ist die schon uebersetzte Antwort (subdlSourceAntwort) —
+                // die Schreibweise des Endpunkts kommt hier nicht mehr durch.
+                var list = (payload && payload.quellen) ? payload.quellen : [];
                 for (var i = 0; i < list.length; i++) {
                     var card = subdlSourceRenderCard(list[i]);
                     box.appendChild(card);
@@ -2327,7 +2422,7 @@ workers.forEach(function (w) {
                             return res;
                         });
                     })
-                    .then(function (res) { subdlSourcesRender(res); })
+                    .then(function (res) { subdlSourcesRender(subdlSourceAntwort(res)); })
                     .catch(function (err) {
                         box.innerHTML = '';
                         box.appendChild(subdlSourceEl('div', 'fieldDescription subdl-source-hint',
