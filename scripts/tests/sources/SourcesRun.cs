@@ -365,9 +365,11 @@ internal static class Program
 
             var dateien = new[]
             {
-                ((SubdlEngine)registry.ByKey(SubdlEngine.SourceKey)!).Settings.Path,
-                ((TvstEngine)registry.ByKey(TvstEngine.SourceKey)!).Settings.Path,
-                ((MsubEngine)registry.ByKey(MsubEngine.SourceKey)!).Settings.Path,
+                // F-M684: die Registry reicht die Engine durch eine sprechende Hülle — die konkrete
+                // Engine kommt über Engine<T>() heraus, der Kontrakt bleibt der einzige Weg zum Auftrag.
+                registry.Engine<SubdlEngine>()!.Settings.Path,
+                registry.Engine<TvstEngine>()!.Settings.Path,
+                registry.Engine<MsubEngine>()!.Settings.Path,
             };
             Check(dateien.Distinct(StringComparer.Ordinal).Count() == 3
                   && quellen.Select(k => string.Equals(dateien[Array.IndexOf(quellen, k)],
@@ -482,7 +484,7 @@ internal static class Program
 
             // ---- D: danach liest die Engine aus ihrer Datei, nicht aus der Konfiguration ----
             var nachSchreiben = SourceRegistry.Build(kontext, uebernahmeConfig);
-            var subdlNachher = (SubdlEngine)nachSchreiben.ByKey(SubdlEngine.SourceKey)!;
+            var subdlNachher = nachSchreiben.Engine<SubdlEngine>()!; // F-M684: hinter der Hülle
             Check(string.Equals(subdlNachher.Account, "konto-neu", StringComparison.Ordinal)
                   && !subdlNachher.PreferSeasonZip,
                 "F-M683 (D): die Engine liest Konto und Schalter aus ihrer Datei — der neue Wert gilt ohne Neustart der Konfiguration",
@@ -544,10 +546,195 @@ internal static class Program
         }
 
         // -----------------------------------------------------------------------------------------
+        // (g) F-M684: Diagnose — ehrlicher Pegel, Bündelung, vier beredte Aufträge, Zähler je Quelle.
+        // -----------------------------------------------------------------------------------------
+        Console.WriteLine("(g) F-M684: Pegel, Bündelung, vier Aufträge, Zähler je Quelle");
+
+        // (a) Der Quelltext: die lauten Zeilen stehen auf ECHTEM Debug-Pegel (LogDebug), nicht auf
+        // Information mit einem Textmarker. Geprüft wird die Stelle, nicht die Behauptung.
+        string dbDatei = File.ReadAllText(Path.Combine(plugin, "Data", "ScribeDbContext.cs"));
+        Check(dbDatei.Contains("LogUtil.Debug(_logger, \"[Sub Scribe-DB] file upsert", StringComparison.Ordinal),
+            "F-M684 (a): die Zeile je Datensatz im Store („file upsert\", im Prod-Log „media upsert\") steht auf LogDebug");
+
+        string trackerDatei = File.ReadAllText(Path.Combine(plugin, "Registry", "DownloadSearchTracker.cs"));
+        Check(trackerDatei.Contains("LogUtil.Debug(_logger, \"[Sub Scribe-DB] search stamp", StringComparison.Ordinal)
+              && !trackerDatei.Contains("LogUtil.Detail(", StringComparison.Ordinal),
+            "F-M684 (a): jede Suchstempel-Zeile steht auf LogDebug — im Tracker gibt es keine Detail-Zeile mehr",
+            trackerDatei.Split("LogUtil.Debug(").Length - 1 + " Debug-Aufrufe, 0 Detail");
+
+        string markenDatei = File.ReadAllText(Path.Combine(plugin, "Registry", "ContentHashRegistry.cs"));
+        Check(markenDatei.Contains("LogUtil.Debug(_logger, \"[Sub Scribe-DB] embed", StringComparison.Ordinal)
+              && markenDatei.Contains("LogUtil.Debug(_logger, \"[Sub Scribe-DB] sidecar", StringComparison.Ordinal)
+              && markenDatei.Contains("LogUtil.Debug(_logger, \"[Sub Scribe-DB] subtitles uploaded-complete", StringComparison.Ordinal),
+            "F-M684 (a): die Markenzeilen (embed, sidecar, uploaded-complete) stehen auf LogDebug");
+
+        string dlQuelle = File.ReadAllText(Path.Combine(plugin, "Pipeline", "DownloadPipeline.cs"));
+        Check(dlQuelle.Contains("LogUtil.Debug(_config.LogMode, _logger, \"[Sub Scribe-D] {Msg}\", msg)", StringComparison.Ordinal),
+            "F-M684 (a): die API-Aufruf/Antwort-Paare des Downloads stehen auf LogDebug");
+
+        string ulQuelle2 = File.ReadAllText(Path.Combine(plugin, "Pipeline", "UploadPipeline.cs"));
+        Check(ulQuelle2.Contains("LogUtil.Debug(_config.LogMode, _logger, \"[Sub Scribe] {Msg}\", msg)", StringComparison.Ordinal),
+            "F-M684 (a): dasselbe im Upload — beide Richtungen zählen und schweigen gleich");
+
+        string logDatei = File.ReadAllText(Path.Combine(plugin, "Pipeline", "LogUtil.cs"));
+        Check(logDatei.Contains("logger?.LogDebug(DebugTag + message, args)", StringComparison.Ordinal)
+              && logDatei.Contains("if (mode >= LogLevelMode.Debug)", StringComparison.Ordinal),
+            "F-M684 (a): LogUtil.Debug schreibt mit LogDebug und hält den LogMode-Schalter — der TEXT bleibt gleich");
+
+        // (b) Die vier Aufträge sprechen: je Auftrag eine Zeile, mit einem sammelnden Logger gemessen.
+        var ruf = new Rec();
+        string tmpQ = Path.Combine(Path.GetTempPath(), "sources-fm684-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(tmpQ);
+        try
+        {
+            var qKontext = new SourceEngineContext(
+                new HttpClient(), ruf, TimeProvider.System, DataFolder: tmpQ);
+
+            // Ein Schlüssel steht in der Datei (damit „kein Geheimwert in einer Zeile" messbar ist), aber
+            // KEIN Auftrag geht ins Netz: jede Anfrage unten endet vor dem ersten Aufruf an der Grenze.
+            // LogMode DEBUG: die Auftragszeilen sind Massenzeilen und erscheinen nur dann — bei Normal
+            // bleibt es bei den sichtbaren Fehlerzeilen, genau wie der Schalter es verspricht.
+            var qConfig = new PluginConfiguration
+            {
+                ApiKey = PruefSchluessel,
+                LogMode = Jellyfin.Plugin.SubScribe.Configuration.LogLevelMode.Debug,
+            };
+            var qRegistry = SourceRegistry.Build(qKontext, qConfig);
+            var quelle = qRegistry.ByKey(SubdlEngine.SourceKey)!;
+
+            SourceTraffic.BeginRun(SourceTraffic.KnownKeys);
+
+            // Zwei Suchen ohne Kennung: die Quelle sucht über Ids, also endet jede als „keine Suchgrundlage"
+            // — ohne einen einzigen Netzzugriff.
+            var sucheA = quelle.SearchAsync(
+                new SourceSearchRequest { Name = "Pruefung", IsSeries = true, Season = 1, Episode = 1 },
+                CancellationToken.None).GetAwaiter().GetResult();
+            var sucheB = quelle.SearchAsync(
+                new SourceSearchRequest { Name = "Pruefung", IsSeries = true, Season = 1, Episode = 1 },
+                CancellationToken.None).GetAwaiter().GetResult();
+
+            // (d) Die Zähler zählen hoch: zwei Suchen → zwei Abrufe, zwei Aufträge, zwei Fehlschläge.
+            var nachZwei = SourceTraffic.For(SubdlEngine.SourceKey).Snapshot();
+            Check(nachZwei.Requests == 2 && nachZwei.Tasks == 2 && nachZwei.NoSearchBase == 2,
+                "F-M684 (d): Suche 2× zählt zwei Abrufe, zwei Aufträge und zwei Fehlschläge (keine Suchgrundlage)",
+                "Abrufe=" + nachZwei.Requests + ", Aufträge=" + nachZwei.Tasks
+                + ", keine Suchgrundlage=" + nachZwei.NoSearchBase + ", Fehler=" + nachZwei.Errors);
+
+            var hole = quelle.FetchAsync(new SourceFetchRequest(string.Empty), CancellationToken.None)
+                .GetAwaiter().GetResult();
+            var sende = quelle.SendAsync(
+                new SourceSendRequest { FileName = "x.srt", Language = "DEU" }, CancellationToken.None)
+                .GetAwaiter().GetResult();
+            var melde = quelle.ReportAsync(
+                new SourceReportRequest(string.Empty, SourceReportKind.Missing, "Pruefung"),
+                CancellationToken.None).GetAwaiter().GetResult();
+
+            bool Zeile(string auftrag) => ruf.Lines.Any(l => l.Text.Contains("[Sub Scribe-Q]", StringComparison.Ordinal)
+                && l.Text.Contains(" " + auftrag + " —", StringComparison.Ordinal));
+            Check(Zeile("Suche") && sucheA.Fault?.Kind == SourceFault.NoSearchBase
+                  && sucheB.Fault?.Kind == SourceFault.NoSearchBase,
+                "F-M684 (b): der Auftrag Suche erzeugt eine Zeile mit Quelle, Kennungen, Sprachen, HI und Ergebnis",
+                ruf.Lines.FirstOrDefault(l => l.Text.Contains(" Suche —", StringComparison.Ordinal)).Text);
+            Check(Zeile("Hole") && hole.Fault?.Kind == SourceFault.NotFound,
+                "F-M684 (b): der Auftrag Hole erzeugt eine Zeile mit Griff, Folge, Mitglied, Größe und Dauer",
+                ruf.Lines.FirstOrDefault(l => l.Text.Contains(" Hole —", StringComparison.Ordinal)).Text);
+            Check(Zeile("Sende") && sende.Status == SourceSendStatus.Rejected,
+                "F-M684 (b): der Auftrag Sende erzeugt eine Zeile mit Umfang, Sprache, HI, Ziel und Urteil",
+                ruf.Lines.FirstOrDefault(l => l.Text.Contains(" Sende —", StringComparison.Ordinal)).Text);
+            Check(Zeile("Melde") && melde.Status == SourceReportStatus.Failed,
+                "F-M684 (b): der Auftrag Melde erzeugt eine Zeile mit Eintrag, Art und Urteil",
+                ruf.Lines.FirstOrDefault(l => l.Text.Contains(" Melde —", StringComparison.Ordinal)).Text);
+
+            Check(ruf.Lines.Any(l => l.Level == Microsoft.Extensions.Logging.LogLevel.Debug
+                      && l.Text.StartsWith("[D] ", StringComparison.Ordinal)),
+                "F-M684 (b): die Auftragszeile ist eine ECHTE Debug-Zeile (LogDebug) und trägt weiter den [D]-Marker",
+                ruf.Lines.Count(l => l.Level == Microsoft.Extensions.Logging.LogLevel.Debug) + " Debug-Zeile(n) gesammelt");
+
+            Check(ruf.Lines.Any(l => l.Level == Microsoft.Extensions.Logging.LogLevel.Warning
+                      && l.Text.Contains("keine Suchgrundlage", StringComparison.Ordinal))
+                  && ruf.Lines.Any(l => l.Level == Microsoft.Extensions.Logging.LogLevel.Warning
+                      && l.Text.Contains("Feld abgewiesen", StringComparison.Ordinal)),
+                "F-M684 (b): „keine Suchgrundlage\" und „Feld abgewiesen\" stehen sichtbar auf WRN — nicht nur als Zähler");
+
+            // (4) Der Endpunkt liefert die Zähler, und sie leben im Speicher (kein Store, keine Ableitung).
+            var eintrag = Jellyfin.Plugin.SubScribe.Api.SourceSettingsView.Build(qRegistry, tmpQ)
+                .Single(e => e.Key == SubdlEngine.SourceKey);
+            Check(eintrag.Counters.Requests == 5 && eintrag.Counters.Tasks == 5
+                  && eintrag.Counters.Errors >= 3 && eintrag.Counters.LastFailureUtc is not null,
+                "F-M684 (4): der Endpunkt Plugins/SubdlSync/Sources nennt je Quelle Abrufe, Aufträge, Fehlschläge und den letzten Fehler",
+                "Abrufe=" + eintrag.Counters.Requests + ", Aufträge=" + eintrag.Counters.Tasks
+                + ", Fehler=" + eintrag.Counters.Errors
+                + ", Grund=" + (eintrag.Counters.LastFailureReason ?? "-"));
+
+            // (2) Die Summenzeile: eine Zeile je Quelle, auf Normal, mit Aufrufen, Seiten, Fehlern, Dauer.
+            SourceTraffic.WriteSummary(ruf, new[] { SubdlEngine.SourceKey });
+            string summe = ruf.Lines.Last(l => l.Text.Contains("Aufrufe", StringComparison.Ordinal)).Text;
+            Check(summe.StartsWith("[N] SubDL: 5 Aufrufe, 0 Seiten, 3 Fehler, ", StringComparison.Ordinal)
+                  && summe.Contains(" s", StringComparison.Ordinal)
+                  && summe.Contains("(5 Aufträge)", StringComparison.Ordinal),
+                "F-M684 (2): die Summenzeile nennt je Quelle Abrufe, Seiten, Fehler und Dauer — in EINER Zeile",
+                summe);
+
+            // (3) Ein unlesbares Einstellungsfile ist nicht mehr still: eine Zeile und ein Zähler.
+            File.WriteAllText(SourceSettingsFile.PathIn(tmpQ, SubdlEngine.SourceKey), "{ das ist kein JSON");
+            var nachKaputt = SourceRegistry.Build(qKontext, qConfig);
+            var kaputt = SourceTraffic.For(SubdlEngine.SourceKey).Snapshot();
+            Check(ruf.Lines.Any(l => l.Level == Microsoft.Extensions.Logging.LogLevel.Warning
+                      && l.Text.Contains("sources/subdl", StringComparison.Ordinal)
+                      && l.Text.Contains("nicht eingerichtet", StringComparison.Ordinal))
+                  && kaputt.ConfigFailed == 1,
+                "F-M684 (3): ein unlesbares Einstellungsfile erzeugt eine Logzeile UND einen Zähler",
+                "ConfigFailed=" + kaputt.ConfigFailed);
+            Check(SourceTraffic.For(TvstEngine.SourceKey).Snapshot().ConfigFailed == 0
+                  && SourceTraffic.For(MsubEngine.SourceKey).Snapshot().ConfigFailed == 0,
+                "F-M684 (3): die kaputte Datei trifft nur ihre eine Quelle — die anderen zählen nichts",
+                "tvst=" + SourceTraffic.For(TvstEngine.SourceKey).Snapshot().ConfigFailed
+                + ", msub=" + SourceTraffic.For(MsubEngine.SourceKey).Snapshot().ConfigFailed);
+            GC.KeepAlive(nachKaputt);
+
+            // (5) Kein Geheimwert in irgendeiner Zeile — Schlüssel steht in der Datei, keine Zeile trägt ihn.
+            var lecks = ruf.Lines
+                .Where(l => l.Text.Contains(PruefSchluessel, StringComparison.Ordinal))
+                .Select(l => l.Text)
+                .ToList();
+            Check(lecks.Count == 0,
+                "F-M684 (5): keine der gesammelten Zeilen enthält den Prüfschlüssel — weder im Klartext noch in einer Ableitung",
+                ruf.Lines.Count + " Zeile(n) geprüft, 0 mit Schlüssel");
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(tmpQ, recursive: true);
+            }
+            catch (IOException)
+            {
+                // Ein liegengebliebenes Temp-Verzeichnis ist kein Prüfergebnis.
+            }
+        }
+
+        // (2)/(4) Die Netzarbeit selbst: der Live-Kanal der Clients zählt Abruf und Antwort je Quelle —
+        // inklusive der Bremse, die sonst nur als Textzeile im Log stünde.
+        SourceTraffic.BeginRun(new[] { SubdlEngine.SourceKey });
+        SourceTraffic.NoteTrace("API call GET https://api.subdl.com/subtitles");
+        SourceTraffic.NoteTrace("API response GET https://api.subdl.com/subtitles → 200");
+        var nachAntwort = SourceTraffic.For(SubdlEngine.SourceKey).Snapshot();
+        Check(nachAntwort.Requests == 1 && nachAntwort.Pages == 1 && nachAntwort.LastSuccessUtc is not null,
+            "F-M684 (2): der Live-Kanal zählt je Anfrage einen Abruf und je 2xx-Antwort eine Seite mit Zeitpunkt",
+            "Abrufe=" + nachAntwort.Requests + ", Seiten=" + nachAntwort.Pages);
+
+        SourceTraffic.NoteTrace("API response GET https://api.subdl.com/subtitles → 429");
+        var nachBremse = SourceTraffic.For(SubdlEngine.SourceKey).Snapshot();
+        Check(nachBremse.RateLimited == 1 && nachBremse.Errors == 1
+              && (nachBremse.LastFailureReason ?? string.Empty).Contains("429", StringComparison.Ordinal),
+            "F-M684 (4): eine Bremse (429) zählt als eigener Fehlschlag mit Zeitpunkt und Grund",
+            "RateLimited=" + nachBremse.RateLimited + ", Grund=" + (nachBremse.LastFailureReason ?? "-"));
+
+        // -----------------------------------------------------------------------------------------
         // Bericht.
         // -----------------------------------------------------------------------------------------
         Console.WriteLine();
-        Console.WriteLine("sources: " + _checks + " Prüfungen (T339/T340, F-M682/F-M683)");
+        Console.WriteLine("sources: " + _checks + " Prüfungen (T339/T340/T341, F-M682/F-M683/F-M684)");
         if (Failures.Count == 0)
         {
             Console.WriteLine(">>> SOURCES OK: " + _checks + " Prüfungen bestanden");
@@ -561,6 +748,28 @@ internal static class Program
         }
 
         return 1;
+    }
+
+    /// <summary>
+    /// F-M684: ein sammelnder Logger für die Prüfung — jede Zeile mit ihrem PEGEL, damit „echte
+    /// Debug-Stufe" gemessen und nicht behauptet wird.
+    /// </summary>
+    internal sealed class Rec : Microsoft.Extensions.Logging.ILogger
+    {
+        public List<(Microsoft.Extensions.Logging.LogLevel Level, string Text)> Lines { get; } = new();
+
+        public IDisposable? BeginScope<TState>(TState state)
+            where TState : notnull => null;
+
+        public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+        public void Log<TState>(
+            Microsoft.Extensions.Logging.LogLevel logLevel,
+            Microsoft.Extensions.Logging.EventId eventId,
+            TState state,
+            Exception? exception,
+            Func<TState, Exception?, string> formatter)
+            => Lines.Add((logLevel, formatter(state, exception)));
     }
 
     /// <summary>

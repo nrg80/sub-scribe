@@ -13,6 +13,7 @@ using System.Collections.Generic;
 using System.IO;
 using System.Linq;
 using Jellyfin.Plugin.SubScribe.Sources;
+using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.SubScribe.Api;
 
@@ -88,6 +89,11 @@ public sealed record SourceCapabilityView(
 /// <param name="File">Die Datei dieser Quelle, relativ zum Datenordner.</param>
 /// <param name="Capabilities">Ihre Fähigkeiten.</param>
 /// <param name="Fields">Ihre erklärten Felder in Erklärungsreihenfolge, mit den aktuellen Werten.</param>
+/// <param name="Counters">
+/// F-M684: was DIESE Quelle im laufenden Betrieb getan hat — Aufträge, Abrufe, Seiten, Fehlschläge nach
+/// Art, letzter Erfolg und letzter Fehler samt Grund. Die Zahlen leben im Speicher und werden nirgends
+/// abgelegt; sie entstehen am Ort des Geschehens, nicht durch das Lesen eines Logs.
+/// </param>
 public sealed record SourceEntryView(
     string Key,
     string DisplayName,
@@ -95,7 +101,8 @@ public sealed record SourceEntryView(
     string? Hint,
     string? File,
     SourceCapabilityView Capabilities,
-    IReadOnlyList<SourceFieldView> Fields);
+    IReadOnlyList<SourceFieldView> Fields,
+    SourceCountersView Counters);
 
 /// <summary>F-M683: das Ergebnis eines Schreibvorgangs.</summary>
 /// <param name="Ok">Wurde gespeichert?</param>
@@ -152,21 +159,30 @@ public static class SourceSettingsView
     /// <param name="dataDir">Der Datenordner des Plugins.</param>
     /// <param name="key">Die Quelle.</param>
     /// <param name="updates">Feldname → Wert; null heißt „nichts übergeben".</param>
+    /// <param name="logger">
+    /// F-M684: der Logger, der eine ABWEISUNG meldet. Eine abgewiesene Eingabe war bis F-M683 nur an der
+    /// Antwort des Endpunkts zu sehen — im Log stand nichts, und ein Betreiber, der eine Einstellung
+    /// „gespeichert" glaubte, hatte keinen Beleg. Gemeldet wird der Grund, nie der Wert.
+    /// </param>
     /// <returns>Das Ergebnis samt neuem Stand.</returns>
     public static SourceSaveResult Save(
-        SourceRegistry registry, string? dataDir, string key, IReadOnlyDictionary<string, string?>? updates)
+        SourceRegistry registry,
+        string? dataDir,
+        string key,
+        IReadOnlyDictionary<string, string?>? updates,
+        ILogger? logger = null)
     {
         ArgumentNullException.ThrowIfNull(registry);
 
         ISourceEngine? engine = registry.ByKey(key);
         if (engine is null)
         {
-            return Fail("unbekannte Quelle '" + (key ?? string.Empty) + "'");
+            return Fail("unbekannte Quelle '" + (key ?? string.Empty) + "'", key, logger);
         }
 
         if (string.IsNullOrWhiteSpace(dataDir))
         {
-            return Fail("kein Datenordner — es kann nichts gespeichert werden");
+            return Fail("kein Datenordner — es kann nichts gespeichert werden", key, logger);
         }
 
         IReadOnlyList<SourceField> schema = engine.Fields;
@@ -197,7 +213,7 @@ public static class SourceSettingsView
 
             if (feld.Validate(paar.Value, out string clean) is { } fehler)
             {
-                return Fail(fehler);
+                return Fail(fehler, key, logger);
             }
 
             merged[feld.Key] = clean;
@@ -209,7 +225,7 @@ public static class SourceSettingsView
             string wert = merged.TryGetValue(feld.Key, out string? vorhanden) ? vorhanden : feld.Default;
             if (wert.Length == 0)
             {
-                return Fail("Pflichtfeld '" + feld.Label + "' fehlt");
+                return Fail("Pflichtfeld '" + feld.Label + "' fehlt", key, logger);
             }
         }
 
@@ -248,7 +264,8 @@ public static class SourceSettingsView
             hinweis,
             RelativeFile(key),
             Capabilities(engine.Capabilities),
-            Fields(settings));
+            Fields(settings),
+            SourceTraffic.For(key).Snapshot());
     }
 
     private static SourceCapabilityView Capabilities(SourceCapabilities capabilities)
@@ -298,6 +315,21 @@ public static class SourceSettingsView
     private static string RelativeFile(string key)
         => SourceSettingsFile.FolderName + "/" + key + SourceSettingsFile.Extension;
 
-    private static SourceSaveResult Fail(string grund)
-        => new(false, grund, Array.Empty<string>(), Array.Empty<string>(), null);
+    /// <summary>
+    /// F-M684: eine Abweisung — mit einer Logzeile und einem Zähler, damit sie nicht nur in der Antwort
+    /// des Endpunkts steht. Die Zeile nennt Quelle und Grund, nie einen Wert.
+    /// </summary>
+    /// <param name="grund">Der Klartext-Grund.</param>
+    /// <param name="key">Der Quellenschlüssel.</param>
+    /// <param name="logger">Der Logger, oder null.</param>
+    /// <returns>Das abweisende Ergebnis.</returns>
+    private static SourceSaveResult Fail(string grund, string? key, ILogger? logger)
+    {
+        logger?.LogWarning(
+            "[Sub Scribe-Q] {Source} Einstellungen abgewiesen: {Reason}",
+            string.IsNullOrWhiteSpace(key) ? "?" : key,
+            grund);
+        SourceTraffic.For(key).CountFault(SourceFault.Rejected, grund);
+        return new(false, grund, Array.Empty<string>(), Array.Empty<string>(), null);
+    }
 }

@@ -13,6 +13,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Text.Json;
+using Microsoft.Extensions.Logging;
 
 namespace Jellyfin.Plugin.SubScribe.Sources;
 
@@ -99,8 +100,14 @@ public static class SourceSettingsFile
     /// <param name="dataDir">Der Datenordner des Plugins (null/leer = kein Ordner: leere Werte).</param>
     /// <param name="key">Der Quellenschlüssel.</param>
     /// <param name="schema">Die erklärten Felder dieser Quelle.</param>
+    /// <param name="logger">
+    /// F-M684: der Logger, der einen LESEFEHLER meldet. Bis F-M683 war ein unlesbares File still — der
+    /// Hinweis stand nur in der Antwort des Endpunkts, und im Log sah eine kaputte Quelldatei wie eine
+    /// nicht eingerichtete Quelle aus.
+    /// </param>
     /// <returns>Die Einstellungen dieser Quelle.</returns>
-    public static SourceSettings Load(string? dataDir, string key, IReadOnlyList<SourceField> schema)
+    public static SourceSettings Load(
+        string? dataDir, string key, IReadOnlyList<SourceField> schema, ILogger? logger = null)
     {
         if (string.IsNullOrWhiteSpace(dataDir))
         {
@@ -120,32 +127,32 @@ public static class SourceSettingsFile
             JsonElement root = doc.RootElement;
             if (root.ValueKind != JsonValueKind.Object)
             {
-                return Broken(key, schema, path, "die Datei ist kein JSON-Objekt");
+                return Broken(key, schema, path, logger, "die Datei ist kein JSON-Objekt");
             }
 
             if (!root.TryGetProperty("schema", out JsonElement schemaElement)
                 || !schemaElement.TryGetInt32(out int gelesen))
             {
-                return Broken(key, schema, path, "die Datei nennt keine Schema-Zahl");
+                return Broken(key, schema, path, logger, "die Datei nennt keine Schema-Zahl");
             }
 
             if (gelesen != SchemaVersion)
             {
-                return Broken(key, schema, path, "Schema " + gelesen.ToString(CultureInfo.InvariantCulture)
+                return Broken(key, schema, path, logger, "Schema " + gelesen.ToString(CultureInfo.InvariantCulture)
                     + " statt " + SchemaVersion.ToString(CultureInfo.InvariantCulture));
             }
 
             if (!root.TryGetProperty("key", out JsonElement keyElement)
                 || keyElement.ValueKind != JsonValueKind.String)
             {
-                return Broken(key, schema, path, "die Datei nennt ihren Quellenschlüssel nicht");
+                return Broken(key, schema, path, logger, "die Datei nennt ihren Quellenschlüssel nicht");
             }
 
             string dateiKey = keyElement.GetString() ?? string.Empty;
             if (!string.Equals(dateiKey, key, StringComparison.Ordinal))
             {
                 // Zwei Quellen dürfen nie dieselbe Datei benutzen: eine kopierte Datei gilt nicht.
-                return Broken(key, schema, path, "die Datei gehört zur Quelle '" + dateiKey + "'");
+                return Broken(key, schema, path, logger, "die Datei gehört zur Quelle '" + dateiKey + "'");
             }
 
             var werte = new Dictionary<string, string>(StringComparer.Ordinal);
@@ -159,7 +166,7 @@ public static class SourceSettingsFile
                 string? wert = AsText(element);
                 if (wert is null)
                 {
-                    return Broken(key, schema, path, "Feld '" + feld.Key + "' hat keine einfache Form");
+                    return Broken(key, schema, path, logger, "Feld '" + feld.Key + "' hat keine einfache Form");
                 }
 
                 werte[feld.Key] = wert;
@@ -171,7 +178,7 @@ public static class SourceSettingsFile
         {
             // Der Hinweis nennt Art und Grund, NIE den Inhalt: eine Meldung über eine Datei mit
             // Zugängen darf keinen Zugang tragen (eine JsonException-Zeile kann Text zitieren).
-            return Broken(key, schema, path, "die Datei ist nicht lesbar (" + ex.GetType().Name + ")");
+            return Broken(key, schema, path, logger, "die Datei ist nicht lesbar (" + ex.GetType().Name + ")");
         }
     }
 
@@ -328,6 +335,24 @@ public static class SourceSettingsFile
         _ => null,
     };
 
-    private static SourceSettings Broken(string key, IReadOnlyList<SourceField> schema, string path, string grund)
-        => new(key, schema, null, grund, path);
+    /// <summary>
+    /// F-M684: ein unlesbares File — der Klartext-Grund geht in die Einstellungen, in eine Logzeile und
+    /// in den Zähler dieser Quelle. Die Zeile nennt Quelle und Grund, NIE einen Wert aus der Datei.
+    /// </summary>
+    /// <param name="key">Der Quellenschlüssel.</param>
+    /// <param name="schema">Die erklärten Felder.</param>
+    /// <param name="path">Der Pfad der Datei.</param>
+    /// <param name="logger">Der Logger, oder null.</param>
+    /// <param name="grund">Der Klartext-Grund.</param>
+    /// <returns>Die Einstellungen mit Hinweis.</returns>
+    private static SourceSettings Broken(
+        string key, IReadOnlyList<SourceField> schema, string path, ILogger? logger, string grund)
+    {
+        logger?.LogWarning(
+            "[Sub Scribe] sources/{Key}: {Reason} — diese Quelle gilt als nicht eingerichtet, die anderen laufen weiter.",
+            key,
+            grund);
+        SourceTraffic.NoteConfigFault(key, grund);
+        return new(key, schema, null, grund, path);
+    }
 }

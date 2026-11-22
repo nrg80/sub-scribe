@@ -144,7 +144,7 @@ public class SourceSettingsController : ControllerBase
         try
         {
             SourceSaveResult ergebnis = SourceSettingsView.Save(
-                Registry(plugin, _logger), plugin.DataFolderPath, key, updates);
+                Registry(plugin, _logger), plugin.DataFolderPath, key, updates, _logger);
 
             if (!ergebnis.Ok)
             {

@@ -550,6 +550,10 @@ public sealed class UploadPipeline : IPackFiller
         // je Abschnitt die Dauer: Item-Liste, Pack-Phase, Item-Schleife, Lauf gesamt.
         var laufTakt = System.Diagnostics.Stopwatch.StartNew();
 
+        // F-M684: die Zähler der Quellen beginnen mit DIESEM Lauf; die Summenzeile steht im finally,
+        // also auch nach einem Abbruch.
+        Sources.SourceTraffic.BeginRun(_sources.Keys);
+
         // F-M445 (operator order 02.11.2026, "bestehende Aufträge bereits beim Upload-Start stornieren"):
         // an order left over from an earlier run is dropped the moment THIS run starts. It would fire
         // against state this run is about to change, and the run's own end sets the new moment — so the
@@ -2893,6 +2897,10 @@ public sealed class UploadPipeline : IPackFiller
                     "[Sub Scribe] upload: nothing uploaded — no postprocessing order armed (F-M465).");
             }
 
+            // F-M684: die Summenzeile der Netzarbeit, je Quelle eine — im finally, damit sie auch nach
+            // einem Abbruch erscheint.
+            Sources.SourceTraffic.WriteSummary(_logger, _sources.Keys);
+
             PipelineRunLock.Release(_logger, "upload");
         }
     }
@@ -3989,8 +3997,16 @@ public sealed class UploadPipeline : IPackFiller
         LogUtil.Trace(_config.LogMode, _logger, "{Tag} {Msg}", "[Sub Scribe]", msg);
     }
 
-    /// <summary>F-M24a: per-API-call trace → LogLevel.Debug (never Normal/Verbose).</summary>
-    private void OnApiTrace(string msg) => LogUtil.Detail(_config.LogMode, _logger, "[Sub Scribe] {Msg}", msg);
+    /// <summary>
+    /// F-M24a: per-API-call trace → LogLevel.Debug (never Normal/Verbose).
+    /// <para>F-M684: Massenzeile auf echtem Debug-Pegel; zugleich die Zählquelle der Netzarbeit.</para>
+    /// </summary>
+    /// <param name="msg">Die Zeile des Kanals.</param>
+    private void OnApiTrace(string msg)
+    {
+        Sources.SourceTraffic.NoteTrace(msg);
+        LogUtil.Debug(_config.LogMode, _logger, "[Sub Scribe] {Msg}", msg);
+    }
 
     /// <summary>
     /// F-M232: routes the API client's LogInfo channel into the run log. Login retries,

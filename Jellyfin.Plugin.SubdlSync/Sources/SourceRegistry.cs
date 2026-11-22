@@ -92,7 +92,17 @@ public sealed class SourceRegistry
         var msub = new MsubEngine(
             context.Msub, context, Settings(context, MsubEngine.SourceKey, MsubEngine.Declared));
 
-        return new SourceRegistry(new ISourceEngine[] { subdl, tvst, msub });
+        // F-M684: jede Engine geht EINMAL durch die sprechende Hülle — eine Debug-Zeile je Auftrag, eine
+        // sichtbare Zeile je Fehlerfall, ein Zähler je Quelle. Die Hülle gibt Fähigkeiten und Felder
+        // unverändert weiter; der Ablauf merkt nichts davon.
+        var gehoert = new ISourceEngine[]
+        {
+            new AuditedSourceEngine(subdl, context.Logger, config.LogMode),
+            new AuditedSourceEngine(tvst, context.Logger, config.LogMode),
+            new AuditedSourceEngine(msub, context.Logger, config.LogMode),
+        };
+
+        return new SourceRegistry(gehoert);
     }
 
     /// <summary>
@@ -105,7 +115,20 @@ public sealed class SourceRegistry
     /// <param name="schema">Die Erklärung dieser Quelle.</param>
     /// <returns>Die Einstellungen; ohne Datenordner die Vorgaben.</returns>
     public static SourceSettings Settings(SourceEngineContext context, string key, IReadOnlyList<SourceField> schema)
-        => SourceSettingsFile.Load(context.DataFolder, key, schema);
+        => SourceSettingsFile.Load(context.DataFolder, key, schema, context.Logger);
+
+    /// <summary>
+    /// F-M684: die Engine HINTER der Hülle, nach ihrem Typ — für Prüfungen und für Aufrufer, die die
+    /// Eigenheiten einer Quelle brauchen. Der Ablauf benutzt sie nicht; er kennt nur den Kontrakt.
+    /// </summary>
+    /// <typeparam name="T">Der Typ der Engine.</typeparam>
+    /// <returns>Die Engine, oder null wenn diese Fassung sie nicht baut.</returns>
+    public T? Engine<T>()
+        where T : class, ISourceEngine
+        => _engines
+            .Select(e => e is AuditedSourceEngine huelle ? huelle.Inner : e)
+            .OfType<T>()
+            .FirstOrDefault();
 
     /// <summary>F-M682: schlägt eine Engine nach.</summary>
     /// <param name="key">Der Quellenschlüssel.</param>

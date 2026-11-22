@@ -662,6 +662,10 @@ public sealed class DownloadPipeline : IDisposable
         // run, naming whether it is on. The per-file detail (which audio track, which subtitle it
         // was fitted against) stays at Verbose. F-M24d's "one summary line per direction" is not
         // violated: this is the run START line it already prescribes, carrying one more fact.
+        // F-M684: die Zähler der Quellen gehören zu DIESEM Lauf — die Summenzeile steht im finally,
+        // also auch dann, wenn der Lauf abbricht (dann mit dem Stand bis zum Abbruch).
+        Sources.SourceTraffic.BeginRun(Sources.SourceTraffic.KnownKeys);
+
         LogUtil.Normal(_logger, _config.DownloadDryRun
                 ? "[Sub Scribe] download: started, dry, refetch={Refetch}, audio fit={Fit:l}"
                 : "[Sub Scribe] download: started, refetch={Refetch}, audio fit={Fit:l}",
@@ -974,6 +978,10 @@ public sealed class DownloadPipeline : IDisposable
 
             // F-M23: keep the partial summary even when the run is cancelled — the caller
             // reads StopRequested and the counters include the work that did land.
+            // F-M684: die Summenzeile der Netzarbeit, je Quelle eine — steht im finally, damit sie auch
+            // nach einem Abbruch erscheint.
+            Sources.SourceTraffic.WriteSummary(_logger, Sources.SourceTraffic.KnownKeys);
+
             PipelineRunLock.Release(_logger, "download");
         }
     }
@@ -1000,8 +1008,21 @@ public sealed class DownloadPipeline : IDisposable
         LogUtil.Trace(_config.LogMode, _logger, "{Tag} {Msg}", "[Sub Scribe-D]", msg);
     }
 
-    /// <summary>F-M24a: per-API-call trace → LogLevel.Debug (never Normal/Verbose).</summary>
-    private void OnApiTrace(string msg) => LogUtil.Detail(_config.LogMode, _logger, "[Sub Scribe-D] {Msg}", msg);
+    /// <summary>
+    /// F-M24a: per-API-call trace → LogLevel.Debug (never Normal/Verbose).
+    /// <para>
+    /// F-M684: die Paare sind Massenzeilen (gemessen 7 016 Aufruf/Antwort-Paare eines Tages) und stehen
+    /// deshalb auf echtem Debug-Pegel. Der Kanal ist zugleich die Zählquelle der Netzarbeit: jede Zeile
+    /// geht durch <see cref="Sources.SourceTraffic.NoteTrace"/>, das die Anfrage der Quelle zuordnet und
+    /// in ihrem Zähler führt.
+    /// </para>
+    /// </summary>
+    /// <param name="msg">Die Zeile des Kanals.</param>
+    private void OnApiTrace(string msg)
+    {
+        Sources.SourceTraffic.NoteTrace(msg);
+        LogUtil.Debug(_config.LogMode, _logger, "[Sub Scribe-D] {Msg}", msg);
+    }
 
     /// <summary>
     /// F-M232: routes the API client's LogInfo channel into the run log (429 raw bodies,

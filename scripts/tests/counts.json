@@ -731,6 +731,10 @@
     "T340": {
       "suite": "sources",
       "checks": 20
+    },
+    "T341": {
+      "suite": "sources",
+      "checks": 20
     }
   }
 }

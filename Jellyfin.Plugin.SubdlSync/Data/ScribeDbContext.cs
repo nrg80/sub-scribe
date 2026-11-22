@@ -1340,7 +1340,8 @@ public sealed class ScribeDbContext : IDisposable
 
         patch?.Invoke(entity);
         Files.Upsert(entity);
-        LogUtil.Detail(_logger, "[Sub Scribe-DB] file upsert {Hash} -> {FileId}", osHash, entity.FileId);
+        // F-M684: Massenzeile — eine je Datei und Lauf, deshalb auf echtem Debug-Pegel.
+        LogUtil.Debug(_logger, "[Sub Scribe-DB] file upsert {Hash} -> {FileId}", osHash, entity.FileId);
         return entity;
     }
 

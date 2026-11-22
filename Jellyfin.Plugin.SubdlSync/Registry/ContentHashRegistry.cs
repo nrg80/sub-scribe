@@ -846,7 +846,7 @@ public sealed class ContentHashRegistry : IDisposable
             moviesubtitlesUploadedAt, moviesubtitlesDownloadId, moviesubtitlesUploadId);
 
         RefreshMediaAggregates(mediaHash);
-        LogUtil.Detail(_logger, "[Sub Scribe-DB] embed {Media}|{Pos} {Status} {Lang}", mediaHash, subPos, status, language);
+        LogUtil.Debug(_logger, "[Sub Scribe-DB] embed {Media}|{Pos} {Status} {Lang}", mediaHash, subPos, status, language);
     }
 
     /// <summary>
@@ -922,7 +922,7 @@ public sealed class ContentHashRegistry : IDisposable
 
         _db.Tracks.Upsert(row);
         RefreshMediaAggregates(mediaHash);
-        LogUtil.Detail(_logger, "[Sub Scribe-DB] embed {Media}|{Pos} observed {Lang} (HI={Hi})",
+        LogUtil.Debug(_logger, "[Sub Scribe-DB] embed {Media}|{Pos} observed {Lang} (HI={Hi})",
             mediaHash, subPos, language, hearingImpaired);
         return true;
     }
@@ -993,7 +993,7 @@ public sealed class ContentHashRegistry : IDisposable
         _db.Tracks.Upsert(row);
         if (changed)
         {
-            LogUtil.Detail(_logger, "[Sub Scribe-DB] embed {Media}|{Pos} detection {Outcome} {Lang}",
+            LogUtil.Debug(_logger, "[Sub Scribe-DB] embed {Media}|{Pos} detection {Outcome} {Lang}",
                 mediaHash, subPos, outcome, language ?? "-");
         }
 
@@ -1807,7 +1807,7 @@ public sealed class ContentHashRegistry : IDisposable
         SourceStore.WriteTrackMark(_db, media, mediaHash, SourceStore.MovieSubtitles, language, hearingImpaired,
             SourceStore.SidecarPosition, moviesubtitlesUploadedAt, moviesubtitlesDownloadId, moviesubtitlesUploadId);
 
-        LogUtil.Detail(_logger, "[Sub Scribe-DB] sidecar {Hash} {Status} {Lang}", contentHash, status, language);
+        LogUtil.Debug(_logger, "[Sub Scribe-DB] sidecar {Hash} {Status} {Lang}", contentHash, status, language);
     }
 
     /// <summary>
@@ -1896,7 +1896,7 @@ public sealed class ContentHashRegistry : IDisposable
         }
 
         _db.Sidecars.Upsert(row);
-        LogUtil.Detail(_logger, "[Sub Scribe-DB] sidecar {Hash} observed {Lang} (HI={Hi})",
+        LogUtil.Debug(_logger, "[Sub Scribe-DB] sidecar {Hash} observed {Lang} (HI={Hi})",
             contentHash, language, hearingImpaired);
         return true;
     }
@@ -1943,7 +1943,7 @@ public sealed class ContentHashRegistry : IDisposable
         row.FileName = fileName;
         row.Path = path;
         _db.Sidecars.Upsert(row);
-        LogUtil.Detail(_logger, "[Sub Scribe-DB] sidecar {Hash} moved to {Name}", contentHash, fileName);
+        LogUtil.Debug(_logger, "[Sub Scribe-DB] sidecar {Hash} moved to {Name}", contentHash, fileName);
         return true;
     }
 
@@ -2967,7 +2967,7 @@ public sealed class ContentHashRegistry : IDisposable
         {
             m.SubtitlesUploadedAt = now;
         });
-        LogUtil.Detail(_logger, "[Sub Scribe-DB] subtitles uploaded-complete {Media}", mediaHash);
+        LogUtil.Debug(_logger, "[Sub Scribe-DB] subtitles uploaded-complete {Media}", mediaHash);
     }
 
     /// <summary>True when the embedded subtitle side of this file is complete.</summary>
@@ -3472,7 +3472,7 @@ public sealed class ContentHashRegistry : IDisposable
             {
                 _db.Tracks.Remove(row);
                 removed++;
-                LogUtil.Detail(_logger, "[Sub Scribe-DB] forgot stale embed {Media}|{Pos} {Lang} (HI={Hi}, position gone)",
+                LogUtil.Debug(_logger, "[Sub Scribe-DB] forgot stale embed {Media}|{Pos} {Lang} (HI={Hi}, position gone)",
                     mediaHash, row.SubPos, row.Language, row.HearingImpaired);
                 continue;
             }
@@ -3493,7 +3493,7 @@ public sealed class ContentHashRegistry : IDisposable
 
             _db.Tracks.Remove(row);
             removed++;
-            LogUtil.Detail(_logger, "[Sub Scribe-DB] forgot stale embed {Media}|{Pos} {Lang} (HI={Hi})",
+            LogUtil.Debug(_logger, "[Sub Scribe-DB] forgot stale embed {Media}|{Pos} {Lang} (HI={Hi})",
                 mediaHash, row.SubPos, row.Language, row.HearingImpaired);
         }
 
