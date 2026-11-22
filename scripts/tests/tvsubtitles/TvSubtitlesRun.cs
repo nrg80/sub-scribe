@@ -872,6 +872,29 @@ internal static class Program
                 && sid == 3234 && sst == 2 && slg == "en" && six >= 0),
             string.Join(",", ersteFolge.Select(h => h.Id)));
 
+        // --- F-M693: der Staffel-ZIP-Schalter dieser Quelle -------------------------------------------
+        // Betreiberansage 22.11.2026: "Seadon zip toggle also for tvst". Aus heisst NICHT „keine
+        // Behaelter", sondern „erst der Einzelweg": mit PreferSeasonZip=false darf die Staffel-ZIP
+        // gar nicht erst geholt werden (kein Staffelabruf, kein ZIP-Abruf), die Folgenseite liefert.
+        var ohneZipHandler = new SeasonPackHandler { Zip = BuildSeasonZipFor(1, 5), EpisodesOnPages = { 1, 5 } };
+        var ohneZip = new TvSubtitlesDownloadEndpoint(new TvSubtitlesClient(new HttpClient(ohneZipHandler)));
+        var ohneZipTreffer = await ohneZip
+            .SearchAsync(new SubtitleQuery("MobLand", null, null, 2, 1, "en", PreferSeasonZip: false))
+            .ConfigureAwait(false);
+
+        Check("F-M693: mit ausgeschaltetem Staffel-ZIP-Schalter wird die Staffel-ZIP nicht geholt",
+            ohneZipHandler.DownloadPages == 0
+            && ohneZipHandler.SeasonPages == 0
+            && ohneZipHandler.EpisodeListPages >= 1
+            && ohneZipHandler.EpisodePages >= 1,
+            "Staffelseiten=" + ohneZipHandler.SeasonPages + " ZIP=" + ohneZipHandler.DownloadPages
+            + " Folgenliste=" + ohneZipHandler.EpisodeListPages + " Folgenseite=" + ohneZipHandler.EpisodePages);
+        Check("F-M693: und der Einzelweg liefert trotzdem Treffer — keiner davon aus einem Behaelter",
+            ohneZipTreffer.Count > 0
+            && ohneZipTreffer.All(h => !h.Id.StartsWith("seasonpack:", StringComparison.Ordinal)),
+            "Treffer=" + ohneZipTreffer.Count.ToString(CultureInfo.InvariantCulture)
+            + " " + string.Join(",", ohneZipTreffer.Select(h => h.Id)));
+
         // Beide Seiten getrennt: der reguläre Treffer darf nie auf der HI-Seite landen und umgekehrt.
         var staffelSeite3 = await staffelEndpoint
             .SearchAsync(new SubtitleQuery("MobLand", null, null, 2, 3, "en")).ConfigureAwait(false);

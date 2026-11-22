@@ -49,6 +49,15 @@ public sealed class TvstEngine : ISourceEngine
     /// <summary>F-M691: der Download-Schalter in der eigenen Datei dieser Quelle.</summary>
     public const string FieldDownloadEnabled = SourceSwitches.DownloadField;
 
+    /// <summary>F-M693: der Staffelpack-Schalter in der eigenen Datei dieser Quelle.</summary>
+    public const string FieldPacksEnabled = SourceSwitches.PacksField;
+
+    /// <summary>F-M693: der Melde-Schalter in der eigenen Datei dieser Quelle.</summary>
+    public const string FieldReportEnabled = SourceSwitches.ReportField;
+
+    /// <summary>F-M693: Staffel-ZIPs bevorzugen — auch diese Seite liefert sie (Stufe 1 der Suche).</summary>
+    public const string FieldPreferSeasonZip = "preferSeasonZip";
+
     /// <summary>F-M683: der Schlüssel der Adresse in der eigenen Datei dieser Quelle.</summary>
     public const string FieldBaseUrl = "baseUrl";
 
@@ -60,12 +69,23 @@ public sealed class TvstEngine : ISourceEngine
     /// </summary>
     public static IReadOnlyList<SourceField> Declared { get; } = new SourceField[]
     {
-        // F-M691: Richtungen zuerst. Die Vorgaben sind die des Betreibers vom 15.11.2026 (F-M503):
-        // Download an, Upload aus — ein Upload verlässt den Rechner und ist deshalb opt-in.
-        new(FieldUploadEnabled, "Upload", SourceFieldKind.Switch, Default: "false",
+        // F-M693: die vier Möglichkeiten als Reihe oben auf der Karte, jede mit ihrem eigenen Schalter.
+        // Die Vorgaben sind die des Betreibers vom 15.11.2026 (F-M503): Download an, Upload aus — ein
+        // Upload verlässt den Rechner und ist deshalb opt-in.
+        new(FieldUploadEnabled, "Upload", SourceFieldKind.Switch, Default: "false", Group: SourceField.Badges,
             Help: "Offer our own subtitles to this site. Off unless you switch it on."),
-        new(FieldDownloadEnabled, "Download", SourceFieldKind.Switch, Default: "true",
+        new(FieldDownloadEnabled, "Download", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
             Help: "Search and fetch subtitles from this site."),
+        new(FieldPacksEnabled, "Packs", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
+            Help: "Accept a whole season as ONE archive. Off means every episode goes on its own."),
+        new(FieldReportEnabled, "Report", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
+            Help: "Tell this site when one of its subtitles was unusable."),
+
+        // F-M693 (Betreiberansage 22.11.2026: „Seadon zip toggle also for tvst"): Stufe 1 der Suche ist
+        // die Staffel-ZIP — EIN Abruf für die ganze Staffel statt einer je Folge. Der Schalter sagt, ob
+        // dieser Weg zuerst gegangen wird; aus heißt: nur der Einzelweg der Folgenseite.
+        new(FieldPreferSeasonZip, "Prefer season ZIPs", SourceFieldKind.Switch, Default: "true",
+            Help: "Try the season ZIP first — one request for the whole season instead of one per episode."),
         // F-M692: die Adresse ist kein Feld mehr — sie steht fest im Client dieses Builds.
     };
 
@@ -94,6 +114,7 @@ public sealed class TvstEngine : ISourceEngine
         _client = client ?? new TvSubtitlesClient(context.Http, context.ArchiveCache);
         _weg = new Api.Endpoints.TvSubtitlesDownloadEndpoint(_client);
         Settings = settings ?? SourceSettings.Empty(SourceKey, Declared);
+        PreferSeasonZip = Settings.Switch(FieldPreferSeasonZip);
 
         // F-M692: kein Adressvergleich mehr — die Adresse ist kein Feld.
 
@@ -102,10 +123,12 @@ public sealed class TvstEngine : ISourceEngine
             Key = SourceKey,
             DisplayName = "tvsubtitles.net",
             CanUpload = true,
-            CanReport = true,
+
+            // F-M693: Meldung und Staffelpack sind Schalter DIESER Quelle — die Datei antwortet zuerst.
+            CanReport = SourceSwitches.Flag(SourceKey, FieldReportEnabled) ?? true,
             CanHearingImpaired = true,
             CanOfferSeasonPacks = true,
-            CanSeasonPacks = seasonPacks,
+            CanSeasonPacks = SourceSwitches.Flag(SourceKey, FieldPacksEnabled) ?? seasonPacks,
 
             // F-M687: der Staffel-Slot dieser Seite nimmt EIN Archiv — die Behälterform ist eine
             // Eigenschaft der Quelle, keine Frage an ihren Namen.
@@ -137,6 +160,9 @@ public sealed class TvstEngine : ISourceEngine
 
     /// <summary>Gets F-M683: die Adresse aus der eigenen Datei.</summary>
     public string BaseUrl { get; }
+
+    /// <summary>Gets F-M693: Staffel-ZIPs bevorzugen (Vorgabe an).</summary>
+    public bool PreferSeasonZip { get; private set; } = true;
 
     /// <inheritdoc />
     public async Task<SourceSearchAnswer> SearchAsync(SourceSearchRequest request, CancellationToken ct)
@@ -194,7 +220,8 @@ public sealed class TvstEngine : ISourceEngine
                 treffer = await _weg.SearchAsync(
                     new Api.Endpoints.SubtitleQuery(
                         request.Name, null, request.TmdbId, staffel, nummer, code,
-                        Year: request.Year ?? 0),
+                        Year: request.Year ?? 0,
+                        PreferSeasonZip: PreferSeasonZip),
                     ct).ConfigureAwait(false);
             }
             catch (OperationCanceledException)

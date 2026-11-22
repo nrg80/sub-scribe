@@ -42,7 +42,8 @@ public sealed record SourceFieldView(
     double? Min,
     double? Max,
     IReadOnlyList<string> Options,
-    SourceFieldVisibility? VisibleWhen);
+    SourceFieldVisibility? VisibleWhen,
+    string? Group);
 
 /// <summary>F-M683: die Taktgrenzen einer Quelle, wie sie sie selbst nennt.</summary>
 /// <param name="UploadsPerHour">Abgaben je Stunde, 0 wenn die Quelle keine nennt.</param>
@@ -309,7 +310,8 @@ public static class SourceSettingsView
                 feld.Kind == SourceFieldKind.Number ? feld.Min : null,
                 feld.Kind == SourceFieldKind.Number ? feld.Max : null,
                 feld.Kind == SourceFieldKind.Choice ? feld.Options ?? Array.Empty<string>() : Array.Empty<string>(),
-                feld.VisibleWhen);
+                feld.VisibleWhen,
+                feld.Group);
         }).ToList();
 
     private static string RelativeFile(string key)

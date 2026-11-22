@@ -43,6 +43,12 @@ public static class SourceSwitches
     /// <summary>Der Feldname des Download-Schalters in der Datei einer Quelle.</summary>
     public const string DownloadField = "downloadEnabled";
 
+    /// <summary>F-M693: der Feldname des Staffelpack-Schalters in der Datei einer Quelle.</summary>
+    public const string PacksField = "packsEnabled";
+
+    /// <summary>F-M693: der Feldname des Melde-Schalters in der Datei einer Quelle.</summary>
+    public const string ReportField = "reportEnabled";
+
     /// <summary>
     /// Gets or sets wo die Dateien der Quellen liegen. Vorbelegt mit dem Datenordner der laufenden
     /// Plugin-Instanz; die Prüfungen setzen hier ein temporäres Verzeichnis.
@@ -71,6 +77,29 @@ public static class SourceSwitches
     /// <param name="provider">Die Quelle.</param>
     /// <returns>Der gespeicherte Wert, oder null wenn die Datei nichts sagt.</returns>
     public static bool? Download(SubtitleProvider provider) => Read(provider, DownloadField);
+
+    /// <summary>F-M693: der Staffelpack-Schalter aus der Datei dieser Quelle, oder null.</summary>
+    /// <param name="provider">Die Quelle.</param>
+    /// <returns>Der gespeicherte Wert, oder null wenn die Datei nichts sagt.</returns>
+    public static bool? Packs(SubtitleProvider provider) => Read(provider, PacksField);
+
+    /// <summary>F-M693: der Melde-Schalter aus der Datei dieser Quelle, oder null.</summary>
+    /// <param name="provider">Die Quelle.</param>
+    /// <returns>Der gespeicherte Wert, oder null wenn die Datei nichts sagt.</returns>
+    public static bool? Report(SubtitleProvider provider) => Read(provider, ReportField);
+
+    /// <summary>
+    /// F-M693: ein Wahrheitsfeld aus der Datei EINER Quelle, nach ihrem Schlüssel gefragt — für die
+    /// Engines, die ihre eigene Fähigkeit aus ihrer eigenen Datei lesen. <c>null</c> heißt „die Datei
+    /// sagt nichts"; was dann gilt, entscheidet die Engine mit ihrem Alt-Wert.
+    /// </summary>
+    /// <param name="providerKey">Der Quellenschlüssel, z. B. <c>subdl</c>.</param>
+    /// <param name="fieldKey">Der Feldname in der Datei.</param>
+    /// <returns>Der gespeicherte Wert, oder null.</returns>
+    public static bool? Flag(string providerKey, string fieldKey)
+        => string.IsNullOrWhiteSpace(providerKey)
+            ? null
+            : SourceSettingsFile.ReadFlag(DataFolder(), providerKey, fieldKey);
 
     private static bool? Read(SubtitleProvider provider, string fieldKey)
     {

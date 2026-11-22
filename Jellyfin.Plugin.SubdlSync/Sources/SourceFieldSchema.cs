@@ -80,6 +80,12 @@ public sealed record SourceFieldVisibility(string Field, string Value);
 /// <param name="Max">Obere Grenze bei <see cref="SourceFieldKind.Number"/>.</param>
 /// <param name="Options">Die Möglichkeiten bei <see cref="SourceFieldKind.Choice"/>.</param>
 /// <param name="VisibleWhen">Nur zeigen, wenn ein anderes Feld einen bestimmten Wert hat — oder null.</param>
+/// <param name="Group">
+/// F-M693: wohin das Feld gehört, wenn es nicht als Zeile untereinander steht. <c>badges</c> ist die
+/// Reihe ganz oben auf der Karte: die vier Möglichkeiten einer Quelle — Upload, Download, Packs,
+/// Meldung —, jede mit ihrem eigenen Schalter (Betreiberansage 22.11.2026: „Badges upload /download
+/// /packs / report. Each with it's own toogle"). Leer heißt: eine gewöhnliche Zeile.
+/// </param>
 public sealed record SourceField(
     string Key,
     string Label,
@@ -90,10 +96,17 @@ public sealed record SourceField(
     double? Min = null,
     double? Max = null,
     IReadOnlyList<string>? Options = null,
-    SourceFieldVisibility? VisibleWhen = null)
+    SourceFieldVisibility? VisibleWhen = null,
+    string? Group = null)
 {
+    /// <summary>F-M693: der Name der Gruppe für die Reihe der Möglichkeiten oben auf der Karte.</summary>
+    public const string Badges = "badges";
+
     /// <summary>Gets a value indicating whether this is a secret — its value never leaves the plugin.</summary>
     public bool IsSecret => Kind == SourceFieldKind.Secret;
+
+    /// <summary>Gets F-M693: steht dieses Feld in der Reihe der Möglichkeiten oben auf der Karte?</summary>
+    public bool IsBadge => string.Equals(Group, Badges, StringComparison.Ordinal);
 
     /// <summary>
     /// F-M683: der Name der Art, wie er in der Antwort des Endpunkts steht (<c>text</c>, <c>secret</c>,

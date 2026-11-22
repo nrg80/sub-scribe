@@ -75,7 +75,7 @@ def run_case_probe(page_src):
     Gibt (ok, detail) zurueck. Fehlt node, ist das ein Fehlschlag mit klarem Grund — nicht still.
     """
     start = page_src.find("function subdlSourceWert")
-    end = page_src.find("function subdlSourceCaps")
+    end = page_src.find("function subdlSourceBadges")
     if start == -1 or end == -1 or end <= start:
         return False, "Uebersetzungsfunktionen nicht gefunden"
     block = page_src[start:end]
@@ -96,9 +96,9 @@ def run_case_probe(page_src):
       },
       "Fields": [
         { "Key": "uploadEnabled", "Label": "Upload", "Kind": "switch", "Default": "false",
-          "Value": false, "Gesetzt": false, "Options": [] },
+          "Value": false, "Gesetzt": false, "Options": [], "Group": "badges" },
         { "Key": "downloadEnabled", "Label": "Download", "Kind": "switch", "Default": "true",
-          "Value": true, "Gesetzt": false, "Options": [] },
+          "Value": true, "Gesetzt": false, "Options": [], "Group": "badges" },
         { "Key": "apiKey", "Label": "API-Schluessel", "Kind": "secret", "Required": true,
           "Help": "Bearer", "Gesetzt": true, "Options": [] },
         { "Key": "account", "Label": "Konto", "Kind": "text", "Required": false,
@@ -177,6 +177,16 @@ def run_case_probe(page_src):
         fehler.append("Arten=%s" % arten)
 
     # F-M691: die beiden Richtungsschalter stehen als Schalter auf der Karte, mit ihrem Wert.
+    # F-M693: die Gruppe kommt mit — badges sind die Reihe oben, alles andere bleibt Zeile.
+    if felder and felder[0].get("badge") is not True:
+        fehler.append("upload.badge=%r" % felder[0].get("badge"))
+    if len(felder) > 1 and felder[1].get("badge") is not True:
+        fehler.append("download.badge=%r" % felder[1].get("badge"))
+    if len(felder) > 2 and felder[2].get("badge") is not False:
+        fehler.append("apiKey.badge=%r" % felder[2].get("badge"))
+    if felder and felder[-1].get("badge") is not False:
+        fehler.append("letztes.badge=%r" % felder[-1].get("badge"))
+
     if felder and felder[0].get("key") != "uploadEnabled":
         fehler.append("erstes Feld=%r" % (felder[0].get("key") if felder else None))
     if felder and felder[0].get("value") is not False:
@@ -2230,13 +2240,19 @@ def main():
           "entry.configured ? 'on' : 'off'" in quellen,
           "the operator named the two states himself")
 
-    _caps_fn = quellen[quellen.find('function subdlSourceCaps'):quellen.find('function subdlSourceField')] \
-        if quellen.find('function subdlSourceCaps') != -1 and quellen.find('function subdlSourceField') != -1 else ""
-    check("F-M688: the capabilities are a DISPLAY only — no input, no select, no checkbox",
-          _caps_fn != "" and "createElement('input')" not in _caps_fn
-          and "createElement('select')" not in _caps_fn and 'checkbox' not in _caps_fn
-          and "subdl-source-cap" in _caps_fn,
-          "a capability the operator could switch would be a second place for a decision")
+    # F-M693 (Betreiberansage 22.11.2026: "Badges upload /download /packs / report. Each with it's own
+    # toogle"): F-M688 sagte, die Faehigkeiten seien reine Anzeige. Das ist ueberholt — der Betreiber
+    # will sie schaltbar. Was BLEIBT: der Faehigkeits-Block der Antwort (Takt, Sprachtafel, Suchschluessel)
+    # ist weiter nur Anzeige; schaltbar sind allein die vier Felder, die die Engine als Badge erklaert.
+    _badges_fn = quellen[quellen.find('function subdlSourceBadges'):
+                        quellen.find('function subdlSourceField')] \
+        if quellen.find('function subdlSourceBadges') != -1 and quellen.find('function subdlSourceField') != -1 else ""
+    check("F-M693: the badges are switches, and they are FIELDS — not a second write path",
+          _badges_fn != ""
+          and "list[i].badge" in _badges_fn
+          and "subdlSourceField(entry, list[i])" in _badges_fn
+          and "capabilities" not in _badges_fn,
+          "der Badge ist ein Feld mit Schalter, kein Sonderweg an den Werten vorbei")
 
     check("F-M688: after a save the card is refilled from the answer, and the written fields are named",
           "if (ant && ant.quelle)" in quellen and "card.parentNode.replaceChild(neu, card)" in quellen
@@ -2312,12 +2328,6 @@ def main():
     # (c) ein Geheimfeld SIEHT gefuellt aus und ist ein normales Eingabefeld — es trug ein
     # is="emby-input", das der Browser an einem per JS erzeugten Element NICHT mehr aufwertet, weshalb
     # es im dunklen Theme praktisch unsichtbar blieb.
-    check("F-M692: the capability line is ONE short text, not a row of badges",
-          "SUBDL_SOURCE_CAP_WORDS" in quellen
-          and "subdl-source-cap'" not in quellen
-          and quellen.count("'canUpload', 'upload'") == 1
-          and "box.textContent = worte.join(' · ')" in quellen,
-          "Woerter: upload/report/packs als Text")
     check("F-M692: a secret field is a real, visible input that LOOKS filled",
           "input.style.width = '100%'" in quellen
           and "input.placeholder = field.gesetzt ?" in quellen
@@ -2327,6 +2337,35 @@ def main():
           "field.kind === 'url'" in page_src and "'SourceField-' + entry.key + '-' + field.key" in page_src,
           "die Karte kennt die Art noch, aber keine Quelle erklaert sie mehr (sources: F-M692)")
 
+    # Jede SUBDL_SOURCE_*-Kennung, die die Seite BENUTZT, muss sie auch DEFNINIEREN. Am 22.11.2026 fiel
+    # beim Umbau die Definition von SUBDL_SOURCE_CAP_KEYS weg, waehrend subdlSourceFaehigkeiten sie
+    # weiter las: node --check war gruen (Syntax stimmt), die Karte blieb im Browser leer
+    # ("SUBDL_SOURCE_CAP_KEYS is not defined"). Diese Pruefung haette es gesehen.
+    benutzt = set(re.findall(r"\bSUBDL_SOURCE_[A-Z_]+\b", page_src))
+    definiert = set(re.findall(r"(?:var|function)\s+(SUBDL_SOURCE_[A-Z_]+)", page_src))
+    check("every SUBDL_SOURCE_* identifier the page uses is also defined on the page",
+          benutzt <= definiert,
+          "fehlt: " + (", ".join(sorted(benutzt - definiert)) or "nichts"))
+
+    # ---- F-M693: Badges mit eigenem Schalter, Speichern wie die uebrigen Knoepfe -----------------
+    # Betreiberansage 22.11.2026: "Seadon zip toggle also for tvst. Save Button similar to the other look
+    # and feel. Badges upload /download /packs / report. Each with it's own toogle".
+    check("F-M693: the capability line is gone — the badges carry their own switches",
+          "subdlSourceCaps" not in quellen
+          and "SUBDL_SOURCE_CAP_WORDS" not in quellen
+          and "function subdlSourceBadges(entry)" in quellen
+          and "if (badges) { card.appendChild(badges); }" in quellen,
+          "eine Reihe Schalter statt einer Aufzaehlung")
+    check("F-M693: badge fields are drawn once — not again as a row below",
+          "if (list[i].badge) { continue; }" in quellen
+          and "row.classList.add('subdl-badge')" in quellen,
+          "derselbe Feld-Renderer, kein zweiter Weg durch die Werte")
+    check("F-M693: the Save button wears the same classes as every other button on the page",
+          "save.className = 'raised button-submit subdl-source-save'" in quellen
+          and "save.setAttribute('is', 'emby-button')" not in quellen
+          and "class=\"raised button-submit" in page_src,
+          "raised + button-submit wie die uebrigen Knoepfe")
+
     probe_ok, probe_detail = run_case_probe(page_src)
     check("F-M689: the translation runs against a real endpoint answer (all six field kinds)",
           probe_ok, probe_detail)
@@ -2335,6 +2374,12 @@ def main():
     # Die Zaehlung gehoert ans ENDE: stand sie mitten in der Datei, waren alle spaeteren Pruefungen
     # fuer die Zusammenfassung unsichtbar (F-M525 — zehn rote Pruefungen bei "326/326 OK").
     failed = [r for r in results if not r[1]]
+
+    # Eine rote Zahl ohne Namen ist keine Auskunft: jeder rote Satz nennt sich hier selbst samt
+    # gemessenem Wert. (Bis F-M693 stand in dieser Datei nur die Summe — drei rote Pruefungen waren
+    # damit unsichtbar, und die Zusammenfassung sagte nur "364/367".)
+    for (name, _ok, detail) in failed:
+        print("  ROT   %s  [%s]" % (name, detail))
 
     print(">>> GUI-STRUKTUR %s: %d/%d Pruefungen bestanden"
           % ("OK" if not failed else "FEHLER", len(results) - len(failed), len(results)))

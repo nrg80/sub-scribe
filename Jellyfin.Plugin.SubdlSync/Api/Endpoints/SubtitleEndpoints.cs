@@ -50,6 +50,10 @@ public enum SubtitleDirection
 /// (<see cref="Jellyfin.Plugin.SubScribe.Data.FileEntity.MsubMovieId"/>). Ist sie gesetzt, wird sie
 /// benutzt statt erneut zu suchen — dieselbe Regel wie <c>UploadTicket.TvstShowId</c> für Serien.
 /// </param>
+/// <param name="PreferSeasonZip">
+/// F-M693: darf die Suche die Staffel-ZIP als Stufe 1 gehen? Vorgabe true, damit jeder vorhandene
+/// Aufrufer unverändert dasselbe tut; tvsubtitles reicht hier den Schalter aus ihrer eigenen Datei durch.
+/// </param>
 public sealed record SubtitleQuery(
     string? ShowName,
     string? ImdbId,
@@ -58,7 +62,8 @@ public sealed record SubtitleQuery(
     int Episode,
     string Language,
     int Year = 0,
-    string? MovieId = null);
+    string? MovieId = null,
+    bool PreferSeasonZip = true);
 
 /// <summary>
 /// F-M483: one offer a source has for a query. <paramref name="Id"/> is the source's own handle — a

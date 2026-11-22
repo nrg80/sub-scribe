@@ -100,6 +100,17 @@ public class Plugin : BasePlugin<Configuration.PluginConfiguration>, IHasWebPage
                     string.Join(", ", uebernommen));
             }
 
+            // F-M693: derselbe Nachtrag für Packs und Meldung — eigene Marke.
+            var faehigkeiten = Sources.SourceSettingsSeed.EnsureCapabilitySwitches(DataFolderPath, Configuration);
+            if (faehigkeiten.Count > 0)
+            {
+                _loggerFactory?.CreateLogger("SubDL-Start")?.LogInformation(
+                    "[Sub Scribe] the packs and report switch of {Count} source(s) now lives in their own "
+                    + "file: {Keys} (F-M693).",
+                    faehigkeiten.Count,
+                    string.Join(", ", faehigkeiten));
+            }
+
             // F-M691: die Richtungsschalter nachtragen. Eigene Marke, eigener Aufruf — die Übernahme von
             // F-M683 ist auf einer laufenden Instanz längst gelaufen, dieser Nachtrag aber noch nicht.
             var richtungen = Sources.SourceSettingsSeed.EnsureDirectionSwitches(DataFolderPath, Configuration);

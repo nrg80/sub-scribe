@@ -86,6 +86,17 @@ public sealed class SourceRegistry
                 string.Join(", ", richtungen));
         }
 
+        // F-M693: derselbe Nachtrag für Packs und Meldung, eigene Marke.
+        var faehigkeiten = SourceSettingsSeed.EnsureCapabilitySwitches(context.DataFolder, config);
+        if (faehigkeiten.Count > 0)
+        {
+            context.Logger?.LogInformation(
+                "[Sub Scribe] the packs and report switch of {Count} source(s) now lives in their own file "
+                + "(F-M693): {Keys}",
+                faehigkeiten.Count,
+                string.Join(", ", faehigkeiten));
+        }
+
         // F-M654: SubDL steht immer im Pack-Slot — der Schalter dieser Quelle entscheidet eine Etage
         // höher, ob der Lauf überhaupt packt, nicht diese Liste. Das ist der Stand vor F-M682 und bleibt
         // er: die Umstellung ändert die Antwort, nicht den Umfang.

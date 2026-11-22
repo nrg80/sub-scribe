@@ -791,9 +791,21 @@
         .subdl-source-state { margin-left: auto; font-size: 0.85em; font-weight: 600; }
         .subdl-source-state.on { color: #107c10; }
         .subdl-source-state.off { color: #a4262c; }
-        .subdl-source-caps { font-size: 0.8em; opacity: 0.7; margin: 0.3em 0 0.4em 0; letter-spacing: 0.02em; }
+        /* F-M693: die Reihe der Moeglichkeiten — vier Schalter, jeder mit seinem Namen. */
+        .subdl-source-badges { display: flex; flex-wrap: wrap; gap: 1.2em; margin: 0.55em 0 0.8em 0; }
+        .subdl-badge { display: flex; align-items: center; margin: 0; }
+        .subdl-badge .checkboxContainer { margin: 0; padding: 0; }
+        /* Der Schalter traegt seinen Namen im eigenen Label (emby-checkbox-label/span) — kein zweites
+           Label darueber, sonst stuende jedes Wort zweimal auf der Karte. */
+        .subdl-badge .emby-checkbox-label { display: inline-flex; align-items: center; gap: 0.35em;
+            margin: 0; font-size: 0.95em; cursor: pointer; }
+        .subdl-badge input[type="checkbox"] { width: auto; margin: 0; }
+        /* Die Hilfe steht als Titel am Schalter (Mauszeiger), nicht als Zeile — die Reihe soll eine
+           Reihe bleiben. */
+        .subdl-badge .fieldDescription { display: none; }
         .subdl-source-hint { font-size: 0.9em; color: #ffc107; margin: 0.3em 0; }
         .subdl-source-secret-state { font-size: 0.85em; opacity: 0.8; margin-left: 0.5em; }
+        .subdl-source-save { margin: 0.6em 0 0 0; }
         .subdl-source-result { min-height: 1.2em; margin-top: 0.4em; }
         .subdl-source-result.ok { color: #107c10; font-weight: 600; }
         .subdl-source-result.fail { color: #a4262c; font-weight: 600; }
@@ -1967,12 +1979,22 @@ workers.forEach(function (w) {
                     min: subdlSourceWert(feld, 'min'),
                     max: subdlSourceWert(feld, 'max'),
                     options: subdlSourceWert(feld, 'options') || [],
+
+                    // F-M693: steht dieses Feld in der Reihe der Moeglichkeiten oben auf der Karte?
+                    badge: subdlSourceWert(feld, 'group') === 'badges',
                     visibleWhen: vw ? {
                         field: subdlSourceWert(vw, 'field'),
                         value: subdlSourceWert(vw, 'value')
                     } : null
                 };
             }
+
+            // F-M693: die Liste bleibt, weil die Uebersetzung der Faehigkeiten sie liest (Takt,
+            // Sprachtafel, Suchschluessel). Auf der Karte steht sie nicht mehr — die vier Moeglichkeiten
+            // sind jetzt Felder mit eigenem Schalter, keine Aufzaehlung.
+            var SUBDL_SOURCE_CAP_KEYS = ['canUpload', 'canReport', 'canHearingImpaired',
+                'canOfferSeasonPacks', 'canSeasonPacks', 'canCreateTitle', 'canQuota',
+                'takesPrebuiltPack', 'searchesByImdb', 'searchesByTmdb', 'searchesByName', 'searchesByHash'];
 
             function subdlSourceFaehigkeiten(caps) {
                 if (!caps) { return null; }
@@ -2027,29 +2049,27 @@ workers.forEach(function (w) {
                 };
             }
 
-            // F-M692 (Betreiberansage 22.11.2026: „All these badges reduce to minimum"): EINE Zeile,
-            // drei Woerter, nur was das Verhalten aendert. Takt, Sprachtafel und Suchschluessel sind
-            // Maschinenangaben — sie gehoeren ins Protokoll, nicht auf die Karte.
-            var SUBDL_SOURCE_CAP_WORDS = [
-                ['canUpload', 'upload'],
-                ['canReport', 'report'],
-                ['canSeasonPacks', 'packs']
-            ];
+            // F-M693 (Betreiberansage 22.11.2026: "Badges upload /download /packs / report. Each with it's
+            // own toogle"): die Moeglichkeiten einer Quelle sind eine Reihe von Schaltern, keine Aufzaehlung.
+            // Gebaut wird sie mit DEMSELBEN Feld-Renderer wie jede Zeile — damit tragen die Schalter
+            // dieselben Kennungen, werden beim Laden mit ihrem Wert gefuellt und beim Speichern mitgelesen,
+            // ohne dass es einen zweiten Weg durch die Werte gibt.
+            function subdlSourceBadges(entry) {
+                var list = entry.fields || [];
+                var strip = null;
+                for (var i = 0; i < list.length; i++) {
+                    if (!list[i].badge) { continue; }
+                    if (!strip) { strip = subdlSourceEl('div', 'subdl-source-badges'); }
+                    var row = subdlSourceField(entry, list[i]);
+                    row.classList.add('subdl-badge');
 
-            function subdlSourceCaps(caps) {
-                var box = subdlSourceEl('div', 'subdl-source-caps');
-                if (!caps) { return box; }
-                var worte = [];
-                for (var i = 0; i < SUBDL_SOURCE_CAP_WORDS.length; i++) {
-                    if (caps[SUBDL_SOURCE_CAP_WORDS[i][0]] === true) { worte.push(SUBDL_SOURCE_CAP_WORDS[i][1]); }
+                    // Die Hilfe des Feldes bleibt erreichbar, ohne die Reihe zu sprengen.
+                    if (list[i].help) { row.title = list[i].help; }
+                    strip.appendChild(row);
                 }
-                box.textContent = worte.join(' · ');
-                return box;
+                return strip;
             }
 
-            // Ein Feld, so wie die Engine es erklaert: Beschriftung, Pflicht, Hilfetext, Grenzen,
-            // Auswahl. Die ART entscheidet ueber das Steuerelement; ein Geheimnis bekommt NIE einen
-            // Wert ins DOM — nur die Auskunft "set" / "not set".
             function subdlSourceField(entry, field) {
                 var id = 'SourceField-' + entry.key + '-' + field.key;
                 var row = document.createElement('div');
@@ -2242,7 +2262,12 @@ workers.forEach(function (w) {
                     entry.configured ? 'on' : 'off'));
                 card.appendChild(head);
 
-                card.appendChild(subdlSourceCaps(entry.capabilities));
+                // F-M693 (Betreiberansage 22.11.2026: "Badges upload /download /packs / report. Each with
+                // it's own toogle"): die Moeglichkeiten dieser Quelle stehen als Reihe oben auf der Karte,
+                // jede mit ihrem eigenen Schalter. Die fruehere Kennzeichen-Zeile entfaellt — sie sagte
+                // dasselbe ohne Schalter.
+                var badges = subdlSourceBadges(entry);
+                if (badges) { card.appendChild(badges); }
 
                 if (entry.hint) {
                     card.appendChild(subdlSourceEl('div', 'subdl-source-hint', entry.hint));
@@ -2251,14 +2276,19 @@ workers.forEach(function (w) {
                 var fields = subdlSourceEl('div', 'subdl-source-fields');
                 var list = entry.fields || [];
                 for (var i = 0; i < list.length; i++) {
+                    if (list[i].badge) { continue; }
                     fields.appendChild(subdlSourceField(entry, list[i]));
                 }
                 card.appendChild(fields);
 
                 var save = document.createElement('button');
                 save.type = 'button';
-                save.setAttribute('is', 'emby-button');
-                save.className = 'raised subdl-source-save';
+
+                // F-M693 (Betreiberansage: "Save Button similar to the other look and feel"): derselbe
+                // Satz Klassen wie jeder andere Knopf dieser Seite. Das fruehere is="emby-input"/"emby-button"
+                // half nichts — ein per JS erzeugtes Element wird nicht aufgewertet; gestalt gab allein die
+                // Klasse "raised", und die trug keinen Text-Knopf.
+                save.className = 'raised button-submit subdl-source-save';
                 save.id = subdlSourceId('SourceSave', entry.key);
                 save.textContent = 'Save';
                 save.addEventListener('click', function () { subdlSourceSave(entry.key); });

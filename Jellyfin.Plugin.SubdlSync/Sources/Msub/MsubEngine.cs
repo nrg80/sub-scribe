@@ -56,7 +56,7 @@ public sealed class MsubEngine : ISourceEngine
         // F-M691: hier steht NUR der Download-Schalter. Einen Upload-Schalter zu zeigen, der nichts tun
         // darf, wäre eine Behauptung: der Upload dieser Adresse ist bis zur belegten Sprachabbildung
         // gesperrt (F-M508, Betreiber: „Bevor wir falsche Sprachen hochladen, laden wir nix hoch.").
-        new(FieldDownloadEnabled, "Download", SourceFieldKind.Switch, Default: "true",
+        new(FieldDownloadEnabled, "Download", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
             Help: "Search and fetch subtitles from this site."),
         // F-M692: die Adresse ist kein Feld mehr — sie steht fest im Client dieses Builds.
         new(FieldAccess, "Access", SourceFieldKind.Secret,

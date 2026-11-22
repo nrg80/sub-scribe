@@ -123,7 +123,11 @@ public sealed class TvSubtitlesDownloadEndpoint : IDownloadEndpoint
         // Abruf statt einen je Folge.
         bool regulaerGedeckt = false;
         bool hiGedeckt = false;
-        if (query.Season > 0)
+
+        // F-M693: der Schalter dieser Quelle entscheidet, ob Stufe 1 überhaupt gegangen wird. Aus heißt
+        // NICHT „keine Behälter", sondern „erst der Einzelweg" — die ZIP bleibt als Angebot des Laufs
+        // bestehen, sie wird nur nicht zuerst geholt.
+        if (query.Season > 0 && query.PreferSeasonZip)
         {
             var pack = await _client.SeasonPackAsync(showId.Value, query.Season, language, cancellationToken)
                 .ConfigureAwait(false);

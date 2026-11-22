@@ -218,6 +218,94 @@ public static class SourceSettingsSeed
         return ergaenzt;
     }
 
+    /// <summary>F-M693: die eigene Marke des Nachtrags für Packs und Meldung.</summary>
+    public const string CapabilityMarkerName = ".seed-badges-1";
+
+    /// <summary>
+    /// F-M693: schreibt die beiden Fähigkeitsschalter — Staffelpack und Meldung — EINMAL in die vorhandene
+    /// Datei jeder Quelle, die sie erklärt und noch nicht führt. Betreiberansage 22.11.2026: „Badges upload
+    /// /download /packs / report. Each with it's own toogle."
+    /// <para>
+    /// Der übernommene Wert ist der, der HEUTE gilt: Packs stand bisher im Pack-Slot des Laufs (SubDL
+    /// immer, tvsubtitles an seinem Upload-Schalter), Meldung war für beide an. Der Nachtrag ändert kein
+    /// Verhalten — er zieht nur den Wert dorthin, wo er ab jetzt gepflegt wird. Eine fehlende oder kaputte
+    /// Datei wird nicht angelegt und nicht überschrieben; ein gespeicherter Wert bleibt stehen.
+    /// </para>
+    /// </summary>
+    /// <param name="dataDir">Der Datenordner des Plugins (null/leer = nichts tun).</param>
+    /// <param name="config">Die Konfiguration dieses Laufs.</param>
+    /// <returns>Die Schlüssel der Quellen, deren Datei in DIESEM Aufruf ergänzt wurde.</returns>
+    public static IReadOnlyList<string> EnsureCapabilitySwitches(string? dataDir, PluginConfiguration? config)
+    {
+        var ergaenzt = new List<string>();
+        if (string.IsNullOrWhiteSpace(dataDir) || config is null)
+        {
+            return ergaenzt;
+        }
+
+        string ordner = SourceSettingsFile.DirIn(dataDir);
+        string marke = Path.Combine(ordner, CapabilityMarkerName);
+        if (File.Exists(marke))
+        {
+            return ergaenzt;
+        }
+
+        foreach ((SubtitleProvider provider, string key, IReadOnlyList<SourceField> schema) in DirectionPlan)
+        {
+            string datei = SourceSettingsFile.PathIn(dataDir, key);
+            if (!File.Exists(datei))
+            {
+                continue;
+            }
+
+            SourceSettings vorhanden = SourceSettingsFile.Load(dataDir, key, schema);
+            if (vorhanden.Problem is not null)
+            {
+                continue;
+            }
+
+            var werte = new Dictionary<string, string>(StringComparer.Ordinal);
+            foreach (KeyValuePair<string, string> paar in vorhanden.Stored)
+            {
+                werte[paar.Key] = paar.Value;
+            }
+
+            bool fehltEtwas = false;
+
+            if (!vorhanden.Has(SourceSwitches.PacksField)
+                && schema.Any(f => f.Key == SourceSwitches.PacksField))
+            {
+                // Vor F-M693 stand SubDL immer im Pack-Slot, tvsubtitles nur an seinem Upload-Schalter
+                // (F-M654/F-M495) — genau dieser Stand wird übernommen.
+                bool imSlot = provider == SubtitleProvider.Subdl
+                    || config.IsUploadEnabled(SubtitleProvider.TvSubtitles);
+                werte[SourceSwitches.PacksField] = imSlot ? "true" : "false";
+                fehltEtwas = true;
+            }
+
+            if (!vorhanden.Has(SourceSwitches.ReportField)
+                && schema.Any(f => f.Key == SourceSwitches.ReportField))
+            {
+                werte[SourceSwitches.ReportField] = "true";
+                fehltEtwas = true;
+            }
+
+            if (!fehltEtwas)
+            {
+                continue;
+            }
+
+            SourceSettingsFile.Save(dataDir, key, schema, werte);
+            ergaenzt.Add(key);
+        }
+
+        Directory.CreateDirectory(ordner);
+        SourceSettingsFile.RestrictFolderToOwner(ordner);
+        File.WriteAllText(marke, "badges " + SourceSettingsFile.SchemaNumber);
+        SourceSettingsFile.RestrictToOwner(marke);
+        return ergaenzt;
+    }
+
     /// <summary>
     /// F-M691: welche Quelle welchen Schlüssel führt und welchen Schalter sie erklärt — die Grundlage des
     /// Nachtrags. Die Zuordnung steht hier, weil <see cref="SourceSwitches"/> sie schon hält.

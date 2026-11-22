@@ -51,6 +51,12 @@ public sealed class SubdlEngine : ISourceEngine
     /// <summary>F-M691: der Download-Schalter in der eigenen Datei dieser Quelle.</summary>
     public const string FieldDownloadEnabled = SourceSwitches.DownloadField;
 
+    /// <summary>F-M693: der Staffelpack-Schalter in der eigenen Datei dieser Quelle.</summary>
+    public const string FieldPacksEnabled = SourceSwitches.PacksField;
+
+    /// <summary>F-M693: der Melde-Schalter in der eigenen Datei dieser Quelle.</summary>
+    public const string FieldReportEnabled = SourceSwitches.ReportField;
+
     /// <summary>F-M683: der Schlüssel des API-Schlüssels in der eigenen Datei dieser Quelle.</summary>
     public const string FieldApiKey = "apiKey";
 
@@ -80,12 +86,18 @@ public sealed class SubdlEngine : ISourceEngine
     /// </summary>
     public static IReadOnlyList<SourceField> Declared { get; } = new SourceField[]
     {
-        // F-M691: die beiden Richtungen stehen zuerst — sie sind die gröbste Frage an eine Quelle
-        // („nimmst du überhaupt teil?"), alles andere gilt innerhalb einer eingeschalteten Richtung.
-        new(FieldUploadEnabled, "Upload", SourceFieldKind.Switch, Default: "false",
+        // F-M693: die vier Möglichkeiten dieser Quelle stehen als Reihe oben auf der Karte, jede mit
+        // ihrem eigenen Schalter (Betreiberansage 22.11.2026: „Badges upload /download /packs / report.
+        // Each with it's own toogle"). F-M691 hatte die beiden Richtungen schon hierher geholt; jetzt
+        // kommen Packs und Meldung dazu, weil auch sie Eigenschaften DIESER Quelle sind.
+        new(FieldUploadEnabled, "Upload", SourceFieldKind.Switch, Default: "false", Group: SourceField.Badges,
             Help: "Offer our own subtitles to this source. Off unless you switch it on."),
-        new(FieldDownloadEnabled, "Download", SourceFieldKind.Switch, Default: "true",
+        new(FieldDownloadEnabled, "Download", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
             Help: "Search and fetch subtitles from this source."),
+        new(FieldPacksEnabled, "Packs", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
+            Help: "Send a whole season as ONE archive. Off means every episode goes on its own."),
+        new(FieldReportEnabled, "Report", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
+            Help: "Tell this source when one of its subtitles was unusable."),
         new(FieldApiKey, "API key", SourceFieldKind.Secret, Default: string.Empty, Required: true,
             Help: "Sent as a bearer token. Without a key SubDL neither searches nor downloads."),
         new(FieldAccount, "Account", SourceFieldKind.Text,
@@ -140,10 +152,13 @@ public sealed class SubdlEngine : ISourceEngine
             Key = SourceKey,
             DisplayName = "SubDL",
             CanUpload = true,
-            CanReport = true,
+
+            // F-M693: Meldung und Staffelpack sind Schalter DIESER Quelle. Die Datei antwortet zuerst,
+            // der Alt-Wert (bzw. der Slot des Laufs) nur, solange sie nichts sagt.
+            CanReport = SourceSwitches.Flag(SourceKey, FieldReportEnabled) ?? true,
             CanHearingImpaired = true,
             CanOfferSeasonPacks = true,
-            CanSeasonPacks = seasonPacks,
+            CanSeasonPacks = SourceSwitches.Flag(SourceKey, FieldPacksEnabled) ?? seasonPacks,
             CanCreateTitle = false,
             CanQuota = true,
             SearchesByImdb = true,

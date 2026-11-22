@@ -432,12 +432,18 @@ internal static class Program
             // F-M692: die ADRESSE ist kein Feld mehr (Betreiberansage 22.11.2026: „Url is fixed, no gui
             // need") — sie steht als Konstante im Client dieses Builds. tvsubtitles erklärt damit nur noch
             // seine beiden Richtungen.
+            // F-M693: die vier Moeglichkeiten stehen als Badges oben auf der Karte; tvsubtitles erklaert
+            // jetzt auch die Staffel-ZIP (Betreiberansage "Seadon zip toggle also for tvst"), moviesubtitles
+            // nur den Download (F-M508).
             var erwarteteFelder = new[]
             {
                 "subdl uploadEnabled = false", "subdl downloadEnabled = true",
+                "subdl packsEnabled = true", "subdl reportEnabled = true",
                 "subdl apiKey = [leer]", "subdl account = [leer]",
                 "subdl preferSeasonZip = true",
                 "tvsubtitles uploadEnabled = false", "tvsubtitles downloadEnabled = true",
+                "tvsubtitles packsEnabled = true", "tvsubtitles reportEnabled = true",
+                "tvsubtitles preferSeasonZip = true",
                 "moviesubtitles downloadEnabled = true",
                 "moviesubtitles access = [leer]",
             };
@@ -459,10 +465,68 @@ internal static class Program
                 + "Meldung ueber ein nicht erklartes Feld ist Rauschen",
                 string.Join(" | ", adressMeldungen));
 
+            // F-M693: die beiden neuen Schalter WIRKEN auch — die Datei antwortet vor dem Alt-Wert. Ein
+            // Schalter, der nur auf der Karte steht, waere eine Behauptung.
+            string badgesDir = Path.Combine(Path.GetTempPath(), "sub-scribe-badges-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Path.Combine(badgesDir, "sources"));
+            Func<string?> vorherOrdner = SourceSwitches.DataFolder;
+            SourceSwitches.DataFolder = () => badgesDir;
+            try
+            {
+                QuelleSchreiben(badgesDir, SubdlEngine.SourceKey, SubdlEngine.Declared, new()
+                {
+                    [SubdlEngine.FieldPacksEnabled] = "false",
+                    [SubdlEngine.FieldReportEnabled] = "false",
+                });
+                QuelleSchreiben(badgesDir, TvstEngine.SourceKey, TvstEngine.Declared, new()
+                {
+                    [TvstEngine.FieldPreferSeasonZip] = "false",
+                });
+
+                var subdlLeser = new SubdlEngine(
+                    new Jellyfin.Plugin.SubScribe.Api.ScribeApiClient(new HttpClient()), kontext, seasonPacks: true,
+                    SourceSettingsFile.Load(badgesDir, SubdlEngine.SourceKey, SubdlEngine.Declared));
+                var tvstLeser = new TvstEngine(
+                    new Jellyfin.Plugin.SubScribe.Api.TvSubtitlesClient(new HttpClient()), kontext, seasonPacks: true,
+                    SourceSettingsFile.Load(badgesDir, TvstEngine.SourceKey, TvstEngine.Declared));
+
+                Check(!subdlLeser.Capabilities.CanSeasonPacks && !subdlLeser.Capabilities.CanReport,
+                    "F-M693: steht packsEnabled/reportEnabled in der Datei auf false, meldet die Quelle die "
+                    + "Faehigkeit nicht mehr — der Slot des Laufs (true) verliert gegen die Datei",
+                    "packs=" + subdlLeser.Capabilities.CanSeasonPacks + " report=" + subdlLeser.Capabilities.CanReport);
+                Check(!tvstLeser.PreferSeasonZip,
+                    "F-M693: der Staffel-ZIP-Schalter kommt aus der Datei der Quelle an",
+                    "preferSeasonZip=" + tvstLeser.PreferSeasonZip);
+                Check(subdlLeser.Capabilities.CanUpload && tvstLeser.Capabilities.CanSeasonPacks,
+                    "F-M693: was die Datei NICHT sagt, bleibt beim Alt-Wert",
+                    "subdl upload=" + subdlLeser.Capabilities.CanUpload
+                    + " tvst packs=" + tvstLeser.Capabilities.CanSeasonPacks);
+            }
+            finally
+            {
+                SourceSwitches.DataFolder = vorherOrdner;
+                try { Directory.Delete(badgesDir, true); } catch (IOException) { }
+            }
+
             Check(registry.Engines.All(e => e.Fields.All(f => f.Kind != SourceFieldKind.Url)),
                 "F-M692: damit steht in keiner Karte ein Adressfeld",
                 string.Join(", ", registry.Engines.SelectMany(e => e.Fields)
                     .Where(f => f.Kind == SourceFieldKind.Url).Select(f => f.Key)));
+
+            // F-M693: die vier Moeglichkeiten stehen als Badges oben auf der Karte — und was kein Badge
+            // ist, ist eine gewoehnliche Zeile. Die Reihe ist die Reihenfolge der Erklaerung, es gibt keine
+            // zweite Sortierung.
+            var badges = SubdlEngine.Declared.Where(f => f.IsBadge).Select(f => f.Key).ToList();
+            var tvstBadges = TvstEngine.Declared.Where(f => f.IsBadge).Select(f => f.Key).ToList();
+            var msubBadges = MsubEngine.Declared.Where(f => f.IsBadge).Select(f => f.Key).ToList();
+            Check(badges.SequenceEqual(new[] { "uploadEnabled", "downloadEnabled", "packsEnabled", "reportEnabled" })
+                  && tvstBadges.SequenceEqual(badges)
+                  && msubBadges.SequenceEqual(new[] { "downloadEnabled" })
+                  && SubdlEngine.Declared.Where(f => f.Key is "apiKey" or "account" or "preferSeasonZip").All(f => !f.IsBadge),
+                "F-M693: die Badges sind upload/download/packs/report — SubDL und tvsubtitles alle vier, "
+                + "moviesubtitles nur der Download (F-M508), und kein Zugangsfeld steht in der Reihe",
+                "subdl=" + string.Join(",", badges) + " tvst=" + string.Join(",", tvstBadges)
+                + " msub=" + string.Join(",", msubBadges));
 
             Check(feldStand.SequenceEqual(erwarteteFelder),
                 "F-M683 (A)/F-M691: die Felder der drei Quellen sind die vereinbarten — Richtungen zuerst, "
@@ -2247,4 +2311,22 @@ internal static class Program
             }
         }
     }
+    /// <summary>F-M693: eine Quelldatei mit genau diesen Feldern schreiben (Pruefstand).</summary>
+    private static void QuelleSchreiben(
+        string dataDir, string key, IReadOnlyList<SourceField> schema, Dictionary<string, string> werte)
+    {
+        var alle = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (var feld in schema)
+        {
+            if (feld.Key == SourceSwitches.UploadField) { alle[feld.Key] = "true"; }
+            if (feld.Key == SourceSwitches.DownloadField) { alle[feld.Key] = "true"; }
+            if (feld.Key == SourceSwitches.PacksField) { alle[feld.Key] = "true"; }
+            if (feld.Key == SourceSwitches.ReportField) { alle[feld.Key] = "true"; }
+            if (feld.Key == "preferSeasonZip") { alle[feld.Key] = "true"; }
+        }
+
+        foreach (var paar in werte) { alle[paar.Key] = paar.Value; }
+        SourceSettingsFile.Save(dataDir, key, schema, alle);
+    }
+
 }
