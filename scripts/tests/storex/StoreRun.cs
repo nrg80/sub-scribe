@@ -193,8 +193,15 @@ using (var db = new ScribeDbContext(workdir, null))
 
     // F-M672: der verbrauchte Kandidat hängt an der DATEI (Tabelle `badapple`), und die Nummer des
     // fremden Eintrags steht dort, weil eine Meldung sie nennt.
-    SourceStore.RecordBadApple(db, db.Files.FindAll().FirstOrDefault()?.FileId, SourceStore.Subdl,
+    var badAppleSubjekt = db.Files.FindAll().FirstOrDefault()?.FileId;
+    SourceStore.RecordBadApple(db, badAppleSubjekt, SourceStore.Subdl,
         "42-43", "EN", RejectReason.CandidateRejected);
+
+    // F-M672: die Tabelle ist quellenneutral. Ein zweiter Eintrag derselben Datei, aber von tvsubtitles
+    // und mit einer Kennung, die NICHT numerisch ist (`download-3234-2-en`) — genau die Form, die der
+    // alte SubDL-Formfilter stillschweigend verworfen hätte.
+    SourceStore.RecordBadApple(db, badAppleSubjekt, SourceStore.TvSubtitles,
+        "download-3234-2-en", "EN", RejectReason.CandidateRejected);
 }
 
 Console.WriteLine("--- seeded ---");
@@ -203,6 +210,14 @@ using (var db = new ScribeDbContext(workdir, null))
     Console.WriteLine("   media=" + db.Files.Count() + " embeds=" + db.Tracks.Count()
         + " sidecars=" + db.Sidecars.Count() + " counters=" + db.Counters.Count()
         + " badapples=" + db.BadApples.Count());
+
+    // F-M672: beide Quellen liegen in derselben Tabelle, unterschieden durch den WERT in `Source`, und
+    // auch eine nicht-numerische Kennung (tvsubtitles) ist aufgenommen.
+    var badApples = db.BadApples.FindAll().ToList();
+    Check(badApples.Count(x => string.Equals(x.Source, SourceStore.Subdl, StringComparison.Ordinal)) == 1
+          && badApples.Count(x => string.Equals(x.Source, SourceStore.TvSubtitles, StringComparison.Ordinal)) == 1
+          && badApples.Any(x => x.SourceId == "download-3234-2-en"),
+        "F-M672: badapple ist quellenneutral — beide Engines in einer Tabelle, auch mit nicht-numerischer Kennung");
 }
 
 // ---------------------------------------------------------------------------------------------

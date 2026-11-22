@@ -106,10 +106,11 @@ public sealed class QaFailTracker
     /// <param name="language">Language code.</param>
     /// <param name="subdlIds">Release ids to remember.</param>
     /// <param name="reason">Why they were discarded.</param>
-    public void RecordSkippedCandidates(string itemId, string language, IEnumerable<string> subdlIds,
+    public void RecordSkippedCandidates(string itemId, string language, IEnumerable<string> entryIds,
                                         string reason = RejectReason.CandidateRejected,
                                         IReadOnlyDictionary<string, ReportFacts>? details = null,
-                                        string kind = "qa")
+                                        string kind = "qa",
+                                        string source = SourceStore.Subdl)
     {
         // F-M672: ohne Datei gibt es kein Subjekt. Der Pfad läuft immer über ein Item, dessen Datei der
         // Store kennt; fehlt sie, wird nichts behauptet (und nichts verbrannt) — das wird geloggt.
@@ -121,7 +122,12 @@ public sealed class QaFailTracker
         }
 
         int recorded = 0;
-        foreach (var id in subdlIds.Where(IsUploadId).Distinct())
+        // F-M672: die Tabelle ist quellenneutral, also darf hier keine Form einer einzelnen Quelle
+        // entscheiden. Der alte Filter `IsUploadId` liess nur rein numerische Kennungen durch — das ist
+        // die Form eines SubDL-Eintrags; tvsubtitles liefert Schlüssel wie `download-3234-2-en` und wäre
+        // damit stillschweigend nie erfasst worden. Was ein Eintrag ist, weiß die Engine, die ihn geholt
+        // hat; hier zählt nur, dass eine Kennung da ist.
+        foreach (var id in entryIds.Where(IsEntryId).Distinct())
         {
             // F-M450: keep what a report needs — the subtitle's report id and the bare finding.
             // The verdict itself is unchanged; the row simply remembers more than the skip memo.
@@ -160,7 +166,7 @@ public sealed class QaFailTracker
 
             // F-M200: the verdict is burned here, keyed by file + source + candidate id.
             SourceStore.RecordBadApple(
-                _db, subjekt, SourceStore.Subdl, id, language, reason, finding, nId, release, kind, reportedAt);
+                _db, subjekt, source, id, language, reason, finding, nId, release, kind, reportedAt);
             recorded++;
         }
 
@@ -252,14 +258,12 @@ public sealed class QaFailTracker
     /// </summary>
     /// <param name="s">Candidate id.</param>
     /// <returns>True when it looks like an id.</returns>
-    private static bool IsUploadId(string s)
-    {
-        if (string.IsNullOrEmpty(s))
-        {
-            return false;
-        }
-
-        var parts = s.Split('-');
-        return parts.Length is 1 or 2 && parts.All(p => p.Length > 0 && p.All(char.IsDigit));
-    }
+    /// <summary>
+    /// F-M672: genügt eine vorhandene Kennung — die Form prüft die Quelle, nicht diese Stelle. Ein
+    /// Formtest hier wäre eine Aussage über EINE Quelle (der alte numerische Test war SubDL) und hätte
+    /// jede andere Engine stillschweigend ausgeschlossen.
+    /// </summary>
+    /// <param name="s">Die Kennung des fremden Eintrags.</param>
+    /// <returns>Wahr, wenn eine Kennung vorliegt.</returns>
+    private static bool IsEntryId(string s) => !string.IsNullOrWhiteSpace(s);
 }

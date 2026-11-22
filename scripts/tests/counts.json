@@ -703,7 +703,7 @@
     },
     "T336": {
       "suite": "storex",
-      "checks": 14
+      "checks": 15
     }
   }
 }
