@@ -66,8 +66,7 @@ public sealed class TvstEngine : ISourceEngine
             Help: "Offer our own subtitles to this site. Off unless you switch it on."),
         new(FieldDownloadEnabled, "Download", SourceFieldKind.Switch, Default: "true",
             Help: "Search and fetch subtitles from this site."),
-        new(FieldBaseUrl, "Address", SourceFieldKind.Url, Default: TvSubtitlesClient.BaseUrl,
-            Help: "The site address. This build uses the built-in one; a differing value is reported."),
+        // F-M692: die Adresse ist kein Feld mehr — sie steht fest im Client dieses Builds.
     };
 
     private readonly TvSubtitlesClient _client;

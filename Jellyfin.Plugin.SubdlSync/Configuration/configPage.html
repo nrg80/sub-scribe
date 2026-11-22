@@ -781,7 +781,6 @@
         #DownloadLangList { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 2px 12px; margin: 0.5em 0; }
         .subdl-prio { display: inline-block; min-width: 1.1em; margin-left: 4px; color: #00a4dc; font-weight: bold; }
         /* F-M228: required fields use the accent blue, never red - red means destructive or failed. */
-        .subdl-required { color: #00a4dc; font-weight: 600; font-size: 0.9em; }
         .subdl-req-inline { color: #00a4dc; font-weight: 600; font-size: 0.9em; }
         /* F-M688: eine Karte je Quelle. Der Rahmen trennt die Quellen, weil je KARTE gespeichert
            wird — ohne Rahmen sieht man nicht, welcher Speichern-Knopf zu welchen Feldern gehoert. */
@@ -792,8 +791,7 @@
         .subdl-source-state { margin-left: auto; font-size: 0.85em; font-weight: 600; }
         .subdl-source-state.on { color: #107c10; }
         .subdl-source-state.off { color: #a4262c; }
-        .subdl-source-caps { display: flex; flex-wrap: wrap; gap: 0.35em; margin: 0.4em 0 0.2em 0; }
-        .subdl-source-cap { font-size: 0.78em; padding: 0 0.45em; border-radius: 0.6em; background: rgba(0,164,220,0.15); color: #00a4dc; }
+        .subdl-source-caps { font-size: 0.8em; opacity: 0.7; margin: 0.3em 0 0.4em 0; letter-spacing: 0.02em; }
         .subdl-source-hint { font-size: 0.9em; color: #ffc107; margin: 0.3em 0; }
         .subdl-source-secret-state { font-size: 0.85em; opacity: 0.8; margin-left: 0.5em; }
         .subdl-source-result { min-height: 1.2em; margin-top: 0.4em; }
@@ -2029,28 +2027,23 @@ workers.forEach(function (w) {
                 };
             }
 
+            // F-M692 (Betreiberansage 22.11.2026: „All these badges reduce to minimum"): EINE Zeile,
+            // drei Woerter, nur was das Verhalten aendert. Takt, Sprachtafel und Suchschluessel sind
+            // Maschinenangaben — sie gehoeren ins Protokoll, nicht auf die Karte.
+            var SUBDL_SOURCE_CAP_WORDS = [
+                ['canUpload', 'upload'],
+                ['canReport', 'report'],
+                ['canSeasonPacks', 'packs']
+            ];
+
             function subdlSourceCaps(caps) {
                 var box = subdlSourceEl('div', 'subdl-source-caps');
                 if (!caps) { return box; }
-                for (var i = 0; i < SUBDL_SOURCE_CAP_KEYS.length; i++) {
-                    var name = SUBDL_SOURCE_CAP_KEYS[i];
-                    if (caps[name] === true) { box.appendChild(subdlSourceEl('span', 'subdl-source-cap', name)); }
+                var worte = [];
+                for (var i = 0; i < SUBDL_SOURCE_CAP_WORDS.length; i++) {
+                    if (caps[SUBDL_SOURCE_CAP_WORDS[i][0]] === true) { worte.push(SUBDL_SOURCE_CAP_WORDS[i][1]); }
                 }
-                if (caps.pace) {
-                    if (caps.pace.uploadsPerHour > 0) {
-                        box.appendChild(subdlSourceEl('span', 'subdl-source-cap', 'uploadsPerHour ' + caps.pace.uploadsPerHour));
-                    }
-                    if (caps.pace.minCallPauseSeconds > 0) {
-                        box.appendChild(subdlSourceEl('span', 'subdl-source-cap', 'minCallPauseSeconds ' + caps.pace.minCallPauseSeconds));
-                    }
-                }
-                if (caps.languages) {
-                    for (var iso in caps.languages) {
-                        if (caps.languages.hasOwnProperty(iso) && caps.languages[iso]) {
-                            box.appendChild(subdlSourceEl('span', 'subdl-source-cap', iso + ' ' + caps.languages[iso]));
-                        }
-                    }
-                }
+                box.textContent = worte.join(' · ');
                 return box;
             }
 
@@ -2127,10 +2120,18 @@ workers.forEach(function (w) {
                 input.id = id;
                 input.name = field.key;
                 input.className = 'emby-input';
-                input.setAttribute('is', 'emby-input');
+
+                // F-M692: KEIN is="emby-input". Ein per JS erzeugtes Element mit diesem Attribut wird
+                // vom Browser nicht mehr aufgewertet (die Aufwertung gilt nur für Markup, das beim Laden
+                // schon dasteht) — das Feld blieb dadurch unformatiert und war im dunklen Jellyfin-Theme
+                // praktisch unsichtbar (Betreiberbefund 22.11.2026: „password entry not available").
+                // Die Klasse allein traegt die Gestalt; die Breite steht ausdruecklich dabei.
+                input.style.width = '100%';
+                input.style.boxSizing = 'border-box';
                 if (field.kind === 'secret') {
                     input.type = 'password';
                     input.autocomplete = 'new-password';
+                    input.spellcheck = false;
                 } else if (field.kind === 'number') {
                     input.type = 'number';
                     if (field.min !== null && field.min !== undefined) { input.setAttribute('min', field.min); }
@@ -2145,6 +2146,11 @@ workers.forEach(function (w) {
                 if (field.kind === 'secret') {
                     // Der EINZIGE Ausdruck ueber den Inhalt: ob eines abgelegt ist.
                     row.setAttribute('data-gesetzt', field.gesetzt ? 'true' : 'false');
+
+                    // F-M692: das Feld SIEHT gefuellt aus, ohne den Wert zu tragen — der Platzhalter
+                    // sagt, dass ein Geheimnis abgelegt ist, und dass Tippen es ersetzt. Vorher stand die
+                    // Auskunft nur als kleines Wort neben einem leeren Kasten („Api key not filled").
+                    input.placeholder = field.gesetzt ? '•••••••• set — type to replace' : 'not set';
                     var state = subdlSourceEl('span', 'subdl-source-secret-state',
                         field.gesetzt ? 'set' : 'not set');
                     state.id = 'SourceSecret-' + entry.key + '-' + field.key;

@@ -104,7 +104,7 @@ def run_case_probe(page_src):
         { "Key": "account", "Label": "Konto", "Kind": "text", "Required": false,
           "Gesetzt": false, "Options": [],
           "VisibleWhen": { "Field": "apiKey", "Value": "set" } },
-        { "Key": "baseUrl", "Label": "Basis-Adresse", "Kind": "url", "Value": "https://api.subdl.com",
+        { "Key": "account", "Label": "Konto", "Kind": "text", "Value": "konto",
           "Gesetzt": false, "Options": [] },
         { "Key": "preferSeasonZip", "Label": "Staffel-ZIP bevorzugen", "Kind": "switch",
           "Value": true, "Gesetzt": false, "Options": [] },
@@ -173,7 +173,7 @@ def run_case_probe(page_src):
         fehler.append("configured(tvst)=%r" % tvst.get("configured"))
     felder = subdl.get("fields") or []
     arten = [f.get("kind") for f in felder]
-    if arten != ["switch", "switch", "secret", "text", "url", "switch", "number", "choice"]:
+    if arten != ["switch", "switch", "secret", "text", "text", "switch", "number", "choice"]:
         fehler.append("Arten=%s" % arten)
 
     # F-M691: die beiden Richtungsschalter stehen als Schalter auf der Karte, mit ihrem Wert.
@@ -2303,6 +2303,29 @@ def main():
           and "field.gesetzt ? 'gesetzt'" not in quellen
           and '"set")' in read_source("Sources", "Subdl", "SubdlEngine.cs"),
           "on/off, Save, set/not set; VisibleWhen = \"set\"")
+
+    # ---- F-M692: die Karte bleibt karg -----------------------------------------------------------
+    # Betreiberbefund 22.11.2026, woertlich: "Well address is not needed. All these badges reduce to
+    # minimum. Url is fixed, no gui need. Api key not filled, password entry not available."
+    # Drei Folgen: (a) die Adresse ist kein Feld mehr (die Engine erklaert sie nicht, s. sources),
+    # (b) die Kennzeichen sind EINE Zeile mit hoechstens drei Woertern statt eines Kasterl-Teppichs,
+    # (c) ein Geheimfeld SIEHT gefuellt aus und ist ein normales Eingabefeld — es trug ein
+    # is="emby-input", das der Browser an einem per JS erzeugten Element NICHT mehr aufwertet, weshalb
+    # es im dunklen Theme praktisch unsichtbar blieb.
+    check("F-M692: the capability line is ONE short text, not a row of badges",
+          "SUBDL_SOURCE_CAP_WORDS" in quellen
+          and "subdl-source-cap'" not in quellen
+          and quellen.count("'canUpload', 'upload'") == 1
+          and "box.textContent = worte.join(' · ')" in quellen,
+          "Woerter: upload/report/packs als Text")
+    check("F-M692: a secret field is a real, visible input that LOOKS filled",
+          "input.style.width = '100%'" in quellen
+          and "input.placeholder = field.gesetzt ?" in quellen
+          and "input.setAttribute('is', 'emby-input')" not in quellen,
+          "Platzhalter set/not set, kein totes is=emby-input")
+    check("F-M692: the card no longer draws an address field",
+          "field.kind === 'url'" in page_src and "'SourceField-' + entry.key + '-' + field.key" in page_src,
+          "die Karte kennt die Art noch, aber keine Quelle erklaert sie mehr (sources: F-M692)")
 
     probe_ok, probe_detail = run_case_probe(page_src)
     check("F-M689: the translation runs against a real endpoint answer (all six field kinds)",

@@ -427,20 +427,30 @@ internal static class Program
                 .SelectMany(e => e.Fields.Select(f => e.Capabilities.Key + " " + f.Key + " = "
                     + (f.Default.Length == 0 ? "[leer]" : f.Default)))
                 .ToList();
-            // F-M691: die beiden Richtungsschalter stehen jetzt VOR den Zugängen — die gröbste Frage an
-            // eine Quelle zuerst. moviesubtitles führt nur den Download (F-M508).
+            // F-M691: die beiden Richtungsschalter stehen VOR den Zugängen — die gröbste Frage an eine
+            // Quelle zuerst. moviesubtitles führt nur den Download (F-M508).
+            // F-M692: die ADRESSE ist kein Feld mehr (Betreiberansage 22.11.2026: „Url is fixed, no gui
+            // need") — sie steht als Konstante im Client dieses Builds. tvsubtitles erklärt damit nur noch
+            // seine beiden Richtungen.
             var erwarteteFelder = new[]
             {
                 "subdl uploadEnabled = false", "subdl downloadEnabled = true",
                 "subdl apiKey = [leer]", "subdl account = [leer]",
-                "subdl baseUrl = " + Jellyfin.Plugin.SubScribe.Api.ScribeApiClient.ApiBase,
                 "subdl preferSeasonZip = true",
                 "tvsubtitles uploadEnabled = false", "tvsubtitles downloadEnabled = true",
-                "tvsubtitles baseUrl = " + Jellyfin.Plugin.SubScribe.Api.TvSubtitlesClient.BaseUrl,
                 "moviesubtitles downloadEnabled = true",
-                "moviesubtitles baseUrl = " + Jellyfin.Plugin.SubScribe.Api.MovieSubtitlesClient.BaseUrl,
                 "moviesubtitles access = [leer]",
             };
+            Check(!SubdlEngine.Declared.Any(f => f.Key == SubdlEngine.FieldBaseUrl)
+                  && !TvstEngine.Declared.Any(f => f.Key == TvstEngine.FieldBaseUrl)
+                  && !MsubEngine.Declared.Any(f => f.Key == MsubEngine.FieldBaseUrl),
+                "F-M692: keine Quelle erklärt die ADRESSE als Feld — sie ist fest im Client dieses Builds "
+                + "(Betreiberansage: Url is fixed, no gui need)");
+            Check(registry.Engines.All(e => e.Fields.All(f => f.Kind != SourceFieldKind.Url)),
+                "F-M692: damit steht in keiner Karte ein Adressfeld",
+                string.Join(", ", registry.Engines.SelectMany(e => e.Fields)
+                    .Where(f => f.Kind == SourceFieldKind.Url).Select(f => f.Key)));
+
             Check(feldStand.SequenceEqual(erwarteteFelder),
                 "F-M683 (A)/F-M691: die Felder der drei Quellen sind die vereinbarten — Richtungen zuerst, "
                 + "dann Zugänge, und ihre Vorgaben sind die Adressen, die die Clients WIRKLICH benutzen",

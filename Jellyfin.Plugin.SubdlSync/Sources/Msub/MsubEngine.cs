@@ -58,8 +58,7 @@ public sealed class MsubEngine : ISourceEngine
         // gesperrt (F-M508, Betreiber: „Bevor wir falsche Sprachen hochladen, laden wir nix hoch.").
         new(FieldDownloadEnabled, "Download", SourceFieldKind.Switch, Default: "true",
             Help: "Search and fetch subtitles from this site."),
-        new(FieldBaseUrl, "Address", SourceFieldKind.Url, Default: MovieSubtitlesClient.BaseUrl,
-            Help: "The site address. This build uses the built-in one; a differing value is reported."),
+        // F-M692: die Adresse ist kein Feld mehr — sie steht fest im Client dieses Builds.
         new(FieldAccess, "Access", SourceFieldKind.Secret,
             Help: "Not used today — the site asks for no access."),
     };
@@ -102,7 +101,13 @@ public sealed class MsubEngine : ISourceEngine
         {
             Key = SourceKey,
             DisplayName = "moviesubtitles.org",
-            CanUpload = true,
+
+            // F-M692: KEIN Upload. Die Quelle könnte formal eine Abgabe annehmen, aber dieser Build
+            // bietet sie nicht an — die Sprachabbildung der Seite ist gegen die echte Seite nicht belegt,
+            // und der Betreiber hat gesagt, was dann gilt (F-M508: „Bevor wir falsche Sprachen hochladen,
+            // laden wir nix hoch."). Eine Fähigkeit, die niemand anbieten darf, ist keine Fähigkeit; die
+            // Karte zeigte sonst „upload" neben einem Schalter, den es nicht gibt.
+            CanUpload = false,
             CanReport = false,
             CanHearingImpaired = false,
             CanOfferSeasonPacks = false,

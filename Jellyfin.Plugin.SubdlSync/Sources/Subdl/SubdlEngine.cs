@@ -91,8 +91,9 @@ public sealed class SubdlEngine : ISourceEngine
         new(FieldAccount, "Account", SourceFieldKind.Text,
             Help: "The SubDL account name — used to sign in and in the report text.",
             VisibleWhen: new SourceFieldVisibility(FieldApiKey, "set")),
-        new(FieldBaseUrl, "Address", SourceFieldKind.Url, Default: ScribeApiClient.ApiBase,
-            Help: "The API address. This build uses the built-in one; a differing value is reported."),
+        // F-M692: die Adresse ist KEIN Feld mehr (Betreiberansage 22.11.2026: „Well address is not
+        // needed … Url is fixed, no gui need"). Sie steht als Konstante im Client dieses Builds; eine
+        // Einstellung dafür wäre eine Frage, die niemand beantworten muss.
         new(FieldPreferSeasonZip, "Prefer season ZIPs", SourceFieldKind.Switch, Default: "true",
             Help: "Bei gewünschtem Behälter zuerst die Staffel-ZIPs anbieten (weniger Abrufe je Staffel)."),
     };
