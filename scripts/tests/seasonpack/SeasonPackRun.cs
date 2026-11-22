@@ -1178,7 +1178,7 @@ internal static class Program
             int tvstSlot = tvstPipe.IndexOf("var slotQuellen = PackSlotSources();", StringComparison.Ordinal);
             Check(tvstSlot > 0
                   && tvstPipe.IndexOf("PlanPacksFromStore(completeSeasons, sources: slotQuellen)", tvstSlot, StringComparison.Ordinal) > tvstSlot
-                  && tvstPipe.IndexOf("var tvstDraussen = slotQuellen.Contains(PackEntity.TvSubtitlesSource)", tvstSlot, StringComparison.Ordinal) > tvstSlot,
+                  && tvstPipe.IndexOf("var draussen = _sources.PackSlotExcluded();", tvstSlot, StringComparison.Ordinal) > tvstSlot,
                 "F-M643/F-M647/F-M680: the second source joins the SAME slot, from the switch alone — the run's kind no longer decides");
 
             int paarSchleife = tvstPipe.IndexOf("foreach (var (packImdb, packSeason, packLang, packHi) in packPaare)", StringComparison.Ordinal);
@@ -1294,14 +1294,14 @@ internal static class Program
 
             // F-M680: der Quellen-Sonderfall „nur im vollen Lauf" ist gefallen. Der Slot antwortet für
             // JEDEN Lauf gleich; die Frage „packt dieser Lauf überhaupt?" steht eine Etage höher.
-            var slotStart = uploadSrc.IndexOf("private List<string> PackSlotSources()", StringComparison.Ordinal);
-            var slotEnde = slotStart < 0 ? -1 : uploadSrc.IndexOf("return quellen;", slotStart, StringComparison.Ordinal);
-            var slotBody = slotStart < 0 || slotEnde < 0 ? string.Empty : uploadSrc.Substring(slotStart, slotEnde - slotStart);
-            Check(slotStart >= 0
-                  && slotBody.Contains("quellen.Add(PackEntity.TvSubtitlesSource)", StringComparison.Ordinal)
-                  && slotBody.Contains("if (SourceAllowed(Configuration.SubtitleProvider.TvSubtitles))", StringComparison.Ordinal)
-                  && !slotBody.Contains("IsArrivalRun", StringComparison.Ordinal),
-                "F-M680: the slot names its sources symmetrically — the switch decides, not the run's kind (F-M495)");
+            // F-M682: die Antwort kommt aus der Registry und ihren Fähigkeiten — der Ablauf nennt keinen
+            // Quellenamen mehr. Die Schalter-Frage steht jetzt in der Registrierung, nicht im Slot.
+            var slotRegistrySrc = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Sources/SourceRegistry.cs"));
+            Check(uploadSrc.Contains("private List<string> PackSlotSources() => _sources.PackSlot().ToList();", StringComparison.Ordinal)
+                  && !uploadSrc.Contains("quellen.Add(PackEntity.TvSubtitlesSource)", StringComparison.Ordinal)
+                  && slotRegistrySrc.Contains("seasonPacks: config.IsUploadEnabled(SubtitleProvider.TvSubtitles)", StringComparison.Ordinal)
+                  && slotRegistrySrc.Contains("e.Capabilities.CanSeasonPacks", StringComparison.Ordinal),
+                "F-M680/F-M682: the slot names its sources symmetrically — the switch decides, not the run's kind (F-M495)");
             Check(uploadSrc.Contains("var slotQuellen = PackSlotSources();", StringComparison.Ordinal),
                 "F-M680: one answer for the slot's sources — the inline copy of the same question is gone");
 

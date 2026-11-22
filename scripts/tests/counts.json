@@ -73,6 +73,11 @@
         "<root>"
       ]
     },
+    "sources": {
+      "args": [
+        "<root>"
+      ]
+    },
     "followup": {
       "python": "scripts/tests/followup/check.py",
       "file": "Jellyfin.Plugin.SubdlSync/ScheduledTasks/ScribeEventDispatcher.cs"
@@ -718,6 +723,10 @@
     "T338": {
       "suite": "matrix",
       "checks": 678
+    },
+    "T339": {
+      "suite": "sources",
+      "checks": 27
     }
   }
 }

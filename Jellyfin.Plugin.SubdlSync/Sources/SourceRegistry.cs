@@ -12,133 +12,121 @@
 using System;
 using System.Collections.Generic;
 using System.Linq;
+using Jellyfin.Plugin.SubScribe.Configuration;
+using Jellyfin.Plugin.SubScribe.Sources.Msub;
+using Jellyfin.Plugin.SubScribe.Sources.Subdl;
+using Jellyfin.Plugin.SubScribe.Sources.Tvst;
 
 namespace Jellyfin.Plugin.SubScribe.Sources;
 
 /// <summary>
-/// F-M625: was eine Quelle kann. Der Ablauf fragt die Fähigkeit ab — er vergleicht keine Quellennamen.
-/// </summary>
-[Flags]
-public enum SourceCapabilities
-{
-    /// <summary>Die Quelle kann gar nichts (nur ein Platzhalter).</summary>
-    None = 0,
-
-    /// <summary>Die Quelle lässt sich nach Untertiteln durchsuchen und liefert Treffer.</summary>
-    Search = 1,
-
-    /// <summary>Die Quelle gibt einen gefundenen Untertitel heraus.</summary>
-    Fetch = 2,
-
-    /// <summary>Die Quelle nimmt eigene Untertitel entgegen.</summary>
-    Upload = 4,
-
-    /// <summary>Die Quelle lässt einen fehlenden Film oder eine fehlende Serie anlegen.</summary>
-    CreateTitle = 8,
-
-    /// <summary>Die Quelle führt ein Kontingent und antwortet mit Erschöpfung.</summary>
-    Quota = 16,
-
-    /// <summary>Der Mindestumfang einer angebundenen Quelle (F-M630).</summary>
-    Minimum = Search | Fetch,
-}
-
-/// <summary>
-/// F-M626: eine Quelle ist ein Eintrag in dieser Liste, kein Zweig im Ablauf.
+/// F-M682: die EINE Stelle, die die Engines baut. Kein Reflection-Scan, kein DI-Container, kein
+/// Service-Locator — die Liste steht hier im Quelltext, damit ein Leser sie in einer Zeile sieht.
 /// <para>
-/// Die Reihenfolge der Liste ist die Reihenfolge, in der gefragt wird; die Vorrangstellung selbst bleibt
-/// eine Einstellung (F-M627) und wird hier nur abgebildet. Eine neue Quelle anbinden heißt: einen
-/// Eintrag hinzufügen — kein Schema, kein Zweig.
+/// Die Registrierung ist die einzige Stelle, die Quellennamen kennen darf: jede Engine bekommt ihren
+/// Schlüssel von ihrer eigenen Klasse, und der Ablauf fragt danach über
+/// <see cref="PackSlot"/> beziehungsweise <see cref="With"/>. Eine neue Quelle anbinden heißt:
+/// eine Engine schreiben und hier eine Zeile ergänzen.
+/// </para>
+/// <para>
+/// Die Engines werden aus der Konfiguration gebaut, also MIT den Schaltern des Betreibers: sie
+/// bekommen den <see cref="SourceEngineContext"/> (HttpClient, Archiv-Cache, Logger, Zeitgeber und die
+/// bereits mit Zugang versehenen Clients) gereicht und legen sich nichts davon selbst an
+/// (F-M682, Grenzregel b).
 /// </para>
 /// </summary>
-public static class SourceRegistry
+public sealed class SourceRegistry
 {
-    private static readonly object Gate = new();
+    private readonly IReadOnlyList<ISourceEngine> _engines;
 
-    private static readonly List<SourceDescriptor> Registriert = new();
-
-    static SourceRegistry()
+    private SourceRegistry(IReadOnlyList<ISourceEngine> engines)
     {
-        Register(new SourceDescriptor("subdl", SourceCapabilities.Search | SourceCapabilities.Fetch
-            | SourceCapabilities.Upload | SourceCapabilities.Quota));
-        Register(new SourceDescriptor("tvsubtitles", SourceCapabilities.Search | SourceCapabilities.Fetch
-            | SourceCapabilities.Upload));
-        Register(new SourceDescriptor("moviesubtitles", SourceCapabilities.Search | SourceCapabilities.Fetch
-            | SourceCapabilities.Upload | SourceCapabilities.CreateTitle));
+        _engines = engines;
     }
 
-    /// <summary>Alle angebundenen Quellen in Frage-Reihenfolge.</summary>
-    /// <returns>The registered sources.</returns>
-    public static IReadOnlyList<SourceDescriptor> All()
-    {
-        lock (Gate)
-        {
-            return Registriert.ToList();
-        }
-    }
+    /// <summary>Gets die Engines in der Reihenfolge, in der gefragt wird.</summary>
+    public IReadOnlyList<ISourceEngine> Engines => _engines;
 
-    /// <summary>Die Schlüssel aller angebundenen Quellen.</summary>
-    /// <returns>The registered source keys, in order.</returns>
-    public static IReadOnlyList<string> Keys()
-        => All().Select(s => s.Key).ToList();
-
-    /// <summary>Schlägt eine Quelle nach.</summary>
-    /// <param name="key">Source key.</param>
-    /// <returns>The descriptor, or null when the source is not attached.</returns>
-    public static SourceDescriptor? ByKey(string? key)
-    {
-        if (string.IsNullOrEmpty(key))
-        {
-            return null;
-        }
-
-        lock (Gate)
-        {
-            return Registriert.FirstOrDefault(s => string.Equals(s.Key, key, StringComparison.Ordinal));
-        }
-    }
+    /// <summary>Gets die Schlüssel der Engines, in derselben Reihenfolge.</summary>
+    public IReadOnlyList<string> Keys
+        => _engines.Select(e => e.Capabilities.Key).ToList();
 
     /// <summary>
-    /// F-M625/F-M630: kann diese Quelle diese Aufgabe? Unbekannte Quellen können nichts, und die
-    /// Mindestaufgaben gelten als Fähigkeit nur, wenn die Quelle sie ausdrücklich meldet.
+    /// F-M682: baut die Engines dieser Fassung aus der Konfiguration.
+    /// <para>
+    /// Der SubDL-Client kommt vom Plugin und trägt seinen Zugang bereits; fehlt er, wird einer über den
+    /// gereichten HttpClient gebaut. tvst und die Film-Adresse ebenso — der gereichte Client, wenn es
+    /// ihn gibt, sonst einer über denselben HttpClient und denselben Archiv-Cache.
+    /// </para>
     /// </summary>
-    /// <param name="key">Source key.</param>
-    /// <param name="capability">The capability asked for.</param>
-    /// <returns>True when the source declares that capability.</returns>
-    public static bool Can(string? key, SourceCapabilities capability)
+    /// <param name="context">Was das Plugin der Engine reicht.</param>
+    /// <param name="config">Die Einstellungen dieses Laufs (Schalter des Betreibers).</param>
+    /// <returns>Die Registrierung.</returns>
+    public static SourceRegistry Build(SourceEngineContext context, PluginConfiguration config)
     {
-        SourceDescriptor? quelle = ByKey(key);
-        return quelle != null && (quelle.Capabilities & capability) == capability;
+        ArgumentNullException.ThrowIfNull(context);
+        ArgumentNullException.ThrowIfNull(config);
+
+        // F-M654: SubDL steht immer im Pack-Slot — der Schalter dieser Quelle entscheidet eine Etage
+        // höher, ob der Lauf überhaupt packt, nicht diese Liste. Das ist der Stand vor F-M682 und bleibt
+        // er: die Umstellung ändert die Antwort, nicht den Umfang.
+        var subdl = new SubdlEngine(
+            context.Subdl ?? new Api.ScribeApiClient(context.Http),
+            context,
+            seasonPacks: true);
+
+        // F-M495: die zweite Quelle hängt an IHREM Upload-Schalter — die Frage wird hier aus der
+        // Konfiguration beantwortet, nicht im Ablauf am Namen.
+        var tvst = new TvstEngine(
+            context.Tvst,
+            context,
+            seasonPacks: config.IsUploadEnabled(SubtitleProvider.TvSubtitles));
+
+        var msub = new MsubEngine(context.Msub, context);
+
+        return new SourceRegistry(new ISourceEngine[] { subdl, tvst, msub });
     }
 
-    /// <summary>
-    /// Die Quellen, die eine Aufgabe können — in Frage-Reihenfolge. Das ist die Liste, die der Ablauf
-    /// abarbeitet, statt je Quelle einen Zweig zu haben (F-M626).
-    /// </summary>
-    /// <param name="capability">The capability asked for.</param>
-    /// <returns>The source keys that declare it.</returns>
-    public static IReadOnlyList<string> For(SourceCapabilities capability)
-        => All().Where(s => (s.Capabilities & capability) == capability).Select(s => s.Key).ToList();
+    /// <summary>F-M682: schlägt eine Engine nach.</summary>
+    /// <param name="key">Der Quellenschlüssel.</param>
+    /// <returns>Die Engine, oder null wenn die Quelle nicht angebunden ist.</returns>
+    public ISourceEngine? ByKey(string? key)
+        => string.IsNullOrWhiteSpace(key)
+            ? null
+            : _engines.FirstOrDefault(e => string.Equals(e.Capabilities.Key, key, StringComparison.Ordinal));
 
     /// <summary>
-    /// Trägt eine Quelle ein. Ein zweiter Eintrag unter demselben Schlüssel ersetzt den ersten — die
-    /// Registrierung bleibt damit die eine Wahrheit über die angebundenen Quellen.
+    /// F-M682: die Engines, die eine Fähigkeit melden — in Frage-Reihenfolge. Der Ablauf arbeitet diese
+    /// Liste ab, statt je Quelle einen Zweig zu haben.
     /// </summary>
-    /// <param name="descriptor">The source.</param>
-    public static void Register(SourceDescriptor descriptor)
-    {
-        ArgumentNullException.ThrowIfNull(descriptor);
-        lock (Gate)
-        {
-            Registriert.RemoveAll(s => string.Equals(s.Key, descriptor.Key, StringComparison.Ordinal));
-            Registriert.Add(descriptor);
-        }
-    }
+    /// <param name="capability">Die gefragte Fähigkeit.</param>
+    /// <returns>Die Engines, die sie melden.</returns>
+    public IReadOnlyList<ISourceEngine> With(Func<SourceCapabilities, bool> capability)
+        => _engines.Where(e => capability(e.Capabilities)).ToList();
+
+    /// <summary>
+    /// F-M682: die Quellen, die in DIESEM Lauf in den Pack-Slot gehören — die Fähigkeit „Staffelpack"
+    /// aus der Registry, nicht zwei fest verdrahtete Namen im Ablauf.
+    /// <para>
+    /// Die Antwort ist dieselbe wie vor der Umstellung: mit eingeschaltetem tvst-Upload-Schalter
+    /// <c>subdl, tvsubtitles</c>, sonst <c>subdl</c> allein (F-M680 verlangt dieselbe Antwort für jeden
+    /// Lauf, in dem überhaupt gepackt wird). Die Reihenfolge ist die Reihenfolge der Engines.
+    /// </para>
+    /// </summary>
+    /// <returns>Die Schlüssel der Quellen des Slots, in Frage-Reihenfolge.</returns>
+    public IReadOnlyList<string> PackSlot()
+        => _engines.Where(e => e.Capabilities.CanSeasonPacks)
+            .Select(e => e.Capabilities.Key)
+            .ToList();
+
+    /// <summary>
+    /// F-M682: die Quellen, die Behälter annehmen KÖNNTEN, in diesem Lauf aber nicht im Slot stehen —
+    /// weil ihr Schalter aus ist. Der Ablauf nennt damit den Grund, ohne einen Quellennamen zu kennen
+    /// (vorher stand hier ein Vergleich auf <c>tvsubtitles</c>).
+    /// </summary>
+    /// <returns>Die Schlüssel der Quellen, die der Schalter aus dem Slot hält.</returns>
+    public IReadOnlyList<string> PackSlotExcluded()
+        => _engines.Where(e => e.Capabilities.CanOfferSeasonPacks && !e.Capabilities.CanSeasonPacks)
+            .Select(e => e.Capabilities.Key)
+            .ToList();
 }
-
-/// <summary>
-/// Eine angebundene Quelle: ihr Schlüssel und was sie kann (F-M624/F-M625).
-/// </summary>
-/// <param name="Key">The source key, as it is written into the marks.</param>
-/// <param name="Capabilities">What this source can do.</param>
-public sealed record SourceDescriptor(string Key, SourceCapabilities Capabilities);

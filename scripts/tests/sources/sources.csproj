@@ -1,0 +1,44 @@
+<!--
+  This file is part of Sub Scribe (https://github.com/nrg80/sub-scribe)
+  SPDX-License-Identifier: GPL-3.0-or-later
+
+  Sub Scribe is free software: you can redistribute it and/or modify it
+  under the terms of the GNU General Public License as published by the
+  Free Software Foundation, either version 3 of the License, or (at your
+  option) any later version.
+
+  Sub Scribe is distributed WITHOUT ANY WARRANTY; without even the implied
+  warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
+  See the GNU General Public License for more details.
+
+  T339 / F-M682: the boundary between plugin and source engine. The suite
+  MEASURES the boundary instead of describing it: it reads the files that
+  live on either side, counts the public members of the contract, and builds
+  the REAL registry to ask it for the pack slot.
+
+  References the BUILT plugin assembly, like the other harnesses here, so the
+  thing under test is the compiled one and not a copy that can drift. The
+  default PluginDir points at THIS working tree (relative to the project
+  file), so the suite also runs from a worktree; -p:PluginDir=… overrides it.
+-->
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <AssemblyName>sourcesrun</AssemblyName>
+    <RootNamespace>SourcesRun</RootNamespace>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <NoWarn>$(NoWarn);CA1305;CA1307;CA1862;CA1725</NoWarn>
+    <JellyfinDir Condition="'$(JellyfinDir)' == ''">/opt/data/jf-test/jellyfin</JellyfinDir>
+    <PluginDir Condition="'$(PluginDir)' == ''">$(MSBuildThisFileDirectory)..\..\..\Jellyfin.Plugin.SubdlSync\bin\Release\net10.0</PluginDir>
+  </PropertyGroup>
+  <ItemGroup>
+    <Reference Include="Jellyfin.Plugin.SubdlSync"><HintPath>$(PluginDir)/Jellyfin.Plugin.SubdlSync.dll</HintPath></Reference>
+    <Reference Include="MediaBrowser.Common"><HintPath>$(JellyfinDir)/MediaBrowser.Common.dll</HintPath></Reference>
+    <Reference Include="MediaBrowser.Controller"><HintPath>$(JellyfinDir)/MediaBrowser.Controller.dll</HintPath></Reference>
+    <Reference Include="MediaBrowser.Model"><HintPath>$(JellyfinDir)/MediaBrowser.Model.dll</HintPath></Reference>
+    <Reference Include="Microsoft.Extensions.Logging.Abstractions"><HintPath>$(JellyfinDir)/Microsoft.Extensions.Logging.Abstractions.dll</HintPath></Reference>
+  </ItemGroup>
+</Project>

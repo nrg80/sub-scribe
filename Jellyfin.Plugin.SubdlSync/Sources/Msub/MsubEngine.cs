@@ -1,0 +1,299 @@
+// This file is part of Sub Scribe (https://github.com/nrg80/sub-scribe)
+// SPDX-License-Identifier: GPL-3.0-or-later
+//
+// Sub Scribe is free software: you can redistribute it and/or modify it
+// under the terms of the GNU General Public License as published by the
+// Free Software Foundation, either version 3 of the License, or (at your
+// option) any later version. Sub Scribe is distributed WITHOUT ANY WARRANTY;
+// without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+// PARTICULAR PURPOSE. See the GNU General Public License for more details.
+
+using System;
+using System.Collections.Generic;
+using System.Globalization;
+using System.Threading;
+using System.Threading.Tasks;
+using Jellyfin.Plugin.SubScribe.Api;
+using Jellyfin.Plugin.SubScribe.Language;
+
+namespace Jellyfin.Plugin.SubScribe.Sources.Msub;
+
+/// <summary>
+/// F-M682: die Film-Adresse der zweiten Quelle hinter der Grenze. Dünner Adapter auf
+/// <see cref="MovieSubtitlesClient"/>.
+/// <para>
+/// Diese Quelle kennt nur Filme: sie sucht über den Namen (und vergleicht Titel UND Jahr eng), sie
+/// kennt keine Staffel-Behälter, und sie hat keinen Meldeweg — <see cref="SourceCapabilities.CanReport"/>
+/// ist deshalb falsch, und <see cref="ReportAsync"/> antwortet nur, es gehe nicht.
+/// </para>
+/// </summary>
+public sealed class MsubEngine : ISourceEngine
+{
+    /// <summary>Der Schlüssel dieser Quelle — derselbe Wert, den der Bestand führt.</summary>
+    public const string SourceKey = "moviesubtitles";
+
+    /// <summary>Der Griff trägt seine Herkunft: <c>m:</c> + Filmnummer + <c>:</c> + Eintrags-Kennung.</summary>
+    private const string HandlePrefix = "m:";
+
+    private readonly MovieSubtitlesClient _client;
+    private readonly SourceEngineContext _context;
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="MsubEngine"/> class.
+    /// </summary>
+    /// <param name="client">Der Film-Client des Laufs, oder null — dann baut ihn die Engine über den
+    /// gereichten HttpClient.</param>
+    /// <param name="context">Was das Plugin reicht (HttpClient, Logger, Zeitgeber).</param>
+    public MsubEngine(MovieSubtitlesClient? client, SourceEngineContext context)
+    {
+        _context = context ?? throw new ArgumentNullException(nameof(context));
+        _client = client ?? new MovieSubtitlesClient(context.Http);
+        Capabilities = new SourceCapabilities
+        {
+            Key = SourceKey,
+            DisplayName = "moviesubtitles.org",
+            CanUpload = true,
+            CanReport = false,
+            CanHearingImpaired = false,
+            CanOfferSeasonPacks = false,
+            CanSeasonPacks = false,
+            CanCreateTitle = true,
+            SearchesByImdb = false,
+            SearchesByTmdb = false,
+            SearchesByName = true,
+            SearchesByHash = false,
+            Pace = new SourcePace(),
+            LanguageCode = MovieSubtitlesClient.SiteLanguage,
+        };
+    }
+
+    /// <inheritdoc />
+    public SourceCapabilities Capabilities { get; }
+
+    /// <inheritdoc />
+    public async Task<SourceSearchAnswer> SearchAsync(SourceSearchRequest request, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (request.IsSeries)
+        {
+            return SourceSearchAnswer.Because(SourceFaultInfo.NoSearchBase(
+                "moviesubtitles.org holds films only"));
+        }
+
+        if (string.IsNullOrWhiteSpace(request.Name))
+        {
+            return SourceSearchAnswer.Because(SourceFaultInfo.NoSearchBase(
+                "moviesubtitles.org is searched by name — the request carries none"));
+        }
+
+        try
+        {
+            // Ein Auftrag, mehrere Abrufe: den Film eng auflösen (Titel UND Jahr), dann seine Seite
+            // lesen.
+            int? film = await _client.FindMovieAsync(request.Name, request.Year, ct).ConfigureAwait(false);
+            if (film is null)
+            {
+                return SourceSearchAnswer.Because(SourceFaultInfo.NotFound(
+                    "no film entry for '" + request.Name + "'"));
+            }
+
+            MovieSubtitlesMoviePage seite = await _client.MovieAsync(film.Value, ct).ConfigureAwait(false);
+            var kandidaten = new List<SourceCandidate>(seite.Entries.Count);
+            foreach (MovieSubtitlesEntry e in seite.Entries)
+            {
+                if (!int.TryParse(e.SubtitleId, NumberStyles.Integer, CultureInfo.InvariantCulture, out int eintrag)
+                    || eintrag <= 0)
+                {
+                    continue;
+                }
+
+                kandidaten.Add(new SourceCandidate(
+                    HandlePrefix + film.Value.ToString(CultureInfo.InvariantCulture) + ":" +
+                        e.SubtitleId,
+                    SourceNeutral.CandidateLanguage(e.Language),
+                    false,
+                    e.Release,
+                    false));
+            }
+
+            return new SourceSearchAnswer(kandidaten);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return SourceSearchAnswer.Because(SourceFaultInfo.Transient(ex.Message));
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<SourceFetchAnswer> FetchAsync(SourceFetchRequest request, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (string.IsNullOrWhiteSpace(request.Handle)
+            || !request.Handle.StartsWith(HandlePrefix, StringComparison.Ordinal))
+        {
+            return SourceFetchAnswer.Because(SourceFaultInfo.NotFound("no handle of this source"));
+        }
+
+        string[] teile = request.Handle[HandlePrefix.Length..].Split(':');
+        if (teile.Length != 2
+            || !int.TryParse(teile[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out int eintrag)
+            || eintrag <= 0)
+        {
+            return SourceFetchAnswer.Because(SourceFaultInfo.NotFound("unreadable handle"));
+        }
+
+        try
+        {
+            MovieSubtitlesDownload geladen = await _client.DownloadAsync(eintrag, null, ct)
+                .ConfigureAwait(false);
+
+            byte[] inhalt = geladen.Data;
+            if (inhalt.Length == 0)
+            {
+                return SourceFetchAnswer.Because(SourceFaultInfo.NotFound("the download delivered nothing"));
+            }
+
+            return new SourceFetchAnswer(
+                inhalt,
+                geladen.Name,
+                teile[1],
+                SourceNeutral.ContentHash(geladen.Data));
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            return SourceFetchAnswer.Because(
+                SourceNeutral.FaultForStatus(_client.LastStatus, null, _context.Clock)
+                ?? SourceFaultInfo.Transient(ex.Message));
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<SourceSendAnswer> SendAsync(SourceSendRequest request, CancellationToken ct)
+    {
+        ArgumentNullException.ThrowIfNull(request);
+
+        if (request.AsPack)
+        {
+            return new SourceSendAnswer(
+                SourceSendStatus.Rejected,
+                "moviesubtitles.org takes no season containers",
+                Fault: SourceFaultInfo.Rejected("no season packs at this source"));
+        }
+
+        string? sprache = MovieSubtitlesClient.SiteLanguage(request.Language);
+        if (sprache is null)
+        {
+            return new SourceSendAnswer(
+                SourceSendStatus.Rejected,
+                "language unknown to the page: " + request.Language,
+                Fault: SourceFaultInfo.Rejected("language unknown to the source"));
+        }
+
+        if (request.Bytes.Length == 0)
+        {
+            return new SourceSendAnswer(
+                SourceSendStatus.Rejected, "no bytes to send", Fault: SourceFaultInfo.Rejected("empty payload"));
+        }
+
+        try
+        {
+            int? film = await _client
+                .FindMovieAsync(request.Target.Title, request.Target.Year, ct)
+                .ConfigureAwait(false);
+            if (film is null)
+            {
+                return new SourceSendAnswer(
+                    SourceSendStatus.Rejected,
+                    "no film entry for '" + request.Target.Title + "'",
+                    Fault: SourceFaultInfo.NotFound("film not found"));
+            }
+
+            long? tmdb = long.TryParse(request.Target.TmdbId, NumberStyles.Integer, CultureInfo.InvariantCulture, out long zahl)
+                ? zahl
+                : null;
+
+            MovieSubtitlesUpload payload = MovieSubtitlesClient.BuildUpload(
+                film.Value,
+                sprache,
+                request.ReleaseName,
+                request.FileName,
+                request.Bytes,
+                rip: null,
+                author: null,
+                tmdbId: tmdb,
+                imdbId: request.Target.ImdbId,
+
+                // Der Kommentar ist der TEXT DES PLUGINS — die Kennungszeile baut der Client.
+                commentExtra: request.Comment,
+                movieTitle: request.Target.Title,
+                year: request.Target.Year ?? 0);
+
+            MovieSubtitlesUploadResult ergebnis = await _client
+                .UploadAsync(payload, dryRun: false, ct)
+                .ConfigureAwait(false);
+
+            return Verdict(ergebnis);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (ArgumentException ex)
+        {
+            return new SourceSendAnswer(
+                SourceSendStatus.Rejected, ex.Message, Fault: SourceFaultInfo.Rejected(ex.Message));
+        }
+        catch (Exception ex)
+        {
+            return new SourceSendAnswer(
+                SourceSendStatus.NoVerdict, ex.Message, Fault: SourceFaultInfo.Transient(ex.Message));
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<SourceReportAnswer> ReportAsync(SourceReportRequest request, CancellationToken ct)
+    {
+        await Task.CompletedTask.ConfigureAwait(false);
+        return new SourceReportAnswer(
+            SourceReportStatus.Failed,
+            Fault: SourceFaultInfo.Rejected("moviesubtitles.org has no reporting channel"));
+    }
+
+    /// <summary>F-M506: das Urteil der Seite in die drei Fälle der Grenze.</summary>
+    /// <param name="ergebnis">Die Antwort der Seite.</param>
+    /// <returns>Die Antwort der Grenze.</returns>
+    private static SourceSendAnswer Verdict(MovieSubtitlesUploadResult ergebnis)
+    {
+        if (!ergebnis.Sent)
+        {
+            return new SourceSendAnswer(
+                SourceSendStatus.NoVerdict, "nothing was sent", Fault: SourceFaultInfo.Transient("dry run"));
+        }
+
+        if (ergebnis.Status is 429)
+        {
+            return new SourceSendAnswer(
+                SourceSendStatus.NoVerdict, "HTTP 429", Fault: SourceFaultInfo.RateLimited(null, "HTTP 429"));
+        }
+
+        if (ergebnis.Status is >= 200 and < 300)
+        {
+            return new SourceSendAnswer(SourceSendStatus.Accepted, null);
+        }
+
+        return new SourceSendAnswer(
+            SourceSendStatus.Rejected,
+            "HTTP " + ergebnis.Status?.ToString(CultureInfo.InvariantCulture),
+            Fault: SourceFaultInfo.Rejected("HTTP " + ergebnis.Status?.ToString(CultureInfo.InvariantCulture)));
+    }
+}

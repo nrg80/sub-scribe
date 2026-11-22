@@ -259,6 +259,14 @@ public sealed class UploadPipeline : IPackFiller
     private readonly Api.Endpoints.MsubMovieResolver _msubMovies;
 
     /// <summary>
+    /// F-M682: die Quellen-Engines dieses Laufs. Sie werden EINMAL gebaut — aus der Konfiguration und
+    /// mit dem, was der Lauf schon hat (HttpClient, Archiv-Cache, Logger, Zeitgeber, die beiden
+    /// bestehenden Clients) —, damit die Engine nichts davon selbst anlegt. Der Ablauf fragt danach
+    /// Fähigkeiten ab und nennt keinen Quellennamen.
+    /// </summary>
+    private readonly Sources.SourceRegistry _sources;
+
+    /// <summary>
     /// F-M389: one item per (series IMDb id, season) that this run worked — the way into a season
     /// whose episodes are NOT all in the queue. Jellyfin stores the SERIES id on the series, never
     /// on the episode, so the season is found through an episode rather than by a provider query.
@@ -494,7 +502,8 @@ public sealed class UploadPipeline : IPackFiller
         _ffmpegPath = FfmpegTools.ResolvePath(config, logger);
 
         // F-M501: EIN Client und EIN Auflöser für den ganzen Lauf — siehe die Feldbemerkungen oben.
-        _tvstClient = new Api.TvSubtitlesClient(ScribeApiClient.NewHttpClient(TimeSpan.FromSeconds(90)));
+        var tvstHttp = ScribeApiClient.NewHttpClient(TimeSpan.FromSeconds(90));
+        _tvstClient = new Api.TvSubtitlesClient(tvstHttp);
 
         // F-M521 (Operator-Anweisung 17.11.2026: „Und logging für uploads?"): the upload direction of
         // the tvst family is traced too — the same two Debug lines per request as SubDL, so an upload
@@ -506,6 +515,22 @@ public sealed class UploadPipeline : IPackFiller
         _msubClient = new Api.MovieSubtitlesClient(ScribeApiClient.NewHttpClient(TimeSpan.FromSeconds(90)));
         _msubClient.DebugTrace += OnApiTrace;
         _msubMovies = new Api.Endpoints.MsubMovieResolver(_msubClient, logger);
+
+        // F-M682: die Grenze zur Quellen-Engine. Gebaut EINMAL je Lauf, aus der Konfiguration und mit
+        // dem, was der Lauf schon hat: der HttpClient dieses Laufs, der gemeinsame Archiv-Cache, der
+        // Logger, der Zeitgeber und die beiden Clients samt Zugang. Die Engine legt sich nichts davon
+        // selbst an (Grenzregel b) — deshalb steht hier keine Quelle und kein Quellenname, sondern die
+        // Registrierung.
+        _sources = Sources.SourceRegistry.Build(
+            new Sources.SourceEngineContext(
+                tvstHttp,
+                logger,
+                TimeProvider.System,
+                ArchiveCache: _api.ArchiveDiskCache,
+                Subdl: _api,
+                Tvst: _tvstClient,
+                Msub: _msubClient),
+            config);
     }
 
     /// <summary>
@@ -836,9 +861,13 @@ public sealed class UploadPipeline : IPackFiller
             // Lauf, in dem überhaupt gepackt wird — vorher stand tvsubtitles.net bei jedem Ankunftslauf
             // draußen, obwohl der Lauf am 21.11.2026 um 09:58 zwei SubDL-Packs baute.
             var slotQuellen = PackSlotSources();
-            var tvstDraussen = slotQuellen.Contains(PackEntity.TvSubtitlesSource)
+            // F-M682: auch der GRUND nennt keinen Quellennamen mehr — die Registry sagt, wen ihr
+            // Schalter aus dem Slot hält (vorher: ein Vergleich auf `PackEntity.TvSubtitlesSource`).
+            var draussen = _sources.PackSlotExcluded();
+            var tvstDraussen = draussen.Count == 0
                 ? string.Empty
-                : "the upload switch of tvsubtitles.net is off — nothing is built or sent for this source (F-M495)";
+                : "the upload switch of " + string.Join(", ", draussen)
+                    + " is off — nothing is built or sent for this source (F-M495)";
 
             var packPaare = PlanPacksFromStore(completeSeasons, sources: slotQuellen);
 
@@ -854,7 +883,7 @@ public sealed class UploadPipeline : IPackFiller
                 string.Join(", ", slotQuellen),
                 string.IsNullOrEmpty(tvstDraussen)
                     ? string.Empty
-                    : $"; tvsubtitles.net is not in the slot: {tvstDraussen} (F-M645)");
+                    : $"; not in the slot: {tvstDraussen} (F-M645)");
 
             foreach (var (packImdb, packSeason, packLang, packHi) in packPaare)
             {
@@ -4269,24 +4298,17 @@ public sealed class UploadPipeline : IPackFiller
     /// <returns>Die Paare, leer wenn nichts gepackt ist.</returns>
     /// <summary>
     /// F-M654 (Operator-Anweisung 20.11.2026: „Uploads bei subdl gelten bei subdl erledigt, updates bei
-    /// tvst gelten bei tvst erledigt"): die Quellen des Pack-Slots — SubDL immer, tvsubtitles bei
-    /// eingeschaltetem Upload-Schalter (F-M495, F-M641). F-M680: für ALLE Läufe dieselbe Antwort; der
-    /// frühere Zusatz „nur im vollen Lauf" ist gefallen.
+    /// tvst gelten bei tvst erledigt"): die Quellen des Pack-Slots. F-M680: für ALLE Läufe dieselbe
+    /// Antwort; der frühere Zusatz „nur im vollen Lauf" ist gefallen.
+    /// <para>
+    /// F-M682: die Antwort kommt aus der Registry und ihren Fähigkeiten — der Ablauf nennt keinen
+    /// Quellennamen mehr und vergleicht keinen. SubDL steht immer im Slot (sein Schalter entscheidet
+    /// eine Etage höher, ob überhaupt gepackt wird), die zweite Quelle nur bei eingeschaltetem
+    /// Upload-Schalter (F-M495); beides steht in der Registrierung, nicht hier.
+    /// </para>
     /// </summary>
     /// <returns>Die Quellen, fuer die in diesem Lauf ein Pack entstehen kann.</returns>
-    private List<string> PackSlotSources()
-    {
-        var quellen = new List<string> { PackEntity.SubdlSource };
-        // F-M680: kein Ankunftslauf-Sonderfall mehr — die Frage „darf diese Quelle packen?" wird vom
-        // Quellen-Schalter beantwortet, nicht von der Art des Laufs. Ob der Lauf überhaupt packt,
-        // entscheidet eine Etage höher (Pack-Schalter und Ankunftslauf-Gate), nicht diese Liste.
-        if (SourceAllowed(Configuration.SubtitleProvider.TvSubtitles))
-        {
-            quellen.Add(PackEntity.TvSubtitlesSource);
-        }
-
-        return quellen;
-    }
+    private List<string> PackSlotSources() => _sources.PackSlot().ToList();
 
     /// <summary>
     /// F-M654: „schon gepackt" gilt nur, wenn JEDE Quelle des Slots ihren EIGENEN Pack fuer das Paar
