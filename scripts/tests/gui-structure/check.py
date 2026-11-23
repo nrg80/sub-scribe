@@ -30,6 +30,7 @@ Run: python3 scripts/tests/gui-structure/check.py [path/to/configPage.html]
 Exit code 0 = all checks pass.
 """
 
+import json
 import os
 import re
 import subprocess
@@ -61,6 +62,154 @@ def read_source(*parts):
             return fh.read()
     except OSError:
         return ""
+
+def run_case_probe(page_src):
+    """F-M689: fahre die Uebersetzungsfunktionen der Seite gegen eine Endpunkt-Antwort.
+
+    Warum echt und nicht per Textsuche: der Fehler vom 22.11.2026 war syntaktisch einwandfreies
+    JavaScript, das nur die falsche Schreibweise las — eine Textpruefung haette ihn nie gesehen.
+    Hier laeuft derselbe Code, den der Browser laeuft, gegen eine Antwort, wie der Endpunkt sie
+    wirklich liefert (PascalCase, DEU/ENG-Schluessel als Daten), und die Pruefung vergleicht das
+    Ergebnis Feld fuer Feld.
+
+    Gibt (ok, detail) zurueck. Fehlt node, ist das ein Fehlschlag mit klarem Grund — nicht still.
+    """
+    start = page_src.find("function subdlSourceWert")
+    end = page_src.find("function subdlSourceBadges")
+    if start == -1 or end == -1 or end <= start:
+        return False, "Uebersetzungsfunktionen nicht gefunden"
+    block = page_src[start:end]
+
+    # Die Antwort, wie GET Plugins/SubdlSync/Sources sie am 22.11.2026 auf prod geliefert hat:
+    # Huelle klein ("sources"), Eintraege und Felder in .NET-Schreibweise, Sprachtafel DEU/ENG.
+    fixture = r"""
+{
+  "sources": [
+    {
+      "Key": "subdl", "DisplayName": "SubDL", "Configured": true,
+      "File": "sources/subdl.json",
+      "Capabilities": {
+        "CanUpload": true, "CanSeasonPacks": true, "CanQuota": true,
+        "SearchesByImdb": true, "SearchesByTmdb": false,
+        "Pace": { "UploadsPerHour": 500, "MinCallPauseSeconds": 0 },
+        "Languages": { "DEU": "DE", "ENG": "EN" }
+      },
+      "Fields": [
+        { "Key": "uploadEnabled", "Label": "Upload", "Kind": "switch", "Default": "false",
+          "Value": false, "Gesetzt": false, "Options": [], "Group": "badges" },
+        { "Key": "downloadEnabled", "Label": "Download", "Kind": "switch", "Default": "true",
+          "Value": true, "Gesetzt": false, "Options": [], "Group": "badges" },
+        { "Key": "apiKey", "Label": "API-Schluessel", "Kind": "secret", "Required": true,
+          "Help": "Bearer", "Gesetzt": true, "Options": [] },
+        { "Key": "account", "Label": "Konto", "Kind": "text", "Required": false,
+          "Gesetzt": false, "Options": [],
+          "VisibleWhen": { "Field": "apiKey", "Value": "set" } },
+        { "Key": "account", "Label": "Konto", "Kind": "text", "Value": "konto",
+          "Gesetzt": false, "Options": [] },
+        { "Key": "preferSeasonZip", "Label": "Staffel-ZIP bevorzugen", "Kind": "switch",
+          "Value": true, "Gesetzt": false, "Options": [] },
+        { "Key": "menge", "Label": "Menge", "Kind": "number", "Value": 3, "Min": 1, "Max": 9,
+          "Gesetzt": false, "Options": [] },
+        { "Key": "art", "Label": "Art", "Kind": "choice", "Value": "b",
+          "Options": ["a", "b"], "Gesetzt": false }
+      ]
+    },
+    {
+      "Key": "tvsubtitles", "DisplayName": "tvsubtitles.net", "Configured": "false",
+      "Capabilities": { "CanSeasonPacks": true, "Languages": { "ENG": "en" } },
+      "Fields": [ { "Key": "baseUrl", "Label": "Basis-Adresse", "Kind": "url", "Value": "x",
+                    "Options": [] } ]
+    }
+  ]
+}
+"""
+
+    js = (
+        "var SUBDL_SOURCE_CAP_KEYS = ['canUpload','canReport','canHearingImpaired',"
+        "'canOfferSeasonPacks','canSeasonPacks','canCreateTitle','canQuota','takesPrebuiltPack',"
+        "'searchesByImdb','searchesByTmdb','searchesByName','searchesByHash'];\n"
+        + block
+        + "\nvar a = subdlSourceAntwort(" + fixture + ");\n"
+        + "if (!a) { console.log('KEINE_ANTWORT'); } else {\n"
+        + "  console.log(JSON.stringify(a));\n"
+        + "}\n"
+    )
+
+    node = None
+    for kandidat in ("node", "nodejs"):
+        if subprocess.call(["which", kandidat], stdout=subprocess.DEVNULL,
+                           stderr=subprocess.DEVNULL) == 0:
+            node = kandidat
+            break
+    if node is None:
+        return False, "node fehlt — die Uebersetzung kann nicht ausgefahren werden"
+
+    with tempfile.NamedTemporaryFile("w", suffix=".js", delete=False, encoding="utf-8") as fh:
+        fh.write(js)
+        pfad = fh.name
+    try:
+        out = subprocess.run([node, pfad], capture_output=True, text=True, timeout=60)
+    finally:
+        os.unlink(pfad)
+
+    if out.returncode != 0:
+        return False, "node brach ab: %s" % (out.stderr.strip().splitlines()[:1] or ["?"])
+    try:
+        antwort = json.loads(out.stdout.strip().splitlines()[-1])
+    except (ValueError, IndexError):
+        return False, "keine Antwort: %s" % out.stdout.strip()[:80]
+
+    quellen = antwort.get("quellen") or []
+    if len(quellen) != 2:
+        return False, "Quellen=%d statt 2" % len(quellen)
+
+    subdl, tvst = quellen[0], quellen[1]
+    fehler = []
+    if subdl.get("displayName") != "SubDL":
+        fehler.append("displayName=%r" % subdl.get("displayName"))
+    if subdl.get("configured") is not True:
+        fehler.append("configured=%r" % subdl.get("configured"))
+    if tvst.get("configured") is not False:
+        fehler.append("configured(tvst)=%r" % tvst.get("configured"))
+    felder = subdl.get("fields") or []
+    arten = [f.get("kind") for f in felder]
+    if arten != ["switch", "switch", "secret", "text", "text", "switch", "number", "choice"]:
+        fehler.append("Arten=%s" % arten)
+
+    # F-M691: die beiden Richtungsschalter stehen als Schalter auf der Karte, mit ihrem Wert.
+    # F-M693: die Gruppe kommt mit — badges sind die Reihe oben, alles andere bleibt Zeile.
+    if felder and felder[0].get("badge") is not True:
+        fehler.append("upload.badge=%r" % felder[0].get("badge"))
+    if len(felder) > 1 and felder[1].get("badge") is not True:
+        fehler.append("download.badge=%r" % felder[1].get("badge"))
+    if len(felder) > 2 and felder[2].get("badge") is not False:
+        fehler.append("apiKey.badge=%r" % felder[2].get("badge"))
+    if felder and felder[-1].get("badge") is not False:
+        fehler.append("letztes.badge=%r" % felder[-1].get("badge"))
+
+    if felder and felder[0].get("key") != "uploadEnabled":
+        fehler.append("erstes Feld=%r" % (felder[0].get("key") if felder else None))
+    if felder and felder[0].get("value") is not False:
+        fehler.append("Upload-Wert=%r" % felder[0].get("value"))
+    if len(felder) > 1 and felder[1].get("value") is not True:
+        fehler.append("Download-Wert=%r" % felder[1].get("value"))
+    if felder and felder[3].get("visibleWhen", {}) and \
+            felder[3]["visibleWhen"].get("field") != "apiKey":
+        fehler.append("visibleWhen=%r" % felder[3].get("visibleWhen"))
+    if len(felder) > 2 and felder[2].get("gesetzt") is not True:
+        fehler.append("gesetzt=%r" % felder[2].get("gesetzt"))
+    caps = subdl.get("capabilities") or {}
+    if caps.get("canSeasonPacks") is not True or caps.get("searchesByTmdb") is not False:
+        fehler.append("Faehigkeiten=%r" % caps)
+    if (caps.get("languages") or {}).get("DEU") != "DE":
+        fehler.append("Sprachtafel=%r" % caps.get("languages"))
+    if (caps.get("pace") or {}).get("uploadsPerHour") != 500:
+        fehler.append("Takt=%r" % caps.get("pace"))
+
+    if fehler:
+        return False, "; ".join(fehler)
+    return True, "2 Quellen, 6 Feldarten, Faehigkeiten, Takt und Sprachtafel richtig uebersetzt"
+
 
 def main():
     path = sys.argv[1] if len(sys.argv) > 1 else DEFAULT
@@ -842,9 +991,7 @@ def main():
     pos_fu = dl_section.find('id="FollowUpRoundsDownload"')
     pos_sync = dl_section.find('id="QaDownloadAutoSync"')
     pos_gates = dl_section.find("Quality gates (before download save)")
-    check("download: Continue after daily limit comes before Follow-up rounds",
-          pos_limit != -1 and pos_fu != -1 and pos_limit < pos_fu,
-          "limit=%d follow-up=%d" % (pos_limit, pos_fu))
+    # F-M711: der Kasten ist entfernt — die Reihenfolge-Pruefung entfaellt mit ihm.
     check("download: Follow-up rounds comes before Automatically synchronize",
           pos_fu != -1 and pos_sync != -1 and pos_fu < pos_sync,
           "follow-up=%d sync=%d" % (pos_fu, pos_sync))
@@ -921,15 +1068,9 @@ def main():
 
     up_label = _visible_label(up_pos)
     dl_label = _visible_label(dl_pos)
-    check("F-M338: the upload label carries no 'API'",
-          up_label != "" and "API" not in up_label,
-          "the operator asked for it without the word; measured label=%r" % up_label)
-    check("F-M338: both directions read the SAME sentence",
-          up_label != "" and up_label == dl_label,
-          "upload=%r download=%r - a wording difference reads as a behaviour difference" % (up_label, dl_label))
-    check("F-M338: the download label is unchanged",
-          dl_label == "Continue after daily limit",
-          "the fix is on the upload side only; measured download=%r" % dl_label)
+    # F-M711: der Kasten "Continue after daily limit" steht nicht mehr in der Weboberfläche — die
+    # Einstellung ist ein Feld der SubDL-Karte geworden. Damit entfällt die Satzgleichheit beider
+    # Richtungen; die Prüfung auf das Verschwinden steht weiter unten, wo `page_src` vorliegt.
 
     # ---- F-M337 (operator order 09.10.2026): the General tab carries everything that matters ----
     # "Target languages (download, required)" moves up under the library selection, so the first
@@ -1724,29 +1865,32 @@ def main():
         nxt = page_src_f497.find('<h3>', start + len(heading))
         return page_src_f497[start:nxt if nxt != -1 else len(page_src_f497)]
 
-    subdl_block = _section('<h3>SubDL Account')
+    subdl_block = _section('<h3>Endpoints</h3>')
     tmdb_block = _section('<h3>TMDb (')
-    check("F-M497: the SubDL fields are marked 'Required for SubDL only', the TMDb key as Required",
-          "Required for SubDL only" in subdl_block
-          and subdl_block.count("Required for SubDL only") >= 3
-          and 'id="Username"' in subdl_block and 'id="Password"' in subdl_block and 'id="ApiKey"' in subdl_block
+    subdl_engine_src = read_source("Sources", "Subdl", "SubdlEngine.cs")
+    # F-M688: der Block heisst jetzt "Quellen" und traegt die Karten; die Pflicht der Quelle
+    # (apiKey) erklaert die Engine in ihrem eigenen Schema, nicht mehr die Seite.
+    check("F-M497: the TMDb key is Required on the page, the SubDL key's 'required' lives in the engine's schema",
+          "Required for SubDL only" not in subdl_block
+          and 'id="SourceCards"' in subdl_block
           and 'subdl-required">Required</span>' in tmdb_block
           and "the one mandatory key" in tmdb_block
-          and 'id="TmdbApiKey"' in tmdb_block,
-          "F-M497: SubDL ist optional (required for SubDL only), TMDb ist Pflicht")
+          and 'id="TmdbApiKey"' in tmdb_block
+          and re.search(r"new\(FieldApiKey,.*?Required: true", subdl_engine_src) is not None,
+          "F-M497: TMDb ist Pflicht; die Quelle erklaert ihr Pflichtfeld selbst (apiKey, Required: true)")
 
     # ---- F-M497 (Nachtrag des Nutzers: „Tmdb confi dann auch vor subdl konfi in der gui"): die
     # Pflicht steht VOR der optionalen Quelle — wer die Seite liest, sieht zuerst, was er haben MUSS.
     # Nur die beiden Blöcke sind getauscht; geladen und gespeichert wird über die Feld-IDs
     # (querySelector('#…')), die von ihrer Position nichts wissen — der Tausch darf dort nichts ändern.
-    check("F-M497: the TMDb block stands BEFORE the SubDL account block",
-          page_src_f497.index('<h3>TMDb (') < page_src_f497.index('<h3>SubDL Account')
-          and page_src_f497.index('id="TmdbApiKey"') < page_src_f497.index('id="Username"')
+    check("F-M497: the TMDb block stands BEFORE the sources section, and only TMDb is bound to the form",
+          page_src_f497.index('<h3>TMDb (') < page_src_f497.index('<h3>Endpoints</h3>')
+          and page_src_f497.index('id="TmdbApiKey"') < page_src_f497.index('id="SourceCards"')
           and "document.querySelector('#TmdbApiKey').value = config.TmdbApiKey || '';" in page_src_f497
           and "config.TmdbApiKey = tmdbKey;" in page_src_f497
-          and "document.querySelector('#Username').value = config.Username || '';" in page_src_f497
-          and "config.Username = document.querySelector('#Username').value;" in page_src_f497,
-          "F-M497: TMDb zuerst, SubDL danach — die ID-Bindungen bleiben")
+          and "document.querySelector('#Username')" not in page_src_f497
+          and "config.Username" not in page_src_f497,
+          "F-M497: TMDb zuerst, die Quellen danach — die Quellenfelder laufen nicht mehr ueber die Formular-IDs")
 
     failed = [r for r in results if not r[1]]
     for name, ok, detail in results:
@@ -1858,22 +2002,48 @@ def main():
     nxt = [n for n in nxt if n > 0]
     down_part = rest[:min(nxt)] if nxt else rest
 
-    for tab_name, part, box, reason in (("upload", up_part, "TvstUploadEnabled", "TvstUploadReason"),
-                                        ("download", down_part, "TvstDownloadEnabled", "TvstDownloadReason")):
-        check("F-M520: the %s tab shows ONE tvst switch, not one per address" % tab_name,
-              ('id="%s"' % box) in part
-              and 'id="TvSubtitlesUploadEnabled"' not in part
-              and 'id="MovieSubtitlesUploadEnabled"' not in part
-              and 'id="TvSubtitlesDownloadEnabled"' not in part
-              and 'id="MovieSubtitlesDownloadEnabled"' not in part)
-        check("F-M520: the %s switch carries a short default line" % tab_name,
-              ('id="%s"' % reason) in part)
-        # Der Download-Tab nennt den Satz zweimal (einmal am Schalter, einmal in der Statuszeile der
-        # Familie) — geprueft wird, dass er DA ist und beide Adressen nennt, nicht wie oft.
-        check("F-M520: the %s tab names both addresses and says who decides" % tab_name,
-              part.count("tvsubtitles.net") >= 1
-              and part.count("moviesubtitles.org") >= 1
-              and part.count("TMDb decides") >= 1)
+    # F-M698: der General-Reiter — die Ordnung steht dort.
+    gen_i = page_src.find('data-tab-content="general"')
+    gen_j = page_src.find('data-tab-content="', gen_i + 10)
+    general_part = page_src[gen_i:gen_j if gen_j != -1 else len(page_src)]
+    if '<script' in general_part:
+        general_part = general_part[:general_part.find('<script')]
+
+    # Der Reiter "download" ist der LETZTE — sein Ausschnitt laeuft sonst bis ins Seitenende und damit
+    # durch den ganzen JavaScript-Block. Geprueft wird das MARKUP eines Reiters, nicht der Code: ein
+    # Kommentar im Skript ist kein Text, den der Betreiber liest (F-M694).
+    for name in ('up_part', 'down_part'):
+        teil = locals()[name]
+        schnitt = teil.find('<script')
+        if schnitt != -1:
+            teil = teil[:schnitt]
+        if name == 'up_part':
+            up_part = teil
+        else:
+            down_part = teil
+
+    # F-M691 (Operator-Anweisung 22.11.2026: „Enable upload/download pro source dann bitte auch ins
+    # source feld"): die Richtungsschalter standen bis hier als Kaestchen in diesen beiden Reitern. Jetzt
+    # fuehrt sie die Karte ihrer Quelle unter „Endpoints" — ein Kaestchen hier waere ein zweiter Ort, an
+    # dem dieselbe Frage beantwortet wird, und der eine davon wuerde luegen.
+    for tab_name, part in (("upload", up_part), ("download", down_part)):
+        check("F-M691: the %s tab carries NO direction switch of its own" % tab_name,
+              not re.search(r'id="(Subdl|Tvst|TvSubtitles|MovieSubtitles)(Upload|Download)Enabled"', part),
+              "Kaestchen im Reiter: %d" % len(re.findall(
+                  r'id="(Subdl|Tvst|TvSubtitles|MovieSubtitles)(Upload|Download)Enabled"', part)))
+        # F-M694 (Betreiberbefund 22.11.2026: "Auf download und upload gui hast die Beschreibungen nicht
+        # vollstaendig entfernt"): die Reiter nennen die Quellen GAR NICHT mehr — auch nicht im Satz.
+        # Was eine Quelle angeht, steht in ihrer Karte unter Endpoints; eine Zeile hier waere eine
+        # zweite Beschreibung derselben Sache.
+        check("F-M694: the %s tab no longer describes the sources or their switches" % tab_name,
+              "belongs to" not in part
+              and "tvsubtitles.net" not in part
+              and "moviesubtitles.org" not in part
+              and "TMDb decides" not in part
+              and "Endpoints" not in part,
+              "Reste: Quellen=%d Schalter=%d Endpoints=%d"
+              % (part.count("tvsubtitles.net") + part.count("moviesubtitles.org"),
+                 part.count("belongs to"), part.count("Endpoints")))
 
     check("F-M525: the tvst heading is gone from the DOWNLOAD tab (operator order 17.11.2026)",
           down_part.count("<h3>tvst</h3>") == 0,
@@ -1882,25 +2052,151 @@ def main():
           up_part.count("<h3>tvst</h3>") == 0,
           "%d gefunden" % up_part.count("<h3>tvst</h3>"))
 
-    check("F-M520: saving the family switch writes BOTH address flags",
-          "config.TvSubtitlesUploadEnabled = tvstUp;" in page_src
-          and "config.MovieSubtitlesUploadEnabled = tvstUp;" in page_src
-          and "config.TvSubtitlesDownloadEnabled = tvstDown;" in page_src
-          and "config.MovieSubtitlesDownloadEnabled = tvstDown;" in page_src)
+    # F-M691: die Seite SCHREIBT die alten Schalter nicht mehr — ein Speichern dieser Seite darf die
+    # Werte, die in den Quelldateien gelten, nicht ueberschreiben (sonst setzt jeder Klick auf
+    # „Save" in einem anderen Reiter die Richtungen zurueck).
+    check("F-M691: saving this page does not touch the old per-source direction flags",
+          "config.SubdlUploadEnabled =" not in page_src
+          and "config.SubdlDownloadEnabled =" not in page_src
+          and "config.TvSubtitlesUploadEnabled =" not in page_src
+          and "config.MovieSubtitlesUploadEnabled =" not in page_src
+          and "config.TvSubtitlesDownloadEnabled =" not in page_src
+          and "config.MovieSubtitlesDownloadEnabled =" not in page_src,
+          "Zuweisungen an die Alt-Felder in der Seite")
 
-    check("F-M520: loading the family switch reads the EFFECTIVE state of both addresses",
-          "config.TvSubtitlesUploadEnabled === true || config.MovieSubtitlesUploadEnabled === true" in page_src
-          and "? true : !!config.TvSubtitlesDownloadEnabled)" in page_src
-          and "? true : !!config.MovieSubtitlesDownloadEnabled);" in page_src)
+    # F-M704 (Betreiberbefund 22.11.2026: "Tvshow und movie badge bei den endpoints fehlt immer noch.
+    # Passwort Email fuer subdl muss bleiben. Auch die Ampeln sind nicht einsortiert"): drei Ursachen,
+    # drei Pruefungen an EINER Stelle.
+    # (a) die Liste der Faehigkeiten stand ZWEIMAL in der Seite, die zweite Ueberschreibung gewann und
+    #     nannte 'servesSeries'/'servesMovies' nicht — die Art der Quelle kam nie an;
+    check("F-M704: the capability list is declared once and carries servesSeries/servesMovies",
+          page_src.count('var SUBDL_SOURCE_CAP_KEYS') == 1
+          and "'servesSeries', 'servesMovies'" in page_src,
+          "Liste einmal, mit der Art der Quelle")
+    # (b) die Bedingung eines anderen Felds ('VisibleWhen apiKey = set') bekam einen Wahrheitswert statt
+    #     'set' — Email und Passwort blieben dadurch unsichtbar;
+    check("F-M704: a secret answers the condition of another field in 'set'/'not set'",
+          "? 'set' : 'not set';" in page_src
+          and "'set' ? true : false" not in page_src,
+          "Bedingungssprache bleibt 'set'")
+    # (c) F-M707 (Betreiberansage 22.11.2026: "Tvshows movies etc muss bei endpoint order nicht stehen.
+    # Das on/off bitte in der spalte zentrieren"): die Zeile traegt NUR die Ampel — die Art steht auf
+    # der Karte —, und die Ampel hat eine eigene Spalte mit mittiger Ausrichtung.
+    check("F-M707: an order row carries the lamp only, centred in its own column",
+          "subdl-order-state" in page_src
+          and "subdlSourceEl('span', 'subdl-order-tag'" not in page_src
+          and "flex: 0 0 3.2em; text-align: center" in page_src,
+          "nur Ampel, mittig in eigener Spalte")
+    # F-M708 (Betreiberbefund 22.11.2026: "Download enabled off ist lustiges wording. Download on/off.
+    # Off message bitte rot und mit rotem kreuzchen statt haken. Das on unter change order geht nie off"):
+    # die Meldung nennt die Beschriftung und den Zustand, "off" steht rot mit Kreuz, und die Ampel der
+    # Reihenfolge haengt an "participates" statt an "configured".
+    check("F-M708: a save answers with the field label and its state, off in red with a cross",
+          "bez + ' ' + (rumpf[feldName] ? 'on' : 'off')" in page_src
+          and "(aus ? '\u2716 ' : '\u2714 ')" in page_src
+          and "subdlSourceResult(key, aus ? 'fail' : 'ok'" in page_src,
+          "Download off, rot mit Kreuz")
+    check("F-M708: the order lamp follows participation, not completeness of the file",
+          "quelle.participates ? 'on' : 'off'" in page_src
+          and "subdlSourceWert(eintrag, 'participates') === true" in page_src
+          and "subdlOrderDraw(window.__subdlQuellen)" in page_src,
+          "Ampel an participates, Neuzeichnung nach dem Speichern")
 
-    check("F-M509: the order field keeps exactly TWO values — the family is ordered, not its addresses",
-          'id="DownloadOrder"' in down_part
-          and down_part.count('<option value="TvSubtitlesFirst">tvst first</option>') == 1
-          and down_part.count('<option value="SubdlFirst">SubDL first</option>') == 1
-          and down_part.count("<option value=") == 2)
+    # F-M710 (Betreiberansage 22.11.2026: "Das gui bla bla asked in this order first one wins bitte
+    # entfernen"): der Block nennt nur noch seinen Namen.
+    check("F-M710: the order block carries no description",
+          'Asked in this order' not in page_src,
+          "kein blabla am Block")
 
-    check("F-M525: the order field names the sources in the same words as the switches",
-          '>tvst first<' in down_part and '>SubDL first<' in down_part)
+    check("F-M707: the block is titled 'Endpoint order'",
+          ">Endpoint order</label>" in page_src,
+          "Ueberschrift Endpoint order")
+
+    # F-M705 (Betreiberbefund 22.11.2026: "Wenn ich auf save druecke kommt immer download enabled auch
+    # wenn ich ausschalte. Ist eigentlich durch die tickbox abgedeckt"): nur Geaendertes geht mit, und
+    # ohne Aenderung stellt die Karte gar keine Anfrage.
+    check("F-M705: saving sends only what changed, and nothing at all when nothing changed",
+          "Object.keys(rumpf).length === 0" in page_src
+          and "nothing changed" in page_src
+          and "body: JSON.stringify(rumpf)" in page_src
+          and "body: JSON.stringify(subdlSourceBody(card))" not in page_src,
+          "nur die bewegten Felder")
+
+    # F-M703 (Betreiberansage 22.11.2026: "Source order bitte direkt bei endpoints unter der Ueberschrift
+    # einsortieren"): der Block steht im Abschnitt "Endpoints" — direkt unter der Ueberschrift und VOR den
+    # Karten. Der Abschnitt liegt im General-Reiter; entscheidend ist die Position im Abschnitt.
+    _ep_start = page_src.find('<h3>Endpoints</h3>')
+    _ep_ende = page_src.find('<h3>Media files</h3>', _ep_start)
+    bereich = page_src[_ep_start:_ep_ende if _ep_ende > _ep_start else len(page_src)]
+    check("F-M703: the order sits under the Endpoints heading, before the cards",
+          bereich.find('id="SourceOrderBlock"') >= 0
+          and bereich.find('id="SourceOrderBlock"') < bereich.find('id="SourceCards"')
+          and 'id="SourceOrderRows"' in bereich
+          and 'id="SourceOrderValue"' in bereich
+          and 'id="DownloadOrder"' not in page_src
+          and '><option value="TvSubtitlesFirst"' not in page_src,
+          "Reihenfolge im Endpoints-Abschnitt, Alt-Kasten weg")
+
+    check("F-M698: the order list is built from the endpoint answer — one row per source",
+          "function subdlOrderSeed(payload)" in page_src
+          and "function subdlOrderDraw(payload)" in page_src
+          and "function subdlOrderMove(pos, schritt, payload)" in page_src
+          and "subdlOrderKeys.forEach" in page_src
+          and "subdlOrderSeed(payload);" in page_src
+          and "subdlOrderDraw(payload);" in page_src,
+          "Zeilen aus payload.quellen, nicht aus einer festen Liste")
+
+    # F-M702 (Betreiberansage 22.11.2026: "und das bla blah weglassen. nur apikey email for login und
+    # Passwort. keine weitere Beschreibung, kein set."): kein Platzhalter, keine "set"-Zeile, keine
+    # Beschreibung an einem Geheimfeld — die Ampel sagt, ob die Datei vollstaendig ist.
+    # F-M706: die Punkte sind zurueck ("Die .... Im feld bei api und Passwort fehlen"), das Wort "set"
+    # bleibt weg. F-M702 gilt weiter fuer den TEXT, nicht fuer das Punktmuster.
+    check("F-M702/F-M706: a secret shows dots but no word and no value",
+          "set — type to replace" not in page_src
+          and "subdl-source-secret-state" not in page_src
+          and "input.placeholder = field.gesetzt ? '••••••••' : '';" in page_src,
+          "Punkte ohne Wort")
+
+    # F-M706: "Die prio pfeile rechtsbuendig" und "Fuer subdl bei api key das required weg".
+    check("F-M706: the order arrows sit on the right edge",
+          ".subdl-order-row .subdl-order-move:first-of-type { margin-left: auto; }" in page_src,
+          "Pfeile rechtsbuendig")
+    check("F-M706: no Required marker on a source card",
+          "subdlSourceEl('span', 'subdl-required', 'Required')" not in page_src,
+          "Karte nennt nur den Feldnamen")
+    check("F-M706: the answer to a save names the new state of a switch",
+          "'downloadEnabled: off'" not in page_src
+          and "(rumpf[feldName] ? 'on' : 'off')" in page_src,
+          "Rueckmeldung nennt den Zustand")
+
+    # F-M706 (Betreiberansage 22.11.2026: "Das on bitte nur an einer stelle, der source order"): die
+    # Ampel steht NUR in der Reihenfolge — die Karte trug sie doppelt (F-M700 hatte sie dort eingebaut).
+    check("F-M706: the state light lives only in the source order, not on the card",
+          "subdl-source-state-row" not in page_src
+          and ".subdl-order-state" in page_src
+          and "subdlSourceEl('span', 'subdl-order-state '" in page_src,
+          "Ampel nur in der Reihenfolge")
+
+    # F-M699 (Betreiberbefund 22.11.2026: "es ist komisch das subdl subdl hintereinander steht"): der
+    # Kartenkopf nennt den Namen EINMAL; der Schluessel haengt als title am Namen.
+    check("F-M699: the card head names the source once, the key rides as a tooltip",
+          "subdl-source-key" not in page_src
+          and "nameTeil.title = 'source key: ' + entry.key" in page_src,
+          "kein Schluessel-Element mehr im Kopf")
+
+    # F-M701: ohne gespeicherte Liste zeigt die Ordnung die ALTE Einstellung — sonst zeigt die Oberfläche
+    # die Reihenfolge der Engines (subdl zuerst), während der Lauf "tvst first" fährt. Im Browser gemessen:
+    # vor der Korrektur stand "1. SubDL" bei DownloadOrder=TvSubtitlesFirst.
+    check("F-M701: with no saved list the order shows the old two-value setting",
+          "'subdl,tvsubtitles,moviesubtitles'" in page_src
+          and "'tvsubtitles,moviesubtitles,subdl'" in page_src
+          and "if (!liste) {" in page_src,
+          "Vorbelegung aus DownloadOrder")
+
+    check("F-M698: the page saves the list and derives the old two-value field from it",
+          "config.SourceOrderList = ordnungFeld" in page_src
+          and "config.DownloadOrder = (erste === 'subdl')" in page_src,
+          "SourceOrderList ist die Wahrheit, DownloadOrder wird abgeleitet")
 
     check("F-M508: the addresses are data, not controls — no address switch survives in the page",
           page_src.count('id="MovieSubtitlesUploadEnabled"') == 0
@@ -1908,11 +2204,11 @@ def main():
           and page_src.count('id="TvSubtitlesUploadEnabled"') == 0
           and page_src.count('id="TvSubtitlesDownloadEnabled"') == 0)
 
-    check("F-M508: the film-address fields are still saved and loaded as configuration",
-          "config.MovieSubtitlesUploadEnabled" in page_src
-          and "config.MovieSubtitlesDownloadEnabled" in page_src
-          and "config.TvSubtitlesUploadEnabled" in page_src
-          and "config.TvSubtitlesDownloadEnabled" in page_src)
+    check("F-M508: the film-address fields keep their place in the configuration — the page no longer names them",
+          "config.MovieSubtitlesUploadEnabled" not in page_src
+          and "config.MovieSubtitlesDownloadEnabled" not in page_src
+          and "config.TvSubtitlesUploadEnabled" not in page_src
+          and "config.TvSubtitlesDownloadEnabled" not in page_src)
 
     # ---- F-M526: jede Einstellung sagt, WELCHE Quelle sie betrifft -------------------------------
     # Operator-Anweisung 17.11.2026: „Dann sollten wir in der gui vermerken welches feature nur auf
@@ -1924,16 +2220,32 @@ def main():
     # an tvsubtitles.net (eigene Meldeform "Report bad"), deshalb traegt er keinen Merker mehr.
     # F-M641: "Upload season packs" ist ebenfalls NICHT mehr SubDL-only — seit dem 20.11.2026 baut
     # auch tvsubtitles.net Packs, der Schalter gibt beide Quellen frei.
-    subdl_only = ("UploadContinueAfterLimit", "DownloadContinueAfterLimit",
-                  "DownloadHearingImpaired", "AllowAiTranslatedSubs",
-                  "DownloadArchiveCacheDays", "DownloadArchiveCacheMaxMb")
-    for cid in subdl_only:
-        # Der Merker steht mal hinter dem Kaestchen (Checkbox), mal im Label DAVOR (Zahlenfeld) —
-        # gesucht wird deshalb in einem Fenster um das Control, nicht nur dahinter.
-        pos = page_src.find('id="%s"' % cid)
-        check("F-M526: %s carries the SubDL-only marker" % cid,
-              pos > 0 and 'src-subdl' in page_src[max(0, pos - 400):pos + 400],
-              "kein Merker" if pos > 0 else "Control fehlt")
+    # F-M665 (Operator 21.11.2026: „die tvst-Staffel-ZIP in denselben Platten-Cache … source
+    # unabhängig"): die zwei Archiv-Cache-Felder tragen KEINEN Quellenmerker mehr — der Cache dient
+    # jeder Engine, die Quelle steckt im Schlüsselraum (tvst.<Serie>.<Staffel>.<Sprache>).
+    # F-M664 (Operator 21.11.2026): auch der HI-Schalter ist nicht mehr SubDL-only — mit der
+    # Ohr-Marke der Eintragsseite und dem .HI.-Marker der Staffel-ZIP liefert tvst HI-Fassungen
+    # ebenso. Bleiben drei Merker: die zwei Tageslimit-Schalter und der AI-Schalter.
+    # F-M711 (Betreiberansage 22.11.2026: „Die 2 verbleibenden subdl only Einstellungen können dann auch
+    # in den endpoint kasten und das badge subdl only kann entfallen"): das Tupel ist LEER — die drei
+    # letzten Merker sind weg, ihre Einstellungen stehen als Felder in der Karte der Quelle.
+    subdl_only = ()
+
+    # F-M711: der Text und die Felder — der Kasten ist weg, die Einstellung steht in der Quelle.
+    check("F-M711: the 'Continue after daily limit' box is gone from the page",
+          "Continue after daily limit" not in page_src
+          and 'id="UploadContinueAfterLimit"' not in page_src
+          and 'id="DownloadContinueAfterLimit"' not in page_src
+          and 'id="AllowAiTranslatedSubs"' not in page_src,
+          "kein Kasten mehr in der Oberflaeche")
+    _subdl_quelle = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
+        "Jellyfin.Plugin.SubdlSync", "Sources", "Subdl", "SubdlEngine.cs")
+    _subdl_text = open(_subdl_quelle, encoding="utf-8").read() if os.path.exists(_subdl_quelle) else ""
+    check("F-M711: the three settings are declared by the SubDL source itself",
+          all(k in _subdl_text for k in ("uploadContinueAfterLimit", "downloadContinueAfterLimit",
+                                         "allowAiTranslatedSubs")),
+          "Felder in der Erklaerung der Quelle")
 
     # F-M527: Jellyfin zeichnet das Haekchen ueber die Nachbar-Kette
     # `.emby-checkbox:checked + span + .checkboxOutline` — das Outline-<span> haengt der Baustein
@@ -1944,18 +2256,15 @@ def main():
     check("F-M527: no badge sits between the label text and Jellyfin's checkbox outline",
           '</span> <span class="src-badge' not in page_src,
           "%d kaputte Ketten" % page_src.count('</span> <span class="src-badge'))
-    for cid in ("UploadContinueAfterLimit", "DownloadContinueAfterLimit",
-                "DownloadHearingImpaired", "AllowAiTranslatedSubs"):
-        pos = page_src.find('id="%s"' % cid)
-        check("F-M527: %s keeps the marker nested inside its label text" % cid,
-              pos > 0 and 'SubDL only</span></span>' in page_src[pos:pos + 700])
+    # F-M711: die drei Controls, die diesen Merker trugen, stehen nicht mehr in der Seite.
 
-    check("F-M526: the marker has its own two styles and spells the source out",
-          ".src-badge {" in page_src and ".src-subdl {" in page_src and ".src-tvst" in page_src
-          and ">SubDL only</span>" in page_src)
+    # F-M711: es gibt keinen Quellenmerker mehr — auch keine eigene Gestalt dafür.
+    check("F-M711: no source badge and no badge styling survive in the page",
+          "src-subdl" not in page_src and "src-tvst" not in page_src,
+          "kein Merker, keine Gestalt")
 
     check("F-M526: no marker claims a tvst-only setting that does not exist",
-          page_src.count("src-tvst") == 1)  # nur die CSS-Klasse, kein gesetztes Abzeichen
+          page_src.count("src-tvst") == 0)  # F-M711: keine Merker mehr, auch keine Gestalt
 
     # F-M641: der Pack-Schalter wirkt auf BEIDE Quellen (SubDL und tvst bauen Packs) und darf
     # deshalb keinen Quellenmerker tragen.
@@ -1966,8 +2275,9 @@ def main():
 
     # F-M533: der Melde-Schalter wirkt auf BEIDE Quellen und darf keinen Quellenmerker tragen.
     check("F-M533: the report switch carries no source marker any more",
-          page_src.count('>SubDL only</span>') == 6,
-          "%d Abzeichen (erwartet 6 nach dem Melde- und dem Pack-Schalter)" % page_src.count('>SubDL only</span>'))
+          page_src.count('>SubDL only</span>') == 0,
+          "%d Abzeichen (erwartet 3: Tageslimit x2 und AI — Melde-, Pack-, Cache- und HI-Schalter tragen keins)"
+          % page_src.count('>SubDL only</span>'))
     check("F-M533: the report switch is named without a source",
           "<span>Report broken subtitles</span>" in page_src)
 
@@ -1979,9 +2289,277 @@ def main():
     check("F-M660: the reset block says that pack verdicts are a separate memory",
           "Pack verdicts" in page_src and "only the pack verdicts" in page_src)
 
+    # ---- F-M688 (Betreiber-Entscheidung 22.11.2026: „Die übergeordneten Einstellungen haben wir ja
+    # schon. Was wir jetzt brauchen sind flexibel einblendbare Eigenschaften pro engine", „Und
+    # entsprechend ein eigenes konfi file pro engine", „Und die hmi Anpassung?"): der Abschnitt
+    # Quellen. Geprueft wird, was die Seite TUT, nicht was sie behauptet: der Zeichner baut die
+    # Karten aus der Antwort des Endpunkts, kennt keinen Quellenamen, deckt alle Feldarten ab, wertet
+    # visibleWhen aus, laesst ein Geheimnis ohne Wert und schreibt beim Speichern genau eine Quelle.
+    quellen_start = page_src.find('// ==== F-M688')
+    quellen_ende = page_src.find('// ==== F-M688 Ende ====')
+    quellen = page_src[quellen_start:quellen_ende] if (quellen_start != -1 and quellen_ende > quellen_start) else ""
+
+    check("F-M688: the page carries ONE sources section, and it is a real heading",
+          page_src.count('<h3>Endpoints</h3>') == 1 and page_src.count('id="SourceCards"') == 1,
+          "h3=%d cards=%d" % (page_src.count('<h3>Endpoints</h3>'), page_src.count('id="SourceCards"')))
+
+    gen_q = html.find('data-tab-content="general"')
+    gen_end_q = html.find('data-tab-content=', gen_q + 1) if gen_q != -1 else -1
+    gen_q_section = html[gen_q:gen_end_q if gen_end_q != -1 else len(html)] if gen_q != -1 else ""
+    check("F-M688: the sources section sits INSIDE the general tab (a section outside renders under every tab)",
+          'id="SourceCards"' in gen_q_section,
+          "the cards would otherwise follow the operator onto all four tabs")
+
+    check("F-M688: the cards are drawn from the endpoint, and the loader runs when the page builds",
+          quellen != "" and "ApiClient.getUrl('Plugins/SubdlSync/Sources')" in quellen
+          and "'Plugins/SubdlSync/Sources/' + encodeURIComponent(key)" in quellen
+          and page_src.count('subdlLoadSources();') == 1,
+          "loader calls=%d" % page_src.count('subdlLoadSources();'))
+
+    check("F-M688: the drawing block names NO source — the answer decides which cards exist",
+          quellen != ""
+          and all(("'" + name + "'") not in quellen and ('"' + name + '"') not in quellen
+                  for name in ("subdl", "tvsubtitles", "moviesubtitles")),
+          "a name here would mean the card is built from our knowledge of the source, not from its schema")
+
+    check("F-M688: every field kind of the schema occurs in the drawing block",
+          all(("'" + kind + "'") in quellen
+              for kind in ("text", "url", "secret", "number", "switch", "choice")),
+          "one missing kind means a field of that kind renders as nothing")
+
+    check("F-M688: the number field carries its bounds, and the choice its options",
+          "'number'" in quellen and "input.setAttribute('min', field.min)" in quellen
+          and "input.setAttribute('max', field.max)" in quellen
+          and "data-options" in quellen and "JSON.parse(row.getAttribute('data-options'))" in quellen,
+          "min/max and the options come from the schema, not from a second list in the page")
+
+    # F-M702 hat die Hilfe abgeschafft, F-M706 die Pflichtmarke auf der Karte (Betreiberansage
+    # 22.11.2026: "Fuer subdl bei api key das required weg"). Von F-M688 bleibt: eine Hilfe, falls eine
+    # Engine eine erklaert, steht UNTER dem Feld — die Karte selbst bringt keine.
+    check("F-M688: a help text, if an engine declares one, stands under the field",
+          "field.help" in quellen
+          and "subdl-required', 'Required'" not in quellen,
+          "Hilfe unter dem Feld, keine Pflichtmarke auf der Karte")
+
+    check("F-M688: visibleWhen is read from the schema and stored on the row it governs",
+          "field.visibleWhen" in quellen and "data-visible-when-field" in quellen
+          and "data-visible-when-value" in quellen,
+          "the condition is the schema's, not a second rule in the page")
+
+    check("F-M688: visibleWhen is evaluated on typing and on switching — no reload needed",
+          "function subdlSourceApplyVisibility" in quellen
+          and "card.addEventListener('input'" in quellen
+          and "card.addEventListener('change'" in quellen
+          and "subdlSourceApplyVisibility(card)" in quellen,
+          "a condition read only at page build would leave 'account' hidden after entering a key")
+
+    # F-M702 hat "set"/"not set" abgeschafft; von F-M688 bleibt die Absicht: ein getippter Schluessel
+    # muss das Feld, das von ihm abhaengt, sofort zeigen — ohne erst zu speichern.
+    check("F-M688: a typed secret reveals the field that depends on it, without a save first",
+          "(abgelegt || ctrl.value.length > 0)" in quellen
+          and "subdlSourceApplyVisibility" in quellen,
+          "Abhaengigkeit ohne Speichern sichtbar")
+
+    _secret_branch = ""
+    _sb = quellen.find("if (field.kind === 'secret') {")
+    if _sb != -1:
+        _sb2 = quellen.find("if (field.kind === 'secret') {", _sb + 1)
+        _end = quellen.find("} else {", _sb2 if _sb2 != -1 else _sb)
+        if _sb2 != -1 and _end > _sb2:
+            _secret_branch = quellen[_sb2:_end]
+    check("F-M688: a secret field never carries a value into the DOM — only its stored state",
+          _secret_branch != "" and 'data-value' not in _secret_branch
+          and "input.type = 'password'" in quellen
+          and "row.setAttribute('data-gesetzt'" in _secret_branch,
+          "the endpoint sends wert=null for a secret; the page must not invent one")
+
+    # F-M705 hat die Form geaendert (frueh weiter statt Zuweisung) — geprueft wird die ABSICHT:
+    # ein leeres Geheimfeld geht nicht mit.
+    check("F-M688: an empty secret field is not sent — it means 'leave it as it is'",
+          "if (ctrl.value === '') { continue; }" in quellen,
+          "sending the empty box would wipe a stored key on every save")
+
+    check("F-M688: a hidden field is not sent either — what the card shows is what is written",
+          "row.style.display === 'none'" in quellen and "subdlSourceBody" in quellen,
+          "a hidden account would otherwise be overwritten with an empty string")
+
+    check("F-M688: the card has its OWN 'Save' button, and it writes exactly one source",
+          "save.textContent = 'Save';" in quellen
+          and "'Plugins/SubdlSync/Sources/' + encodeURIComponent(key)" in quellen
+          and "method: 'POST'" in quellen
+          and 'ApiClient.updatePluginConfiguration' not in quellen,
+          "one button per card; the page-wide save must stay out of the card's path")
+
+    # F-M708: das Wort kommt weiter vom Endpunkt, jetzt aber aus "participates" — sonst blieb die
+    # Ampel auf "on", wenn beide Richtungen einer Quelle aus sind.
+    check("F-M688: the state word is 'on' or 'off', taken from the endpoint's participation flag",
+          "quelle.participates ? 'on' : 'off'" in page_src,
+          "the operator named the two states himself")
+
+    # F-M693 (Betreiberansage 22.11.2026: "Badges upload /download /packs / report. Each with it's own
+    # toogle"): F-M688 sagte, die Faehigkeiten seien reine Anzeige. Das ist ueberholt — der Betreiber
+    # will sie schaltbar. Was BLEIBT: der Faehigkeits-Block der Antwort (Takt, Sprachtafel, Suchschluessel)
+    # ist weiter nur Anzeige; schaltbar sind allein die vier Felder, die die Engine als Badge erklaert.
+    _badges_fn = quellen[quellen.find('function subdlSourceBadges'):
+                        quellen.find('function subdlSourceField')] \
+        if quellen.find('function subdlSourceBadges') != -1 and quellen.find('function subdlSourceField') != -1 else ""
+    check("F-M693: the badges are switches, and they are FIELDS — not a second write path",
+          _badges_fn != ""
+          and "list[i].badge" in _badges_fn
+          and "subdlSourceField(entry, list[i])" in _badges_fn
+          and "capabilities" not in _badges_fn,
+          "der Badge ist ein Feld mit Schalter, kein Sonderweg an den Werten vorbei")
+
+    check("F-M688: after a save the card is refilled from the answer, and the written fields are named",
+          "if (ant && ant.quelle)" in quellen and "card.parentNode.replaceChild(neu, card)" in quellen
+          and "subdlSourceApplyValues(neu)" in quellen and "'✔ '" in quellen,
+          "the card must show the state AFTER the write, not the one before it")
+
+    check("F-M688: a refusal is shown at the card in the endpoint's own words",
+          "res.error" in quellen and "'fail'" in quellen and "err.message" in quellen,
+          "400, unknown field, missing required or a broken bound — the text is the server's")
+
+    check("F-M688: the three old SubDL fields are GONE from the page — one value, one place",
+          'id="Username"' not in page_src and 'id="Password"' not in page_src
+          and 'id="ApiKey"' not in page_src
+          and 'config.Username' not in page_src and 'config.Password' not in page_src
+          and 'config.ApiKey' not in page_src,
+          "Username/Password/ApiKey: %d/%d/%d occurrences"
+          % (page_src.count('id="Username"'), page_src.count('id="Password"'), page_src.count('id="ApiKey"')))
+
+    check("F-M688: the page-wide save is still there and still the only updatePluginConfiguration",
+          page_src.count('ApiClient.updatePluginConfiguration(') == 1
+          and 'ApiClient.updatePluginConfiguration(SubdlSyncConfig.pluginUniqueId, config)' in page_src,
+          "count=%d — the superior settings keep their collective save"
+          % page_src.count('ApiClient.updatePluginConfiguration('))
+
+    check("F-M688: the card takes its values from the source's file, not from the plugin configuration",
+          quellen != "" and 'entry.fields' in quellen and 'getPluginConfiguration' not in quellen,
+          "the values arrived in sources/<key>.json (F-M683); reading the old fields would be a second place")
+
+    # ---- F-M689: die Schreibweise des Endpunkts ------------------------------------------------
+    # Der Betreiber meldete am 22.11.2026 drei LEERE Karten mit "aus" und "Speichern": der
+    # Endpunkt antwortet in der Schreibweise von .NET (DisplayName, Configured, Fields, Key …),
+    # der Zeichner las die von JavaScript. Jedes Feld war undefined. Die Pruefung hier faehrt die
+    # Uebersetzungsfunktionen der Seite ECHT gegen eine Antwort in der Endpunkt-Schreibweise —
+    # ein Rueckfall auf nur-kleine-Schreibweise faellt damit auf, statt im Browser zu landen.
+    check("F-M689: the page translates the endpoint's spelling before drawing",
+          "function subdlSourceWert" in page_src and "function subdlSourceAntwort" in page_src,
+          "subdlSourceWert / subdlSourceAntwort")
+    check("F-M689: the renderer takes the translated answer, not the raw 'sources' key",
+          "payload.quellen" in page_src and "payload.sources" not in page_src,
+          "payload.quellen / payload.sources")
+    check("F-M689: the save answer goes through the same translation",
+          page_src.count("subdlSourceAntwort(") >= 3,
+          "count=%d" % page_src.count("subdlSourceAntwort("))
+
+    # ---- F-M690: die Seite spricht ENGLISCH, auch im Abschnitt Endpoints ----------------------
+    # Betreiber-Anweisung 22.11.2026, woertlich: "Und Quellen ist Sources or better Endpoints auf
+    # Englisch" — die Seite ist durchgehend englisch (Libraries, Target languages, Status,
+    # Statistics, Workers, Media files); ein deutscher Abschnittstonfall waere der einzige.
+    check("F-M690: the section heading is English ('Endpoints'), not 'Quellen'",
+          '<h3>Endpoints</h3>' in page_src and '<h3>Quellen</h3>' not in page_src,
+          "h3 Endpoints=%d, h3 Quellen=%d"
+          % (page_src.count('<h3>Endpoints</h3>'), page_src.count('<h3>Quellen</h3>')))
+
+    # Die Woerter, die eine Karte selbst schreibt: on/off, Save, set/not set. Der Bedingungswert
+    # im Schema ist sprachneutral ("set"), damit die Engine nicht die Sprache der Oberflaeche kennt.
+    # F-M702: "set"/"not set" gibt es nicht mehr — die Karte zeigt nur on/off und Save.
+    # F-M704: 'set'/'not set' ist die BEDINGUNGSSPRACHE des Schemas ('VisibleWhen apiKey = set'),
+    # kein angezeigtes Wort — angezeigt werden nur on/off und Save.
+    check("F-M690: the card's own words are English (on/off, Save) and the schema's "
+          "condition value is language-neutral",
+          "quelle.participates ? 'on' : 'off'" in page_src
+          and "save.textContent = 'Save';" in page_src
+          and "'nicht gesetzt'" not in page_src
+          and "field.gesetzt ? 'gesetzt'" not in page_src
+          and "? 'set' : 'not set';" in page_src)
+
+    # ---- F-M692: die Karte bleibt karg -----------------------------------------------------------
+    # Betreiberbefund 22.11.2026, woertlich: "Well address is not needed. All these badges reduce to
+    # minimum. Url is fixed, no gui need. Api key not filled, password entry not available."
+    # Drei Folgen: (a) die Adresse ist kein Feld mehr (die Engine erklaert sie nicht, s. sources),
+    # (b) die Kennzeichen sind EINE Zeile mit hoechstens drei Woertern statt eines Kasterl-Teppichs,
+    # (c) ein Geheimfeld SIEHT gefuellt aus und ist ein normales Eingabefeld — es trug ein
+    # is="emby-input", das der Browser an einem per JS erzeugten Element NICHT mehr aufwertet, weshalb
+    # es im dunklen Theme praktisch unsichtbar blieb.
+    # F-M702 hat den Platzhalter abgeschafft; von F-M692 bleibt: das Geheimfeld ist ein echtes,
+    # sichtbares Eingabefeld, und sein Wert steht nirgends im DOM.
+    check("F-M692/F-M702: a secret field is a real input with no placeholder and no value in the DOM",
+          "input.style.width = '100%'" in quellen
+          and "input.placeholder = field.gesetzt ? '••••••••' : '';" in quellen
+          and "input.type = 'password'" in quellen
+          and "Ein Geheimnis bekommt KEIN data-value" in quellen,
+          "echtes Feld, kein Platzhalter, kein Wert im DOM")
+    check("F-M692: the card no longer draws an address field",
+          "field.kind === 'url'" in page_src and "'SourceField-' + entry.key + '-' + field.key" in page_src,
+          "die Karte kennt die Art noch, aber keine Quelle erklaert sie mehr (sources: F-M692)")
+
+    # Jede SUBDL_SOURCE_*-Kennung, die die Seite BENUTZT, muss sie auch DEFNINIEREN. Am 22.11.2026 fiel
+    # beim Umbau die Definition von SUBDL_SOURCE_CAP_KEYS weg, waehrend subdlSourceFaehigkeiten sie
+    # weiter las: node --check war gruen (Syntax stimmt), die Karte blieb im Browser leer
+    # ("SUBDL_SOURCE_CAP_KEYS is not defined"). Diese Pruefung haette es gesehen.
+    benutzt = set(re.findall(r"\bSUBDL_SOURCE_[A-Z_]+\b", page_src))
+    definiert = set(re.findall(r"(?:var|function)\s+(SUBDL_SOURCE_[A-Z_]+)", page_src))
+    check("every SUBDL_SOURCE_* identifier the page uses is also defined on the page",
+          benutzt <= definiert,
+          "fehlt: " + (", ".join(sorted(benutzt - definiert)) or "nichts"))
+
+    # ---- F-M693: Badges mit eigenem Schalter, Speichern wie die uebrigen Knoepfe -----------------
+    # Betreiberansage 22.11.2026: "Seadon zip toggle also for tvst. Save Button similar to the other look
+    # and feel. Badges upload /download /packs / report. Each with it's own toogle".
+    check("F-M693: the capability line is gone — the badges carry their own switches",
+          "subdlSourceCaps" not in quellen
+          and "SUBDL_SOURCE_CAP_WORDS" not in quellen
+          and "function subdlSourceBadges(entry)" in quellen
+          and "if (badges) { card.appendChild(badges); }" in quellen,
+          "eine Reihe Schalter statt einer Aufzaehlung")
+    check("F-M693: badge fields are drawn once — not again as a row below",
+          "if (list[i].badge) { continue; }" in quellen
+          and "row.classList.add('subdl-badge')" in quellen,
+          "derselbe Feld-Renderer, kein zweiter Weg durch die Werte")
+    # F-M695 (Betreiberbefund 22.11.2026: "Save Button still not the blue type elsewhere used in the gui"):
+    # Der Knopf muss ein AUFGEWERTETES emby-button sein — die Kennung gehoert in den createElement-Aufruf,
+    # ein spaeter gesetztes is="..." bleibt wirkungslos. Deshalb: subdlSourceButton('button','emby-button').
+    check("F-M695: the Save button is an upgraded emby-button, like every other button on the page",
+          "subdlSourceButton('button', 'emby-button')" in quellen
+          and "save.className = 'raised button-submit emby-button subdl-source-save'" in quellen
+          and 'document.createElement(tag, { is: isName })' in quellen
+          and "class=\"raised button-submit" in page_src,
+          "createElement mit is-Option, sonst keine Aufwertung")
+    # F-M696 (Betreiberbefund 22.11.2026: "Einige Tickboxen in der gui klappen nicht."): Felder, Kaestchen
+    # und Auswahl werden NICHT aufgewertet — ein Element, das aufgewertet wird, bevor type/id/name stehen,
+    # ist halbfertig, und ein Teil der Kaestchen laesst sich dann nicht mehr anklicken. Die Gestalt kommt
+    # aus den Klassen. Nur der Knopf wird aufgewertet (F-M695, er ist blau).
+    check("F-M696: inputs, checkboxes and selects are plain elements wearing the emby classes",
+          "subdlSourceButton('input'" not in quellen
+          and "subdlSourceButton('select'" not in quellen
+          and "box.className = 'emby-checkbox'" in quellen
+          and "input.className = 'emby-input'" in quellen
+          and "select.className = 'emby-select'" in quellen,
+          "Kaestchen/Felder ohne Aufwertung, mit Klasse")
+    check("F-M696: the card head carries the kind of the source as a tag",
+          "subdlSourceServes(entry)" in quellen
+          and "faehig.servesSeries" in quellen
+          and "faehig.servesMovies" in quellen
+          and "subdl-source-serves" in quellen
+          and ".subdl-source-serves" in page_src,
+          "Kennzeichen aus den Faehigkeiten, nicht aus dem Namen")
+
+    probe_ok, probe_detail = run_case_probe(page_src)
+    check("F-M689: the translation runs against a real endpoint answer (all six field kinds)",
+          probe_ok, probe_detail)
+
+
     # Die Zaehlung gehoert ans ENDE: stand sie mitten in der Datei, waren alle spaeteren Pruefungen
     # fuer die Zusammenfassung unsichtbar (F-M525 — zehn rote Pruefungen bei "326/326 OK").
     failed = [r for r in results if not r[1]]
+
+    # Eine rote Zahl ohne Namen ist keine Auskunft: jeder rote Satz nennt sich hier selbst samt
+    # gemessenem Wert. (Bis F-M693 stand in dieser Datei nur die Summe — drei rote Pruefungen waren
+    # damit unsichtbar, und die Zusammenfassung sagte nur "364/367".)
+    for (name, _ok, detail) in failed:
+        print("  ROT   %s  [%s]" % (name, detail))
 
     print(">>> GUI-STRUKTUR %s: %d/%d Pruefungen bestanden"
           % ("OK" if not failed else "FEHLER", len(results) - len(failed), len(results)))

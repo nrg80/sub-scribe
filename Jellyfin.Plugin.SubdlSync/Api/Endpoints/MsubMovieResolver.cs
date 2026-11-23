@@ -26,7 +26,7 @@ namespace Jellyfin.Plugin.SubScribe.Api.Endpoints;
 /// DIE REIHENFOLGE IST FEST UND KURZ:
 /// <list type="number">
 /// <item><description>
-/// Steht <see cref="Data.MediaEntity.MsubMovieId"/> am Medium, wird SIE benutzt — kein Netzzugriff zur
+/// Steht <see cref="Data.FileEntity.MsubMovieId"/> am Medium, wird SIE benutzt — kein Netzzugriff zur
 /// Suche, kein Vergleich. Die Nummer wurde bewiesen, als sie geschrieben wurde.
 /// </description></item>
 /// <item><description>
@@ -46,7 +46,7 @@ namespace Jellyfin.Plugin.SubScribe.Api.Endpoints;
 /// F-M513 — DIE ANLAGE GEHT NUR UEBER DIE ERWEITERTE FASSUNG, und nur der Upload-Pfad ruft sie: sie
 /// sucht EINMAL (<see cref="MovieSubtitlesClient.CheckForAddAsync"/> beantwortet Auflösung UND
 /// Doppeleintrag-Schutz in einer Runde) und legt nur an, wenn der Titel wirklich nicht da ist. Sie ist
-/// die eine Stelle, an der die neue Nummer in den Store geht (<see cref="Data.MediaEntity.MsubMovieId"/>)
+/// die eine Stelle, an der die neue Nummer in den Store geht (<see cref="Data.FileEntity.MsubMovieId"/>)
 /// — dieselbe Spalte, dieselbe Methode wie bei der Auflösung.
 /// </para>
 /// </summary>
@@ -393,7 +393,7 @@ public sealed class MsubMovieResolver
     /// <para>
     /// F-M517: DER SCHREIBWEG IST DERSELBE, DER FUND EIN ANDERER. Ohne Medien-Hash sucht
     /// <see cref="ContentHashRegistry.SetMsubMovieId"/> die Zeile über ihren PFAD
-    /// (<c>MediaEntity.Path</c>) und schreibt dieselbe Spalte <c>MsubMovieId</c>. Vorher kehrte diese
+    /// (<c>FileEntity.Path</c>) und schreibt dieselbe Spalte <c>MsubMovieId</c>. Vorher kehrte diese
     /// Methode bei fehlendem Hash stumm zurück, obwohl die Zeile existierte — gemessen am 16.11.2026
     /// 04:13 auf jf-test: `[moviesubtitles] ?: 'Hotel Transylvania 2' (2015) ist Film 13392 — nicht
     /// gespeichert: kein Medien-Hash bekannt`. Der Upload lief durch, die Nummer war weg.

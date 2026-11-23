@@ -170,6 +170,11 @@ public sealed class SeasonPackCoordinator
     private readonly IPackFiller? _filler;
 
     /// <summary>
+    /// F-M687: die Engines dieses Laufs — der Versand fragt sie nach dem Schlüssel der Quelle, statt
+    /// einen Namen zu vergleichen. Ohne Registry (Prüfungen, Alt-Aufrufer) gibt es keinen Versand.
+    /// </summary>
+    private readonly Sources.SourceRegistry? _sources;
+    /// <summary>
     /// F-M406 (operator order 02.11.2026): the run's progress heartbeat. The watchdog aborts a run
     /// after six minutes without one, and the pack loop used to build silently — it was killed at
     /// eleven to twelve minutes with a dozen packs done, which read like "the plugin only manages
@@ -209,7 +214,8 @@ public sealed class SeasonPackCoordinator
         Action<int> countFailed,
         Action<string> reportDone,
         IPackFiller? filler = null,
-        Action? progress = null)
+        Action? progress = null,
+        Sources.SourceRegistry? sources = null)
     {
         _api = api;
         _registry = registry;
@@ -222,6 +228,7 @@ public sealed class SeasonPackCoordinator
         _reportDone = reportDone;
         _filler = filler;
         _progress = progress;
+        _sources = sources;
     }
 
     /// <summary>True when this season is complete AND fully queued, therefore worth buffering.</summary>
@@ -302,7 +309,11 @@ public sealed class SeasonPackCoordinator
                 _logger,
                 "[Sub Scribe] season pack skipped — {Imdb} S{Season} [{Lang}]: {Have} of {Want} episode(s), the rest stays single.",
                 entry.Key.ImdbId, entry.Key.Season, SeasonPack.LangTag(entry.Key.Lang, entry.Key.Hi), entry.Value.Count, aired.Count);
-            await UploadSinglesAsync(entry.Value, ct).ConfigureAwait(false);
+            // BUCHHALTUNG (bleibt): der Puffer-Pfad ist der Weg, der EINE Quelle kennt — er sammelt und
+            // sendet je (Staffel, Sprache, Variante) für SubDL (die drei `PackEntity.SubdlSource` oben).
+            // Der Schlüssel sagt damit, wohin die Einzel gehen; kein Vergleich, sondern die Quelle dieses
+            // Wegs.
+            await UploadSinglesAsync(entry.Value, PackEntity.SubdlSource, ct).ConfigureAwait(false);
         }
     }
 
@@ -711,8 +722,21 @@ public sealed class SeasonPackCoordinator
             return null;
         }
 
-        return PlanOf(key, group, quellen.Contains(PackEntity.TvSubtitlesSource));
+        // F-M687: welche Behälterform eine Quelle nimmt, sagt ihre Engine (Fähigkeit „nimmt den fertigen
+        // Behälter"). Ohne Registry (Prüfungen, Alt-Aufrufer) bleibt der bekannte Schlüssel — das ist
+        // dann eine Aussage über den PLAN, nicht über einen Versandweg.
+        return PlanOf(key, group, quellen.Any(TakesPrebuiltPack));
     }
+
+    /// <summary>
+    /// F-M687: nimmt die Quelle dieses Schlüssels den fertigen Behälter (ein Archiv)? Die Frage geht an
+    /// die Registry; ohne Registry wird der bekannte Schlüssel gelesen (Buchhaltung der Behälterform).
+    /// </summary>
+    /// <param name="source">Der Quellenschlüssel.</param>
+    /// <returns>Wahr, wenn diese Quelle ein Archiv erwartet.</returns>
+    private bool TakesPrebuiltPack(string source)
+        => _sources?.ByKey(source)?.Capabilities.TakesPrebuiltPack
+            ?? string.Equals(source, PackEntity.TvSubtitlesSource, StringComparison.Ordinal);
 
 
 
@@ -720,13 +744,13 @@ public sealed class SeasonPackCoordinator
     private const string FillTagSuffix = Jellyfin.Plugin.SubScribe.Registry.PackSeasonStore.FillTagSuffix;
 
     /// <summary>
-    /// F-M643 (Betreiber-Vorgabe 20.11.2026: „Ja. Aber nur für den vollen lauf, refetch oder manuell"):
-    /// der Versand eines Staffel-Packs an die ZWEITE Quelle. Der Sammler, die Prüfungen und die Sperren
-    /// sind dieselben geblieben — nur der Behälter unterscheidet sich: SubDL baut seinen Zip selbst aus
-    /// Einzeldateien, tvsubtitles.net nimmt EINEN Zip in den Staffel-Slot. Ist der Versand nicht gesetzt,
-    /// wird fuer diese Quelle nichts gebaut (die Suite laeuft ohne Netz).
+    /// F-M687 (vorher F-M643): der Versand eines Staffel-Behälters geht als AUFTRAG an die Engine der
+    /// Quelle — für jede Quelle des Slots derselbe Weg. Der Koordinator sammelt, prüft und baut; die
+    /// Frage „was braucht DIESE Quelle für ihre Nutzlast" (Serientitel, Jahr, Seriennummer, Tore)
+    /// beantwortet der LAUF, weil nur er sie kennt. Ist der Empfänger nicht gesetzt, wird der Auftrag
+    /// hier gebaut (Suite, Alt-Aufrufer) — gesendet wird er in beiden Fällen an derselben Stelle.
     /// </summary>
-    public Func<TvPackTransfer, CancellationToken, Task<UploadResult>>? TvSubtitlesSender { get; set; }
+    public Func<PackPlan, Sources.ISourceEngine, CancellationToken, Task<Sources.SourcePackRequest>>? PackRequest { get; set; }
 
     /// <summary>
     /// F-M643: was der Pack der zweiten Quelle zu uebergeben hat — der fertige Behälter und alles, was
@@ -906,48 +930,44 @@ public sealed class SeasonPackCoordinator
             return new PackSend(source, PackSendOutcome.WouldSend, "dry run");
         }
 
-        UploadResult result;
-        if (source == PackEntity.TvSubtitlesSource)
+        // F-M687: der Behälter geht als AUFTRAG an die Engine DIESER Quelle. Kein Namensvergleich mehr:
+        // die Registry sagt, welche Engine den Schlüssel führt, und die Fähigkeiten der Engine sagen, ob
+        // der Auftrag den fertigen Behälter trägt (tvst) oder die Mitgliedsdateien (SubDL).
+        Sources.ISourceEngine? engine = _sources?.ByKey(source);
+        if (engine is null)
         {
-            // F-M643: der Behälter der zweiten Quelle ist EIN Zip mit den Folgen-Dateinamen. Gebaut wird
-            // er hier (die Namen stehen im Plan), gesendet vom Lauf, der den Serientitel aufloest und
-            // den Endpunkt kennt — der Koordinator kennt weder TMDb noch die Seriennummer der Seite.
-            if (TvSubtitlesSender == null)
-            {
-                LogUtil.Normal(
-                    _logger,
-                    "[Sub Scribe] season pack skipped — {Imdb} S{Season} [{Lang}]: this run cannot send a {Source} container (no sender wired), nothing is built (F-M643).",
-                    key.ImdbId, key.Season, SeasonPack.LangTag(key.Lang, key.Hi), source);
-                return new PackSend(source, PackSendOutcome.Skipped, "no sender wired");
-            }
+            LogUtil.Normal(
+                _logger,
+                "[Sub Scribe] season pack skipped — {Imdb} S{Season} [{Lang}]: no engine for {Source}, nothing is sent (F-M687).",
+                key.ImdbId, key.Season, SeasonPack.LangTag(key.Lang, key.Hi), source);
+            return new PackSend(source, PackSendOutcome.Skipped, "no engine for this source");
+        }
 
-            // F-M646 (Operator-Anweisung 20.11.2026: „Pack gebildet/ hochgeladen, sowas interessiert"):
-            // der Behaelter nennt sich, BEVOR er rausgeht — gebaut, wie viele Folgen, unter welchem
-            // Namen. Die Zeile nach dem Versand steht im Erfolgsfall weiter unten.
+        Sources.SourcePackRequest vorbereitet = PackRequest is null
+            ? NeutralPackRequest(plan, engine)
+            : await PackRequest(plan, engine, ct).ConfigureAwait(false);
+
+        if (vorbereitet.Request is null)
+        {
+            // Ein Tor des Laufs sagt nein (Schalter, Sprache, TMDb, Titel-Leiter): kein Fehler, kein
+            // Beleg, und die andere Quelle versucht es unberührt weiter (F-M629/F-M648).
+            return new PackSend(source, PackSendOutcome.Skipped, vorbereitet.Refusal ?? "no request");
+        }
+
+        // F-M646: der Behaelter nennt sich, BEVOR er rausgeht — gebaut, wie viele Folgen, unter welchem
+        // Namen. Die Zeile nach dem Versand steht im Erfolgsfall weiter unten.
+        if (engine.Capabilities.TakesPrebuiltPack)
+        {
             LogUtil.Normal(
                 _logger,
                 "[Sub Scribe] season pack built — {Imdb} S{Season} [{Lang}]: {Count} episode(s) as one .zip {Zip}, sending to {Source} (F-M646)",
                 key.ImdbId, key.Season, SeasonPack.LangTag(key.Lang, key.Hi), plan.TvstFiles.Count, plan.Name + ".zip", source);
-
-            result = await TvSubtitlesSender(
-                new TvPackTransfer(
-                    key.ImdbId,
-                    first.TmdbId,
-                    key.Season,
-                    key.Lang,
-                    key.Hi,
-                    // Der Zip-Name nennt Staffel, Sprache und Inhalt — dieselbe Kennung wie der Name des
-                    // SubDL-Packs, damit ein Behälter auf der Seite zuordenbar bleibt.
-                    plan.Name + ".zip",
-                    plan.TvstZip ?? BuildZip(plan.TvstFiles),
-                    ordered.Select(c => c.Episode).ToList(),
-                    plan.Releases[0],
-                    first.Quality,
-                    first.MediaHash,
-                    first.Item?.Path),
-                ct).ConfigureAwait(false);
         }
-        else
+
+        // BUCHHALTUNG (bleibt): die Einzel-Ids, die neben dem Behälter oben stehen, gibt es nur dort, wo
+        // die Quelle Einzelabgaben führt (SubDL-Kennungen). Das ist eine Aussage über unseren Bestand,
+        // keine über den Transport — deshalb hier und nicht im Versand (F-M585, F-M412, F-M429).
+        if (!engine.Capabilities.TakesPrebuiltPack)
         {
             // F-M585 (Operator-Anweisung 17.11.2026: „Subdl erlaubt Einzeluploads die gleichzeitig
             // bestandteil eines staffelpacks sind"): die Einzel-Uploads werden NICHT geloescht. Bis
@@ -990,22 +1010,10 @@ public sealed class SeasonPackCoordinator
                     key.ImdbId, key.Season, SeasonPack.LangTag(key.Lang, key.Hi), absorbed.Count,
                     string.Join(",", absorbed.Take(8).Select(x => x.Id)));
             }
-
-            result = await _api.UploadSeasonPackAsync(
-                plan.SubdlFiles,
-                plan.Name,
-                key.Lang,
-                plan.Releases,
-                first.Quality,
-                key.ImdbId,
-                first.TmdbId,
-                key.Season,
-                ordered.Min(c => c.Episode),
-                ordered.Max(c => c.Episode),
-                ct,
-                key.Hi,
-                first.Framerate).ConfigureAwait(false);
         }
+
+        Sources.SourceSendAnswer antwort = await engine.SendAsync(vorbereitet.Request, ct).ConfigureAwait(false);
+        UploadResult result = UploadResult.FromAnswer(antwort);
 
         if (result.Verdict == UploadVerdict.NoVerdict)
         {
@@ -1084,11 +1092,28 @@ public sealed class SeasonPackCoordinator
             return new PackSend(source, PackSendOutcome.Failed, $"send failed ({ShortReason(result.Reason)})");
         }
 
-        // F-M643: der tvst-Behälter ist durch. Seine Zeile hat der Endpunkt geschrieben (F-M642) — dort
-        // entstehen die Folgen aus dem Zip, den er gerade gesendet hat. Hier stehen nur der Fortschritt,
-        // die Zählung und die Zeile, die den Pack nennt; eine SubDL-Kennung gibt es nicht.
-        if (source == PackEntity.TvSubtitlesSource)
+        // F-M687: nimmt die Quelle den fertigen Behälter (ein Archiv im Staffel-Slot), ist die Zeile
+        // damit durch: F-M642 schreibt sie HIER (vorher schrieb sie der Endpunkt, der den Zip selbst
+        // gesehen hat) — die Folgen kommen aus dem Behälter, den der Koordinator gerade gesendet hat, und
+        // werden nicht geraten (F-M466). Eine Kennung nennt diese Seite nicht (F-M612).
+        if (engine.Capabilities.TakesPrebuiltPack)
         {
+            var imZip = Api.TvSubtitlesClient.EpisodesInZip(plan.TvstZip);
+            _registry?.MarkAndFlush(() => _registry.RecordPack(
+                key.ImdbId,
+                key.Season,
+                key.Lang,               // Sprache des Behälters, in der Schreibweise des Laufs
+                key.Hi,
+                plan.Releases[0],
+                packId: null,
+                imZip,
+                absorbedIds: null,
+                fingerprint: null,
+                source: source));
+
+            _registry?.MarkAndFlush(() => _registry.SetPackTmdbId(
+                key.ImdbId, key.Season, key.Lang, key.Hi, source, first.TmdbId));
+
             foreach (var candidate in ordered)
             {
                 _reportDone(candidate.ItemId);
@@ -1112,7 +1137,7 @@ public sealed class SeasonPackCoordinator
         // says "subtitle sent for review" — but /user/mySubtitles lists the entry seconds later with
         // its UploadId. The pack asks for it the same way a single does, matched by the release name
         // it was uploaded under and the season it covers.
-        string? packId = ReadPackId(result.Response);
+        string? packId = result.SourceId;
         if (string.IsNullOrWhiteSpace(packId))
         {
             packId = await ResolveOwnPackIdAsync(releases: plan.Releases, key, ct).ConfigureAwait(false)
@@ -1155,6 +1180,11 @@ public sealed class SeasonPackCoordinator
             source,
             absorbedIds: null,
             plan.Fingerprint));
+
+        // F-M681: die TMDb-Kennung des Titels gehoert an die Pack-Zeile — sie fehlte an JEDEM Pack,
+        // weil `RecordPack` sie nie entgegennahm. Der Nachzug ist ein eigener Schreibvorgang.
+        _registry?.MarkAndFlush(() => _registry.SetPackTmdbId(
+            key.ImdbId, key.Season, key.Lang, key.Hi, source, first.TmdbId));
 
         _countUploaded($"{key.ImdbId} S{key.Season} [{key.Lang}]", ordered.Count);
         LogUtil.Normal(
@@ -1343,17 +1373,17 @@ public sealed class SeasonPackCoordinator
                 key.ImdbId, key.Season, SeasonPack.LangTag(key.Lang, key.Hi));
             if (uploadSinglesOnRefusal)
             {
-                await UploadSinglesAsync(ordered, ct).ConfigureAwait(false);
+                await UploadSinglesAsync(ordered, source, ct).ConfigureAwait(false);
             }
 
             return;
         }
 
         var ergebnis = await SendAsync(
-            PlanOf(key, ordered, withTvstZip: source == PackEntity.TvSubtitlesSource), source, ct).ConfigureAwait(false);
+            PlanOf(key, ordered, withTvstZip: TakesPrebuiltPack(source)), source, ct).ConfigureAwait(false);
         if (ergebnis.SinglesFallback && uploadSinglesOnRefusal)
         {
-            await UploadSinglesAsync(ordered, ct).ConfigureAwait(false);
+            await UploadSinglesAsync(ordered, source, ct).ConfigureAwait(false);
         }
     }
 
@@ -1531,15 +1561,51 @@ public sealed class SeasonPackCoordinator
         return stream.ToArray();
     }
 
-    private async Task UploadSinglesAsync(List<Candidate> group, CancellationToken ct)
+    /// <summary>
+    /// F-M644/F-M585: die Einzel dieser Staffel, nachdem der Behälter abgelehnt wurde. F-M687: auch sie
+    /// gehen als AUFTRAG an die Engine der Quelle — die Kennung des Mediums und der Inhalt stehen am
+    /// Kandidaten, die Quelle kommt aus dem Schlüssel. Was der Auftrag zurückgibt, wird an EINER Stelle
+    /// gedeutet (<see cref="UploadResult.FromAnswer"/>).
+    /// </summary>
+    /// <param name="group">Die Mitglieder der Staffel.</param>
+    /// <param name="source">Die Quelle, an die die Einzel gehen.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Eine Aufgabe.</returns>
+    private async Task UploadSinglesAsync(List<Candidate> group, string source, CancellationToken ct)
     {
+        Sources.ISourceEngine? engine = _sources?.ByKey(source);
+        if (engine is null)
+        {
+            _logger.LogWarning(
+                "[Sub Scribe] season pack {Source}: no engine for the singles fallback, nothing is sent (F-M687).", source);
+            return;
+        }
+
         foreach (var c in group.OrderBy(x => x.Episode))
         {
             ct.ThrowIfCancellationRequested();
             var neutral = SeasonPack.NeutralFileName(true, c.ImdbId, c.Season, c.Episode, c.Lang, ContentHashRegistry.ComputeHash(c.Srt), c.HearingImpaired);
-            UploadResult result = await _api.UploadSubtitleAsync(
-                c.Srt, neutral, c.Lang, c.ReleaseName, c.Quality, c.ImdbId, c.TmdbId, true, c.Season, c.Episode,
-                ct, c.HearingImpaired, c.Framerate).ConfigureAwait(false);
+            Sources.SourceSendAnswer antwort = await engine.SendAsync(
+                new Sources.SourceSendRequest
+                {
+                    Bytes = System.Text.Encoding.UTF8.GetBytes(c.Srt),
+                    FileName = neutral,
+                    Language = c.Lang,
+                    HearingImpaired = c.HearingImpaired,
+                    ReleaseName = c.ReleaseName,
+                    Quality = c.Quality,
+                    Framerate = c.Framerate ?? string.Empty,
+                    Target = new Sources.SourceSendTarget(
+                        IsSeries: true,
+                        Title: SeriesNameOf(c.Item) ?? string.Empty,
+                        ImdbId: c.ImdbId,
+                        TmdbId: c.TmdbId,
+                        Season: c.Season,
+                        Episode: c.Episode),
+                    AsPack = false,
+                },
+                ct).ConfigureAwait(false);
+            UploadResult result = UploadResult.FromAnswer(antwort);
 
             if (result.Ok)
             {
@@ -1566,49 +1632,47 @@ public sealed class SeasonPackCoordinator
     }
 
     /// <summary>
-    /// Reads the SubDL upload id out of the uploadSubtitle response. It is what ties the episodes to
-    /// the one remote object, so a later rejection can be fanned out over all of them.
+    /// F-M687: der neutrale Behälter-Auftrag, wenn kein Empfänger verdrahtet ist (Prüfungen,
+    /// Alt-Aufrufer). Er trägt genau das, was der Plan weiß: den Behälter und seine Mitglieder, Sprache,
+    /// Variante, Pack-Namen und Releases. Was nur der Lauf weiß (Serientitel, Jahr, Nummer der Seite),
+    /// fehlt hier absichtlich — und `Target.MediaId` bleibt leer, damit die Engine nach ihrer eigenen
+    /// Regel auflöst statt zu raten.
     /// </summary>
-    private static string? ReadPackId(JsonDocument? response)
+    /// <param name="plan">Der eingesammelte Behälter.</param>
+    /// <param name="engine">Die Engine, an die er geht (für die Behälterform).</param>
+    /// <returns>Der Auftrag.</returns>
+    private static Sources.SourcePackRequest NeutralPackRequest(
+        PackPlan plan, Sources.ISourceEngine engine)
     {
-        if (response == null)
+        var first = plan.Ordered[0];
+
+        return new Sources.SourcePackRequest(new Sources.SourceSendRequest
         {
-            return null;
-        }
+            Bytes = engine.Capabilities.TakesPrebuiltPack
+                ? plan.TvstZip ?? BuildZip(plan.TvstFiles)
+                : Array.Empty<byte>(),
+            FileName = engine.Capabilities.TakesPrebuiltPack ? plan.Name + ".zip" : plan.Name,
+            Language = plan.Lang,
+            HearingImpaired = plan.Hi,
+            ReleaseName = engine.Capabilities.TakesPrebuiltPack ? plan.Releases[0] : plan.Name,
+            Releases = plan.Releases,
+            Quality = first.Quality,
+            Framerate = first.Framerate ?? string.Empty,
+            Target = new Sources.SourceSendTarget(
+                IsSeries: true,
+                ImdbId: plan.ImdbId,
+                TmdbId: first.TmdbId,
+                Season: plan.Season,
+                Episode: plan.Ordered.Max(c => c.Episode)),
+            AsPack = true,
 
-        var root = response.RootElement;
-        foreach (var path in new[] { new[] { "data", "upload", "id" }, new[] { "upload", "id" }, new[] { "id" }, new[] { "subtitle_id" } })
-        {
-            JsonElement cursor = root;
-            bool ok = true;
-            foreach (var step in path)
-            {
-                if (cursor.ValueKind == JsonValueKind.Object && cursor.TryGetProperty(step, out var next))
-                {
-                    cursor = next;
-                }
-                else
-                {
-                    ok = false;
-                    break;
-                }
-            }
-
-            if (ok)
-            {
-                string? text = cursor.ValueKind switch
-                {
-                    JsonValueKind.String => cursor.GetString(),
-                    JsonValueKind.Number => cursor.GetRawText(),
-                    _ => null
-                };
-                if (!string.IsNullOrWhiteSpace(text))
-                {
-                    return text;
-                }
-            }
-        }
-
-        return null;
+            // Die Mitglieder reisen immer mit: eine Quelle, die sie nicht braucht, liest sie nicht.
+            Members = plan.SubdlFiles
+                .Select((file, i) => new Sources.SourcePackMember(
+                    file.FileName,
+                    i < plan.Ordered.Count ? plan.Ordered[i].Episode : 0,
+                    System.Text.Encoding.UTF8.GetBytes(file.Srt)))
+                .ToList(),
+        });
     }
 }

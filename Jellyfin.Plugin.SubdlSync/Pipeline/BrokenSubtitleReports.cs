@@ -255,4 +255,31 @@ public static class BrokenSubtitleReports
 /// <summary>F-M450: one prepared report — category for SubDL and the comment that goes with it.</summary>
 /// <param name="Category">One of the four SubDL categories.</param>
 /// <param name="Comment">The comment text, finding plus attribution.</param>
-public sealed record ReportText(string Category, string Comment);
+public sealed record ReportText(string Category, string Comment)
+{
+    /// <summary>
+    /// F-M687: die Kategorie in der neutralen Sprache der Grenze — dieselbe Aussage, ohne den Wortlaut
+    /// der Seite. Der Meldeauftrag trägt sie; die Kategorie übersetzt erst die Engine in ihr eigenes
+    /// Vokabular, damit der Ablauf kein Meldevokabular einer Quelle lernen muss.
+    /// </summary>
+    public Sources.SourceReportKind Kind => ReportKinds.Of(Category);
+}
+
+/// <summary>
+/// F-M687: die Kategorie einer Meldung als neutrale Art des Defekts. Die Abbildung ist verlustfrei für
+/// die drei Kategorien, die dieser Lauf vergibt (<c>not_a_subtitle</c>, <c>wrong_release_info</c>,
+/// <c>other</c>) — und sie ist die Umkehrung der Abbildung in der Engine, damit ein Auftrag wieder
+/// genau die Kategorie trägt, die der Befund hergibt.
+/// </summary>
+public static class ReportKinds
+{
+    /// <summary>Die neutrale Art zu einer Kategorie.</summary>
+    /// <param name="category">Die Kategorie der Meldung.</param>
+    /// <returns>Die neutrale Art.</returns>
+    public static Sources.SourceReportKind Of(string category) => category switch
+    {
+        BrokenSubtitleReports.CategoryIncomplete => Sources.SourceReportKind.Missing,
+        BrokenSubtitleReports.CategoryMetadata => Sources.SourceReportKind.WrongContent,
+        _ => Sources.SourceReportKind.Other,
+    };
+}

@@ -12,6 +12,7 @@
 using System;
 using System.Collections.Generic;
 using MediaBrowser.Model.Plugins;
+using Jellyfin.Plugin.SubScribe.Sources;
 
 namespace Jellyfin.Plugin.SubScribe.Configuration;
 
@@ -445,6 +446,16 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public DownloadSourceOrder DownloadOrder { get; set; } = DownloadSourceOrder.TvSubtitlesFirst;
 
+    /// <summary>
+    /// F-M698 (Betreiberansage 22.11.2026: „Und order muss jetzt auf der general gui sein. Und für jede
+    /// Anzahl quellen funktionieren."): die Reihenfolge der Quellen als Liste von Quellenschlüsseln,
+    /// durch Komma getrennt — in der Reihenfolge, in der gefragt wird. Die alte Einstellung
+    /// (<see cref="DownloadOrder"/>) kennt genau zwei Werte und kann eine dritte Quelle nicht ausdrücken;
+    /// sie bleibt als Rückfall und als Vorbelegung erhalten (der Nachtrag schreibt sie einmal in die Liste).
+    /// Leer heißt: es gilt weiter <see cref="DownloadOrder"/>.
+    /// </summary>
+    public string SourceOrderList { get; set; } = string.Empty;
+
     /// <summary>Gets or sets the target languages, e.g. "EN, FR, ES" (F-M42). Empty = download disabled. (user decision 08.09.2026, Arabic added 30.09.2026): default AR, EN, ES, FR, HI, ZH (alphabetical) — DE/RU/PT were removed deliberately (DE is uploaded by hand, RU/PT have thin coverage).</summary>
     public string DownloadLanguages { get; set; } = "AR, EN, ES, FR, HI, ZH";
 
@@ -554,7 +565,19 @@ public class PluginConfiguration : BasePluginConfiguration
     /// downloaded. Off by default — the switch is applied to the SEARCH RESULT, so such a candidate
     /// neither enters the ranking nor costs a download unit.
     /// </summary>
-    public bool AllowAiTranslatedSubs { get; set; } = false;
+    public bool AllowAiTranslatedSubs
+    {
+        // F-M711: die Datei der Quelle antwortet zuerst (wie bei den Richtungsschaltern, F-M691); sagt
+        // sie nichts, gilt der Alt-Wert aus der Plugin-Konfiguration.
+        get => Sources.SourceSwitches.Flag(Sources.Subdl.SubdlEngine.SourceKey,
+                   Sources.Subdl.SubdlEngine.FieldAllowAiTranslatedSubs) ?? _allowAiTranslatedSubs;
+        set => _allowAiTranslatedSubs = value;
+    }
+
+    // F-M711: die Alt-Werte als Rueckfall — sie kommen aus der XML und bleiben unveraendert lesbar.
+    private bool _allowAiTranslatedSubs = false;
+    private bool _downloadContinueAfterLimit = true;
+    private bool _uploadContinueAfterLimit = true;
 
     /// <summary>
     /// F-M450: report a subtitle that failed twice (download delivered no data, or the file did not
@@ -697,7 +720,13 @@ public class PluginConfiguration : BasePluginConfiguration
     /// waits (once per run, at most 24 h) until the server-reported reset time and
     /// retries the current candidate; a second 429 in the same run stops.
     /// </summary>
-    public bool DownloadContinueAfterLimit { get; set; } = true;
+    public bool DownloadContinueAfterLimit
+    {
+        // F-M711: Datei zuerst, dann der Alt-Wert.
+        get => Sources.SourceSwitches.Flag(Sources.Subdl.SubdlEngine.SourceKey,
+                   Sources.Subdl.SubdlEngine.FieldDownloadContinueAfterLimit) ?? _downloadContinueAfterLimit;
+        set => _downloadContinueAfterLimit = value;
+    }
 
     /// <summary>
     /// Gets or sets a value indicating whether the UPLOAD pipeline waits out the
@@ -710,7 +739,13 @@ public class PluginConfiguration : BasePluginConfiguration
     /// (user decision: download can hit TWO quotas — API requests AND ~50 downloads/day —
     /// while upload only hits the API quota).
     /// </summary>
-    public bool UploadContinueAfterLimit { get; set; } = true;
+    public bool UploadContinueAfterLimit
+    {
+        // F-M711: Datei zuerst, dann der Alt-Wert.
+        get => Sources.SourceSwitches.Flag(Sources.Subdl.SubdlEngine.SourceKey,
+                   Sources.Subdl.SubdlEngine.FieldUploadContinueAfterLimit) ?? _uploadContinueAfterLimit;
+        set => _uploadContinueAfterLimit = value;
+    }
 
     #endregion
 
@@ -930,12 +965,17 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <returns>True when the download direction runs for this source.</returns>
     public bool IsDownloadEnabled(SubtitleProvider provider) => provider switch
     {
-        SubtitleProvider.Subdl => HasProvider(provider) && (SubdlDownloadEnabled ?? DownloadEnabled),
-        SubtitleProvider.TvSubtitles => HasProvider(provider) && (TvSubtitlesDownloadEnabled ?? true),
+        // F-M691: die Datei der Quelle antwortet ZUERST (Betreiberansage „ins source feld"); sagt sie
+        // nichts — Bestand von vor F-M691, von Hand gekürzte Datei —, antwortet der Alt-Wert wie bisher.
+        SubtitleProvider.Subdl =>
+            HasProvider(provider) && (SourceSwitches.Download(provider) ?? SubdlDownloadEnabled ?? DownloadEnabled),
+        SubtitleProvider.TvSubtitles =>
+            HasProvider(provider) && (SourceSwitches.Download(provider) ?? TvSubtitlesDownloadEnabled ?? true),
 
         // F-M507: moviesubtitles.org hat keinen Alt-Wert — wie tvst ist ein ungesetzter Download AN
         // und ein gespeichertes false AUS.
-        SubtitleProvider.MovieSubtitles => HasProvider(provider) && (MovieSubtitlesDownloadEnabled ?? true),
+        SubtitleProvider.MovieSubtitles =>
+            HasProvider(provider) && (SourceSwitches.Download(provider) ?? MovieSubtitlesDownloadEnabled ?? true),
         _ => false,
     };
 
@@ -962,11 +1002,15 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <returns>True when the upload direction runs for this source.</returns>
     public bool IsUploadEnabled(SubtitleProvider provider) => provider switch
     {
-        SubtitleProvider.Subdl => HasProvider(provider) && (SubdlUploadEnabled ?? UploadEnabled),
-        SubtitleProvider.TvSubtitles => HasProvider(provider) && (TvSubtitlesUploadEnabled ?? false),
+        // F-M691: Datei zuerst, dann der Alt-Wert (siehe IsDownloadEnabled).
+        SubtitleProvider.Subdl =>
+            HasProvider(provider) && (SourceSwitches.Upload(provider) ?? SubdlUploadEnabled ?? UploadEnabled),
+        SubtitleProvider.TvSubtitles =>
+            HasProvider(provider) && (SourceSwitches.Upload(provider) ?? TvSubtitlesUploadEnabled ?? false),
 
         // F-M507: der Upload dieser Quelle ist default AUS (F-M503-Regel: Download an, Upload aus).
-        SubtitleProvider.MovieSubtitles => HasProvider(provider) && (MovieSubtitlesUploadEnabled ?? false),
+        SubtitleProvider.MovieSubtitles =>
+            HasProvider(provider) && (SourceSwitches.Upload(provider) ?? MovieSubtitlesUploadEnabled ?? false),
         _ => false,
     };
 

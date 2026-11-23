@@ -9,6 +9,8 @@
 // warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 // See the GNU General Public License for more details.
 
+using System;
+
 namespace Jellyfin.Plugin.SubScribe.Api;
 
 /// <summary>
@@ -68,6 +70,27 @@ public class UploadResult
     public UploadVerdict Verdict { get; private init; } = UploadVerdict.Refused;
 
     /// <summary>
+    /// F-M685: der Klartext der Quelle, wenn sie einen nennt — etwa
+    /// „Duplicate upload: identical file already published". <see cref="Reason"/> bleibt daneben unser
+    /// kurzer Grund; dieser hier ist der Satz der Seite, damit ein Urteil im Wortlaut der Quelle steht
+    /// und nicht in unserer Übersetzung.
+    /// </summary>
+    public string? SourceText { get; init; }
+
+    /// <summary>
+    /// F-M685: war der Versuch nur VORÜBERGEHEND unmöglich (429, Stundendeckel)? Dann ist die Quelle
+    /// „beschäftigt" — ein echter Ausgang, kein „weiß nicht". Ein Timeout, ein Verbindungsfehler oder
+    /// ein Abbruch ist das NICHT; der bleibt ohne Antwort und damit ohne Urteil.
+    /// </summary>
+    public bool TemporarilyBusy { get; private init; }
+
+    /// <summary>
+    /// F-M685: hat niemand entschieden (Timeout, Verbindungsfehler, 5xx, Deckel, Abbruch)? Die Frage
+    /// steht hier, damit kein Aufrufer die Werteliste des Urteils nachbauen muss.
+    /// </summary>
+    public bool Unanswered => Verdict == UploadVerdict.NoVerdict;
+
+    /// <summary>
     /// F-M550: the source that actually answered. The log used to name no source at all, and the old
     /// <c>[SubDL]</c> prefix in front of an upload line read like "uploaded to SubDL" even when the
     /// upload went to tvsubtitles. Set by the chain where the source is known, not by its caller.
@@ -94,23 +117,114 @@ public class UploadResult
         => new() { Ok = true, Response = response, Verdict = UploadVerdict.Accepted };
 
     /// <summary>
+    /// F-M687: dasselbe, mit der Kennung, die die Quelle in ihrer Antwort genannt hat — für einen
+    /// Behälter ist das die eine Zahl, die seine Folgen an EIN entferntes Objekt bindet (F-M414).
+    /// </summary>
+    /// <param name="response">Die rohe Antwort.</param>
+    /// <param name="sourceId">Die Kennung aus der Antwort, oder null.</param>
+    /// <returns>Das Ergebnis.</returns>
+    public static UploadResult Success(System.Text.Json.JsonDocument? response, string? sourceId)
+        => new() { Ok = true, Response = response, SourceId = sourceId, Verdict = UploadVerdict.Accepted };
+
+    /// <summary>
     /// Creates a failure result.
     /// </summary>
     public static UploadResult Failed(string reason) => new() { Ok = false, Reason = reason };
 
     /// <summary>
-    /// F-M609: keine Antwort — Timeout, Verbindungsfehler, 429, 5xx, Stundendeckel, Abbruch durch uns.
+    /// F-M687: das NEIN einer Quelle — mit ihrem Klartext daneben. <see cref="Reason"/> bleibt der kurze
+    /// Grund, mit dem der Lauf rechnet; <see cref="SourceText"/> ist der Satz der Seite, damit ein Urteil
+    /// im Wortlaut der Quelle im Bestand steht und nicht in unserer Übersetzung (F-M685).
+    /// </summary>
+    /// <param name="reason">Der kurze Grund.</param>
+    /// <param name="sourceText">Der Klartext der Quelle.</param>
+    /// <returns>Das Ergebnis.</returns>
+    public static UploadResult Refused(string reason, string? sourceText)
+        => new() { Ok = false, Reason = reason, SourceText = sourceText };
+
+    /// <summary>
+    /// F-M687: der EINE Ausgang der Grenze (<see cref="Sources.SourceOutcome"/>) in das Urteil der
+    /// Kette — die einzige Stelle, an der eine Antwort der Quelle zu einem Urteil wird, und damit die
+    /// einzige Stelle, an der die vier Fälle auseinandergehen:
+    /// <list type="bullet">
+    /// <item><c>Accepted</c> → <see cref="UploadVerdict.Accepted"/>: das Urteil ist geschlossen
+    /// (<c>upload.UploadedAt</c>).</item>
+    /// <item><c>Rejected</c> → <see cref="UploadVerdict.Refused"/>: abgelehnt, mit dem Klartext der
+    /// Quelle.</item>
+    /// <item><c>Busy</c> → <see cref="UploadVerdict.NoVerdict"/> mit <see cref="TemporarilyBusy"/>: KEIN
+    /// Urteil. Die Zeile bleibt offen, der nächste Lauf fragt neu (F-M609/F-M649).</item>
+    /// <item><c>Failed</c> → <see cref="UploadVerdict.NoVerdict"/>: ebenfalls kein Urteil — Netz,
+    /// Anmeldung oder Unbekanntes; protokolliert, nichts geschlossen.</item>
+    /// </list>
+    /// <para>
+    /// „Schon vorhanden" bleibt dabei ein SKIP mit dem Kurzgrund <c>duplicate-content</c> und dem
+    /// Klartext daneben: der Koordinator erkennt daran die Ablehnung eines Behälters samt
+    /// Fingerabdruck (F-M644), und die Einzelspur wird über den Inhalt entschieden (F-M298), nicht über
+    /// das Wort der Quelle.
+    /// </para>
+    /// </summary>
+    /// <param name="answer">Die Antwort des Auftrags.</param>
+    /// <returns>Das Ergebnis, das die Kette liest.</returns>
+    public static UploadResult FromAnswer(Sources.SourceSendAnswer answer)
+    {
+        ArgumentNullException.ThrowIfNull(answer);
+
+        switch (answer.Outcome)
+        {
+            case Sources.SourceOutcome.Accepted:
+                return Success(answer.SubmissionId);
+
+            case Sources.SourceOutcome.Busy:
+                return NoVerdict(answer.Reason ?? "busy", busy: true);
+
+            case Sources.SourceOutcome.Rejected:
+                string text = answer.Reason ?? "refused";
+                return IsDuplicate(text)
+                    ? Skipped("duplicate-content", text)
+                    : Refused(text, text);
+
+            default:
+                // Failed: niemand hat entschieden. Protokolliert wird das beim Aufrufer — hier steht
+                // nur, dass es KEIN Urteil ist.
+                return NoVerdict(answer.Reason ?? "no answer");
+        }
+    }
+
+    /// <summary>
+    /// F-M687: die Worte, mit denen eine Quelle „das habe ich schon" sagt — dieselben, an denen der
+    /// SubDL-Client seine Einordnung festmacht (<c>already exist</c>/<c>identical file already
+    /// published</c>/<c>duplicate</c>). Die Einordnung ist eine Aussage über den INHALT und gilt für
+    /// jede Quelle gleich.
+    /// </summary>
+    /// <param name="text">Der Klartext der Quelle.</param>
+    /// <returns>Wahr, wenn die Quelle den Inhalt als schon vorhanden abgelehnt hat.</returns>
+    private static bool IsDuplicate(string text)
+        => text.Contains("already exist", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("identical file already published", StringComparison.OrdinalIgnoreCase)
+            || text.Contains("duplicate", StringComparison.OrdinalIgnoreCase);
+
+    /// <summary>
+    /// F-M609/F-M685: keine Antwort — Timeout, Verbindungsfehler, 5xx, Deckel, Abbruch durch uns.
     /// KEIN Urteil der Quelle, deshalb bleibt das Paar offen und der naechste Lauf fragt neu.
+    /// <para>
+    /// F-M685: <paramref name="busy"/> trennt „vorübergehend nicht möglich" (429, Stundendeckel) von
+    /// „niemand hat geantwortet" (Timeout, Netz). Nur das Erste ist ein Ausgang der Quelle.
+    /// </para>
     /// </summary>
     /// <param name="reason">What went wrong.</param>
+    /// <param name="busy">True nur fuer 429 und den Stundendeckel.</param>
     /// <returns>The result.</returns>
-    public static UploadResult NoVerdict(string reason)
-        => new() { Ok = false, Reason = reason, Verdict = UploadVerdict.NoVerdict };
+    public static UploadResult NoVerdict(string reason, bool busy = false)
+        => new() { Ok = false, Reason = reason, Verdict = UploadVerdict.NoVerdict, TemporarilyBusy = busy };
 
     /// <summary>
     /// Creates a skip result.
     /// </summary>
-    public static UploadResult Skipped(string reason) => new() { Ok = false, SkippedItem = true, Reason = reason };
+    /// <param name="reason">Why the attempt was skipped.</param>
+    /// <param name="sourceText">F-M685: der Klartext der Quelle, wenn sie einen genannt hat.</param>
+    /// <returns>The result.</returns>
+    public static UploadResult Skipped(string reason, string? sourceText = null)
+        => new() { Ok = false, SkippedItem = true, Reason = reason, SourceText = sourceText };
 
     /// <summary>
     /// F-M603: the source took the attempt but returned no usable id — evidence enough to close the pair,

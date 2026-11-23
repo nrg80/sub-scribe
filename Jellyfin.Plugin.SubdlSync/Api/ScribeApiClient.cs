@@ -34,7 +34,9 @@ public sealed class ScribeApiClient
     // F-M63 (user decision 09.09.2026 "official endpoint"): the official documented API
     // host is https://api.subdl.com (subdl.com/api-doc lists it for search, upload and /me;
     // api3.subdl.com appears NOWHERE in the docs — it is an undocumented mirror).
-    private const string ApiBase = "https://api.subdl.com";
+    // F-M683: public, weil die Feldbeschreibung der SubDL-Quelle ihre Vorgabe von HIER nimmt — nicht
+    // von einer zweiten, abgetippten Adresse, die beim nächsten Wechsel daneben läge.
+    public const string ApiBase = "https://api.subdl.com";
     private readonly HttpClient _http;
 
     // F-M369/F-M386 (operator order 02.11.2026: "nur noch den Platten-Cache"): ONE archive cache,
@@ -815,7 +817,7 @@ public sealed class ScribeApiClient
 
         if ((int)resp.StatusCode == 429)
         {
-            return ScribeReportOutcome.Deferred;
+            return ScribeReportOutcome.Busy;
         }
 
         if (!resp.IsSuccessStatusCode)
@@ -996,11 +998,12 @@ public sealed class ScribeApiClient
         if ((int)metaResp.StatusCode == 429)
         {
             Classify429(metaResp, metaBody);
-            return UploadResult.NoVerdict("rate-limited");
+            return UploadResult.NoVerdict("rate-limited", busy: true);
         }
 
         bool isHourlyUploadCap = false;
         bool serverDuplicate = false; // Fix 13.09.2026: SubDL duplicate verdict
+        string? serverDuplicateText = null; // F-M685: der Satz der Quelle, fuer den Ausgang "abgelehnt"
         bool ok;
         try
         {
@@ -1022,6 +1025,7 @@ public sealed class ScribeApiClient
                     || msg.Contains("duplicate", StringComparison.OrdinalIgnoreCase))
                 {
                     serverDuplicate = true;
+                    serverDuplicateText = msg;
                 }
             }
         }
@@ -1034,14 +1038,14 @@ public sealed class ScribeApiClient
         {
             // Not a failure — the item stays due and the run stops cleanly.
             HourlyUploadCapHit = true;
-            return UploadResult.NoVerdict("upload-hourly-cap");
+            return UploadResult.NoVerdict("upload-hourly-cap", busy: true);
         }
 
         if (serverDuplicate)
         {
             // Definitive verdict — the subtitle is already on SubDL. Skip (not
             // fail): the caller settles the position, nothing to retry.
-            return UploadResult.Skipped("duplicate-content");
+            return UploadResult.Skipped("duplicate-content", serverDuplicateText);
         }
 
         if (!ok)
@@ -1203,7 +1207,7 @@ public sealed class ScribeApiClient
         if ((int)metaResp.StatusCode == 429)
         {
             Classify429(metaResp, metaBody);
-            return UploadResult.NoVerdict("rate-limited");
+            return UploadResult.NoVerdict("rate-limited", busy: true);
         }
 
         bool ok;
@@ -1219,13 +1223,13 @@ public sealed class ScribeApiClient
                 {
                     // Not a failure — the season stays due and the run stops cleanly (F-M72).
                     HourlyUploadCapHit = true;
-                    return UploadResult.NoVerdict("upload-hourly-cap");
+                    return UploadResult.NoVerdict("upload-hourly-cap", busy: true);
                 }
 
                 if (msg.Contains("already exist", StringComparison.OrdinalIgnoreCase)
                     || msg.Contains("duplicate", StringComparison.OrdinalIgnoreCase))
                 {
-                    return UploadResult.Skipped("duplicate-content");
+                    return UploadResult.Skipped("duplicate-content", msg);
                 }
             }
         }
@@ -1249,13 +1253,59 @@ public sealed class ScribeApiClient
             responseDoc = null;
         }
 
-        return UploadResult.Success(responseDoc);
+        return UploadResult.Success(responseDoc, PackIdOf(responseDoc));
     }
 
     /// <summary>
-    /// Step 2 of the upload for one file: returns the <c>file_n_id</c> SubDL assigns, or null when
-    /// the file was refused.
+    /// F-M687: die Kennung, die SubDL auf eine Behälter-Abgabe zurückgibt, aus der eigenen Antwort
+    /// gelesen — dieselben Pfade, die der Koordinator vorher selbst abgeklopft hat. Sie ist die eine
+    /// Zahl, die die Folgen an EIN entferntes Objekt bindet (F-M414); nennt die Antwort keine, bleibt
+    /// sie leer und der Lauf vergibt seine eigene Marke (F-M421).
     /// </summary>
+    /// <param name="response">Die Antwort auf <c>uploadSubtitle</c>, oder null.</param>
+    /// <returns>Die Kennung, oder null.</returns>
+    public static string? PackIdOf(System.Text.Json.JsonDocument? response)
+    {
+        if (response == null)
+        {
+            return null;
+        }
+
+        var root = response.RootElement;
+        foreach (var path in new[] { new[] { "data", "upload", "id" }, new[] { "upload", "id" }, new[] { "id" }, new[] { "subtitle_id" } })
+        {
+            System.Text.Json.JsonElement cursor = root;
+            bool ok = true;
+            foreach (var step in path)
+            {
+                if (cursor.ValueKind == System.Text.Json.JsonValueKind.Object && cursor.TryGetProperty(step, out var next))
+                {
+                    cursor = next;
+                }
+                else
+                {
+                    ok = false;
+                    break;
+                }
+            }
+
+            if (ok)
+            {
+                string? text = cursor.ValueKind switch
+                {
+                    System.Text.Json.JsonValueKind.String => cursor.GetString(),
+                    System.Text.Json.JsonValueKind.Number => cursor.GetRawText(),
+                    _ => null
+                };
+                if (!string.IsNullOrWhiteSpace(text))
+                {
+                    return text;
+                }
+            }
+        }
+
+        return null;
+    }
     private async Task<string?> UploadSingleFileAsync(string token, string nId, string fileName, string content, CancellationToken ct)
     {
         var boundary = "----Boundary" + Guid.NewGuid().ToString("N");
@@ -3023,8 +3073,11 @@ public enum ScribeReportOutcome
     /// <summary>SubDL confirmed the report.</summary>
     Accepted,
 
-    /// <summary>Rate limited — the row stays unreported and is taken up by the next run.</summary>
-    Deferred,
+    /// <summary>
+    /// F-M685: rate limited — the row stays unreported and is taken up by the next run. Derselbe
+    /// Ausgang wie beim Senden heisst hier genauso: „beschaeftigt", nicht „vertagt".
+    /// </summary>
+    Busy,
 
     /// <summary>Not accepted; no retry.</summary>
     Failed

@@ -67,6 +67,17 @@
         "<root>"
       ]
     },
+    "matrix": {
+      "args": [
+        "<temp>/matrix",
+        "<root>"
+      ]
+    },
+    "sources": {
+      "args": [
+        "<root>"
+      ]
+    },
     "followup": {
       "python": "scripts/tests/followup/check.py",
       "file": "Jellyfin.Plugin.SubdlSync/ScheduledTasks/ScribeEventDispatcher.cs"
@@ -692,6 +703,190 @@
     "T333": {
       "suite": "seasonpack",
       "checks": 9
+    },
+    "T334": {
+      "suite": "storex",
+      "checks": 39
+    },
+    "T335": {
+      "suite": "storex",
+      "checks": 20
+    },
+    "T336": {
+      "suite": "storex",
+      "checks": 15
+    },
+    "T337": {
+      "suite": "storex",
+      "checks": 15
+    },
+    "T338": {
+      "suite": "matrix",
+      "checks": 678
+    },
+    "T339": {
+      "suite": "sources",
+      "checks": 27
+    },
+    "T340": {
+      "suite": "sources",
+      "checks": 20
+    },
+    "T341": {
+      "suite": "sources",
+      "checks": 20
+    },
+    "T342": {
+      "suite": "sources",
+      "checks": 21
+    },
+    "T343": {
+      "suite": "sources",
+      "checks": 11
+    },
+    "T344": {
+      "suite": "sources",
+      "checks": 53
+    },
+    "T345": {
+      "suite": "gui-structure",
+      "checks": 25
+    },
+    "T346": {
+      "suite": "gui-structure",
+      "checks": 4
+    },
+    "T347": {
+      "suite": "gui-structure",
+      "checks": 2
+    },
+    "T348": {
+      "suite": "sources",
+      "checks": 19
+    },
+    "T349": {
+      "suite": "gui-structure",
+      "checks": 3
+    },
+    "T350": {
+      "suite": "sources",
+      "checks": 3
+    },
+    "T351": {
+      "suite": "gui-structure",
+      "checks": 3
+    },
+    "T352": {
+      "suite": "sources",
+      "checks": 4
+    },
+    "T353": {
+      "suite": "tvsubtitles",
+      "checks": 2
+    },
+    "T354": {
+      "suite": "gui-structure",
+      "checks": 4
+    },
+    "T355": {
+      "suite": "sources",
+      "checks": 2
+    },
+    "T356": {
+      "suite": "gui-structure",
+      "checks": 2
+    },
+    "T357": {
+      "suite": "sources",
+      "checks": 1
+    },
+    "T358": {
+      "suite": "gui-structure",
+      "checks": 2
+    },
+    "T359": {
+      "suite": "gui-structure",
+      "checks": 3
+    },
+    "T360": {
+      "suite": "sources",
+      "checks": 1
+    },
+    "T361": {
+      "suite": "sources",
+      "checks": 4
+    },
+    "T362": {
+      "suite": "gui-structure",
+      "checks": 1
+    },
+    "T363": {
+      "suite": "gui-structure",
+      "checks": 1
+    },
+    "T364": {
+      "suite": "gui-structure",
+      "checks": 1
+    },
+    "T365": {
+      "suite": "sources",
+      "checks": 1
+    },
+    "T366": {
+      "suite": "gui-structure",
+      "checks": 1
+    },
+    "T367": {
+      "suite": "gui-structure",
+      "checks": 1
+    },
+    "T368": {
+      "suite": "gui-structure",
+      "checks": 3
+    },
+    "T369": {
+      "suite": "gui-structure",
+      "checks": 1
+    },
+    "T370": {
+      "suite": "gui-structure",
+      "checks": 5
+    },
+    "T371": {
+      "suite": "gui-structure",
+      "checks": 2
+    },
+    "T372": {
+      "suite": "gui-structure",
+      "checks": 2
+    },
+    "T373": {
+      "suite": "sources",
+      "checks": 9
+    },
+    "T374": {
+      "suite": "gui-structure",
+      "checks": 1
+    },
+    "T375": {
+      "suite": "gui-structure",
+      "checks": 4
+    },
+    "T376": {
+      "suite": "sources",
+      "checks": 2
+    },
+    "T377": {
+      "suite": "sources",
+      "checks": 5
+    },
+    "T378": {
+      "suite": "sources",
+      "checks": 2
+    },
+    "T379": {
+      "suite": "sources",
+      "checks": 1
     }
   }
 }

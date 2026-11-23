@@ -94,8 +94,17 @@ internal static class AiFilterRun
 
         // --- 4. the switch ----------------------------------------------------
         string config = Read(plugin, "Configuration/PluginConfiguration.cs");
-        Check(Regex.IsMatch(config, @"public\s+bool\s+AllowAiTranslatedSubs\s*\{\s*get;\s*set;\s*\}\s*=\s*false\s*;"),
-            "the switch exists and defaults to off");
+        // F-M711: die Eigenschaft liest jetzt die Datei der Quelle zuerst und faellt auf den Alt-Wert
+        // zurueck; die Vorgabe "aus" steht als Default am Feld der Engine.
+        Check(config.Contains("public bool AllowAiTranslatedSubs", StringComparison.Ordinal)
+              && config.Contains("FieldAllowAiTranslatedSubs", StringComparison.Ordinal)
+              && config.Contains("_allowAiTranslatedSubs = false", StringComparison.Ordinal),
+            "the switch exists, reads the source file first and defaults to off");
+        string subdlEngine = Read(plugin, "Sources/Subdl/SubdlEngine.cs");
+        Check(subdlEngine.Contains("FieldAllowAiTranslatedSubs", StringComparison.Ordinal)
+              && subdlEngine.Contains("\"Allow AI translated subs\"", StringComparison.Ordinal)
+              && subdlEngine.Contains("Default: \"false\"", StringComparison.Ordinal),
+            "the SubDL source declares the switch with default off");
         string pipeline = Read(plugin, "Pipeline/DownloadPipeline.cs");
         Check(pipeline.Contains("AllowAiTranslatedSubs", StringComparison.Ordinal),
             "the download pipeline reads the switch");
@@ -117,24 +126,14 @@ internal static class AiFilterRun
         Check(pipeline.Contains("{Ai} AI uploader filtered", StringComparison.Ordinal),
             "the run summary names the count");
 
-        // --- 7. the page ------------------------------------------------------
+        // --- 7. the page (F-M711: der Kasten ist in die Karte der Quelle gewandert) ------------
         string page = Read(plugin, "Configuration/configPage.html");
-        int gateAt = page.IndexOf("Quality gates (before download save)", StringComparison.Ordinal);
-        int switchAt = page.IndexOf("id=\"AllowAiTranslatedSubs\"", StringComparison.Ordinal);
-        Check(switchAt > 0, "the page carries the switch");
-        Check(gateAt > 0 && switchAt > gateAt,
-            "the switch sits inside the download quality-gate block");
-        Check(page.Contains("Allow AI translated subs (SUBDL AI)", StringComparison.Ordinal),
-            "the label names the account");
-        int runtimeAt = page.IndexOf("Runtime tolerance (seconds)", StringComparison.Ordinal);
-        Check(switchAt > 0 && runtimeAt > switchAt,
-            "the switch sits ABOVE the runtime tolerance field, which stays the last one");
-        string tail = switchAt > 0 ? page.Substring(switchAt, Math.Min(600, page.Length - switchAt)) : string.Empty;
-        Check(tail.Contains("Default: off", StringComparison.Ordinal),
-            "the description states the default");
-        Check(page.Contains("config.AllowAiTranslatedSubs = document.querySelector('#AllowAiTranslatedSubs').checked", StringComparison.Ordinal)
-              && page.Contains("document.querySelector('#AllowAiTranslatedSubs').checked = config.AllowAiTranslatedSubs === true", StringComparison.Ordinal),
-            "the switch is loaded and saved with the page");
+        Check(!page.Contains("id=\"AllowAiTranslatedSubs\"", StringComparison.Ordinal),
+            "the old checkbox is gone from the page");
+        Check(!page.Contains("config.AllowAiTranslatedSubs = ", StringComparison.Ordinal),
+            "the page no longer saves it into the plugin configuration");
+        Check(page.Contains("SubdlSync/Sources", StringComparison.Ordinal),
+            "the card writes its fields through the source endpoint");
 
         Console.WriteLine();
         Console.WriteLine(Failures.Count == 0

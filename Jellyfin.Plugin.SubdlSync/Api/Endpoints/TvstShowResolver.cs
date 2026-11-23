@@ -37,7 +37,7 @@ namespace Jellyfin.Plugin.SubScribe.Api.Endpoints;
 /// für Doppeleinträge“):
 /// <list type="number">
 /// <item><description>
-/// Steht <see cref="MediaEntity.TvstShowId"/> am Medium, wird SIE benutzt — kein Netzzugriff zur Suche,
+/// Steht <see cref="FileEntity.TvstShowId"/> am Medium, wird SIE benutzt — kein Netzzugriff zur Suche,
 /// kein Vergleich, keine Anlage. Die Nummer ist bewiesen worden, als sie geschrieben wurde.
 /// </description></item>
 /// <item><description>

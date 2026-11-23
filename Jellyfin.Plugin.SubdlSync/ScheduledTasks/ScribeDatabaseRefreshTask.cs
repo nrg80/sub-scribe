@@ -205,7 +205,7 @@ public class ScribeDatabaseRefreshTask : IScheduledTask
                 // row. `collectRoots` is the same helper phase 3 already uses for the OSHash cache.
                 if (registry != null)
                 {
-                    var mediaRoots = Registry.OshashCache.RootsFromPaths(db.Media.FindAll()
+                    var mediaRoots = Registry.OshashCache.RootsFromPaths(db.Files.FindAll()
                         .Where(m => !string.IsNullOrEmpty(m.Path))
                         .Select(m => m.Path!));
                     if (mediaRoots.Count == 0)
@@ -546,7 +546,7 @@ public class ScribeDatabaseRefreshTask : IScheduledTask
     private int ForgetStaleEmbeds(Registry.ContentHashRegistry registry, HashSet<string> aliveItemIds)
     {
         int removed = 0;
-        var mediaItems = Plugin.Instance?.SharedDbContext.Media;
+        var mediaItems = Plugin.Instance?.SharedDbContext.Files;
         if (mediaItems == null)
         {
             return 0;
@@ -557,7 +557,7 @@ public class ScribeDatabaseRefreshTask : IScheduledTask
                                  && aliveItemIds.Contains(m.JellyfinItemId!))
                      .ToList())
         {
-            if (registry.GetEmbeds(media.Id).Count == 0)
+            if (registry.GetEmbeds(media.OsHash).Count == 0)
             {
                 continue; // nothing stored for this file — no work, no query
             }
@@ -574,7 +574,7 @@ public class ScribeDatabaseRefreshTask : IScheduledTask
             }
             catch (Exception ex)
             {
-                LogUtil.Detail(_logger, "[Sub Scribe-Refresh] embedded check skipped for {Id}: {Msg}", media.Id, ex.Message);
+                LogUtil.Detail(_logger, "[Sub Scribe-Refresh] embedded check skipped for {Id}: {Msg}", media.OsHash, ex.Message);
                 continue; // unreadable streams — no verdict this run
             }
 
@@ -599,7 +599,7 @@ public class ScribeDatabaseRefreshTask : IScheduledTask
             var current = Registry.SidecarNaming.EmbeddedTracks(streams)
                 .Where(t => positions.Contains(t.SubPos))
                 .ToList();
-            removed += registry.ForgetStaleEmbeds(media.Id, current, positions);
+            removed += registry.ForgetStaleEmbeds(media.OsHash, current, positions);
         }
 
         return removed;
@@ -648,7 +648,7 @@ public class ScribeDatabaseRefreshTask : IScheduledTask
             targets, Plugin.Instance?.Configuration.DownloadHearingImpaired == true);
 
         int open = 0;
-        foreach (var media in db.Media.FindAll()
+        foreach (var media in db.Files.FindAll()
                      .Where(m => !string.IsNullOrEmpty(m.JellyfinItemId)
                                  && aliveItemIds.Contains(m.JellyfinItemId!))
                      .ToList())
@@ -720,7 +720,7 @@ public class ScribeDatabaseRefreshTask : IScheduledTask
     /// <param name="registry">Content registry.</param>
     /// <param name="media">The media row whose mark is being judged.</param>
     /// <returns>Languages carried by the file's own tracks.</returns>
-    private HashSet<string> EmbeddedLanguagesForCoverage(Data.ScribeDbContext db, Registry.ContentHashRegistry registry, Data.MediaEntity media)
+    private HashSet<string> EmbeddedLanguagesForCoverage(Data.ScribeDbContext db, Registry.ContentHashRegistry registry, Data.FileEntity media)
     {
         var found = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
@@ -753,7 +753,7 @@ public class ScribeDatabaseRefreshTask : IScheduledTask
         {
             // unknown ≠ missing: the registry half already answered, and a probe that fails adds
             // nothing rather than turning a language into "absent".
-            LogUtil.Detail(_logger, "[Sub Scribe-Refresh] embedded coverage probe skipped for {Id}: {Msg}", media.Id, ex.Message);
+            LogUtil.Detail(_logger, "[Sub Scribe-Refresh] embedded coverage probe skipped for {Id}: {Msg}", media.OsHash, ex.Message);
         }
 
         return found;

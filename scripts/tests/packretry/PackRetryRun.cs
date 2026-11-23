@@ -128,7 +128,13 @@ internal static class Program
             "the four content gates live in one function");
         Check(pipe.Contains("cand.FindUnpackFiles(season, episode, effectiveHi)", StringComparison.Ordinal),
             "the retry walks the archive's files with the wanted HI flag");
-        Check(pipe.Contains(".ExtractArchiveMemberAsync(cand.Url, sibling.Name, ct)", StringComparison.Ordinal),
+        // F-M686: der Abruf des Geschwisters geht als Auftrag an die Engine — mit dem ADRESS-Griff, den
+        // die Suche am Kandidaten fuehrt, und damit ueber denselben Archiv-Weg (Cache zuerst) wie
+        // bisher. Die Aussage bleibt: es wird aus dem Archiv gelesen, das schon da ist, nicht neu geholt.
+        var subdlEngine = File.ReadAllText(
+            Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Sources/Subdl/SubdlEngine.cs"));
+        Check(pipe.Contains("new Sources.SourceFetchRequest(\"u:\" + cand.Url, MemberName: sibling.Name)", StringComparison.Ordinal)
+            && subdlEngine.Contains(".ExtractArchiveMemberAsync(adresse, request.MemberName, ct)", StringComparison.Ordinal),
             "and takes them out of the archive it already holds");
         Check(pipe.Contains("next file of the same archive accepted", StringComparison.Ordinal),
             "an accepted sibling is named in the log, not swapped in silently");
@@ -277,7 +283,7 @@ internal static class Program
         Check(!coord.Contains("DeletePublishedSubtitleAsync(single.Id, ct)", StringComparison.Ordinal),
             "F-M585: the coordinator no longer deletes the absorbed single — it stays beside the pack");
         Check(coord.IndexOf("DeletePublishedSubtitleAsync(single.Id, ct)", StringComparison.Ordinal)
-              < coord.IndexOf("UploadSeasonPackAsync(", StringComparison.Ordinal),
+              < coord.IndexOf("await engine.SendAsync(vorbereitet.Request, ct)", StringComparison.Ordinal),
             "BEFORE it uploads the pack, not after");
         // F-M585: es wird nichts mehr geloescht — die packs-Zeile traegt deshalb auch keine geloeschten
         // Ids mehr, sondern nur die Folgen des Containers.
@@ -306,7 +312,7 @@ internal static class Program
         Check(coord.Contains("\"already up with these members\"", StringComparison.Ordinal),
             "the buffer path refuses a pack that is already up with the same members");
         Check(coord.IndexOf("_registry.GetPack(key.ImdbId, key.Season, key.Lang, key.Hi)", StringComparison.Ordinal)
-              < coord.IndexOf("await _api.UploadSeasonPackAsync", StringComparison.Ordinal),
+              < coord.IndexOf("await engine.SendAsync(vorbereitet.Request, ct)", StringComparison.Ordinal),
             "and it decides that BEFORE the pack is sent");
         var refresh = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/ScheduledTasks/ScribeDatabaseRefreshTask.cs"));
         Check(refresh.Contains("registry.PruneOrphanedPacks()", StringComparison.Ordinal),
@@ -356,7 +362,7 @@ internal static class Program
         Console.WriteLine("16. The pack loop keeps the watchdog quiet");
         var coordSrc = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Pipeline/SeasonPackCoordinator.cs"));
         Check(coordSrc.Contains("_progress?.Invoke()"), "the coordinator reports progress per episode");
-        Check(upload.Contains("watchdog.Heartbeat)"), "the pipeline hands the watchdog beat to the coordinator");
+        Check(upload.Contains("watchdog.Heartbeat,"), "the pipeline hands the watchdog beat to the coordinator");
         Check(coordSrc.Contains("Action? progress = null"), "and th callback is optional");
 
         // ── 17. F-M410/F-M411: ein Hash je Folge, eine Logzeile je Datei ─────────
@@ -371,7 +377,7 @@ internal static class Program
         var coordPackSrc = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Pipeline/SeasonPackCoordinator.cs"));
         Check(coordPackSrc.Contains("have no single id yet"), "F-M412: a member without a SubDL id is named");
         Check(coordPackSrc.IndexOf("undeletable", StringComparison.Ordinal)
-              < coordPackSrc.IndexOf("await _api.UploadSeasonPackAsync"), "F-M412: the note comes before the pack is sent");
+              < coordPackSrc.IndexOf("await engine.SendAsync(vorbereitet.Request, ct)", StringComparison.Ordinal), "F-M412: the note comes before the pack is sent");
 
         // ── 19. F-M413: die Id kommt aus mySubtitles ────────────────────────────
         Console.WriteLine("19. The upload id is taken from mySubtitles");
@@ -436,25 +442,35 @@ internal static class Program
         var adopt = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/ScribeAdoptController.cs"));
         Check(adopt.Contains("AdoptUploads", StringComparison.Ordinal)
               && adopt.Contains("SubtitleStatus.Uploaded", StringComparison.Ordinal)
-              && adopt.Contains("subdlId: entry.SubdlId", StringComparison.Ordinal),
+              // F-M670: die Kennung geht als Einsende-Id an die Marke (Matrix `UploadId`) — die Spalte
+              // `embeds.SubdlId`, in die sie frueher zusaetzlich ging, gibt es nicht mehr.
+              && adopt.Contains("subdlUploadId: entry.SubdlId", StringComparison.Ordinal),
             "F-M423: the adoption endpoint writes an uploaded row that carries its SubDL id");
         Check(adopt.Contains("ComputeMediaHash", StringComparison.Ordinal)
               && adopt.Contains("File.Exists", StringComparison.Ordinal),
             "F-M423: adoption resolves the media hash of the file and refuses a path that is gone");
 
-        // ── 27. F-M424: ein Arrival-Lauf packt nur, wenn seine eigenen Items die Staffel sind ─
-        Console.WriteLine("27. An arrival run packs only what it brought");
-        Check(upload.Contains("brought all {Aired} episode(s)", StringComparison.Ordinal)
-              && upload.Contains("the queued items are not the whole season", StringComparison.Ordinal),
-            "F-M424: arrival compares its queued episodes with the aired set and names both numbers");
-        Check(upload.Contains("IReadOnlySet<int>>? onlyEpisodes = null", StringComparison.Ordinal),
-            "F-M424: the plan and the filler can be cut to the arrived episodes");
+        // ── 27. F-M680: ein Ankunftslauf packt GAR NICHT mehr ─────────────────────────────
+        // Betreiber-Vorgabe 22.11.2026: „Season Packs nur bei Refetch- und Manual-Läufen (also nicht
+        // bei Ankunftsläufen) — und für alle Quellen gleich." Der frühere Zweig F-M424 (der Lauf packt
+        // seine eigenen Folgen) ist ersatzlos gefallen, samt der arrival-scoped Kürzung `onlyEpisodes`.
+        Console.WriteLine("27. An arrival run packs nothing at all");
+        Check(upload.Contains("arrival run — no season pack", StringComparison.Ordinal)
+              && !upload.Contains("brought all {Aired} episode(s)", StringComparison.Ordinal)
+              && !upload.Contains("the queued items are not the whole season", StringComparison.Ordinal),
+            "F-M680: an arrival run gets no pack scope — the F-M424 branch and its two log lines are gone");
+        Check(!upload.Contains("onlyEpisodes", StringComparison.Ordinal)
+              && !upload.Contains("HasOpenLanguage(", StringComparison.Ordinal),
+            "F-M680: the arrival-only helpers fell with it — no dead scope cut, no second season question");
 
         // ── 28. F-M426: eine vollständig gepackte Staffel wird gar nicht erst untersucht ─
+        // F-M680: die arrival-eigene Fassung dieser Frage (`HasOpenLanguage`, VOR dem Vergleich
+        // gefragt) ist mit dem Ankunftslauf-Zweig gefallen. Die Regel selbst gilt weiter — sie steht
+        // jetzt nur noch an EINER Stelle, im vollen Lauf, und wird dort mit der Zahl der Paare gesagt.
         Console.WriteLine("28. A fully packed season is not investigated");
-        Check(upload.Contains("HasOpenLanguage(", StringComparison.Ordinal)
-              && upload.Contains("every language is already inside a pack, nothing is investigated", StringComparison.Ordinal),
-            "F-M426: the pack question is asked before the queued-versus-aired comparison");
+        Check(upload.Contains("all {Count} known pair(s)", StringComparison.Ordinal)
+              && upload.Contains("already up as a pack", StringComparison.Ordinal),
+            "F-M426: a season whose pairs are all packed ends before any extraction, and says so with its pair count");
 
         // ── 29. F-M429: Pack zuerst, Einzel danach, übernommene Positionen gemerkt ─
         Console.WriteLine("29. The pack goes up first, the singles after it");
@@ -656,10 +672,17 @@ internal static class Program
         string entitySource = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Data", "Entities.cs"));
         Check(entitySource.Contains("public string? Fingerprint { get; set; }", StringComparison.Ordinal),
             "F-M466: the memo row carries the fingerprint");
+        // F-M668: der Fingerabdruck steht in der Marken-Matrix (Kind = pack), nicht mehr als Spalte an
+        // `packs`; ein älterer Bestand wird beim Öffnen dorthin übernommen und die Spalte fällt.
         string dbSource = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Data", "ScribeDbContext.cs"));
-        Check(dbSource.Contains("ALTER TABLE packs ADD COLUMN Fingerprint TEXT NULL;", StringComparison.Ordinal)
-              && dbSource.Contains("EnsurePackColumns();", StringComparison.Ordinal),
-            "F-M466: an older data file gets the column on start, guarded by the table's own column list");
+        // F-M671: der Fingerabdruck der Mitglieder steht seit Schema 22 am Behälter selbst
+        // (`pack.Signature`), weil er eine Eigenschaft seiner Mitglieder ist; das URTEIL der Quelle
+        // steht in `upload`. Eine Spalte `packs.Fingerprint` gibt es nicht mehr, und nachgezogen wird
+        // sie auch nicht.
+        Check(dbSource.Contains("+ \"Signature TEXT NULL, \"", StringComparison.Ordinal)
+              && !dbSource.Contains("ALTER TABLE packs ADD COLUMN Fingerprint TEXT NULL;", StringComparison.Ordinal)
+              && !dbSource.Contains("ALTER TABLE pack ADD COLUMN Fingerprint TEXT NULL;", StringComparison.Ordinal),
+            "F-M466/F-M671: der Fingerabdruck hat seine Spalte am Behälter — eine Altspalte wird nicht nachgezogen");
 
         // ── 33. F-M644: eine abgelehnte Pack-Zeile wird gemerkt, nicht wiederholt ───────────────────
         // Die Zeile im Store (Grund, Datum, Fingerabdruck, UploadedAt) prueft `storex` mit dem echten
@@ -681,8 +704,11 @@ internal static class Program
               && reg.Contains("&& string.IsNullOrWhiteSpace(row.RefusalReason);", StringComparison.Ordinal),
             "F-M644: a refused row is not a pack — \"is this season packed?\" says no");
 
-        Check(reg.Contains("if (!string.IsNullOrWhiteSpace(row.RefusalReason))", StringComparison.Ordinal)
-              && reg.Split("if (!string.IsNullOrWhiteSpace(row.RefusalReason))").Length - 1 >= 2,
+        // F-M668/F-M677: beide Pack-Karten lesen die Quelle-Tabelle (je Quelle gefiltert) und lassen eine
+        // Absage aus — die Bedingung steht dort neben `ClosedAt`, weil ein gescheiterter Behälter kein
+        // Urteil hat. Seit Schema 23 heißt die gelesene Marke `marke` (vorher `row`).
+        Check(reg.Contains("if (!string.IsNullOrWhiteSpace(marke.RefusalReason) || marke.ClosedAt == null)", StringComparison.Ordinal)
+              && reg.Split("if (!string.IsNullOrWhiteSpace(marke.RefusalReason) || marke.ClosedAt == null)").Length - 1 >= 2,
             "F-M644: and the pack maps of both sources leave it out, so a changed content is planned again");
 
         Console.WriteLine();

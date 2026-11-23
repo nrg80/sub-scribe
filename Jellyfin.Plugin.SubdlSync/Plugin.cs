@@ -83,6 +83,66 @@ public class Plugin : BasePlugin<Configuration.PluginConfiguration>, IHasWebPage
         // F-M533: die tvst-Befunde melden ueber denselben Weg wie alles andere — eine Meldestelle.
         var tvstLog = _loggerFactory?.CreateLogger("SubDL-Tvst");
         Api.TvstMetadataChecks.OnMessage = msg => tvstLog?.LogInformation("{Msg}", msg);
+
+        // F-M683: der Uebergang der Quellen-Einstellungen in ihre eigenen Dateien — EINMAL beim ersten
+        // Start, danach nie wieder (die Marke in `sources/` sagt es). Er steht hier und nicht nur am
+        // Registry-Bau, damit ein Server, der nie einen Lauf startet, trotzdem seine Dateien hat.
+        // Fehler dabei duerfen den Start nicht verhindern: sie werden gemeldet, die Quellen gelten dann
+        // eben als nicht eingerichtet.
+        try
+        {
+            var uebernommen = Sources.SourceSettingsSeed.Ensure(DataFolderPath, Configuration);
+            if (uebernommen.Count > 0)
+            {
+                _loggerFactory?.CreateLogger("SubDL-Start")?.LogInformation(
+                    "[Sub Scribe] the settings of {Count} source(s) were moved into their own file: {Keys} (F-M683).",
+                    uebernommen.Count,
+                    string.Join(", ", uebernommen));
+            }
+
+            // F-M694: das Kontopasswort nachtragen — eigene Marke.
+            var zugang = Sources.SourceSettingsSeed.EnsureCredentials(DataFolderPath, Configuration);
+            if (zugang.Count > 0)
+            {
+                _loggerFactory?.CreateLogger("SubDL-Start")?.LogInformation(
+                    "[Sub Scribe] the account password of {Count} source(s) now lives in their own file: "
+                    + "{Keys} (F-M694).",
+                    zugang.Count,
+                    string.Join(", ", zugang));
+            }
+
+            // F-M693: derselbe Nachtrag für Packs und Meldung — eigene Marke.
+            var faehigkeiten = Sources.SourceSettingsSeed.EnsureCapabilitySwitches(DataFolderPath, Configuration);
+            if (faehigkeiten.Count > 0)
+            {
+                _loggerFactory?.CreateLogger("SubDL-Start")?.LogInformation(
+                    "[Sub Scribe] the packs and report switch of {Count} source(s) now lives in their own "
+                    + "file: {Keys} (F-M693).",
+                    faehigkeiten.Count,
+                    string.Join(", ", faehigkeiten));
+            }
+
+            // F-M691: die Richtungsschalter nachtragen. Eigene Marke, eigener Aufruf — die Übernahme von
+            // F-M683 ist auf einer laufenden Instanz längst gelaufen, dieser Nachtrag aber noch nicht.
+            var richtungen = Sources.SourceSettingsSeed.EnsureDirectionSwitches(DataFolderPath, Configuration);
+
+            // F-M711: die frueheren "SubDL only"-Einstellungen in die Datei der Quelle nachtragen.
+            _ = Sources.SourceSettingsSeed.EnsureSubdlSwitches(DataFolderPath, Configuration);
+            if (richtungen.Count > 0)
+            {
+                _loggerFactory?.CreateLogger("SubDL-Start")?.LogInformation(
+                    "[Sub Scribe] the upload/download switch of {Count} source(s) now lives in their own file: "
+                    + "{Keys} (F-M691).",
+                    richtungen.Count,
+                    string.Join(", ", richtungen));
+            }
+        }
+        catch (Exception ex)
+        {
+            _loggerFactory?.CreateLogger("SubDL-Start")?.LogWarning(
+                "[Sub Scribe] moving the source settings into their own files failed: {Msg}", ex.Message);
+        }
+
         // Stats period start defaults to plugin install/first start —
         // the GUI "since" always shows a real date until "Reset statistics" re-sets it.
     }
@@ -461,9 +521,9 @@ public class Plugin : BasePlugin<Configuration.PluginConfiguration>, IHasWebPage
         // F-M605: and the refusals the sources have already given for a track.
         Jellyfin.Plugin.SubScribe.Registry.SourceRefusalStore.Attach(db);
 
-        // F-M628: die Quellenbelege liegen jetzt in einer eigenen Tabelle — eine Quelle ist ein Wert,
-        // kein Spaltenpaar. Angehängt wird sie neben den übrigen Stores.
-        Jellyfin.Plugin.SubScribe.Data.SourceMarkStore.Attach(db);
+        // F-M670 (21.11.2026): `SourceMarkStore` ist entfallen. Die Alt-Tabelle `source_marks` hatte
+        // keinen Leser und keinen Schreiber mehr; ihre Belege stehen in der Marken-Matrix (F-M668), und
+        // die Übernahme hat sie beim Öffnen dorthin gebracht und die Tabelle entfernt.
 
         // F-M608: and the ladder that closes a title after four failed creations.
         Jellyfin.Plugin.SubScribe.Registry.TitleFailureStore.Attach(db);
@@ -509,7 +569,7 @@ public class Plugin : BasePlugin<Configuration.PluginConfiguration>, IHasWebPage
     /// file. The engine then in use had a non-thread-safe object mapper, so the concurrent
     /// schema setup raced and one task died with
     /// <c>System.NotSupportedException: Member Id not found on BsonMapper for type
-    /// EmbedTrackEntity</c> (measured 26.09.2026 at 08:21:09.081/.082, prune and OSHash firing
+    /// TrackEntity</c> (measured 26.09.2026 at 08:21:09.081/.082, prune and OSHash firing
     /// in the same scheduler tick — the first occurrence in any log). The task itself is fine:
     /// started alone it completes normally.
     /// </para>

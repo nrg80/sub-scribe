@@ -127,18 +127,18 @@ public class ScribeReset : ControllerBase
             else if (scope.Equals("upload", StringComparison.OrdinalIgnoreCase))
             {
                 // Upload side = the embedded tracks of every file.
-                db.Embeds.DeleteAll();
+                db.Tracks.DeleteAll();
 
                 // F-M192 (24.09.2026): the flags must be written back as the SAME
                 // objects that were mutated. The old code called
-                // Update(db.Media.FindAll()) — a SECOND, freshly deserialized list
+                // Update(db.Files.FindAll()) — a SECOND, freshly deserialized list
                 // whose UploadFileComplete is still true — so the reset reported
                 // "completed" while the database kept every marker (measured: reset
                 // at 15:41:50, subdl-sync.db mtime stayed 15:07 and the next run
                 // skipped all 25 files as file-complete). Collect the touched rows
                 // and persist exactly those.
-                var touched = new List<MediaEntity>();
-                foreach (var media in db.Media.FindAll().Where(m => m.SubtitlesUploadedAt != null))
+                var touched = new List<FileEntity>();
+                foreach (var media in db.Files.FindAll().Where(m => m.SubtitlesUploadedAt != null))
                 {
                     media.SubtitlesUploadedAt = null;
                     touched.Add(media);
@@ -146,7 +146,7 @@ public class ScribeReset : ControllerBase
 
                 if (touched.Count > 0)
                 {
-                    db.Media.Update(touched);
+                    db.Files.Update(touched);
                 }
 
                 LogUtil.Normal(_logger, "[Sub Scribe] Reset upload: {Count} file-complete marker(s) cleared.", touched.Count);
@@ -155,7 +155,7 @@ public class ScribeReset : ControllerBase
             {
                 // Download side = downloaded sidecars and burned candidates.
                 db.Sidecars.DeleteMany(x => x.Status == SubtitleStatus.Downloaded);
-                db.RejectedCandidates.DeleteAll();
+                db.BadApples.DeleteAll();
                 // `id-not-found:` AND `file-retry:` are cleaned as RETIRED keys: the give-up budgets
                 // went with IdRetryLimit and with the file-missing counter (both 08.10.2026), so no code
                 // writes or reads either one any more — a database carried over from before still holds
@@ -163,11 +163,11 @@ public class ScribeReset : ControllerBase
                 // though its tracker type is deleted: that is the ONLY place those orphaned rows can be
                 // cleared, and a later reader who finds the prefix "unused" must not delete the clause.
                 db.Counters.DeleteMany(x => x.Key.StartsWith("qa-fail:") || x.Key.StartsWith("id-not-found:") || x.Key.StartsWith("file-retry:"));
-                foreach (var media in db.Media.Find(x => x.LastSearchUtc != null))
+                foreach (var media in db.Files.Find(x => x.LastSearchUtc != null))
                 {
                     media.LastSearchUtc = null;
                     media.LastSearchLanguages = null;
-                    db.Media.Update(media);
+                    db.Files.Update(media);
                 }
 
                 // F-M283 (user decision 02.10.2026): there is no download completion mark to clear.
@@ -346,7 +346,7 @@ public class ScribeReset : ControllerBase
 
             var registry = new Registry.ContentHashRegistry(db);
             var hashes = registry.MediaAtPath(path)
-                .Select(m => m.Id)
+                .Select(m => m.OsHash ?? string.Empty)
                 .Where(h => !string.IsNullOrEmpty(h))
                 .Distinct()
                 .ToList();

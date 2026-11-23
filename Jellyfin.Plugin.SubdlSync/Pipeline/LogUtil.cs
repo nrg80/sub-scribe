@@ -140,6 +140,33 @@ public static class LogUtil
         => Detail(Mode, logger, ex, message, args);
 
     /// <summary>
+    /// F-M684: die MASSENZEILE — je Datensatz eine Zeile, geschrieben auf ECHTEM Debug-Pegel
+    /// (<c>LogDebug</c>) und weiterhin nur, wenn der eigene LogMode Debug ist. Der Text bleibt
+    /// unverändert (derselbe <c>[D]</c>-Marker, dieselbe Nachricht), nur der Pegel ist jetzt ehrlich:
+    /// Jellyfins Serilog filtert eine Zeile VOR dem Sink, deshalb verschwindet eine Massenzeile bei
+    /// Server-Pegel Information — und genau das ist gewollt, denn 32 608 Zeilen eines Tages waren
+    /// überwiegend Massenzeilen (F-M684). Wer sie sehen will, hebt den Server-Pegel auf Debug.
+    /// </summary>
+    /// <param name="mode">Der wirksame LogMode des Plugins.</param>
+    /// <param name="logger">Der Ziel-Logger.</param>
+    /// <param name="message">Die Vorlage.</param>
+    /// <param name="args">Die Argumente.</param>
+    public static void Debug(LogLevelMode mode, ILogger? logger, string message, params object?[] args)
+    {
+        if (mode >= LogLevelMode.Debug)
+        {
+            logger?.LogDebug(DebugTag + message, args);
+        }
+    }
+
+    /// <summary>F-M684: die Massenzeile, den LogMode selbst auflösend.</summary>
+    /// <param name="logger">Der Ziel-Logger.</param>
+    /// <param name="message">Die Vorlage.</param>
+    /// <param name="args">Die Argumente.</param>
+    public static void Debug(ILogger? logger, string message, params object?[] args)
+        => Debug(Mode, logger, message, args);
+
+    /// <summary>
     /// Call trace (the old LogTrace path), shown from Verbose on — the level a
     /// user picks precisely to see it.
     /// </summary>

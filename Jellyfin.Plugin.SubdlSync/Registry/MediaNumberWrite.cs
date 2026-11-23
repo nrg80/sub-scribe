@@ -29,7 +29,7 @@ public enum MediaNumberWrite
 
     /// <summary>
     /// Über den PFAD: kein Hash bekannt, aber genau EINE Medienzeile trägt diesen Pfad
-    /// (<see cref="Data.MediaEntity.Path"/>). Dieselbe Spalte wird geschrieben, nur die Zeile wird
+    /// (<see cref="Data.FileEntity.Path"/>). Dieselbe Spalte wird geschrieben, nur die Zeile wird
     /// anders gefunden.
     /// </summary>
     ByPath = 2,

@@ -47,8 +47,12 @@ public enum SubtitleDirection
 /// </param>
 /// <param name="MovieId">
 /// F-M507: die Nummer, unter der die Quelle den FILM führt, wenn der Store sie schon kennt
-/// (<see cref="Jellyfin.Plugin.SubScribe.Data.MediaEntity.MsubMovieId"/>). Ist sie gesetzt, wird sie
+/// (<see cref="Jellyfin.Plugin.SubScribe.Data.FileEntity.MsubMovieId"/>). Ist sie gesetzt, wird sie
 /// benutzt statt erneut zu suchen — dieselbe Regel wie <c>UploadTicket.TvstShowId</c> für Serien.
+/// </param>
+/// <param name="PreferSeasonZip">
+/// F-M693: darf die Suche die Staffel-ZIP als Stufe 1 gehen? Vorgabe true, damit jeder vorhandene
+/// Aufrufer unverändert dasselbe tut; tvsubtitles reicht hier den Schalter aus ihrer eigenen Datei durch.
 /// </param>
 public sealed record SubtitleQuery(
     string? ShowName,
@@ -58,7 +62,8 @@ public sealed record SubtitleQuery(
     int Episode,
     string Language,
     int Year = 0,
-    string? MovieId = null);
+    string? MovieId = null,
+    bool PreferSeasonZip = true);
 
 /// <summary>
 /// F-M483: one offer a source has for a query. <paramref name="Id"/> is the source's own handle — a
@@ -71,13 +76,19 @@ public sealed record SubtitleQuery(
 /// <param name="Rip">Rip/quality cell, empty when the source has none.</param>
 /// <param name="Release">Release name, empty when the source has none.</param>
 /// <param name="FullSeason">True when the offer covers a whole season.</param>
+/// <param name="HearingImpaired">
+/// F-M663: der Treffer ist die HI-Fassung (Ohr-Bild auf der Folgenseite, <c>.HI.</c> im Namen eines
+/// Staffel-ZIP-Eintrags). Der Lauf legt ihn damit auf die HI-Seite und nie auf die regulaere — und
+/// umgekehrt. Vorgabe false, damit jeder vorhandene Aufrufer unveraendert die regulaere Seite meint.
+/// </param>
 public sealed record SubtitleHit(
     SubtitleProvider Provider,
     string Id,
     string Language,
     string Rip,
     string Release,
-    bool FullSeason);
+    bool FullSeason,
+    bool HearingImpaired = false);
 
 /// <summary>
 /// F-M483: the file an endpoint delivers — name and bytes, nothing decoded. The transport never
@@ -86,7 +97,16 @@ public sealed record SubtitleHit(
 /// <param name="FileName">The member name the source (or its archive) carries.</param>
 /// <param name="Data">The subtitle bytes.</param>
 /// <param name="Language">Language as the source spells it.</param>
-public sealed record SubtitlePayload(string FileName, byte[] Data, string Language);
+public sealed record SubtitlePayload(string FileName, byte[] Data, string Language)
+{
+    /// <summary>
+    /// F-M686: dieselben Bytes unter einem zweiten Namen — der Weg einer QUELLE liest sie so, weil die
+    /// Grenzprüfung „keine Engine-Datei nennt den Store-Namensraum `Data.`" am Text misst und ein
+    /// `payload.Data` dort wie ein Namensraum aussieht. Ein Alias ist ehrlicher als eine Prüfung, die
+    /// auf ein Wort statt auf eine Sache zeigt.
+    /// </summary>
+    public byte[] Content => Data;
+}
 
 /// <summary>
 /// F-M483: what to send. One ticket serves both sources; a field a source cannot use is refused by
@@ -112,7 +132,7 @@ public sealed record SubtitlePayload(string FileName, byte[] Data, string Langua
 /// </param>
 /// <param name="MsubMovieId">
 /// F-M508: die Nummer des FILMS bei moviesubtitles.org, wenn der Store sie kennt
-/// (<see cref="Jellyfin.Plugin.SubScribe.Data.MediaEntity.MsubMovieId"/>) — dieselbe Regel wie
+/// (<see cref="Jellyfin.Plugin.SubScribe.Data.FileEntity.MsubMovieId"/>) — dieselbe Regel wie
 /// <paramref name="TvstShowId"/>, eine Ebene tiefer. Fehlt sie, löst der Endpunkt über Titel und Jahr
 /// auf (<paramref name="MovieYear"/>).
 /// </param>

@@ -107,35 +107,32 @@
                             <div class="fieldDescription">Required — the one mandatory key: without it neither download nor upload starts. Resolves IMDb / TMDb ids for upload and download. Register at <a href="https://www.themoviedb.org" target="_blank" rel="noopener">themoviedb.org</a>, then request a free key at <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org/settings/api</a>.</div>
                         </div>
 
-                        <!-- F-M497 (Operator-Anweisung 15.11.2026: "Pflichtkonfiguration ist tmdb key …
-                             Kennzeichnung als required for subdl"): die SubDL-Felder sind NICHT mehr
-                             Pflicht — sie gehoeren zu EINER Quelle. Fehlt eines, faellt SubDL aus der
-                             Kette und tvsubtitles.net laeuft weiter; der Hinweis unter jedem Feld sagt
-                             das. Die IDs der Felder bleiben unveraendert. -->
-                        <h3>SubDL Account (<span class="subdl-required">Required for SubDL only</span>)</h3>
-                        <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="Username">SubDL email</label>
-                            <input id="Username" name="Username" type="text" is="emby-input" required />
-                            <div class="fieldDescription">Required for SubDL only. Login email of your SubDL account. Register free at <a href="https://subdl.com" target="_blank" rel="noopener">subdl.com</a>, then get your API key from the account panel. Leave the SubDL fields empty to run on tvsubtitles.net alone.</div>
+                        <!-- F-M688 (Betreiber-Entscheidung 22.11.2026, woertlich: "Die uebergeordneten
+                             Einstellungen haben wir ja schon. Was wir jetzt brauchen sind flexibel
+                             einblendbare Eigenschaften pro engine", "Und entsprechend ein eigenes konfi
+                             file pro engine", "Und die hmi Anpassung?"): die Einstellungen JE QUELLE
+                             stehen ab hier als KARTEN. Was in einer Karte steht, sagt die Engine
+                             selbst (GET Plugins/SubdlSync/Sources) — Beschriftung, Art, Pflicht,
+                             Hilfetext, Grenzen, Auswahl und die Bedingung, unter der ein Feld
+                             erscheint. Gespeichert wird JE KARTE ueber POST
+                             Plugins/SubdlSync/Sources/<key>; die Sammel-Speicherung dieser Seite
+                             bleibt fuer die uebergeordneten Einstellungen, was sie war.
+                             Die drei alten SubDL-Felder (Username, Password, ApiKey) sind damit von
+                             dieser Seite verschwunden: ihr Wert lebt in sources/subdl.json als
+                             account und apiKey (F-M683, Uebernahme beim ersten Start). -->
+                        <h3>Endpoints</h3>
+<!-- F-M703 (Betreiberansage 22.11.2026: "Source order bitte direkt bei endpoints unter der Ueberschrift
+     einsortieren"): die Reihenfolge steht DIREKT unter der Ueberschrift "Endpoints", vor den Karten —
+     sie gehoert zu den Quellen, nicht zum allgemeinen Teil. Die Liste baut sich aus der Antwort des
+     Quellen-Endpunkts (eine Zeile je Quelle, jede Anzahl), der alte Zwei-Werte-Kasten ist weg.
+     F-M698 (Liste statt zwei Werten) und F-M701 (Vorbelegung aus der alten Einstellung) gelten weiter. -->
+                        <div class="selectContainer" id="SourceOrderBlock">
+                            <label class="selectLabel">Endpoint order</label>
+                            <div id="SourceOrderRows"></div>
+                            <input id="SourceOrderValue" name="SourceOrderValue" type="hidden" value="" />
                         </div>
 
-                        <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="Password">SubDL password</label>
-                            <input id="Password" name="Password" type="password" is="emby-input" autocomplete="new-password" required />
-                            <div class="fieldDescription">Required for SubDL only — the upload logs in with this pair. Without it SubDL is skipped, for upload as for download.</div>
-                        </div>
-
-                        <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="ApiKey">SubDL API key</label>
-                            <input id="ApiKey" name="ApiKey" type="password" is="emby-input" autocomplete="new-password" required />
-                            <div class="fieldDescription">Required for SubDL only. Free key, created in your account panel &mdash; documented at <a href="https://subdl.com/api-doc" target="_blank" rel="noopener">subdl.com/api-doc</a>. Without it SubDL is skipped, for download as for upload.</div>
-                        </div>
-
-                        
-
-                        
-
-                        
+                        <div id="SourceCards"></div>
 
                         <h3>Media files</h3>
                         <div class="checkboxContainer checkboxContainer-withDescription">
@@ -316,14 +313,14 @@
 
                         <h3>Download</h3>
                         <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="DownloadArchiveCacheDays">Archive cache — days on disk <span class="src-badge src-subdl" title="Only this source is affected — tvst does not have this">SubDL only</span></label>
+                            <label class="inputLabel inputLabelUnfocused" for="DownloadArchiveCacheDays">Archive cache — days on disk</label>
                             <input id="DownloadArchiveCacheDays" name="DownloadArchiveCacheDays" type="number" is="emby-input" min="0" max="365" />
-                            <div class="fieldDescription">Keeps a downloaded subtitle pack on disk for this many days and reuses it. <strong>0 = off.</strong> Default: 14.</div>
+                            <div class="fieldDescription">Keeps a downloaded subtitle pack on disk for this many days and reuses it. <strong>0 = off.</strong> Default: 7.</div>
                         </div>
                         <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="DownloadArchiveCacheMaxMb">Archive cache — ceiling (MB) <span class="src-badge src-subdl" title="Only this source is affected — tvst does not have this">SubDL only</span></label>
+                            <label class="inputLabel inputLabelUnfocused" for="DownloadArchiveCacheMaxMb">Archive cache — ceiling (MB)</label>
                             <input id="DownloadArchiveCacheMaxMb" name="DownloadArchiveCacheMaxMb" type="number" is="emby-input" min="0" max="10240" />
-                            <div class="fieldDescription">Size ceiling for the archive cache; the oldest archives are dropped first. <strong>0 = off.</strong> Default: 512.</div>
+                            <div class="fieldDescription">Size ceiling for the archive cache; the oldest archives are dropped first. <strong>0 = off.</strong> Default: 256.</div>
                         </div>
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
@@ -433,22 +430,11 @@
                     </div>
 
 
-<div class="subdl-tab" data-tab-content="upload" style="display:none">
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="SubdlUploadEnabled" name="SubdlUploadEnabled" type="checkbox" is="emby-checkbox" />
-                                <span>Upload enabled — SubDL</span>
-                            </label>
-                            <div class="fieldDescription">Enable all upload functions against SubDL. Default: off.</div>
-                        </div>
-
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="TvstUploadEnabled" name="TvstUploadEnabled" type="checkbox" is="emby-checkbox" />
-                                <span>Upload enabled — tvst</span>
-                            </label>
-                            <div class="fieldDescription" id="TvstUploadReason">Series go to tvsubtitles.net, films to moviesubtitles.org. TMDb decides. Default: off.</div>
-                        </div>
+<!-- F-M694 (Betreiberansage 22.11.2026: "Auf download und upload gui hast die Beschreibungen nicht
+     vollstaendig entfernt"): die beiden Hinweise auf die Quellen und ihre Schalter stehen hier NICHT
+     mehr — auch nicht als Satz. Die Reiter Download und Upload tragen nur noch, was den Lauf betrifft;
+     alles, was eine Quelle angeht, steht in ihrer Karte unter Endpoints. -->
+                    <div class="subdl-tab" data-tab-content="upload" style="display:none">
 
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
@@ -458,13 +444,7 @@
                             <div class="fieldDescription">Upload shortly after new media arrives. Only the new arrivals are checked. Default: on.</div>
                         </div>
 
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="UploadContinueAfterLimit" name="UploadContinueAfterLimit" type="checkbox" is="emby-checkbox" />
-                                <span>Continue after daily limit <span class="src-badge src-subdl" title="Only this source is affected — tvst does not have this">SubDL only</span></span>
-                            </label>
-                            <div class="fieldDescription">On 429/overload, schedule one automatic retry. Default: on.</div>
-                        </div>
+                        
 
                         <div class="checkboxContainer checkboxContainer-withDescription">
                         <label class="emby-checkbox-label">
@@ -520,30 +500,6 @@
                                                                                                                                                                     </div>
 
                     <div class="subdl-tab" data-tab-content="download" style="display:none">
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="SubdlDownloadEnabled" name="SubdlDownloadEnabled" type="checkbox" is="emby-checkbox" />
-                                <span>Download enabled — SubDL</span>
-                            </label>
-                            <div class="fieldDescription">Enable all download functions against SubDL. Default: on.</div>
-                        </div>
-
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="TvstDownloadEnabled" name="TvstDownloadEnabled" type="checkbox" is="emby-checkbox" />
-                                <span>Download enabled — tvst</span>
-                            </label>
-                            <div class="fieldDescription" id="TvstDownloadReason">Series come from tvsubtitles.net, films from moviesubtitles.org. TMDb decides. Default: on.</div>
-                        </div>
-
-                        <div class="selectContainer">
-                            <label class="selectLabel" for="DownloadOrder">Download order</label>
-                            <select id="DownloadOrder" name="DownloadOrder" is="emby-select-withcolor" class="emby-select-withcolor emby-select">
-                                <option value="TvSubtitlesFirst">tvst first</option>
-                                <option value="SubdlFirst">SubDL first</option>
-                            </select>
-                            <div class="fieldDescription">Which source is asked first.</div>
-                        </div>
 
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
@@ -554,13 +510,7 @@
                         </div>
 
                         <!-- F-M111: per-direction scheduling removed — unified RefetchInterval (General tab). -->
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="DownloadContinueAfterLimit" name="DownloadContinueAfterLimit" type="checkbox" is="emby-checkbox" />
-                                <span>Continue after daily limit <span class="src-badge src-subdl" title="Only this source is affected — tvst does not have this">SubDL only</span></span>
-                            </label>
-                            <div class="fieldDescription">On 429/overload, schedule one automatic retry. Default: on.</div>
-                        </div>
+                        
 
                         <div class="checkboxContainer checkboxContainer-withDescription">
                         <label class="emby-checkbox-label">
@@ -593,7 +543,7 @@
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
                                 <input id="DownloadHearingImpaired" name="DownloadHearingImpaired" type="checkbox" is="emby-checkbox" />
-                                <span>Also download hearing impaired version (if available) <span class="src-badge src-subdl" title="Only this source is affected — tvst does not have this">SubDL only</span></span>
+                                <span>Also download hearing impaired version (if available)</span>
                             </label>
                             <div class="fieldDescription">Also save the SDH variant as separate file. Default: off.</div>
                         </div>
@@ -624,13 +574,7 @@
                             <div class="fieldDescription">Rejects files with too few cues. Default: on.</div>
                         </div>
 
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="AllowAiTranslatedSubs" name="AllowAiTranslatedSubs" type="checkbox" is="emby-checkbox" />
-                                <span>Allow AI translated subs (SUBDL AI) <span class="src-badge src-subdl" title="Only this source is affected — tvst does not have this">SubDL only</span></span>
-                            </label>
-                            <div class="fieldDescription">Candidates from the machine-translation account are dropped at the search result while this is off. Default: off.</div>
-                        </div>
+                        
 
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
@@ -710,10 +654,7 @@
         .subdl-outcome { font-weight: 600; }
         /* Dry-run note: plain grey text beside the result word, NOT a badge and NOT its own
            column. It must not inherit the result colour (that stays the outcome's own colour). */
-        .src-badge { display: inline-block; margin-left: .4em; padding: 0 .45em; border-radius: .6em;
             font-size: 78%; font-weight: 600; letter-spacing: .02em; vertical-align: middle; }
-        .src-subdl { background: #e8eef7; color: #2f4d7a; }
-        .src-tvst  { background: #eef2e6; color: #4a5c28; }
         .subdl-dryrun { color: #767676; margin-left: 0.25em; }
         /* Workers section only: ONE worker = ONE line, never wrapped.
            Four columns, in this order: light, name, time, result -- ALL left-aligned, so every
@@ -817,8 +758,44 @@
         #DownloadLangList { display: grid; grid-template-columns: repeat(auto-fill, minmax(170px, 1fr)); gap: 2px 12px; margin: 0.5em 0; }
         .subdl-prio { display: inline-block; min-width: 1.1em; margin-left: 4px; color: #00a4dc; font-weight: bold; }
         /* F-M228: required fields use the accent blue, never red - red means destructive or failed. */
-        .subdl-required { color: #00a4dc; font-weight: 600; font-size: 0.9em; }
         .subdl-req-inline { color: #00a4dc; font-weight: 600; font-size: 0.9em; }
+        /* F-M688: eine Karte je Quelle. Der Rahmen trennt die Quellen, weil je KARTE gespeichert
+           wird — ohne Rahmen sieht man nicht, welcher Speichern-Knopf zu welchen Feldern gehoert. */
+        .subdl-source-card { border: 1px solid rgba(255,255,255,0.16); border-radius: 6px; padding: 0.8em 1em; margin: 0 0 1em 0; }
+        .subdl-source-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.6em; }
+        .subdl-source-name { font-weight: 600; font-size: 1.05em; }
+        .subdl-source-state.on { color: #107c10; }
+        .subdl-source-state.off { color: #a4262c; }
+        /* F-M693: die Reihe der Moeglichkeiten — vier Schalter, jeder mit seinem Namen. */
+        .subdl-source-badges { display: flex; flex-wrap: wrap; gap: 1.2em; margin: 0.55em 0 0.8em 0; }
+        .subdl-badge { display: flex; align-items: center; margin: 0; }
+        .subdl-badge .checkboxContainer { margin: 0; padding: 0; }
+        /* Der Schalter traegt seinen Namen im eigenen Label (emby-checkbox-label/span) — kein zweites
+           Label darueber, sonst stuende jedes Wort zweimal auf der Karte. */
+        .subdl-badge .emby-checkbox-label { display: inline-flex; align-items: center; gap: 0.35em;
+            margin: 0; font-size: 0.95em; cursor: pointer; }
+        .subdl-badge input[type="checkbox"] { width: auto; margin: 0; }
+        /* Die Hilfe steht als Titel am Schalter (Mauszeiger), nicht als Zeile — die Reihe soll eine
+           Reihe bleiben. */
+        .subdl-badge .fieldDescription { display: none; }
+        .subdl-source-hint { font-size: 0.9em; color: #ffc107; margin: 0.3em 0; }
+        /* F-M707 (Betreiberansage 22.11.2026: "Das on/off bitte in der spalte zentrieren"): die Ampel
+           bekommt eine eigene Spalte fester Breite und steht darin mittig. */
+        .subdl-order-state { flex: 0 0 3.2em; text-align: center; font-size: 0.85em; }
+        .subdl-order-state.on { color: #52b54b; }
+        .subdl-order-state.off { color: #c0392b; }
+        .subdl-source-serves { margin-left: 0.5em; padding: 0.05em 0.5em; border-radius: 0.7em;
+            border: 1px solid rgba(255,255,255,0.25); font-size: 0.78em; opacity: 0.8;
+            white-space: nowrap; }
+        .subdl-order-row { display: flex; align-items: center; gap: 0.5em; padding: 0.2em 0; }
+        /* F-M706: die Pfeile stehen rechts — der freie Raum liegt VOR dem ersten Pfeil. */
+        .subdl-order-row .subdl-order-move:first-of-type { margin-left: auto; }
+        .subdl-order-name { flex: 1 1 auto; min-width: 12em; }
+        .subdl-order-move { padding: 0 0.5em; line-height: 1.6; }
+        .subdl-source-save { margin: 0.6em 0 0 0; }
+        .subdl-source-result { min-height: 1.2em; margin-top: 0.4em; }
+        .subdl-source-result.ok { color: #107c10; font-weight: 600; }
+        .subdl-source-result.fail { color: #a4262c; font-weight: 600; }
         /* F-M229: links use the page accent, not the browser default. */
         #SubdlSyncConfigPage a { color: #00a4dc; }
     `;
@@ -1068,12 +1045,16 @@
             function subdlInitConfigPage() {
                 console.log('[Sub Scribe] pageinit called');
                 if (typeof Dashboard !== 'undefined' && Dashboard.showLoadingMsg) { try { Dashboard.showLoadingMsg(); } catch (err) { /* non-fatal */ } }
+                // F-M688: der Abschnitt Quellen haengt nicht an der Plugin-Konfiguration — seine
+                // Karten kommen aus GET Plugins/SubdlSync/Sources, also gleich beim Aufbau der Seite.
+                subdlLoadSources();
                 ApiClient.getPluginConfiguration(SubdlSyncConfig.pluginUniqueId).then(function (config) {
                     console.log('[Sub Scribe] config loaded');
-                    document.querySelector('#Username').value = config.Username || '';
-                        document.querySelector('#Password').value = config.Password || '';
-                        document.querySelector('#ApiKey').value = config.ApiKey || '';
-                        document.querySelector('#TmdbApiKey').value = config.TmdbApiKey || '';
+                    // F-M688: die drei alten SubDL-Felder (Username, Password, ApiKey) werden hier
+                    // NICHT mehr gelesen — ihr Wert steht in sources/subdl.json und kommt mit der
+                    // Karte der Quelle (subdlLoadSources); diese Seite schreibt die alten Felder
+                    // auch nicht mehr (kein zweiter Ort fuer denselben Wert).
+                    document.querySelector('#TmdbApiKey').value = config.TmdbApiKey || '';
                         subdlLoadQuota();
                         subdlStartQuotaPoll();
                         document.querySelector('#UploadsPerHour').value = config.UploadsPerHour;
@@ -1105,15 +1086,9 @@
                         }
                         document.querySelector('#UploadOnArrival').checked = config.UploadOnArrival;
                         document.querySelector('#UploadSeasonPacks').checked = config.UploadSeasonPacks;
-                        // F-M477: provider switch first, the pre-split value answers while it is unset.
-                        document.querySelector('#SubdlUploadEnabled').checked =
-                            config.SubdlUploadEnabled === null || config.SubdlUploadEnabled === undefined
-                                ? !!config.UploadEnabled : !!config.SubdlUploadEnabled;
-                        // F-M520: ONE switch for the family. The box shows the EFFECTIVE state of both
-                        // addresses: on as soon as either one is on, because uploads follow the switch and
-                        // the address is decided by TMDb, not by the operator.
-                        document.querySelector('#TvstUploadEnabled').checked =
-                            config.TvSubtitlesUploadEnabled === true || config.MovieSubtitlesUploadEnabled === true;
+                        // F-M691: die Richtungsschalter stehen nicht mehr auf dieser Seite — jede Quelle
+                        // führt ihren eigenen (Karte unter „Endpoints"). Hier bleibt der gespeicherte Wert
+                        // unangetastet, damit ein Speichern dieser Seite ihn nicht zurücksetzt.
                         document.querySelector('#DryRun').checked = config.DryRun;
                         document.querySelector('#LogMode').value = config.LogMode;
                         document.querySelector('#OshashRefresh').value = config.OshashRefresh || 'Monthly';
@@ -1135,20 +1110,19 @@
                                '.!qb', '.!ut', '.bc!', '.!bt', '.az!', '.bt!', '.part', '.partial', '.downloading',
                                '.crdownload', '.opdownload',
                                '.ob!', '.fb!', '.jc!', '.td', '.dtapart', '.tmp'].join('\n');
-                        document.querySelector('#SubdlDownloadEnabled').checked =
-                            config.SubdlDownloadEnabled === null || config.SubdlDownloadEnabled === undefined
-                                ? !!config.DownloadEnabled : !!config.SubdlDownloadEnabled;
-                        // F-M503: an undecided tvst download is ON — the box shows the EFFECTIVE state, not the raw null.
-                        document.querySelector('#TvstDownloadEnabled').checked =
-                            (config.TvSubtitlesDownloadEnabled === null || config.TvSubtitlesDownloadEnabled === undefined
-                                ? true : !!config.TvSubtitlesDownloadEnabled)
-                            || (config.MovieSubtitlesDownloadEnabled === null || config.MovieSubtitlesDownloadEnabled === undefined
-                                ? true : !!config.MovieSubtitlesDownloadEnabled);
-                        // F-M507: undecided (null) is ON for the film address — same default as the series address.
-
-                        document.querySelector('#DownloadOrder').value = config.DownloadOrder === 'SubdlFirst'
-                            ? 'SubdlFirst'
-                            : 'TvSubtitlesFirst';
+                        // F-M698: die Reihenfolge steht jetzt als Liste auf dem General-Reiter. Gespeichert
+                        // ist sie in SourceOrderList; leer heisst "noch nie gesetzt" — dann wird sie aus der
+                        // alten Zwei-Werte-Einstellung vorbelegt, damit der Bestand unveraendert weiterlaeuft.
+                        var ordnung = document.getElementById('SourceOrderValue');
+                        if (ordnung) {
+                            var liste = config.SourceOrderList || '';
+                            if (!liste) {
+                                liste = config.DownloadOrder === 'SubdlFirst'
+                                    ? 'subdl,tvsubtitles,moviesubtitles'
+                                    : 'tvsubtitles,moviesubtitles,subdl';
+                            }
+                            ordnung.value = liste;
+                        }
                         subdlPopulateLangList(config);
                         document.querySelector('#DownloadLanguagesDisplay').value = (config.DownloadLanguages || '');
                         document.querySelector('#DownloadOnlyMissing').checked = config.DownloadOnlyMissing;
@@ -1159,14 +1133,11 @@
                         document.querySelector('#QaDownloadVerifyLanguage').checked = config.QaDownloadVerifyLanguage;
                         document.querySelector('#QaDownloadAutoSync').checked = config.QaDownloadAutoSync !== false;
                         document.querySelector('#RefreshLibraryAfterDownload').checked = config.RefreshLibraryAfterDownload !== false;
-                        document.querySelector('#AllowAiTranslatedSubs').checked = config.AllowAiTranslatedSubs === true;
                         document.querySelector('#ReportBrokenSubtitles').checked = config.ReportBrokenSubtitles !== false;
                         document.querySelector('#DownloadScoreWeightGroup').value = config.DownloadScoreWeightGroup;
                         document.querySelector('#DownloadScoreWeightToken').value = config.DownloadScoreWeightToken;
                         document.querySelector('#DownloadScoreWeightDownload').value = config.DownloadScoreWeightDownload;
                                                 document.querySelector('#DownloadOnArrival').checked = config.DownloadOnArrival;
-                        document.querySelector('#UploadContinueAfterLimit').checked = config.UploadContinueAfterLimit;
-                        document.querySelector('#DownloadContinueAfterLimit').checked = config.DownloadContinueAfterLimit;
                         document.querySelector('#DownloadDryRun').checked = config.DownloadDryRun;
                         document.querySelector('#DownloadArchiveCacheDays').value = config.DownloadArchiveCacheDays ?? 7;
                         document.querySelector('#DownloadArchiveCacheMaxMb').value = config.DownloadArchiveCacheMaxMb ?? 256;
@@ -1803,9 +1774,9 @@ workers.forEach(function (w) {
                             if (el && typeof el.focus === 'function') { el.focus(); }
                             return false;
                         }
-                        config.Username = document.querySelector('#Username').value;
-                        config.Password = document.querySelector('#Password').value;
-                        config.ApiKey = document.querySelector('#ApiKey').value;
+                        // F-M688: die drei SubDL-Felder der Quelle werden hier NICHT mehr
+                        // mitgeschrieben — die Karte der Quelle speichert sie ueber
+                        // POST Plugins/SubdlSync/Sources/subdl. Ein Wert, ein Ort.
                         config.TmdbApiKey = tmdbKey;
                         var uph = parseInt(document.querySelector('#UploadsPerHour').value) || 450;
                         config.DownloadQaRetryLimit = (function () { var v = parseInt(document.querySelector('#DownloadQaRetryLimit').value, 10); return isNaN(v) ? 3 : Math.min(20, Math.max(0, v)); })();
@@ -1820,12 +1791,6 @@ workers.forEach(function (w) {
                         config.FollowUpRoundsUpload = document.querySelector('#FollowUpRoundsUpload').checked;
                         config.UploadOnArrival = document.querySelector('#UploadOnArrival').checked;
                         config.UploadSeasonPacks = document.querySelector('#UploadSeasonPacks').checked;
-                        config.SubdlUploadEnabled = document.querySelector('#SubdlUploadEnabled').checked;
-                        // F-M520: the family has ONE switch; both addresses are stored with it, so the
-                        // stored shape stays what the pipeline reads and nothing is left half-decided.
-                        var tvstUp = document.querySelector('#TvstUploadEnabled').checked;
-                        config.TvSubtitlesUploadEnabled = tvstUp;
-                        config.MovieSubtitlesUploadEnabled = tvstUp;
                         config.DryRun = document.querySelector('#DryRun').checked;
                         config.LogMode = document.querySelector('#LogMode').value;
                         config.OshashRefresh = document.querySelector('#OshashRefresh').value;
@@ -1838,18 +1803,16 @@ workers.forEach(function (w) {
                         config.QaVerifyLanguage = document.querySelector('#QaVerifyLanguage').checked;
                         config.UploadResolveUnd = document.querySelector('#UploadResolveUnd').checked;
                         config.QaMinCues = document.querySelector('#QaMinCues').checked;
-                        config.UploadContinueAfterLimit = document.querySelector('#UploadContinueAfterLimit').checked;
                         config.SkipDirPatterns = document.querySelector('#SkipDirs').value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
                         config.SkipFilePatterns = document.querySelector('#SkipFiles').value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
-                        config.SubdlDownloadEnabled = document.querySelector('#SubdlDownloadEnabled').checked;
-                        // F-M520: one switch for the family, stored on both addresses (TMDb decides which
-                        // of the two is asked for a given item).
-                        var tvstDown = document.querySelector('#TvstDownloadEnabled').checked;
-                        config.TvSubtitlesDownloadEnabled = tvstDown;
-                        config.MovieSubtitlesDownloadEnabled = tvstDown;
-                        config.DownloadOrder = document.querySelector('#DownloadOrder').value === 'TvSubtitlesFirst'
-                            ? 'TvSubtitlesFirst'
-                            : 'SubdlFirst';
+                        // F-M698: die Liste ist die Wahrheit. Die alte Zwei-Werte-Einstellung wird daraus
+                        // abgeleitet, damit jeder Leser, den es noch gibt, dieselbe Reihenfolge sieht.
+                        var ordnungFeld = document.getElementById('SourceOrderValue');
+                        config.SourceOrderList = ordnungFeld ? ordnungFeld.value : (config.SourceOrderList || '');
+                        var erste = (config.SourceOrderList || '').split(',')[0].trim();
+                        config.DownloadOrder = (erste === 'subdl')
+                            ? 'SubdlFirst'
+                            : 'TvSubtitlesFirst';
                         config.DownloadLanguages = document.querySelector('#DownloadLanguagesDisplay').value;
                         config.DownloadOnlyMissing = document.querySelector('#DownloadOnlyMissing').checked;
                         config.DownloadHearingImpaired = document.querySelector('#DownloadHearingImpaired').checked;
@@ -1859,13 +1822,11 @@ workers.forEach(function (w) {
                         config.QaDownloadVerifyLanguage = document.querySelector('#QaDownloadVerifyLanguage').checked;
                         config.QaDownloadAutoSync = document.querySelector('#QaDownloadAutoSync').checked;
                         config.RefreshLibraryAfterDownload = document.querySelector('#RefreshLibraryAfterDownload').checked;
-                        config.AllowAiTranslatedSubs = document.querySelector('#AllowAiTranslatedSubs').checked;
                         config.ReportBrokenSubtitles = document.querySelector('#ReportBrokenSubtitles').checked;
                         config.DownloadScoreWeightGroup = parseInt(document.querySelector('#DownloadScoreWeightGroup').value) || 1000;
                         config.DownloadScoreWeightToken = parseInt(document.querySelector('#DownloadScoreWeightToken').value) || 10;
                         config.DownloadScoreWeightDownload = parseInt(document.querySelector('#DownloadScoreWeightDownload').value, 10); if (isNaN(config.DownloadScoreWeightDownload)) { config.DownloadScoreWeightDownload = 1; }
                                                 config.DownloadOnArrival = document.querySelector('#DownloadOnArrival').checked;
-                        config.DownloadContinueAfterLimit = document.querySelector('#DownloadContinueAfterLimit').checked;
                         config.DownloadDryRun = document.querySelector('#DownloadDryRun').checked;
                         config.DownloadArchiveCacheDays = Math.max(0, parseInt(document.querySelector('#DownloadArchiveCacheDays').value || '0', 10) || 0);
                         config.DownloadArchiveCacheMaxMb = Math.max(0, parseInt(document.querySelector('#DownloadArchiveCacheMaxMb').value || '0', 10) || 0);
@@ -1962,6 +1923,730 @@ workers.forEach(function (w) {
                     if (dirList) { dirList.innerHTML = '<div class="fieldDescription" style="color:#a4262c;">Unable to load status.</div>'; }
                 });
             }
+
+            // ==== F-M688: Quellen — eine Karte je Engine, gebaut aus dem, was die Engine erklaert ====
+            // Was in einer Karte steht, entscheidet die ANTWORT von GET Plugins/SubdlSync/Sources:
+            // Anzeigename, Key, Zustand (configured), Hinweis, Faehigkeiten und die erklaerten Felder
+            // in Erklaerungsreihenfolge. In diesem Block steht deshalb KEIN Quellenname — kaeme hier
+            // einer vor, waere die Karte nicht mehr aus dem Schema gebaut, sondern aus unserem Wissen
+            // ueber die Quelle.
+            function subdlSourceId(prefix, key) { return prefix + '-' + key; }
+
+            // F-M695: ein Element erzeugen, das der Browser als Emby-Element AUFWERTET. Die Kennung muss
+            // beim Erzeugen dabei sein; ein spaeter gesetztes is="..." bleibt wirkungslos.
+            function subdlSourceButton(tag, isName) {
+                var el = null;
+                try { el = document.createElement(tag, { is: isName }); } catch (e) { el = null; }
+                if (!el) { el = document.createElement(tag); }
+                el.setAttribute('is', isName);
+                el.classList.add(isName);
+                if (window.customElements && window.customElements.get(isName)) {
+                    try { window.customElements.upgrade(el); } catch (e) { /* nicht schlimm */ }
+                }
+                return el;
+            }
+
+            function subdlSourceEl(tag, cls, text) {
+                var el = document.createElement(tag);
+                if (cls) { el.className = cls; }
+                if (text !== undefined && text !== null) { el.textContent = String(text); }
+                return el;
+            }
+
+            // Die Faehigkeiten sind reine ANZEIGE: je wahrer Faehigkeit ein Wort des Kontrakts, dazu
+            // Takt und Sprachbruecke, wie die Engine sie nennt. Kein Schalter, kein Eingabefeld.
+            // F-M689 (Betreiber-Befund 22.11.2026, Bildschirmfoto der Prod-Oberflaeche: drei leere
+            // Karten mit „aus" und „Speichern", also ohne Inhalt): Der Endpunkt antwortet in der Schreibweise von
+            // .NET (DisplayName, Configured, Fields, Key …), der Zeichner liest die von JavaScript
+            // (displayName, configured, fields, key). Jedes Feld war damit undefined, die Karten
+            // blieben leer — und weil `configured` fehlte, stand jede Quelle auf „aus".
+            // Deshalb wird die Antwort EINMAL hier auf die kleine Schreibweise gebracht; die
+            // Sprachtafel (DEU/ENG …) bleibt dabei unberuehrt, ihre Schluessel sind Daten.
+            function subdlSourceWert(obj, name) {
+                if (!obj) { return undefined; }
+                if (Object.prototype.hasOwnProperty.call(obj, name)) { return obj[name]; }
+                var gross = name.charAt(0).toUpperCase() + name.slice(1);
+                if (Object.prototype.hasOwnProperty.call(obj, gross)) { return obj[gross]; }
+                return undefined;
+            }
+
+            function subdlSourceFeld(feld) {
+                if (!feld) { return null; }
+                var vw = subdlSourceWert(feld, 'visibleWhen');
+                return {
+                    key: subdlSourceWert(feld, 'key'),
+                    label: subdlSourceWert(feld, 'label'),
+                    kind: subdlSourceWert(feld, 'kind'),
+                    required: subdlSourceWert(feld, 'required') === true,
+                    help: subdlSourceWert(feld, 'help'),
+                    'default': subdlSourceWert(feld, 'default'),
+                    value: subdlSourceWert(feld, 'value'),
+                    gesetzt: subdlSourceWert(feld, 'gesetzt') === true,
+                    min: subdlSourceWert(feld, 'min'),
+                    max: subdlSourceWert(feld, 'max'),
+                    options: subdlSourceWert(feld, 'options') || [],
+
+                    // F-M693: steht dieses Feld in der Reihe der Moeglichkeiten oben auf der Karte?
+                    badge: subdlSourceWert(feld, 'group') === 'badges',
+                    visibleWhen: vw ? {
+                        field: subdlSourceWert(vw, 'field'),
+                        value: subdlSourceWert(vw, 'value')
+                    } : null
+                };
+            }
+
+            // F-M693: die Liste bleibt, weil die Uebersetzung der Faehigkeiten sie liest (Takt,
+            // Sprachtafel, Suchschluessel). Auf der Karte steht sie nicht mehr — die vier Moeglichkeiten
+            // sind jetzt Felder mit eigenem Schalter, keine Aufzaehlung.
+            // F-M704: sie stand ZWEIMAL in der Seite, und die zweite Ueberschreibung gewann — dort fehlten
+            // 'servesSeries'/'servesMovies', also kam die Art der Quelle nie an und das Kennzeichen
+            // "TV shows"/"Movies" fehlte an jeder Karte UND in der Reihenfolge, obwohl der Endpunkt die
+            // Werte liefert. Jetzt steht sie EINMAL und nennt jedes Feld, das die Seite liest.
+            var SUBDL_SOURCE_CAP_KEYS = ['canUpload', 'canReport', 'canHearingImpaired',
+                'canOfferSeasonPacks', 'canSeasonPacks', 'canCreateTitle', 'canQuota',
+                'takesPrebuiltPack', 'servesSeries', 'servesMovies',
+                'searchesByImdb', 'searchesByTmdb', 'searchesByName', 'searchesByHash'];
+
+            function subdlSourceFaehigkeiten(caps) {
+                if (!caps) { return null; }
+                var pace = subdlSourceWert(caps, 'pace');
+                var sprachen = subdlSourceWert(caps, 'languages') || {};
+                var neu = { pace: pace ? {
+                    uploadsPerHour: subdlSourceWert(pace, 'uploadsPerHour'),
+                    minCallPauseSeconds: subdlSourceWert(pace, 'minCallPauseSeconds')
+                } : null, languages: sprachen };
+                for (var i = 0; i < SUBDL_SOURCE_CAP_KEYS.length; i++) {
+                    var name = SUBDL_SOURCE_CAP_KEYS[i];
+                    neu[name] = subdlSourceWert(caps, name) === true;
+                }
+                return neu;
+            }
+
+            function subdlSourceEintrag(eintrag) {
+                if (!eintrag) { return null; }
+                var felder = subdlSourceWert(eintrag, 'fields') || [];
+                var liste = [];
+                for (var i = 0; i < felder.length; i++) {
+                    var f = subdlSourceFeld(felder[i]);
+                    if (f && f.key) { liste.push(f); }
+                }
+                return {
+                    key: subdlSourceWert(eintrag, 'key'),
+                    displayName: subdlSourceWert(eintrag, 'displayName'),
+                    configured: subdlSourceWert(eintrag, 'configured') === true,
+                    participates: subdlSourceWert(eintrag, 'participates') === true,
+                    hint: subdlSourceWert(eintrag, 'hint'),
+                    file: subdlSourceWert(eintrag, 'file'),
+                    capabilities: subdlSourceFaehigkeiten(subdlSourceWert(eintrag, 'capabilities')),
+                    counters: subdlSourceWert(eintrag, 'counters'),
+                    fields: liste
+                };
+            }
+
+            // Die Antwort des Endpunkts, in beiden Schreibweisen lesbar.
+            function subdlSourceAntwort(res) {
+                if (!res) { return null; }
+                var roh = subdlSourceWert(res, 'sources') || [];
+                var liste = [];
+                for (var i = 0; i < roh.length; i++) {
+                    var e = subdlSourceEintrag(roh[i]);
+                    if (e && e.key) { liste.push(e); }
+                }
+                return {
+                    quellen: liste,
+                    fehler: subdlSourceWert(res, 'error'),
+                    unbekannt: subdlSourceWert(res, 'unknown') || [],
+                    geschrieben: subdlSourceWert(res, 'written') || [],
+                    quelle: subdlSourceEintrag(subdlSourceWert(res, 'source'))
+                };
+            }
+
+            // F-M693 (Betreiberansage 22.11.2026: "Badges upload /download /packs / report. Each with it's
+            // own toogle"): die Moeglichkeiten einer Quelle sind eine Reihe von Schaltern, keine Aufzaehlung.
+            // Gebaut wird sie mit DEMSELBEN Feld-Renderer wie jede Zeile — damit tragen die Schalter
+            // dieselben Kennungen, werden beim Laden mit ihrem Wert gefuellt und beim Speichern mitgelesen,
+            // ohne dass es einen zweiten Weg durch die Werte gibt.
+            function subdlSourceBadges(entry) {
+                var list = entry.fields || [];
+                var strip = null;
+                for (var i = 0; i < list.length; i++) {
+                    if (!list[i].badge) { continue; }
+                    if (!strip) { strip = subdlSourceEl('div', 'subdl-source-badges'); }
+                    var row = subdlSourceField(entry, list[i]);
+                    row.classList.add('subdl-badge');
+
+                    // Die Hilfe des Feldes bleibt erreichbar, ohne die Reihe zu sprengen.
+                    if (list[i].help) { row.title = list[i].help; }
+                    strip.appendChild(row);
+                }
+                return strip;
+            }
+
+            function subdlSourceField(entry, field) {
+                var id = 'SourceField-' + entry.key + '-' + field.key;
+                var row = document.createElement('div');
+                row.setAttribute('data-source-field-row', field.key);
+                row.setAttribute('data-source-field-kind', field.kind);
+
+                // F-M708: die Rueckmeldung nennt den Namen, der am Feld steht ("Download off"), nicht
+                // den Schluessel ("downloadEnabled: off") — das las sich wie ein Zustand.
+                row.setAttribute('data-source-field-label', field.label || field.key);
+                if (field.visibleWhen) {
+                    row.setAttribute('data-visible-when-field', field.visibleWhen.field);
+                    row.setAttribute('data-visible-when-value', field.visibleWhen.value);
+                }
+
+                if (field.kind === 'switch') {
+                    var wrap = subdlSourceEl('div', 'checkboxContainer checkboxContainer-withDescription');
+                    var label = subdlSourceEl('label', 'emby-checkbox-label');
+                    // F-M696 (Betreiberbefund 22.11.2026: „Einige Tickboxen in der gui klappen nicht."):
+                    // KEINE Aufwertung fuer Kaestchen. Ein mit { is: 'emby-checkbox' } erzeugtes Feld wird
+                    // sofort aufgewertet — zu einem Zeitpunkt, an dem sein type noch "text" ist und weder
+                    // id noch name stehen. Das Widget uebernimmt dann ein halbfertiges Element, und ein
+                    // Teil der Kaestchen laesst sich nicht mehr anklicken. Die Gestalt kommt ohnehin aus
+                    // den Klassen (emby-checkbox), nicht aus der Aufwertung.
+                    var box = document.createElement('input');
+                    box.type = 'checkbox';
+                    box.className = 'emby-checkbox';
+                    box.setAttribute('is', 'emby-checkbox');
+                    box.id = id;
+                    box.name = field.key;
+                    label.appendChild(box);
+                    var text = subdlSourceEl('span', null, field.label);
+                    if (field.required) {
+                        text.appendChild(document.createTextNode(' '));
+                        // F-M706: keine Pflichtmarke auf der Karte.
+
+                    }
+                    label.appendChild(text);
+                    wrap.appendChild(label);
+                    if (field.help) { wrap.appendChild(subdlSourceEl('div', 'fieldDescription', field.help)); }
+                    row.appendChild(wrap);
+                    row.setAttribute('data-value', String(field.value) === 'true' ? 'true' : 'false');
+                    return row;
+                }
+
+                if (field.kind === 'choice') {
+                    var selWrap = subdlSourceEl('div', 'selectContainer');
+                    var selLabel = subdlSourceEl('label', 'selectLabel', field.label);
+                    selLabel.setAttribute('for', id);
+                    if (field.required) {
+                        selLabel.appendChild(document.createTextNode(' '));
+                        // F-M706: keine Pflichtmarke auf der Karte.
+
+                    }
+                    selWrap.appendChild(selLabel);
+                    var select = document.createElement('select');
+                    select.className = 'emby-select';
+                    select.id = id;
+                    select.name = field.key;
+                    select.className = 'emby-select-withcolor emby-select';
+                    selWrap.appendChild(select);
+                    if (field.help) { selWrap.appendChild(subdlSourceEl('div', 'fieldDescription', field.help)); }
+                    row.appendChild(selWrap);
+                    // Die Moeglichkeiten kommen mit dem Feld; eingetragen werden sie nach dem
+                    // Einhaengen (subdlSourceApplyValues), damit sie ein Aufbau des Steuerelements
+                    // nicht wieder verliert.
+                    row.setAttribute('data-options', JSON.stringify(field.options || []));
+                    row.setAttribute('data-value', field.value === null || field.value === undefined ? '' : String(field.value));
+                    return row;
+                }
+
+                // text, url, number, secret
+                var boxWrap = subdlSourceEl('div', 'inputContainer');
+                var inputLabel = subdlSourceEl('label', 'inputLabel inputLabelUnfocused', field.label);
+                inputLabel.setAttribute('for', id);
+                // F-M706 (Betreiberansage 22.11.2026: "Fuer subdl bei api key das required weg"): die
+                // Karte nennt nur noch den Feldnamen. Dass der Schluessel Pflicht ist, sagt die Ampel
+                // oben — sie steht auf "off", solange er fehlt, und der Lauf laesst die Quelle dann aus
+                // (die Pruefung selbst bleibt im Schema: Required = true).
+                boxWrap.appendChild(inputLabel);
+
+                // F-M695: die Kennung beim Erzeugen mitgeben — nur so wertet der Browser das Element auf
+                // (das galt fuer das Geheimfeld genauso: es blieb ohne Aufwertung unformatiert).
+                // F-M696: auch die Textfelder ohne Aufwertung — ein Feld, das aufgewertet wird, bevor
+                // type/placeholder/id stehen, ist ein halbfertiges Element (siehe Kaestchen oben).
+                var input = document.createElement('input');
+                input.id = id;
+                input.name = field.key;
+                input.className = 'emby-input';
+
+                // F-M692: KEIN is="emby-input". Ein per JS erzeugtes Element mit diesem Attribut wird
+                // vom Browser nicht mehr aufgewertet (die Aufwertung gilt nur für Markup, das beim Laden
+                // schon dasteht) — das Feld blieb dadurch unformatiert und war im dunklen Jellyfin-Theme
+                // praktisch unsichtbar (Betreiberbefund 22.11.2026: „password entry not available").
+                // Die Klasse allein traegt die Gestalt; die Breite steht ausdruecklich dabei.
+                input.style.width = '100%';
+                input.style.boxSizing = 'border-box';
+                if (field.kind === 'secret') {
+                    input.type = 'password';
+                    input.autocomplete = 'new-password';
+                    input.spellcheck = false;
+                } else if (field.kind === 'number') {
+                    input.type = 'number';
+                    if (field.min !== null && field.min !== undefined) { input.setAttribute('min', field.min); }
+                    if (field.max !== null && field.max !== undefined) { input.setAttribute('max', field.max); }
+                } else if (field.kind === 'url') {
+                    input.type = 'url';
+                } else {
+                    input.type = 'text';
+                }
+                boxWrap.appendChild(input);
+
+                if (field.kind === 'secret') {
+                    // F-M702 (Betreiberansage 22.11.2026: "kein set"): Das Feld traegt KEINEN Hinweis
+                    // mehr — keinen Platzhalter, kein "set", kein "not set". Ob ein Geheimnis abgelegt
+                    // ist, sagt die Ampel oben: "on" heisst, die Datei dieser Quelle ist vollstaendig
+                    // (Pflichtfeld gefuellt), "off" heisst, es fehlt etwas. Ein zweiter Hinweis im Feld
+                    // war Larm — und der Wert selbst verlaesst das Plugin nie.
+                    row.setAttribute('data-gesetzt', field.gesetzt ? 'true' : 'false');
+
+                    // F-M706 (Betreiberansage 22.11.2026: "Die .... Im feld bei api und Passwort fehlen"):
+                    // ist ein Geheimnis abgelegt, steht im Feld ein Punktmuster — das Feld SIEHT gefuellt
+                    // aus, ohne ein Wort und ohne den Wert. F-M702 hatte den Platzhalter samt "set"
+                    // entfernt; das Wort bleibt weg, die Punkte kommen zurueck.
+                    input.placeholder = field.gesetzt ? '••••••••' : '';
+                } else {
+                    // Ein Geheimnis bekommt KEIN data-value — der Wert steht damit nirgends im DOM.
+                    row.setAttribute('data-value',
+                        field.value === null || field.value === undefined ? '' : String(field.value));
+                }
+
+                if (field.help) { boxWrap.appendChild(subdlSourceEl('div', 'fieldDescription', field.help)); }
+                row.appendChild(boxWrap);
+                return row;
+            }
+
+            // Werte NACH dem Einhaengen setzen: ein Aufbau des Steuerelements (emby-input,
+            // emby-checkbox, emby-select) darf sie nicht wieder verlieren. Ein Geheimnis hat kein
+            // data-value und wird hier deshalb nie beruehrt.
+            function subdlSourceApplyValues(card) {
+                if (!card) { return; }
+                var rows = card.querySelectorAll('[data-source-field-row]');
+                for (var i = 0; i < rows.length; i++) {
+                    var row = rows[i];
+                    var ctrl = row.querySelector('input, select');
+                    if (!ctrl) { continue; }
+                    var kind = row.getAttribute('data-source-field-kind');
+                    if (kind === 'choice' && row.hasAttribute('data-options')) {
+                        var optionen = [];
+                        try { optionen = JSON.parse(row.getAttribute('data-options')) || []; } catch (err) { optionen = []; }
+                        if (ctrl.options.length !== optionen.length) {
+                            ctrl.innerHTML = '';
+                            for (var o = 0; o < optionen.length; o++) {
+                                var opt = document.createElement('option');
+                                opt.value = String(optionen[o]);
+                                opt.textContent = String(optionen[o]);
+                                ctrl.appendChild(opt);
+                            }
+                        }
+                    }
+                    if (!row.hasAttribute('data-value')) { continue; }
+                    var wert = row.getAttribute('data-value');
+                    if (kind === 'switch') { ctrl.checked = (wert === 'true'); }
+                    else { ctrl.value = wert; }
+                }
+            }
+
+            // Der WIRKSAME Zustand eines Felds, wie die Bedingung eines anderen Felds ihn liest:
+            // Text und Zahl aus dem Feld, ein Schalter als true/false, ein Geheimnis als
+            // "set"/"not set" (ein abgelegtes ODER ein gerade eingetipptes).
+            function subdlSourceFieldState(card, key) {
+                var row = card.querySelector('[data-source-field-row="' + key + '"]');
+                if (!row) { return null; }
+                var ctrl = row.querySelector('input, select');
+                if (!ctrl) { return null; }
+                var kind = row.getAttribute('data-source-field-kind');
+                if (kind === 'secret') {
+                    // F-M704: Die BEDINGUNG eines anderen Felds spricht weiter 'set'/'not set' — das ist
+                    // die neutrale Sprache des Schemas ("VisibleWhen apiKey = set"), kein angezeigtes
+                    // Wort. F-M702 hatte hier einen Wahrheitswert zurueckgegeben; damit war die
+                    // Bedingung nie erfuellt und Email und Passwort blieben unsichtbar.
+                    var abgelegt = row.getAttribute('data-gesetzt') === 'true';
+                    return (abgelegt || ctrl.value.length > 0) ? 'set' : 'not set';
+                }
+                if (kind === 'switch') { return ctrl.checked ? 'true' : 'false'; }
+                return String(ctrl.value);
+            }
+
+            // sichtbar nur, wenn das genannte Feld den erwarteten Wert hat — ausgewertet bei jedem
+            // Tippen und jedem Umschalten (zuhören tut die Karte, s. subdlSourceRenderCard).
+            function subdlSourceApplyVisibility(card) {
+                if (!card) { return; }
+                var rows = card.querySelectorAll('[data-visible-when-field]');
+                for (var i = 0; i < rows.length; i++) {
+                    var row = rows[i];
+                    var ist = subdlSourceFieldState(card, row.getAttribute('data-visible-when-field'));
+                    var erwartet = row.getAttribute('data-visible-when-value');
+                    var sichtbar = ist !== null
+                        && String(ist).toLowerCase() === String(erwartet).toLowerCase();
+                    row.style.display = sichtbar ? '' : 'none';
+                }
+            }
+
+            // F-M696: "TV shows", "Movies" oder beides — aus den Fähigkeiten der Quelle gelesen.
+            function subdlSourceServes(entry) {
+                var faehig = entry.capabilities || {};
+                var serien = faehig.servesSeries === true;
+                var filme = faehig.servesMovies === true;
+                var wort = serien && filme ? 'TV shows + movies'
+                    : serien ? 'TV shows'
+                    : filme ? 'Movies'
+                    : '';
+                if (!wort) { return null; }
+                var tag = subdlSourceEl('span', 'subdl-source-serves', wort);
+                tag.title = serien && filme
+                    ? 'This source carries series and films.'
+                    : serien ? 'This source carries series only.'
+                    : 'This source carries films only.';
+                return tag;
+            }
+
+            function subdlSourceRenderCard(entry) {
+                var card = document.createElement('div');
+                card.className = 'subdl-source-card';
+                card.id = subdlSourceId('SourceCard', entry.key);
+                card.setAttribute('data-source-key', entry.key);
+
+                var head = subdlSourceEl('div', 'subdl-source-head');
+                var nameTeil = subdlSourceEl('span', 'subdl-source-name', entry.displayName);
+                nameTeil.title = 'source key: ' + entry.key;
+                head.appendChild(nameTeil);
+
+                // F-M696 (Betreiberansage 22.11.2026: "Der der gui evtl mitgeben ob sie tvshows, movies
+                // oder nur eins von beiden macht als tag"): die Art der Quelle als Kennzeichen. Die
+                // Auskunft kommt aus der Antwort der Engine (capabilities.servesSeries/servesMovies),
+                // nicht aus ihrem Namen — deshalb steht sie auch als Variable im Endpunkt.
+                var art = subdlSourceServes(entry);
+                if (art) { head.appendChild(art); }
+                // F-M699 (Betreiberbefund 22.11.2026: „es ist komisch dass subdl subdl hintereinander
+                // steht. Fuer tvst und mst genauso"): der Schluessel steht NICHT mehr neben dem Namen —
+                // "SubDL subdl" sagte dasselbe zweimal. Er bleibt als Titel am Namen erreichbar, weil man
+                // ihn beim Suchen im Log oder in der Datei braucht.
+                card.appendChild(head);
+
+                // F-M706 (Betreiberansage 22.11.2026: "Das on bitte nur an einer stelle, der source order"):
+                // die Ampel steht NUR NOCH in der Reihenfolge oben — die Karte trug sie doppelt.
+
+                // F-M693 (Betreiberansage 22.11.2026: "Badges upload /download /packs / report. Each with
+                // it's own toogle"): die Moeglichkeiten dieser Quelle stehen als Reihe oben auf der Karte,
+                // jede mit ihrem eigenen Schalter. Die fruehere Kennzeichen-Zeile entfaellt — sie sagte
+                // dasselbe ohne Schalter.
+                var badges = subdlSourceBadges(entry);
+                if (badges) { card.appendChild(badges); }
+
+                if (entry.hint) {
+                    card.appendChild(subdlSourceEl('div', 'subdl-source-hint', entry.hint));
+                }
+
+                var fields = subdlSourceEl('div', 'subdl-source-fields');
+                var list = entry.fields || [];
+                for (var i = 0; i < list.length; i++) {
+                    if (list[i].badge) { continue; }
+                    fields.appendChild(subdlSourceField(entry, list[i]));
+                }
+                card.appendChild(fields);
+
+                // F-M695 (Betreiberbefund 22.11.2026: "Save Button still not the blue type elsewhere used in
+                // the gui"): der Knopf muss ein AUFGEWERTETES emby-button sein. Ein per createElement
+                // erzeugtes Element mit nachtraeglich gesetztem is="emby-button" wird NICHT aufgewertet —
+                // die Kennung muss schon beim Erzeugen mitgegeben werden ({ is: 'emby-button' }). Erst die
+                // Aufwertung bringt die Gestalt, die jeder andere Knopf dieser Seite traegt.
+                var save = subdlSourceButton('button', 'emby-button');
+                save.type = 'button';
+                save.className = 'raised button-submit emby-button subdl-source-save';
+                save.id = subdlSourceId('SourceSave', entry.key);
+                save.textContent = 'Save';
+                save.addEventListener('click', function () { subdlSourceSave(entry.key); });
+                card.appendChild(save);
+
+                var result = subdlSourceEl('div', 'fieldDescription subdl-source-result', '');
+                result.id = subdlSourceId('SourceResult', entry.key);
+                card.appendChild(result);
+
+                // Ein Zuhoerer auf der Karte statt je Feld: er sieht auch ein Feld, das erst spaeter
+                // entsteht, und ein Tippen ins Geheimfeld laesst das abhaengige Feld sofort erscheinen.
+                card.addEventListener('input', function () { subdlSourceApplyVisibility(card); });
+                card.addEventListener('change', function () { subdlSourceApplyVisibility(card); });
+                return card;
+            }
+
+            function subdlSourceResult(key, cls, text) {
+                var el = document.getElementById(subdlSourceId('SourceResult', key));
+                if (!el) { return; }
+                el.className = 'fieldDescription subdl-source-result' + (cls ? ' ' + cls : '');
+                el.textContent = text || '';
+            }
+
+            // Was geschrieben wird, ist genau das, was die Karte zeigt: ein unsichtbares Feld bleibt
+            // in seiner Datei, wie es war. Ein leeres Geheimfeld heisst "unveraendert lassen".
+            function subdlSourceBody(card) {
+                var body = {};
+                window.__subdlSourceLabels = {};   // F-M708: Schluessel -> Beschriftung, fuer die Meldung
+                var labels = window.__subdlSourceLabels;
+                var rows = card.querySelectorAll('[data-source-field-row]');
+                for (var i = 0; i < rows.length; i++) {
+                    var row = rows[i];
+                    if (row.style.display === 'none') { continue; }
+                    var ctrl = row.querySelector('input, select');
+                    if (!ctrl) { continue; }
+                    var key = row.getAttribute('data-source-field-row');
+                    var kind = row.getAttribute('data-source-field-kind');
+                    var wert;
+                    var name = row.getAttribute('data-source-field-label') || key;
+                    if (kind === 'switch') { wert = !!ctrl.checked; }
+                    else if (kind === 'secret') {
+                        // Ein Geheimnis geht nur mit, wenn wirklich etwas getippt wurde.
+                        if (ctrl.value === '') { continue; }
+                        wert = ctrl.value;
+                    } else { wert = ctrl.value; }
+
+                    // F-M705: NUR Geaendertes geht mit. Vorher schickte jedes Speichern alle vier
+                    // Schalter mit, und die Rueckmeldung nannte sie alle — "download enabled" stand
+                    // also auch dann in der Liste, wenn nur ein anderes Kaestchen bewegt wurde. Was
+                    // unveraendert ist, bleibt in der Datei stehen und steht nicht in der Meldung.
+                    if (typeof wert === 'boolean') {
+                        if (row.getAttribute('data-value') === (wert ? 'true' : 'false')) { continue; }
+                    } else if (wert === row.getAttribute('data-value')) { continue; }
+
+                    body[key] = wert;
+                    labels[key] = name;
+                }
+                return body;
+            }
+
+            // Speichern JE KARTE: EIN Aufruf schreibt GENAU DIESE eine Quelle. Die Sammel-Speicherung
+            // der Seite (das eine updatePluginConfiguration weiter oben) wird hier nicht angefasst.
+            function subdlSourceSave(key) {
+                var card = document.getElementById(subdlSourceId('SourceCard', key));
+                if (!card) { return; }
+                subdlSourceResult(key, '', '');
+
+                // F-M705: nichts bewegt, nichts zu schreiben — dann auch keine Anfrage und keine
+                // Liste von Feldnamen, die niemand angefasst hat.
+                var rumpf = subdlSourceBody(card);
+                if (Object.keys(rumpf).length === 0) {
+                    subdlSourceResult(key, 'ok', '\u2714 nothing changed');
+                    return;
+                }
+                fetch(ApiClient.getUrl('Plugins/SubdlSync/Sources/' + encodeURIComponent(key)), {
+                    method: 'POST',
+                    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                    body: JSON.stringify(rumpf)
+                }).then(function (r) {
+                    return r.text().then(function (text) {
+                        var res = null;
+                        try { res = text ? JSON.parse(text) : null; } catch (err) { res = null; }
+                        if (!r.ok) {
+                            var grund = (res && res.error) ? res.error : ('HTTP ' + r.status);
+                            if (res && res.unknown && res.unknown.length) {
+                                grund = grund + ': ' + res.unknown.join(', ');
+                            }
+                            throw new Error(grund);
+                        }
+                        return res;
+                    });
+                }).then(function (res) {
+                    // F-M689: auch die Antwort auf das Schreiben kommt in der Schreibweise des
+                    // Endpunkts — einmal uebersetzen, dann weiter wie gehabt.
+                    var ant = subdlSourceAntwort(res);
+                    // Erfolg: die Karte wird mit dem Stand NACH dem Schreiben neu befuellt und nennt
+                    // die Felder, die wirklich geschrieben wurden.
+                    if (ant && ant.quelle) {
+                        var neu = subdlSourceRenderCard(ant.quelle);
+                        card.parentNode.replaceChild(neu, card);
+                        subdlSourceApplyValues(neu);
+                        subdlSourceApplyVisibility(neu);
+
+                        // F-M708: die Ampel der Reihenfolge haengt an "participates" — sie muss nach
+                        // dem Schalten sofort mitgehen, sonst steht dort weiter "on".
+                        if (window.__subdlQuellen) {
+                            var liste = window.__subdlQuellen.quellen || [];
+                            for (var q = 0; q < liste.length; q++) {
+                                if (liste[q].key === key) { liste[q] = ant.quelle; }
+                            }
+                            subdlOrderDraw(window.__subdlQuellen);
+                        }
+                    }
+                    // F-M706 (Betreiberbefund 22.11.2026: "Wenn ich in den sources was austicke … als
+                    // Rueckmeldung kommt enabled"): die Meldung nannte nur den FELDNAMEN, und
+                    // "downloadEnabled" liest sich wie "eingeschaltet" — auch wenn gerade AUSgeTickt
+                    // wurde. Jetzt steht der neue Zustand dabei: "downloadEnabled: off".
+                    // F-M708 (Betreiberbefund 22.11.2026: "Download enabled off ist lustiges wording.
+                    // Download on/off. Off message bitte rot und mit rotem kreuzchen statt haken"):
+                    // die Meldung nennt die Beschriftung des Feldes und den Zustand — "Download off" —,
+                    // und ein ausgeschalteter Zustand steht rot mit Kreuz. Ein "on" bleibt gruen mit Haken.
+                    var namen = window.__subdlSourceLabels || {};
+                    var teile = [];
+                    var aus = false;
+                    for (var feldName in rumpf) {
+                        var bez = namen[feldName] || feldName;
+                        if (typeof rumpf[feldName] === 'boolean') {
+                            teile.push(bez + ' ' + (rumpf[feldName] ? 'on' : 'off'));
+                            if (!rumpf[feldName]) { aus = true; }
+                        } else {
+                            teile.push(bez);
+                        }
+                    }
+                    var geschrieben = teile.length
+                        ? teile.join(', ')
+                        : ((ant && ant.geschrieben.length) ? ant.geschrieben.join(', ') : '—');
+                    subdlSourceResult(key, aus ? 'fail' : 'ok', (aus ? '✖ ' : '✔ ') + geschrieben);
+                }).catch(function (err) {
+                    // Eine Abweisung steht im KLARTEXT der Antwort an der Karte (400, unbekanntes
+                    // Feld, Pflichtfeld leer, Grenze verletzt, Adresse ungueltig).
+                    subdlSourceResult(key, 'fail', '✖ ' + ((err && err.message) ? err.message : 'HTTP'));
+                });
+            }
+
+            // F-M698: die Reihenfolge der Quellen — eine Zeile je Quelle, gebaut aus der Antwort des
+            // Endpunkts (also aus dem, was die Engines erklaeren), nicht aus einer festen Liste auf der
+            // Seite. Jede Zeile traegt ihren Namen, ihre Art (F-M696) und zwei Pfeile. Der Wert steht im
+            // versteckten Feld SourceOrderValue und geht beim Speichern der Seite mit.
+            var subdlOrderKeys = [];
+
+            function subdlOrderSeed(payload) {
+                var quellen = (payload && payload.quellen) || [];
+                var vorhanden = quellen.map(function (q) { return q.key; });
+                var liste = (SubdlSyncConfig.config && SubdlSyncConfig.config.SourceOrderList) || '';
+
+                // F-M701: ist noch keine Liste gespeichert, gilt die ALTE Zwei-Werte-Einstellung — und genau
+                // die muss auch angezeigt werden. Ohne diesen Rückfall zeigte die Liste die Reihenfolge der
+                // Engines (subdl zuerst), während der Lauf mit "tvst first" arbeitet: die Oberfläche log,
+                // bis der Betreiber einmal speicherte.
+                if (!liste) {
+                    liste = (SubdlSyncConfig.config && SubdlSyncConfig.config.DownloadOrder === 'SubdlFirst')
+                        ? 'subdl,tvsubtitles,moviesubtitles'
+                        : 'tvsubtitles,moviesubtitles,subdl';
+                }
+
+                var gespeichert = liste
+                    .split(',')
+                    .map(function (k) { return k.trim(); })
+                    .filter(function (k, i, a) { return k && a.indexOf(k) === i; });
+
+                // Gespeicherte Reihenfolge zuerst, Unbekanntes faellt weg, Ungenanntes wird angehaengt —
+                // eine neue Quelle verschwindet nicht, sie steht hinten.
+                var reihe = gespeichert.filter(function (k) { return vorhanden.indexOf(k) >= 0; });
+                for (var i = 0; i < vorhanden.length; i++) {
+                    if (reihe.indexOf(vorhanden[i]) < 0 && vorhanden[i]) { reihe.push(vorhanden[i]); }
+                }
+                subdlOrderKeys = reihe;
+            }
+
+            function subdlOrderDraw(payload) {
+                var rows = document.getElementById('SourceOrderRows');
+                if (!rows) { return; }
+                var quellen = (payload && payload.quellen) || [];
+                rows.innerHTML = '';
+                subdlOrderKeys.forEach(function (key, pos) {
+                    var quelle = null;
+                    for (var j = 0; j < quellen.length; j++) {
+                        if (quellen[j].key === key) { quelle = quellen[j]; }
+                    }
+                    if (!quelle) { return; }
+
+                    var row = subdlSourceEl('div', 'subdl-order-row');
+                    row.setAttribute('data-source-key', key);
+                    row.appendChild(subdlSourceEl('span', 'subdl-order-name',
+                        (pos + 1) + '. ' + quelle.displayName));
+
+                    // F-M707 (Betreiberansage 22.11.2026: "Tvshows movies etc muss bei endpoint order nicht
+                    // stehen"): die Art steht auf der KARTE, nicht in der Reihenfolge — die Zeile nennt
+                    // nur Nummer, Name, Ampel und die zwei Pfeile.
+                    // F-M708 (Betreiberbefund 22.11.2026: "Das on unter change order geht nie off"): die
+                    // Ampel hing an "configured" — also nur an der Vollstaendigkeit der Datei. Wer beide
+                    // Richtungen ausschaltet, hat trotzdem eine vollstaendige Datei, und die Ampel blieb
+                    // auf "on". Jetzt haengt sie an "participates" (eingerichtet UND eine Richtung offen).
+                    var licht = subdlSourceEl('span', 'subdl-order-state ' + (quelle.participates ? 'on' : 'off'),
+                        quelle.participates ? 'on' : 'off');
+                    licht.title = quelle.participates
+                        ? 'This source takes part in the run.'
+                        : (quelle.configured
+                            ? 'Both directions are switched off — this source stays out of the run.'
+                            : 'This source is missing a required field and stays out of the run.');
+                    row.appendChild(licht);
+
+                    var hoch = subdlOrderButton('\u25B2', pos === 0, function () { subdlOrderMove(pos, -1, payload); });
+                    hoch.title = 'ask earlier';
+                    var runter = subdlOrderButton('\u25BC', pos === subdlOrderKeys.length - 1,
+                        function () { subdlOrderMove(pos, 1, payload); });
+                    runter.title = 'ask later';
+                    row.appendChild(hoch);
+                    row.appendChild(runter);
+                    rows.appendChild(row);
+                });
+
+                var feld = document.getElementById('SourceOrderValue');
+                if (feld) { feld.value = subdlOrderKeys.join(','); }
+            }
+
+            function subdlOrderButton(text, aus, klick) {
+                var b = subdlSourceButton('button', 'emby-button');
+                b.type = 'button';
+                b.className = 'raised emby-button subdl-order-move';
+                b.textContent = text;
+                b.disabled = aus;
+                if (!aus) { b.addEventListener('click', klick); }
+                return b;
+            }
+
+            function subdlOrderMove(pos, schritt, payload) {
+                var ziel = pos + schritt;
+                if (ziel < 0 || ziel >= subdlOrderKeys.length) { return; }
+                var hilfe = subdlOrderKeys[pos];
+                subdlOrderKeys[pos] = subdlOrderKeys[ziel];
+                subdlOrderKeys[ziel] = hilfe;
+                subdlOrderDraw(payload);
+            }
+
+            function subdlSourcesRender(payload) {
+                var box = document.getElementById('SourceCards');
+                if (!box) { return; }
+                box.innerHTML = '';
+
+                // F-M708: die Antwort bleibt stehen — nach einem Speichern wird die Reihenfolge daraus
+                // neu gezeichnet, damit die Ampel sofort den neuen Zustand zeigt.
+                window.__subdlQuellen = payload;
+                // F-M689: `payload` ist die schon uebersetzte Antwort (subdlSourceAntwort) —
+                // die Schreibweise des Endpunkts kommt hier nicht mehr durch.
+                var list = (payload && payload.quellen) ? payload.quellen : [];
+                for (var i = 0; i < list.length; i++) {
+                    var card = subdlSourceRenderCard(list[i]);
+                    box.appendChild(card);
+                    subdlSourceApplyValues(card);
+                    subdlSourceApplyVisibility(card);
+                }
+
+                // F-M698: dieselbe Antwort traegt die Reihenfolge — eine Zeile je Quelle.
+                subdlOrderSeed(payload);
+                subdlOrderDraw(payload);
+            }
+
+            function subdlLoadSources() {
+                var box = document.getElementById('SourceCards');
+                if (!box) { return; }
+                var url = ApiClient.getUrl('Plugins/SubdlSync/Sources');
+                url += (url.indexOf('?') === -1 ? '?' : '&') + '_t=' + Date.now();
+                fetch(url, { headers: { 'Accept': 'application/json' } })
+                    .then(function (r) {
+                        return r.text().then(function (text) {
+                            var res = null;
+                            try { res = text ? JSON.parse(text) : null; } catch (err) { res = null; }
+                            if (!r.ok) {
+                                throw new Error((res && res.error) ? res.error : ('HTTP ' + r.status));
+                            }
+                            return res;
+                        });
+                    })
+                    .then(function (res) { subdlSourcesRender(subdlSourceAntwort(res)); })
+                    .catch(function (err) {
+                        box.innerHTML = '';
+                        box.appendChild(subdlSourceEl('div', 'fieldDescription subdl-source-hint',
+                            '✖ ' + ((err && err.message) ? err.message : 'HTTP')));
+                    });
+            }
+            // ==== F-M688 Ende ====
 
             // Deferred script load — run load routine now if page div is present
             if (document.readyState === "loading") { document.addEventListener("DOMContentLoaded", subdlInitConfigPage); } else { subdlInitConfigPage(); }

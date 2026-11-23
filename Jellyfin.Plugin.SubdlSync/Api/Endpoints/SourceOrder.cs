@@ -134,4 +134,118 @@ public static class SourceOrder
             ? new[] { seite, MainSearch }
             : new[] { MainSearch, seite };
     }
+
+    /// <summary>
+    /// F-M698: die Quellenschlüssel, wie die Oberfläche sie führt — der Vertrag zwischen Liste,
+    /// Dateinamen und Antwort des Einstellungs-Endpunkts.
+    /// </summary>
+    /// <returns>Alle Quellen in fester Reihenfolge (SubDL, tvst-Familie).</returns>
+    public static IReadOnlyList<string> Keys() => new[] { "subdl", "tvsubtitles", "moviesubtitles" };
+
+    /// <summary>
+    /// F-M698: ein Quellenschlüssel als Anbieter — null, wenn die Liste einen Namen führt, den dieser
+    /// Build nicht kennt. Unbekanntes wird übersprungen, nicht geraten.
+    /// </summary>
+    /// <param name="key">Der Schlüssel aus der Liste.</param>
+    /// <returns>Der Anbieter oder null.</returns>
+    public static SubtitleProvider? Provider(string key) => key?.Trim().ToLowerInvariant() switch
+    {
+        "subdl" => SubtitleProvider.Subdl,
+        "tvsubtitles" => SubtitleProvider.TvSubtitles,
+        "moviesubtitles" => SubtitleProvider.MovieSubtitles,
+        _ => null,
+    };
+
+    /// <summary>
+    /// F-M698: der Quellenschlüssel eines Anbieters — die Umkehrung, damit die Oberfläche und die Liste
+    /// dieselben Wörter benutzen.
+    /// </summary>
+    /// <param name="provider">Der Anbieter.</param>
+    /// <returns>Sein Schlüssel.</returns>
+    public static string KeyOf(SubtitleProvider provider) => provider switch
+    {
+        SubtitleProvider.Subdl => "subdl",
+        SubtitleProvider.TvSubtitles => "tvsubtitles",
+        SubtitleProvider.MovieSubtitles => "moviesubtitles",
+        _ => provider.ToString().ToLowerInvariant(),
+    };
+
+    /// <summary>
+    /// F-M698: die gespeicherte Liste als Anbieter, in der gespeicherten Reihenfolge.
+    /// </summary>
+    /// <param name="list">Die Liste aus der Konfiguration (durch Komma getrennt).</param>
+    /// <returns>Die Anbieter; leer, wenn nichts gespeichert ist.</returns>
+    public static IReadOnlyList<SubtitleProvider> Parse(string? list)
+    {
+        var ergebnis = new List<SubtitleProvider>();
+        if (string.IsNullOrWhiteSpace(list))
+        {
+            return ergebnis;
+        }
+
+        foreach (string teil in list.Split(new[] { ',', ';', ' ' }, StringSplitOptions.RemoveEmptyEntries))
+        {
+            if (Provider(teil) is { } anbieter && !ergebnis.Contains(anbieter))
+            {
+                ergebnis.Add(anbieter);
+            }
+        }
+
+        return ergebnis;
+    }
+
+    /// <summary>
+    /// F-M698: die Reihenfolge für EINE Medienart — für JEDE Anzahl von Quellen.
+    /// <para>
+    /// Die gespeicherte Liste führt die Quelle in der Reihenfolge des Betreibers. Für eine Medienart
+    /// zählt jede Quelle nur, wenn sie diese Art überhaupt führt (F-M696: <c>ServesSeries</c>/
+    /// <c>ServesMovies</c>); eine Quelle der tvst-Familie wird dabei auf ihre zuständige Seite
+    /// aufgelöst (Serie → tvsubtitles.net, Film → moviesubtitles.org), weil die Familie intern so
+    /// aufgeteilt ist. Was die Liste nicht nennt, wird angehängt — nichts fällt still heraus.
+    /// </para>
+    /// <para>
+    /// Ist keine Liste gespeichert, antwortet die alte Zwei-Werte-Einstellung (<see cref="ForMedia"/>):
+    /// die Umstellung soll den Bestand nicht umstellen.
+    /// </para>
+    /// </summary>
+    /// <param name="config">Die Konfiguration dieses Laufs.</param>
+    /// <param name="isSeries">Wahr für eine Serie, falsch für einen Film (aus TMDb).</param>
+    /// <returns>Die Quellen, zuerst gefragte zuerst.</returns>
+    public static IReadOnlyList<SubtitleProvider> Sequence(PluginConfiguration? config, bool isSeries)
+    {
+        if (config is null)
+        {
+            return ForMedia(PluginConfiguration.DownloadSourceOrder.TvSubtitlesFirst, isSeries);
+        }
+
+        IReadOnlyList<SubtitleProvider> gespeichert = Parse(config.SourceOrderList);
+        if (gespeichert.Count == 0)
+        {
+            return ForMedia(config.DownloadOrder, isSeries);
+        }
+
+        SubtitleProvider seite = FamilyPage(isSeries);
+        var reihe = new List<SubtitleProvider>();
+        foreach (SubtitleProvider anbieter in gespeichert)
+        {
+            // Die Familie ist EINE Quelle mit zwei Adressen: für diese Medienart zählt ihre Seite.
+            SubtitleProvider aufgeloest = InFamily(anbieter) ? seite : anbieter;
+            if (!reihe.Contains(aufgeloest))
+            {
+                reihe.Add(aufgeloest);
+            }
+        }
+
+        // Was die Liste nicht nennt, kommt dahinter — in der Reihenfolge der alten Einstellung, damit
+        // eine neu eingehängte Quelle nicht stillschweigend verschwindet.
+        foreach (SubtitleProvider rest in ForMedia(config.DownloadOrder, isSeries))
+        {
+            if (!reihe.Contains(rest))
+            {
+                reihe.Add(rest);
+            }
+        }
+
+        return reihe;
+    }
 }

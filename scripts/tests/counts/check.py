@@ -76,7 +76,7 @@ def run_suite(repo, name, spec):
         # Suites that print one PASS/FAIL marker per check but no summary: count the markers.
         # This is the same number the summary line would carry — the marker is the check.
         marks = len(re.findall(r"\[PASS\]|\bOK\s{2,}", out))
-        for m in re.finditer(r"(\d+)/(\d+)\s+Prüfungen", out):
+        for m in re.finditer(r"(\d+)/(\d+)\s+(?:Prüfungen|Pruefungen)", out):
             marks = max(marks, int(m.group(2)))
         total = marks if marks else None
     return proc.returncode, total, out

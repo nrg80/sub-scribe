@@ -47,8 +47,17 @@ public sealed class TvSubtitlesDownloadEndpoint : IDownloadEndpoint
     /// F-M533: how many entries of the LAST search were dropped because a field contradicted the
     /// site's own vocabulary — the operator's rule (17.11.2026): report it, drop the entry, keep the
     /// run going.
+    /// <para>
+    /// F-M686: der Zähler lebt am CLIENT (<see cref="TvSubtitlesClient.LastRejectedByFormat"/>), weil
+    /// die Suche jetzt hinter der Engine liegt und der Lauf nur den Client in der Hand hat. Diese
+    /// Eigenschaft ist die alte Lesestelle und zählt denselben Wert.
+    /// </para>
     /// </summary>
-    public int LastRejectedByFormat { get; private set; }
+    public int LastRejectedByFormat
+    {
+        get => _client.LastRejectedByFormat;
+        private set => _client.LastRejectedByFormat = value;
+    }
 
     /// <inheritdoc />
     public SubtitleProvider Provider => SubtitleProvider.TvSubtitles;
@@ -100,54 +109,209 @@ public sealed class TvSubtitlesDownloadEndpoint : IDownloadEndpoint
         // damit der nächste Lauf die Serienliste gar nicht erst holen muss (F-M501).
         _client.LastResolvedShowId = showId.Value;
 
-        var pages = await _client.EpisodePagesAsync(showId.Value, query.Season, cancellationToken)
-            .ConfigureAwait(false);
+        // F-M664 (Betreiber-Anweisung 21.11.2026: „Innerhalb von tvst erst staffelzip dann einzel, dann
+        // hi."): zwei Listen, weil es zwei Seiten und drei Stufen sind. `hits` traegt die REGULAERE Seite
+        // (Stufe 1 und 2), `hiTreffer` die HI-Seite (Stufe 3). Die HI-Treffer werden erst am Ende
+        // angehaengt — eingesammelt werden sie dort, wo sie anfallen (ZIP-Namen, Ohr-Bild), aber
+        // weitergegeben erst, nachdem beide regulaeren Stufen durch sind.
+        var hits = new List<SubtitleHit>();
+        var hiTreffer = new List<SubtitleHit>();
 
-        foreach (var page in pages)
+        // F-M663 (Bediener-Anweisung 21.11.2026): STUFE 1 ist die Staffel-ZIP. Gemessen an MobLand S02:
+        // 27 Dateien fuer 9 Folgen in EINER ZIP je Sprache (610.807 B), Regular und HI durch `.HI.`
+        // getrennt. Der Merker im Client haelt sie fuer den ganzen Lauf, also kostet die Staffel EINEN
+        // Abruf statt einen je Folge.
+        bool regulaerGedeckt = false;
+        bool hiGedeckt = false;
+
+        // F-M693: der Schalter dieser Quelle entscheidet, ob Stufe 1 überhaupt gegangen wird. Aus heißt
+        // NICHT „keine Behälter", sondern „erst der Einzelweg" — die ZIP bleibt als Angebot des Laufs
+        // bestehen, sie wird nur nicht zuerst geholt.
+        if (query.Season > 0 && query.PreferSeasonZip)
         {
-            var (season, episode) = await _client.EpisodeLabelAsync(page, cancellationToken).ConfigureAwait(false);
-
-            // F-M533: eine Staffel/Folge-Angabe ausserhalb der Werte, die das Formular kennt, ist ein
-            // Falscheintrag der Seite — melden und die Seite ueberspringen, nicht raten.
-            if (await TvstMetadataChecks.EmitAsync(
-                    _client, TvstMetadataChecks.CheckEpisodeLabel(season, episode), null, null, cancellationToken)
-                    .ConfigureAwait(false))
+            var pack = await _client.SeasonPackAsync(showId.Value, query.Season, language, cancellationToken)
+                .ConfigureAwait(false);
+            for (int i = 0; i < pack.Count; i++)
             {
-                LastRejectedByFormat++;
-                continue;
-            }
-
-            if (season != query.Season || episode != query.Episode)
-            {
-                continue;
-            }
-
-            var entries = await _client.EntriesAsync(page, cancellationToken).ConfigureAwait(false);
-            var hits = new List<SubtitleHit>();
-            foreach (var e in entries)
-            {
-                if (!string.Equals(e.Language, language, StringComparison.Ordinal))
+                var datei = pack[i];
+                if (datei.Season != query.Season || datei.Episode != query.Episode)
                 {
                     continue;
                 }
 
-                var falsch = TvstMetadataChecks.CheckEntry(e);
-                if (falsch.Count > 0)
+                if (!string.Equals(datei.Language, language, StringComparison.Ordinal))
                 {
-                    await TvstMetadataChecks.EmitAsync(_client, falsch, e.SubtitleId, e.Release, cancellationToken)
-                        .ConfigureAwait(false);
+                    continue;
+                }
+
+                string release = datei.Name.EndsWith(".srt", StringComparison.OrdinalIgnoreCase)
+                    ? datei.Name[..^4]
+                    : datei.Name;
+
+                // F-M663: dieselben Tore wie ein Eintrag der Folgenseite — Sprache und Rip gegen das
+                // Vokabular der Seite. Nur der MELDEWEG faellt hier aus: ein ZIP-Eintrag hat keine sid,
+                // und eine „Report bad"-Anfrage mit erfundener Nummer waere schlimmer als kein Bericht.
+                var pruefung = TvstMetadataChecks.CheckEntry(
+                    new TvSubtitlesEntry(string.Empty, datei.Language, string.Empty, release, string.Empty, datei.HearingImpaired));
+                if (pruefung.Count > 0)
+                {
                     LastRejectedByFormat++;
                     continue;
                 }
 
-                hits.Add(new SubtitleHit(
-                    SubtitleProvider.TvSubtitles, e.SubtitleId, e.Language, e.Rip, e.Release, false));
-            }
+                var zipTreffer = new SubtitleHit(
+                    SubtitleProvider.TvSubtitles,
+                    SeasonPackId(showId.Value, query.Season, language, i),
+                    datei.Language,
+                    string.Empty,
+                    release,
+                    false,
+                    datei.HearingImpaired);
 
-            return hits;
+                // F-M664: die Marke entscheidet die SEITE, nicht die Stufe. Die regulaere Fassung der
+                // ZIP ist Stufe 1 und geht sofort weiter; die HI-Fassung wandert in den Stufe-3-Korb und
+                // wird erst nach dem Einzelweg angehaengt.
+                if (datei.HearingImpaired)
+                {
+                    hiGedeckt = true;
+                    hiTreffer.Add(zipTreffer);
+                }
+                else
+                {
+                    regulaerGedeckt = true;
+                    hits.Add(zipTreffer);
+                }
+            }
         }
 
-        return Array.Empty<SubtitleHit>();
+        // F-M663/F-M664: STUFE 2 ist der Einzelweg der Folgenseite, und STUFE 3 ist HI. Beide brauchen
+        // dieselbe Seite; gelesen wird sie EINMAL, aber jede Seite nimmt nur, was ihre Stufe deckt:
+        //   * regulaere Eintraege nur, solange Stufe 1 (ZIP) den regulaeren Platz nicht gedeckt hat,
+        //   * HI-Eintraege nur, solange die HI-Seite offen ist — und sie wandern in `hiTreffer`.
+        // Ist beides gedeckt, wird die Folgenseite gar nicht gefragt.
+        if (!regulaerGedeckt || !hiGedeckt)
+        {
+            var pages = await _client.EpisodePagesAsync(showId.Value, query.Season, cancellationToken)
+                .ConfigureAwait(false);
+
+            foreach (var page in pages)
+            {
+                var (season, episode) = await _client.EpisodeLabelAsync(page, cancellationToken).ConfigureAwait(false);
+
+                // F-M533: eine Staffel/Folge-Angabe ausserhalb der Werte, die das Formular kennt, ist ein
+                // Falscheintrag der Seite — melden und die Seite ueberspringen, nicht raten.
+                if (await TvstMetadataChecks.EmitAsync(
+                        _client, TvstMetadataChecks.CheckEpisodeLabel(season, episode), null, null, cancellationToken)
+                        .ConfigureAwait(false))
+                {
+                    LastRejectedByFormat++;
+                    continue;
+                }
+
+                if (season != query.Season || episode != query.Episode)
+                {
+                    continue;
+                }
+
+                var entries = await _client.EntriesAsync(page, cancellationToken).ConfigureAwait(false);
+                foreach (var e in entries)
+                {
+                    if (!string.Equals(e.Language, language, StringComparison.Ordinal))
+                    {
+                        continue;
+                    }
+
+                    // F-M663/F-M664: eine Seite, die ihre Stufe schon gedeckt hat, wird hier nicht ein
+                    // zweites Mal gefuellt — und eine HI-Datei landet nie auf der regulaeren Seite.
+                    if (e.HearingImpaired ? hiGedeckt : regulaerGedeckt)
+                    {
+                        continue;
+                    }
+
+                    var falsch = TvstMetadataChecks.CheckEntry(e);
+                    if (falsch.Count > 0)
+                    {
+                        await TvstMetadataChecks.EmitAsync(_client, falsch, e.SubtitleId, e.Release, cancellationToken)
+                            .ConfigureAwait(false);
+                        LastRejectedByFormat++;
+                        continue;
+                    }
+
+                    var treffer = new SubtitleHit(
+                        SubtitleProvider.TvSubtitles, e.SubtitleId, e.Language, e.Rip, e.Release, false, e.HearingImpaired);
+
+                    if (e.HearingImpaired)
+                    {
+                        hiGedeckt = true;
+                        hiTreffer.Add(treffer);
+                    }
+                    else
+                    {
+                        regulaerGedeckt = true;
+                        hits.Add(treffer);
+                    }
+                }
+
+                if (regulaerGedeckt && hiGedeckt)
+                {
+                    break;
+                }
+            }
+        }
+
+        // F-M664: STUFE 3 — erst JETZT gehen die HI-Treffer weiter, nach der Staffel-ZIP und nach dem
+        // Einzeleintrag. Sie stehen deshalb hinter jeder regulaeren Zeile: wer die Antwort liest, sieht
+        // die Reihenfolge der Stufen, nicht die Reihenfolge der Abrufe.
+        hits.AddRange(hiTreffer);
+        return hits;
+    }
+
+    /// <summary>
+    /// F-M663: der Griff eines Treffers aus der Staffel-ZIP. Die Seite kennt fuer eine Staffel-ZIP
+    /// keine Einzel-Ids (anders als fuer jede Datei der Folgenseite) — der Griff nennt deshalb, was der
+    /// Merker im Client braucht: Serie, Staffel, Sprache und die Nummer des Eintrags im Archiv.
+    /// </summary>
+    /// <param name="showId">The site's show id.</param>
+    /// <param name="season">Season number.</param>
+    /// <param name="language">The site's language code.</param>
+    /// <param name="index">Position in the archive's entry list.</param>
+    /// <returns>The handle, e.g. <c>seasonpack:3234:2:en:4</c>.</returns>
+    public static string SeasonPackId(int showId, int season, string language, int index) =>
+        "seasonpack:"
+        + showId.ToString(CultureInfo.InvariantCulture) + ":"
+        + season.ToString(CultureInfo.InvariantCulture) + ":"
+        + (language ?? string.Empty).Trim().ToLowerInvariant() + ":"
+        + index.ToString(CultureInfo.InvariantCulture);
+
+    /// <summary>
+    /// F-M663: liest <see cref="SeasonPackId"/> zurueck. Falsch fuer jeden anderen Griff — eine
+    /// Subtitle-id der Seite ist eine Zahl und darf nie als Archiv-Eintrag gelesen werden.
+    /// </summary>
+    /// <param name="id">The handle a hit carries.</param>
+    /// <param name="showId">Show id, 0 when the handle is not a season pack.</param>
+    /// <param name="season">Season, 0 when the handle is not a season pack.</param>
+    /// <param name="language">The site's language code, empty when the handle is not a season pack.</param>
+    /// <param name="index">Entry number, -1 when the handle is not a season pack.</param>
+    /// <returns>True when the handle names an entry of a season archive.</returns>
+    public static bool TryParseSeasonPackId(
+        string? id, out int showId, out int season, out string language, out int index)
+    {
+        showId = 0;
+        season = 0;
+        language = string.Empty;
+        index = -1;
+        if (string.IsNullOrEmpty(id) || !id.StartsWith("seasonpack:", StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var parts = id.Split(':');
+        return parts.Length == 5
+            && int.TryParse(parts[1], NumberStyles.Integer, CultureInfo.InvariantCulture, out showId)
+            && int.TryParse(parts[2], NumberStyles.Integer, CultureInfo.InvariantCulture, out season)
+            && int.TryParse(parts[4], NumberStyles.Integer, CultureInfo.InvariantCulture, out index)
+            && (language = parts[3]).Length > 0
+            && index >= 0;
     }
 
     /// <inheritdoc />
@@ -158,6 +322,15 @@ public sealed class TvSubtitlesDownloadEndpoint : IDownloadEndpoint
         if (string.IsNullOrWhiteSpace(hit.Id))
         {
             return null;
+        }
+
+        // F-M663: ein Treffer aus der Staffel-ZIP wird aus dem Merker gelesen — KEINE zweite Anfrage.
+        if (TryParseSeasonPackId(hit.Id, out int showId, out int season, out string packLanguage, out int index))
+        {
+            var (packName, packData) = await _client
+                .DownloadPackMemberAsync(showId, season, packLanguage, index, cancellationToken)
+                .ConfigureAwait(false);
+            return packData.Length == 0 ? null : new SubtitlePayload(packName, packData, hit.Language);
         }
 
         var (name, data) = await _client.DownloadAsync(hit.Id, cancellationToken).ConfigureAwait(false);
@@ -363,6 +536,11 @@ public sealed class TvSubtitlesUploadEndpoint : IUploadEndpoint
                 absorbedIds: null,
                 fingerprint: null,
                 source: PackEntity.TvSubtitlesSource));
+
+            // F-M681: die TMDb-Kennung steht am Pack, nicht nur am Ticket (sie fehlte an jedem Pack).
+            _registry.MarkAndFlush(() => _registry.SetPackTmdbId(
+                imdb, ticket.Season, ticket.Language, ticket.HearingImpaired,
+                PackEntity.TvSubtitlesSource, ticket.TmdbId));
         }
 
         return new EndpointAnswer(

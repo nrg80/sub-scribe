@@ -168,19 +168,48 @@ public class MetaEntity
 /// <summary>
 /// Area 2: one row per video file, keyed by the stable OSHash/media hash.
 /// <para>
-/// The embedded subtitle streams of this file live in <see cref="EmbedTrackEntity"/> with this
+/// The embedded subtitle streams of this file live in <see cref="TrackEntity"/> with this
 /// hash as their parent — they have no existence of their own, which is why they are stored
 /// beneath the file rather than beside it.
 /// </para>
 /// </summary>
-/// F-M196: one record per video file, keyed by the media hash (OSHash). For a series episode
+/// F-M196: one record per video file, keyed by a random, immutable FileId (F-M671). For a series episode
 /// the stored ids are the SHOW ids, never episode or season ids.
-/// F-M38: state is split by the kind of thing described - embeds live under their video file,
+/// F-M38: state is split by the kind of thing described - tracks live under their video file,
 /// sidecars carry their own record, and the file record holds path, ids and the derived aggregates.
-public class MediaEntity
+/// F-M671: bis Schema 21 war der OSHash der Schlüssel. Ein Hash beschreibt den INHALT; ein neu getaggter
+/// Container bekam damit eine neue Identität samt neuer Spurkennungen, obwohl Datei und Spuren dieselben
+/// waren. Seit Schema 22 ist die Kennung zufällig und unveränderlich, der Hash eine Eigenschaft daneben.
+public class FileEntity
 {
-    /// <summary>Primary key: OSHash/media content hash (16 hex chars).</summary>
-    public string Id { get; set; } = string.Empty;
+    /// <summary>
+    /// F-M676: der Primärschlüssel — <c>#yyyyy</c>, fünf Zeichen aus dem Alphabet mit vorangestelltem
+    /// <c>#</c>. Zufällig, einmalig, unveränderlich.
+    /// </summary>
+    public string FileId { get; set; } = string.Empty;
+
+    // F-M673 (Betreiber-Korrektur 22.11.2026): die DATEI TRÄGT KEIN PACK. Eine Datei enthält Spuren in
+    // vielen Sprachen, und der Pack einer Quelle pflegt EINE Sprache (und HI) — die Zugehörigkeit ist
+    // deshalb die der Spur. F-M676: sie trägt auch keinen Anzeige-String mehr; ihre Id IST der Text.
+
+    /// <summary>
+    /// F-M671: der OSHash (Größe plus erste und letzte 64 KB). Er ist die Eigenschaft, an der die Datei
+    /// WIEDERERKANNT wird — nicht ihre Identität: bleibt der Hash gleich, ist es dieselbe Datei; ändert
+    /// er sich, behält die Zeile ihre Kennung und bekommt einen neuen Hash.
+    /// </summary>
+    public string? OsHash { get; set; }
+
+    /// <summary>Date name (not the full path), for the osHash check against name and path.</summary>
+    public string? FileName { get; set; }
+
+    /// <summary>File size in bytes at the last sighting.</summary>
+    public long? Size { get; set; }
+
+    /// <summary>File mtime in unix seconds at the last sighting.</summary>
+    public long? MtimeUnix { get; set; }
+
+    /// <summary>When the row was first written (UTC).</summary>
+    public DateTime Created { get; set; } = DateTime.UtcNow;
 
     /// <summary>Latest known absolute path to the media file.</summary>
     public string? Path { get; set; }
@@ -246,28 +275,10 @@ public class MediaEntity
     // F-M88c: the upload-side completion mark; a file whose embedded side is complete is skipped.
     public DateTime? SubtitlesUploadedAt { get; set; }
 
-    /// <summary>
-    /// F-M557 (Operator-Entscheidung 16.11.2026: „Alle spuren bearbeitet im durchlauf oder übersprungen
-    /// ist zu für die Quelle?"): der Zugeh-Stempel JE QUELLE. Er sagt: für diese Quelle wurde jede
-    /// vorhandene Dialogspur der Datei in einem Durchlauf entschieden — hochgeladen oder bewusst
-    /// übersprungen. Ein Upload bei tvst schliesst die Datei NICHT für SubDL; genau das war der Fehler,
-    /// den <see cref="SubtitlesUploadedAt"/> als eine globale Marke gemacht hat.
-    /// </summary>
-    public DateTime? CompleteSubdl { get; set; }
-
-    /// <summary>F-M557: Zugeh-Stempel für tvsubtitles.net (Serien).</summary>
-    public DateTime? CompleteTvSubtitles { get; set; }
-
-    /// <summary>F-M557: Zugeh-Stempel für moviesubtitles.org (Filme).</summary>
-    public DateTime? CompleteMsub { get; set; }
-
-    /// <summary>
-    /// F-M562: die Spursignatur, die zu den Stempeln gehört — die verschiedenen (Sprache, HI)-Paare der
-    /// Datei, sortiert und verkettet. Weicht sie beim nächsten Nachsehen ab (Spur dazu, Remux, andere
-    /// Sprache), gilt die Datei wieder als offen; ohne diese Zeile wäre der Stempel eine Behauptung über
-    /// einen Zustand, der sich ändern kann.
-    /// </summary>
-    public string? CompleteSignature { get; set; }
+    // F-M668 (21.11.2026): der Zugeh-Stempel je Quelle (F-M557) und die Spursignatur (F-M562) standen
+    // hier als `CompleteSubdl`/`CompleteTvSubtitles`/`CompleteMsub`/`CompleteSignature`. Sie sind in die
+    // Marken-Matrix gewandert (`Kind = file`, Signatur im Feld `Fingerprint`) und werden hier NICHT mehr
+    // geführt: ein Urteil hat genau einen Ort (F-M668).
 
     // F-M283 (user decision 02.10.2026): the download-side completion mark is GONE.
     //
@@ -289,6 +300,14 @@ public class MediaEntity
 
     /// <summary>Target-language list the last search was made for.</summary>
     public string? LastSearchLanguages { get; set; }
+
+    /// <summary>
+    /// F-M661: last time a search for this file came back EMPTY — no candidate from any source.
+    /// An empty answer is re-asked on a longer clock than the configured refetch interval, so a
+    /// library full of titles no source carries does not spend its whole search budget on the same
+    /// empty questions at every run. Cleared by any search that does return something.
+    /// </summary>
+    public DateTime? LastSearchEmptyUtc { get; set; }
 
     /// <summary>Last time this media record was seen/updated.</summary>
     public DateTime LastSeen { get; set; } = DateTime.UtcNow;
@@ -347,8 +366,9 @@ public abstract class SubtitleState
     /// <summary>When <see cref="Status"/> was last set.</summary>
     public DateTime StatusAt { get; set; } = DateTime.UtcNow;
 
-    /// <summary>SubDL upload or download id this verdict refers to, when known.</summary>
-    public string? SubdlId { get; set; }
+    // F-M670 (21.11.2026): `SubdlId` stand hier als „SubDL upload or download id this verdict refers
+    // to". Genau das führt die Marken-Matrix als `SourceId` (Eintrag/Fund) und `UploadId` (Einsendung);
+    // die Spalte war der zweite Bestand derselben Aussage und ist entfernt (F-M668/F-M670).
 
     /// <summary>
     /// F-M486 (operator order 15.11.2026): where this subtitle CAME FROM — <c>subdl</c> or
@@ -362,65 +382,24 @@ public abstract class SubtitleState
     /// F-M486: the source's OWN id for this subtitle — the tvsubtitles.net subtitle id (for example
     /// <c>170678</c>) or the SubDL entry id. Together with <see cref="Origin"/> it names the original
     /// exactly, so a later check can quote it instead of describing it.
-    /// </summary>
-    public string? OriginId { get; set; }
-
-    /// <summary>
-    /// F-M488 (operator order 15.11.2026): the four marks are separate fields, one per source AND
-    /// direction, so a row says by itself what happened where — no reading of <see cref="Status"/> and
-    /// no guessing. <c>SubdlDownloadId</c> is the SubDL entry the subtitle was fetched from.
-    /// </summary>
-    public string? SubdlDownloadId { get; set; }
-
-    /// <summary>F-M488: the SubDL id the uploaded subtitle got.</summary>
-    public string? SubdlUploadId { get; set; }
-
-    /// <summary>F-M488: the tvsubtitles.net subtitle id the subtitle was fetched from (e.g. <c>170678</c>).</summary>
-    public string? TvSubtitlesDownloadId { get; set; }
-
-    /// <summary>
-    /// F-M488: the tvsubtitles.net subtitle id our own upload got, read back from the episode page after
-    /// the send. Null means the id could not be read back — it is never filled with a guess.
-    /// </summary>
-    public string? TvSubtitlesUploadId { get; set; }
-
-    /// <summary>
-    /// F-M490 (operator order 15.11.2026): when OUR upload to SubDL happened (UTC). A timestamp rather
-    /// than a flag, because "uploaded" without "when" answers half the question — and because a row can
-    /// carry both sources: uploaded to SubDL in March, to tvsubtitles.net in November.
-    /// </summary>
-    public DateTime? SubdlUploadedAt { get; set; }
-
-    /// <summary>
-    /// F-M490: when OUR upload to tvsubtitles.net happened (UTC). Independent of
-    /// <see cref="SubdlUploadedAt"/> — that is the whole point of two fields.
-    /// </summary>
-    public DateTime? TvSubtitlesUploadedAt { get; set; }
-
-    /// <summary>
-    /// F-M507 (Schema 14): die Id, unter der moviesubtitles.org diesen Untertitel führt — die
-    /// Gegenseite der Eintragsseite <c>subtitle-&lt;id&gt;.html</c>. Eigenes Feld je Quelle und
-    /// Richtung, wie die vier Kennzeichen aus F-M488: eine Zeile soll von sich aus sagen, was wo
-    /// passiert ist, ohne <see cref="Status"/> zu deuten.
-    /// </summary>
-    public string? MoviesubtitlesDownloadId { get; set; }
-
-    /// <summary>
-    /// F-M507 (Schema 14): die Id, die unser eigener Upload bei moviesubtitles.org bekommen hat.
     /// <para>
-    /// Das Feld steht hier mit der Spalte, weil die Migration beide Richtungen auf einmal anlegt;
-    /// GESCHRIEBEN wird es erst in Etappe 2b, wenn der Upload dieser Quelle verdrahtet ist. Null heißt
-    /// deshalb heute „noch nicht ermittelt" und nicht „kein Upload".
+    /// F-M672 (Schritt B, 22.11.2026): DIE SPALTE IST FORT. Eine fremde Id steht seit Schema 23 in
+    /// <c>reference</c> (<c>DownloadSourceId</c>), adressiert über die eigene Kennung des Subjekts — sie
+    /// ist damit ein Beleg JE QUELLE statt eines Feldes an der Zeile, und <c>Origin</c> bleibt, was es
+    /// immer war: der Quellenname, also Herkunft, kein Urteil.
     /// </para>
     /// </summary>
-    public string? MoviesubtitlesUploadId { get; set; }
+    // F-M672: `OriginId` stand hier bis Schema 22.
 
-    /// <summary>
-    /// F-M507 (Schema 14): wann UNSER Upload zu moviesubtitles.org lief (UTC) — ein Zeitpunkt, kein
-    /// Schalter, aus demselben Grund wie <see cref="SubdlUploadedAt"/>. Geschrieben wird er in
-    /// Etappe 2b.
-    /// </summary>
-    public DateTime? MoviesubtitlesUploadedAt { get; set; }
+    // F-M668 (21.11.2026): die neun Marken-Spalten je Quelle und Richtung (`SubdlDownloadId`,
+    // `SubdlUploadId`, `SubdlUploadedAt`, dasselbe für tvsubtitles und moviesubtitles) standen hier und
+    // an den Sidecars. Sie sind in die Marken-Matrix gewandert (Anker = Medien-Hash, Art = `track` bzw.
+    // `track-hi`, `SourceId` = Abruf-Id, `UploadId` = Einsende-Id, `ClosedAt` = Einsende-Zeitpunkt) und
+    // werden hier NICHT mehr geführt: ein Urteil hat genau einen Ort (F-M668).
+    // F-M670 (21.11.2026): dasselbe gilt für `SubdlId`. Die Spalte stand hier und an den Sidecars und
+    // wiederholte, was die Matrix als `SourceId`/`UploadId` führt — sie ist samt Feld entfernt. Was
+    // bleibt, ist allein die Herkunft (`Origin`/`OriginId`); sie sagt, WOHER der Text kam, nicht was
+    // die Quelle über ihn geurteilt hat.
 }
 
 /// <summary>
@@ -432,22 +411,55 @@ public abstract class SubtitleState
 /// row; conflating them is what made one rejected stream block all its siblings.
 /// </para>
 /// </summary>
-/// F-M197: one record per embedded subtitle stream, keyed by media hash + stream position.
-/// The position is the identity of a track: it has no name of its own, and two streams of one
-/// file can share a language (a normal and an SDH variant).
-public class EmbedTrackEntity : SubtitleState
+/// F-M197: one record per embedded subtitle stream, keyed by a random TrackId that is unique within its
+/// file (F-M671). Two streams of one file can share a language (a normal and an SDH variant); the
+/// position stays a column because it is how a caller addresses the stream today.
+public class TrackEntity : SubtitleState
 {
     /// <summary>
-    /// Primary key: "&lt;media hash&gt;|&lt;sub position&gt;". A stable business key rather than a
-    /// database-assigned id, so an upsert always updates the row it means to update.
+    /// F-M676: der Primärschlüssel — <c>#yyyyy#zzz</c>: die Datei-Id, ein <c>#</c> und drei Zeichen. Die
+    /// drei Zeichen sind innerhalb der Datei eindeutig; die Datei-Id steht in derselben Spalte, also ist
+    /// die Id global eindeutig und lesbar.
     /// </summary>
-    public string Id { get; set; } = string.Empty;
+    public string TrackId { get; set; } = string.Empty;
 
-    /// <summary>Parent media hash.</summary>
+    /// <summary>
+    /// F-M676: die Datei, zu der die Spur gehört — ABGELEITET aus <see cref="TrackId"/>, nicht
+    /// gespeichert. Eine eigene Spalte wäre dieselbe Aussage ein zweites Mal, und zwei Aussagen können
+    /// verschieden sein.
+    /// </summary>
+    public string FileId
+    {
+        get => ScribeIds.FileOf(TrackId);
+    }
+
+    // F-M677 (Betreiber-Korrektur 22.11.2026): DIE MITGLIEDSCHAFT HÄLT DER PACK, nicht die Spur. Ein Feld
+    // `PackId` hier war der Fehler, der alle 315 Spuren in den EN-HI-Pack gezogen hat: es kam von der
+    // DATEI, und eine Datei trägt Spuren in vielen Sprachen. Die Zugehörigkeit steht jetzt in der
+    // Zuordnungstabelle `pack_track` (PackId, TrackId) — das Array des Packs, zeilenweise und abfragbar.
+
+    /// <summary>
+    /// F-M671: die SPURNUMMER je Datei — aus EINEM Nummernkreis für eingebettete Spuren und Seitenwagen,
+    /// beim ersten Sehen vergeben, nie neu vergeben und nie wiederverwendet. Sie ist NICHT der
+    /// ffmpeg-Index: ffmpeg zählt nur, was gerade im Container liegt, und Seitenwagen stehen dazwischen.
+    /// Der Index wird zur Laufzeit abgeleitet (<see cref="TrackNumbers.FfmpegIndex"/>).
+    /// </summary>
+    public int TrackNumber { get; set; }
+
+    /// <summary>
+    /// Der OSHash der Datei, zu der die Spur gehört — die Adresse, unter der die Aufrufer sie heute
+    /// führen (F-M256). Er ist eine Eigenschaft der Datei und wird beim Neu-Hashen mitgezogen.
+    /// </summary>
     public string MediaHash { get; set; } = string.Empty;
 
-    /// <summary>ffmpeg stream position (0:s:N).</summary>
+    /// <summary>ffmpeg stream position (0:s:N) as last observed — a property, never the identity.</summary>
     public int SubPos { get; set; }
+
+    /// <summary>F-M671: when the row was first written (UTC).</summary>
+    public DateTime Created { get; set; }
+
+    /// <summary>F-M671: when the track was last seen in its file (UTC).</summary>
+    public DateTime LastSeen { get; set; }
 
     /// <summary>
     /// When language DETECTION last ran for this position, or null when it never did.
@@ -473,7 +485,7 @@ public class EmbedTrackEntity : SubtitleState
 
 /// <summary>
 /// How a per-track language detection attempt ended. Stored on the embedded track row alongside
-/// <see cref="EmbedTrackEntity.DetectionAttemptedAt"/>.
+/// <see cref="TrackEntity.DetectionAttemptedAt"/>.
 /// </summary>
 public static class DetectionOutcome
 {
@@ -500,17 +512,42 @@ public static class DetectionOutcome
 /// in the identity.
 /// </para>
 /// </summary>
-/// F-M199: one record per loose .srt file, keyed by the normalized content hash (F-M186), so a
+/// F-M199: one record per loose .srt file, addressed by the normalized content hash (F-M186), so a
 /// sidecar stays known after a rename or a move, and two sidecars differing in text stay two rows.
+/// F-M671: die IDENTITÄT ist die Spurkennung, nicht der Inhalt: ein Seitenwagen ist „diese Untertitelspur
+/// dieser Datei", seine Anzeige ist <c>0000-yyyyy-zzz</c> — er trägt bewusst KEIN Pack (aus Seitenwagen
+/// werden keine Packs gebaut), teilt aber den Nummernkreis seiner Datei mit den eingebetteten Spuren.
 public class SidecarEntity : SubtitleState
 {
-    /// <summary>Primary key: MD5 of the normalized content.</summary>
-    public string Id { get; set; } = string.Empty;
+    /// <summary>
+    /// F-M676: der Primärschlüssel — <c>#yyyyy&amp;zzz</c>: die Datei-Id, ein <c>&amp;</c> und drei Zeichen
+    /// aus dem gemeinsamen Nummernkreis der Datei. Das <c>&amp;</c> ist kein Zeichen des Alphabets, also
+    /// kann ein Seitenwagen nie mit einer eingebetteten Spur derselben Datei kollidieren.
+    /// </summary>
+    public string TrackId { get; set; } = string.Empty;
+
+    /// <summary>F-M676: die Hostdatei — ABGELEITET aus <see cref="TrackId"/>, nicht gespeichert.</summary>
+    public string FileId
+    {
+        get => ScribeIds.FileOf(TrackId);
+    }
+
+    // F-M671: ein Seitenwagen gehört zu KEINEM Pack — aus Seitenwagen werden keine Packs gebaut, und
+    // eine `pack_track`-Zeile für ihn würde eine Mitgliedschaft behaupten, die es nicht gibt.
+
+    /// <summary>F-M671: die Spurnummer aus dem gemeinsamen Nummernkreis der Hostdatei.</summary>
+    public int TrackNumber { get; set; }
+
+    /// <summary>When the row was first written (UTC).</summary>
+    public DateTime Created { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Last time this sidecar was seen on disk (UTC).</summary>
+    public DateTime LastSeen { get; set; } = DateTime.UtcNow;
 
     /// <summary>File name (not the full path) of the sidecar, for diagnostics.</summary>
     public string? FileName { get; set; }
 
-    /// <summary>Media hash of the file this sidecar sits next to.</summary>
+    /// <summary>Media hash of the file this sidecar sits next to (address, not identity).</summary>
     public string MediaHash { get; set; } = string.Empty;
 
     /// <summary>Full path of the sidecar as last seen, for diagnostics.</summary>
@@ -533,59 +570,12 @@ public class SidecarEntity : SubtitleState
 }
 
 /// <summary>
-/// Area 4: download candidates that were fetched and then discarded, remembered per
-/// (item, language) so the same candidate is never fetched and screened twice.
-/// <para>
-/// Kept apart from areas 2 and 3 because its grain is neither a stream nor a piece of content —
-/// it is "this remote release id was burned for this file and language". SubDL's own id is the
-/// only identifier such a verdict has.
-/// </para>
+/// F-M200/F-M450/F-M672: die verworfenen Download-Kandidaten standen bis Schema 22 in einer eigenen
+/// Tabelle (<c>rejected_candidates</c>, Schlüssel <c>item|language|subdl-id</c>). Sie sind mit F-M672 in
+/// <see cref="BadAppleEntity"/> aufgegangen — dieselbe Aussage („dieser fremde Eintrag war schlecht"),
+/// aber adressiert über das SUBJEKT des Stores statt über eine Jellyfin-Item-Id, und mit der fremden
+/// Kennung an der Stelle, an der sie ausdrücklich erlaubt ist.
 /// </summary>
-/// F-M200: one record per fetched-and-discarded candidate, keyed by item id + language + SubDL id.
-/// Its grain is "this remote release was burned for this file and language".
-public class RejectedCandidateEntity
-{
-    /// <summary>Primary key: "&lt;item id&gt;|&lt;language&gt;|&lt;subdl id&gt;".</summary>
-    public string Id { get; set; } = string.Empty;
-
-    /// <summary>Jellyfin item id the candidate was fetched for.</summary>
-    public string ItemId { get; set; } = string.Empty;
-
-    /// <summary>Language the candidate was fetched for.</summary>
-    public string Language { get; set; } = string.Empty;
-
-    /// <summary>SubDL release id that was burned.</summary>
-    public string SubdlId { get; set; } = string.Empty;
-
-    /// <summary>Why it was discarded (one of <see cref="RejectReason"/>, suffixes allowed).</summary>
-    public string Reason { get; set; } = string.Empty;
-
-    /// <summary>F-M450: the subtitle's report id from the search response ("subtitlePage",
-    /// "/s/info/Nj3hP7BQDw" → "Nj3hP7BQDw"). Empty for rows written before the field was kept, and
-    /// for candidates the search never delivered one for — such a row cannot be reported.</summary>
-    public string NId { get; set; } = string.Empty;
-
-    /// <summary>F-M450: the release name as SubDL lists it — the report names the package by id and
-    /// by this name, and the row outlives the candidate that carried it.</summary>
-    public string ReleaseName { get; set; } = string.Empty;
-
-    /// <summary>F-M450: the bare finding as it would be sent to SubDL ("downloads with 0 bytes",
-    /// "no usable cues", "cue span 2433s vs. runtime 1290s"). Empty when unknown.</summary>
-    public string Finding { get; set; } = string.Empty;
-
-    /// <summary>F-M450: "qa" rows keep a candidate out of the walk (as before), "empty" rows only
-    /// remember that the package delivered no data — they must not turn into a skip memo, because
-    /// the same package is fetched again and the second failure is what confirms the diagnosis.</summary>
-    public string Kind { get; set; } = "qa";
-
-    /// <summary>F-M450: when the report for this row was accepted by SubDL. Null = not reported
-    /// (never, or the attempt was deferred). One report per row, ever.</summary>
-    public DateTime? ReportedUtc { get; set; }
-
-    /// <summary>When the candidate was discarded.</summary>
-    public DateTime Updated { get; set; } = DateTime.UtcNow;
-}
-
 /// <summary>F-M450: what a report needs about the candidate that failed, as stored.</summary>
 /// <param name="NId">Subtitle report id.</param>
 /// <param name="Finding">Bare finding.</param>
@@ -832,16 +822,23 @@ public class PackEntity
     public const string TvSubtitlesSource = "tvsubtitles";
 
     /// <summary>
-    /// Primary key: "&lt;imdb&gt;|S&lt;season&gt;|&lt;lang&gt;|&lt;hi|plain&gt;|&lt;source&gt;" — one pack
-    /// per season, language, variant and SOURCE.
+    /// F-M676: der Primärschlüssel — <c>[xxxx]</c>, vier Zeichen in eckigen Klammern. Zufällig, einmalig,
+    /// unveränderlich. Die Klammern sind die Marke der Ebene und stehen nicht im Alphabet.
+    /// </summary>
+    public string PackId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// F-M390/F-M642: der STAFFEL-SCHLÜSSEL — „&lt;imdb&gt;|S&lt;season&gt;|&lt;lang&gt;|&lt;hi|plain&gt;|&lt;source&gt;".
+    /// Er ist ab F-M671 NICHT mehr die Identität, sondern die Adresse, unter der die Aufrufer den Behälter
+    /// fragen („gibt es zu dieser Staffel, Sprache, Variante und Quelle eine Zeile?"). Er bleibt eindeutig
+    /// indiziert, damit „ein Behälter je Staffel/Sprache/Variante/Quelle" weiter gilt.
     /// <para>
-    /// F-M642: die Quelle steht seit dem 20.11.2026 im Schluessel. Vorher war der Pack je (Staffel,
-    /// Sprache, Variante) genau einer, weil nur SubDL Container baute; zwei Quellen teilten sich also
-    /// eine Zeile, und der zweite Pack haette den ersten ueberschrieben — die Zeile haette danach eine
-    /// Staffel als „gepackt" gefuehrt, die es bei dieser Quelle nie gab.
+    /// F-M642: die Quelle steht im Schlüssel. Vorher war der Pack je (Staffel, Sprache, Variante) genau
+    /// einer, weil nur SubDL Container baute; zwei Quellen teilten sich also eine Zeile, und der zweite
+    /// Pack hätte den ersten überschrieben.
     /// </para>
     /// </summary>
-    public string Id { get; set; } = string.Empty;
+    public string SeasonKey { get; set; } = string.Empty;
 
     /// <summary>
     /// F-M642: die Quelle, zu der die Zeile gehoert (<see cref="SubdlSource"/> oder
@@ -868,16 +865,21 @@ public class PackEntity
     /// <summary>Release name the pack carries — one release for the whole season, never a mixture.</summary>
     public string? ReleaseName { get; set; }
 
+    /// <summary>F-M671: TMDb id of the series, the same level as the IMDb id.</summary>
+    public string? TmdbId { get; set; }
+
     /// <summary>
-    /// The packed id of THIS row's own source when the upload answered with one, else the pack NAME —
-    /// which is unique per season and content and is what the postprocessing pass can match against.
-    /// <para>
-    /// F-M642: seit die Quelle im Schluessel steht, gibt es je Quelle eine eigene Zeile und damit
-    /// genau eine Kennung pro Zeile. SubDLs Pack-Id steht also nie neben einer tvst-Kennung in
-    /// derselben Zeile; wer die Kennung einer Quelle braucht, fragt mit dieser Quelle.
-    /// </para>
+    /// F-M671: Signatur der Mitglieder (F-M466/F-M650) — „ist das noch dieselbe Staffel?". Sie steht am
+    /// Behälter, weil sie eine Eigenschaft seiner Mitglieder ist; das URTEIL der Quelle steht in
+    /// <c>upload</c> (F-M672).
     /// </summary>
-    public string? PackId { get; set; }
+    public string? Signature { get; set; }
+
+    /// <summary>F-M671: mtime of the newest member file in unix seconds, to which <see cref="Signature"/> belongs.</summary>
+    public long? MtimeUnix { get; set; }
+
+    /// <summary>F-M671: how many episodes the pack carries (the count behind <see cref="Episodes"/>).</summary>
+    public int EpisodeCount { get; set; }
 
     /// <summary>Episode numbers the pack carries, comma separated and ascending ("1,2,3").</summary>
     public string Episodes { get; set; } = string.Empty;
@@ -889,65 +891,305 @@ public class PackEntity
     public string? AbsorbedIds { get; set; }
 
     /// <summary>
-    /// F-M466: fingerprint of the pack as it was built — the hash over its member contents plus the
-    /// release it carries. It answers "is the pack the same one?" in one comparison, without
-    /// re-deriving anything from the subtitle rows: equal fingerprint means the same members in the
-    /// same shape, so nothing is re-sent; a different one means the set changed and the pack is
-    /// legitimately new. Rows written before this column existed carry null and fall back to the
-    /// member comparison.
+    /// F-M668 (21.11.2026): die Behälter-Kennung der Quelle (`PackId`), der Mitglieder-Fingerabdruck
+    /// (`Fingerprint`), die Ablehnung (`RefusalReason`/`RefusedAt`/`RefusedSignature`) und das Urteil
+    /// `UploadedAt` standen hier. Sie wanderten in die Marken-Matrix (`Kind = pack`, `SourceId` =
+    /// Behälter-Kennung, `ClosedAt` = Urteil, `Fingerprint`, `RefusalReason`/`RefusedAt`/
+    /// `RefusalSignature`) und ab Schema 23 (F-M672) in die Tabelle `upload` beziehungsweise
+    /// `reference`. Diese Zeile trägt nur noch die MITGLIEDER — Release, Folgen, aufgesogene
+    /// Einzel-Ids —, die kein Urteil einer Quelle sind.
     /// </summary>
-    public string? Fingerprint { get; set; }
-
-    /// <summary>
-    /// F-M644 (Betreiber-Vorgabe 20.11.2026): der Grund, aus dem die QUELLE diesen Behälter abgelehnt
-    /// hat — null, solange nichts abgelehnt wurde.
-    /// <para>
-    /// SubDL antwortet auf einen Pack, dessen Inhalt es schon hat, mit einer Ablehnung
-    /// („already exist"/„duplicate") und nimmt nichts an. Bis hierher war das eine Zeile im Log und
-    /// sonst nichts: die Zeile im Store blieb leer, der nächste Lauf baute denselben Behälter und bekam
-    /// dieselbe Absage — bei jedem Lauf, für immer. Der Grund steht deshalb in der Zeile, die der Pack
-    /// ohnehin hat, zusammen mit dem Fingerabdruck seines Inhalts (<see cref="Fingerprint"/>).
-    /// </para>
-    /// </summary>
-    public string? RefusalReason { get; set; }
-
-    /// <summary>F-M644: wann abgelehnt wurde (UTC) — die Zeile nennt den Grund mit seinem Datum.</summary>
-    public DateTime? RefusedAt { get; set; }
-
-    /// <summary>
-    /// F-M650: die STAFFEL-SIGNATUR, auf der die Ablehnung beruht — die Signatur der Dateien im
-    /// Augenblick der Absage (<see cref="Pipeline.SeasonPackCoordinator.SeasonSignature"/>).
-    /// <para>
-    /// Warum sie gebraucht wird: der Fingerabdruck (<see cref="Fingerprint"/>) beschreibt die
-    /// MITGLIEDER eines Behälters und lässt sich erst vergleichen, wenn gesammelt und entpackt wurde.
-    /// Die Signatur ist vor der Extraktion bekannt — sie sagt „diese Staffel ist dieselbe wie bei der
-    /// Absage". Steht sie unverändert und hat die Quelle den Behälter nicht, ist das Paar für diese
-    /// Quelle geschlossen: es wird weder gesammelt noch entpackt. Erst eine neue Folge oder eine
-    /// geänderte Datei ergibt eine andere Signatur und damit einen neuen Versuch.
-    /// </para>
-    /// </summary>
-    public string? RefusedSignature { get; set; }
-
-    /// <summary>
-    /// F-M644: wann dieser Behälter tatsächlich durchgegangen ist (UTC) — der Beleg der Zeile.
-    /// <para>
-    /// Je Zeile und damit je Quelle, genau wie <c>SubdlUploadedAt</c>/<c>TvSubtitlesUploadedAt</c> auf
-    /// der Untertitelzeile: „der Pack ist bei SubDL durch" und „der Pack ist bei tvst durch" sind zwei
-    /// Aussagen, und keine darf die andere vortäuschen. Gesetzt wird sie erst, wenn der Versand
-    /// wirklich angenommen wurde (SubDL: <c>uploadSubtitle</c> mit Kennung; tvst: angenommener Versand);
-    /// solange nur abgelehnt wurde, bleibt sie null.
-    /// </para>
-    /// <para>
-    /// BELEG UND ABLEHNUNG SCHLIESSEN SICH AUS: eine Zeile trägt entweder <see cref="UploadedAt"/> oder
-    /// <see cref="RefusalReason"/>/<see cref="RefusedAt"/>, nie beides. Der Erfolg räumt die Absage weg,
-    /// die Absage den Beleg — sonst stünde „durch" neben „abgelehnt am …" und niemand wüsste, was gilt.
-    /// </para>
-    /// </summary>
-    public DateTime? UploadedAt { get; set; }
 
     /// <summary>When the row was first written (UTC).</summary>
     public DateTime Created { get; set; } = DateTime.UtcNow;
 
     /// <summary>When the row last changed (UTC).</summary>
     public DateTime Updated { get; set; } = DateTime.UtcNow;
+}
+
+/// <summary>
+/// F-M668: EIN Pack, wie ihn die Leser sehen — die Mitglieder aus der <c>packs</c>-Zeile und das Urteil
+/// aus der Marken-Matrix.
+/// <para>
+/// WARUM EIN EIGENER TYP: das Urteil steht seit F-M668 nur noch in <c>source_matrix</c>, die Mitglieder
+/// (Release, Folgen, aufgesogene Kennungen) weiter in <c>packs</c>. Wer „ist dieser Behälter oben?" oder
+/// „warum wurde er abgelehnt?" fragt, braucht beide — und zwar als EINE Antwort, nicht als zwei Abfragen
+/// an zwei Stellen. Der Typ macht außerdem sichtbar, dass seine Urteils-Felder NICHT schreibbar sind:
+/// geschrieben wird über <c>ContentHashRegistry.RecordPack</c>/<c>RecordPackRefusal</c>.
+/// </para>
+/// </summary>
+public sealed class PackView
+{
+    /// <summary>Der Schlüssel der <c>packs</c>-Zeile (Serie, Staffel, Sprache, Variante, Quelle).</summary>
+    public string Id { get; set; } = string.Empty;
+
+    /// <summary>Die Quelle des Behälters (<see cref="PackEntity.SubdlSource"/> oder <see cref="PackEntity.TvSubtitlesSource"/>).</summary>
+    public string Source { get; set; } = PackEntity.SubdlSource;
+
+    /// <summary>Serie des Behälters.</summary>
+    public string ImdbId { get; set; } = string.Empty;
+
+    /// <summary>Staffel.</summary>
+    public int Season { get; set; }
+
+    /// <summary>Sprache des Behälters.</summary>
+    public string Language { get; set; } = string.Empty;
+
+    /// <summary>HI-Variante des Behälters (dreiwertig, F-M285).</summary>
+    public bool? HearingImpaired { get; set; }
+
+    /// <summary>Release, den der Behälter trägt.</summary>
+    public string? ReleaseName { get; set; }
+
+    /// <summary>Folgen des Behälters, kommasepariert und aufsteigend.</summary>
+    public string Episodes { get; set; } = string.Empty;
+
+    /// <summary>Die Einzel-Kennungen, die in diesem Behälter aufgegangen sind.</summary>
+    public string? AbsorbedIds { get; set; }
+
+    /// <summary>F-M390/F-M668: die Kennung des Behälters BEI DER QUELLE (Matrix-<c>SourceId</c>); null, solange keine bekannt ist.</summary>
+    public string? PackId { get; set; }
+
+    /// <summary>F-M466/F-M668: Fingerabdruck der Mitglieder (Matrix-<c>Fingerprint</c>) — „ist das derselbe Behälter?".</summary>
+    public string? Fingerprint { get; set; }
+
+    /// <summary>F-M644/F-M668: der Grund, aus dem die Quelle den Behälter abgelehnt hat; null, solange nichts abgelehnt wurde.</summary>
+    public string? RefusalReason { get; set; }
+
+    /// <summary>F-M644/F-M668: wann abgelehnt wurde (UTC).</summary>
+    public DateTime? RefusedAt { get; set; }
+
+    /// <summary>F-M650/F-M668: die Staffel-Signatur, auf der die Ablehnung beruht.</summary>
+    public string? RefusedSignature { get; set; }
+
+    /// <summary>F-M644/F-M668: wann der Behälter wirklich durchging (Matrix-<c>ClosedAt</c>); null bei Ablehnung.</summary>
+    public DateTime? UploadedAt { get; set; }
+
+    /// <summary>Wahr, wenn es für diesen Behälter überhaupt eine Matrix-Zeile gibt (Urteil oder Absage).</summary>
+    public bool HasVerdict { get; set; }
+}
+
+/// <summary>
+/// F-M672 (Betreiber-Konzept §5, 22.11.2026): DAS URTEIL EINER QUELLE ÜBER EIN SUBJEKT — Tabelle
+/// <c>upload</c>.
+/// <para>
+/// WAS EINE ZEILE BEDEUTET: „diese Quelle hat über dieses Subjekt so entschieden". Das Subjekt ist
+/// eines der vier Dinge, die eine Kennung tragen (<c>pack</c>, <c>file</c>, <c>track</c>, <c>sidecar</c>),
+/// und steht als <see cref="SubjectId"/>; die Quelle ist ein WERT im Feld, keine Tabelle je Quelle —
+/// eine vierte Quelle erzeugt Zeilen, keine Spalten.
+/// </para>
+/// <para>
+/// WARUM „GESCHLOSSEN" KEIN FELD IST: <c>UploadedAt</c> gesetzt heißt geschlossen, und nichts anderes.
+/// Ein eigenes Ja/Nein-Feld daneben wäre eine zweite Aussage über dieselbe Sache, und zwei Aussagen
+/// können verschieden sein. Eine Absage ist kein Urteil, sondern ihr Gegenteil — sie steht deshalb mit
+/// Grund, Zeitpunkt und der Signatur, auf der sie beruht, in derselben Zeile, und <c>UploadedAt</c>
+/// bleibt leer.
+/// </para>
+/// </summary>
+public class UploadEntity
+{
+    /// <summary>
+    /// Die Kennung des SUBJEKTS — <c>PackId</c> (4 Zeichen), <c>FileId</c> (5) oder <c>TrackId</c> (3).
+    /// Welche Ebene gemeint ist, sagt die Tabelle, in der die Kennung steht; die Ebene in die Kennung
+    /// hineinzuschreiben wäre eine zweite Wahrheit.
+    /// </summary>
+    public string SubjectId { get; set; } = string.Empty;
+
+    /// <summary>Die Quelle — <c>subdl</c>, <c>tvsubtitles</c> oder <c>moviesubtitles</c>.</summary>
+    public string Source { get; set; } = string.Empty;
+
+    /// <summary>Wann die Quelle das Subjekt angenommen hat (UTC). Gesetzt = geschlossen.</summary>
+    public DateTime? UploadedAt { get; set; }
+
+    /// <summary>Wann die Quelle abgelehnt hat (UTC); null, wenn nie abgelehnt wurde.</summary>
+    public DateTime? RefusedAt { get; set; }
+
+    /// <summary>Der Grund, den die Quelle genannt hat.</summary>
+    public string? RefusedReason { get; set; }
+
+    /// <summary>
+    /// F-M650: die Signatur, auf der eine ABSAGE beruht (beim Pack die Staffel-Signatur). Sie ist der
+    /// Grund, warum ein abgelehntes Paar nicht bei jedem Lauf neu gesammelt werden muss: ist sie beim
+    /// nächsten Lauf dieselbe, steht das Urteil schon fest.
+    /// </summary>
+    public string? RefusalSignature { get; set; }
+
+    /// <summary>
+    /// Inhaltssignatur, zu der dieses Urteil gehört — bei der Datei die Spursignatur (F-M562), beim Pack
+    /// der Mitglieder-Hash (F-M466). Sie steht am URTEIL, nicht am Subjekt: eine Datei kann für eine
+    /// Quelle geschlossen und für eine andere offen sein, und jede Schließung gilt für einen anderen
+    /// Inhaltsstand.
+    /// </summary>
+    public string? Fingerprint { get; set; }
+
+    /// <summary>Änderungszeit der Datei in Unix-Sekunden, zu der <see cref="Fingerprint"/> gehört.</summary>
+    public long? MtimeUnix { get; set; }
+
+    /// <summary>Wann die Zeile zuletzt geschrieben wurde (UTC) — Diagnose, kein Urteil.</summary>
+    public DateTime Written { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Der zusammengesetzte Schlüssel der Zeile (Subjekt und Quelle) — nur für den Speicher.</summary>
+    public string Key => SubjectId + "|" + Source;
+}
+
+/// <summary>
+/// F-M672: DER BELEG EINER QUELLE ÜBER EIN SUBJEKT — Tabelle <c>reference</c>. Der einzige Ort, an dem
+/// eine FREMDE Kennung stehen darf (Ausnahme: <see cref="BadAppleEntity"/>, siehe dort).
+/// <para>
+/// WARUM GETRENNT VOM URTEIL: „die Quelle hat angenommen" und „der Inhalt kam aus dem Eintrag 3758706"
+/// sind zwei verschiedene Aussagen mit zwei verschiedenen Lebensläufen. Ein Abruf trägt eine Id, lange
+/// bevor irgendetwas hochgeladen ist, und eine Einsendung kann eine Id nachliefern, wenn das Urteil
+/// längst steht. In einer Zeile müsste jede dieser Nachlieferungen die andere überschreiben.
+/// </para>
+/// <para>
+/// DIE FÜNF KENNUNGEN SIND VERSCHIEDENE DINGE: <see cref="DownloadSourceId"/> (fremder Eintrag, aus dem
+/// der Inhalt kam), <see cref="UploadedId"/> (unsere Einsendung), <see cref="ItemId"/> (Jellyfin),
+/// <see cref="SdId"/> (Staffel-/Release-Kennung der Quelle) und <see cref="Url"/> (bei tvsubtitles die
+/// Seite, wenn die Id allein nicht reicht).
+/// </para>
+/// </summary>
+public class ReferenceEntity
+{
+    /// <summary>Die Kennung des Subjekts (siehe <see cref="UploadEntity.SubjectId"/>).</summary>
+    public string SubjectId { get; set; } = string.Empty;
+
+    /// <summary>Die Quelle, bei der diese Kennungen gelten.</summary>
+    public string Source { get; set; } = string.Empty;
+
+    /// <summary>Der fremde Eintrag, aus dem der Inhalt kam.</summary>
+    public string? DownloadSourceId { get; set; }
+
+    /// <summary>Unsere Einsendung bei dieser Quelle.</summary>
+    public string? UploadedId { get; set; }
+
+    /// <summary>Die Kennung des Jellyfin-Items, zu dem der Inhalt gehört.</summary>
+    public string? ItemId { get; set; }
+
+    /// <summary>Die Staffel-/Release-Kennung der Quelle (<c>sd_id</c> bei SubDL).</summary>
+    public string? SdId { get; set; }
+
+    /// <summary>Die Seite des Eintrags, wo eine nackte Kennung nicht reicht (tvsubtitles.net).</summary>
+    public string? Url { get; set; }
+
+    /// <summary>Wann die Zeile zuletzt geschrieben wurde (UTC) — Diagnose.</summary>
+    public DateTime Written { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Der zusammengesetzte Schlüssel der Zeile — nur für den Speicher.</summary>
+    public string Key => SubjectId + "|" + Source;
+}
+
+/// <summary>
+/// F-M672: EIN SCHLECHTER DOWNLOAD — Tabelle <c>badapple</c>. Die einzige Stelle, an der eine fremde
+/// Kennung NEBEN dem Beleg stehen darf.
+/// <para>
+/// WARUM DIE FREMDE ID HIER AUSDRÜCKLICH ERLAUBT IST: die Meldung an die Quelle nennt genau diese
+/// Nummer. „Ein Eintrag von uns ist mangelhaft" ist nicht meldbar; „Eintrag 380011 hat 0 Bytes" ist es.
+/// Deshalb trägt diese Zeile <see cref="SourceId"/> — und nur diese Tabelle, nur für diesen Zweck.
+/// </para>
+/// <para>
+/// F-M200/F-M450: der Speicher ist zugleich das Gedächtnis der Download-Seite — ein Kandidat, der
+/// einmal geholt und verworfen wurde, wird nicht zweimal geholt. <see cref="Kind"/> hält die alte
+/// Unterscheidung fest: <c>qa</c> schließt den Kandidaten aus, <c>empty</c> merkt nur, dass das Paket
+/// nichts lieferte (ein Aussetzer darf keinen Kandidaten für immer verbrennen).
+/// </para>
+/// </summary>
+public class BadAppleEntity
+{
+    /// <summary>Der Zustand „noch nicht gemeldet".</summary>
+    public const string ReportStateOpen = "open";
+
+    /// <summary>Der Zustand „die Quelle hat die Meldung angenommen".</summary>
+    public const string ReportStateReported = "reported";
+
+    /// <summary>Die Kennung des Subjekts — bei einem verworfenen Kandidaten die Datei, für die er geholt wurde.</summary>
+    public string SubjectId { get; set; } = string.Empty;
+
+    /// <summary>Die Quelle, deren Eintrag mangelhaft ist.</summary>
+    public string Source { get; set; } = string.Empty;
+
+    /// <summary>Die Nummer des fremden Eintrags — hier ausdrücklich erlaubt, weil die Meldung sie nennt.</summary>
+    public string SourceId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// F-M679: der Name des Untertitels INNERHALB des fremden Eintrags — leer bei einem Einzeldownload.
+    /// <para>
+    /// Betreiber-Entscheidung 22.11.2026, wörtlich: „Halt fuer subs einzeln und im pack". Ein schlechter
+    /// Download ist ein EINZELNER Untertitel, gleich ob er allein oder in einem Staffelpack kam: diese
+    /// Spalte nennt die Datei im fremden Behälter (z. B.
+    /// <c>MobLand - 2x05 - Birdland.WEB.NeoNoir.en.srt</c>), leer bei einem Einzeldownload.
+    /// </para>
+    /// <para>
+    /// WARUM SIE ZUM SCHLÜSSEL GEHÖRT: erst damit ist der Verbrauch je SUB möglich statt je EINTRAG —
+    /// zwei kaputte Untertitel desselben Packs sind zwei Zeilen, und ein schlechtes Sub verbrennt nur
+    /// sich selbst, nicht den ganzen Pack.
+    /// </para>
+    /// </summary>
+    public string Member { get; set; } = string.Empty;
+
+    /// <summary>Die Sprache, für die der Eintrag geholt wurde (der Kandidat ist je Sprache verbraucht).</summary>
+    public string Language { get; set; } = string.Empty;
+
+    /// <summary>Warum er verworfen wurde (eine der Konstanten aus <see cref="RejectReason"/>, Zusätze erlaubt).</summary>
+    public string Reason { get; set; } = string.Empty;
+
+    /// <summary>Der Befund, wie er an die Quelle ginge („downloads with 0 bytes", „no usable cues").</summary>
+    public string Finding { get; set; } = string.Empty;
+
+    /// <summary>F-M450: die Melde-Id des Untertitels bei der Quelle, wenn die Suche eine nannte.</summary>
+    public string NId { get; set; } = string.Empty;
+
+    /// <summary>F-M450: der Releasename, wie die Quelle ihn führt — die Meldung nennt das Paket mit beidem.</summary>
+    public string ReleaseName { get; set; } = string.Empty;
+
+    /// <summary>F-M450: <c>qa</c> oder <c>empty</c> — die zwei Arten von Verbrauch (siehe Klassenbeschreibung).</summary>
+    public string Kind { get; set; } = "qa";
+
+    /// <summary>F-M450: wann die Meldung von der Quelle angenommen wurde; null = (noch) nicht gemeldet.</summary>
+    public DateTime? ReportedAt { get; set; }
+
+    /// <summary>Der Meldezustand als Wort — <c>open</c> oder <c>reported</c>.</summary>
+    public string ReportState { get; set; } = ReportStateOpen;
+
+    /// <summary>Wann die Zeile zuletzt geschrieben wurde (UTC) — Diagnose.</summary>
+    public DateTime Written { get; set; } = DateTime.UtcNow;
+
+    /// <summary>
+    /// Der zusammengesetzte Schlüssel der Zeile (Subjekt, Quelle, fremde Kennung, Member) — nur für den
+    /// Speicher. F-M679: der Member gehört dazu, sonst überschriebe ein schlechter Untertitel aus einem
+    /// Pack den nächsten desselben Eintrags.
+    /// </summary>
+    public string Key => SubjectId + "|" + Source + "|" + SourceId + "|" + Member;
+}
+
+/// <summary>
+/// F-M677 (Betreiber-Korrektur 22.11.2026): DIE MITGLIEDSCHAFT EINES PACKS — Tabelle <c>pack_track</c>.
+/// <para>
+/// Der Betreiber sagt: „Der Pack ist eine eigene Id <c>[xxxx]</c> und besitzt ein Array seiner Spuren."
+/// Ein Array in einer Zeile wäre ein Textfeld, das niemand abfragen kann; als Zuordnungstabelle ist es
+/// dasselbe Array, nur zeilenweise: eine Zeile je (Behälter, Spur), beide als echte Kennungen.
+/// </para>
+/// <para>
+/// WARUM NICHT EIN FELD AN DER SPUR: ein Feld <c>PackId</c> an <c>track</c> behauptet, eine Spur gehöre
+/// genau einem Behälter — und beim Aufstieg kam dieser Wert von der DATEI, die Spuren in vielen Sprachen
+/// trägt. Gemessen am echten Bestand zog das alle 315 Spuren in den EN-HI-Pack, während die Packs für
+/// FR, PT und ES leer blieben. Die Zugehörigkeit ist eine Aussage des BEHÄLTERS über seine Mitglieder;
+/// deshalb steht sie hier und nicht dort.
+/// </para>
+/// </summary>
+public class PackTrackEntity
+{
+    /// <summary>F-M676: die Kennung des Behälters — <c>[xxxx]</c>.</summary>
+    public string PackId { get; set; } = string.Empty;
+
+    /// <summary>
+    /// F-M676: die Kennung der eingebetteten Spur — <c>#yyyyy#zzz</c>. Ein Seitenwagen ist nie Mitglied
+    /// (aus Seitenwagen werden keine Packs gebaut).
+    /// </summary>
+    public string TrackId { get; set; } = string.Empty;
+
+    /// <summary>Wann die Mitgliedschaft eingetragen wurde (UTC).</summary>
+    public DateTime Added { get; set; } = DateTime.UtcNow;
+
+    /// <summary>Der zusammengesetzte Schlüssel der Zeile — nur für den Speicher.</summary>
+    public string Key => PackId + "|" + TrackId;
 }

@@ -466,25 +466,23 @@ internal static class Program
         // field is allowed and is the majority on the page, hence the `?? string.Empty`. Bound as
         // source text, so a later edit cannot quietly put the file name back.
         {
-            // F-M643: seit dem Staffel-Pack der zweiten Quelle gibt es ZWEI tvst-Tickets in der Datei.
-            // Der Anker ist deshalb die Einzel-Upload-Methode — geprueft wird ihr Ticket, nicht das
-            // des Behaelters (der traegt den Pack-Namen, nicht die Gruppe).
+            // F-M687: der Einzel-Upload der Serien-Adresse ist kein Ticket mehr, sondern ein AUFTRAG an
+            // die Engine. Der Anker ist deshalb die Einzel-Upload-Methode — geprueft wird ihr Auftrag,
+            // nicht der des Behaelters (der traegt den Pack-Namen, nicht die Gruppe).
             int einzelAt = pipeline.IndexOf("private async Task<UploadResult> SendToTvSubtitlesAsync(", StringComparison.Ordinal);
             int ticketAt = einzelAt < 0
                 ? -1
-                : pipeline.IndexOf("var ticket = new Api.Endpoints.UploadTicket(", einzelAt, StringComparison.Ordinal);
+                : pipeline.IndexOf("Bytes = System.Text.Encoding.UTF8.GetBytes(srtContent)", einzelAt, StringComparison.Ordinal);
             int ticketEnd = ticketAt < 0
                 ? -1
-                : pipeline.IndexOf("TvstShowId: show.ShowId", ticketAt, StringComparison.Ordinal);
-            // F-M572: das Ticket endet nicht mehr an "TvstShowId: show.ShowId);" — der Folgentitel steht
-            // jetzt als letztes Feld dahinter. Der Anker ist deshalb der Feldname ohne Klammer.
+                : pipeline.IndexOf("AsPack = false,", ticketAt, StringComparison.Ordinal);
             string ticket = ticketAt < 0 || ticketEnd < 0
                 ? string.Empty
-                : pipeline[ticketAt..(ticketEnd + "TvstShowId: show.ShowId".Length)];
+                : pipeline[ticketAt..ticketEnd];
             Check(ticket.Length > 0
                   && ticket.Contains("SeasonPack.ReleaseGroup(releaseName) ?? string.Empty", StringComparison.Ordinal)
                   && !ticket.Contains("GetFileNameWithoutExtension", StringComparison.Ordinal),
-                "F-M505: the tvst ticket's release field is the GROUP (`SeasonPack.ReleaseGroup(releaseName) ?? string.Empty`) and never the media file name — the page cuts a name at the dash (\"The Middle.S01E21.MULTI.1080p.WEB-DL\") and the group would be lost, an empty field being allowed and the majority on the page");
+                "F-M505: the tvst order's release field is the GROUP (`SeasonPack.ReleaseGroup(releaseName) ?? string.Empty`) and never the media file name — the page cuts a name at the dash (\"The Middle.S01E21.MULTI.1080p.WEB-DL\") and the group would be lost, an empty field being allowed and the majority on the page");
         }
         Check(pipeline.Contains("&& !cand.IsLoose && !cand.Forced", StringComparison.Ordinal), "no pack for a loose sidecar or a forced track");
         Check(pipeline.Contains("await packCoordinator.FlushAsync(runCt)", StringComparison.Ordinal), "the run closes its buffers before the summary");
@@ -526,9 +524,20 @@ internal static class Program
             "F-M429: the pack phase runs before the single uploads, stated where it is enforced");
         Check(pipeline.Contains("PlanPacksFromStore(completeSeasons, sources: slotQuellen)", StringComparison.Ordinal),
             "and the plan is made from the queue, before any single went up — for every source of the slot (F-M647)");
-        Check(pipeline.Contains("brought all {Aired} episode(s)", StringComparison.Ordinal)
-              && pipeline.Contains("no queue of this run was a whole season (F-M424/F-M425)", StringComparison.Ordinal),
-            "every run packs only when its own queued episodes are the whole season (F-M425)");
+        // F-M680 (Betreiber-Vorgabe 22.11.2026: „Season Packs nur bei Refetch- und Manual-Läufen (also
+        // nicht bei Ankunftsläufen) — und für alle Quellen gleich"): der Ankunftslauf-Zweig F-M424 ist
+        // ersatzlos gefallen. Er war die Ungleichheit selbst — derselbe Lauf baute am 21.11.2026 um 09:58
+        // zwei SubDL-Packs, während tvsubtitles.net mit „stays with a full run" draußen blieb.
+        Check(!pipeline.Contains("no queue of this run was a whole season", StringComparison.Ordinal)
+              && !pipeline.Contains("the pack is built from the queued items of this run", StringComparison.Ordinal)
+              && !pipeline.Contains("brought all {Aired} episode(s)", StringComparison.Ordinal),
+            "F-M680: the arrival-run branch F-M424 is gone — no run packs its own queue any more");
+        Check(pipeline.Contains("arrival run — no season pack", StringComparison.Ordinal)
+              && pipeline.Contains("completeSeasons = new Dictionary<(string ImdbId, int Season), IReadOnlyList<int>>();", StringComparison.Ordinal),
+            "F-M680: an arrival run gets NO pack scope — it says so and uploads single");
+        Check(pipeline.IndexOf("if (!IsArrivalRun)", StringComparison.Ordinal)
+              < pipeline.IndexOf("arrival run — no season pack", StringComparison.Ordinal),
+            "F-M680: the one place that still asks for the run's kind is the pack-scope gate itself");
         Check(pipeline.Contains("the rest is filled from what is already uploaded", StringComparison.Ordinal),
             "a partly queued season says that the gap is filled, not that it stays single");
         Check(pipeline.Split("await packCoordinator.AddAsync(").Length - 1 >= 2,
@@ -751,8 +760,12 @@ internal static class Program
         var registrySrc = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Registry/ContentHashRegistry.cs"));
         Check(registrySrc.Contains("public int RemapSubdlId(string uploadId, string entryId)"),
             "F-M435: the registry can rewrite a stored handle");
-        Check(registrySrc.Contains("x.PackId, uploadId") && registrySrc.Contains("x.SubdlId, uploadId"),
-            "F-M435: subtitle rows AND pack rows are rewritten");
+        // F-M668/F-M670: BEIDE Kennungen stehen in der Matrix — die Behälter-Kennung an der `pack`-Zeile,
+        // die Untertitel-Kennung an der Spur-Marke. `RemapId` schreibt beide Zellen EINER Marke um
+        // (`SourceId` und `UploadId`), also braucht es keinen zweiten Schreibweg und keine Id-Spalte mehr.
+        Check(registrySrc.Contains("return SourceStore.RemapId(_db, uploadId, entryId);")
+              && !registrySrc.Contains("x.SubdlId, uploadId"),
+            "F-M435: subtitle rows AND pack rows are rewritten — one call, both cells of the mark");
         var coordinatorSrc = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Pipeline/SeasonPackCoordinator.cs"));
         Check(coordinatorSrc.Contains("pack entry id {Id} taken from myPublishedSubtitles"),
             "F-M435: a pack stores the entry id when the published list names it");
@@ -1101,9 +1114,9 @@ internal static class Program
             var tvstPipe = File.ReadAllText(
                 Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Pipeline/UploadPipeline.cs"));
 
-            Check(tvstCoord.Contains("public Func<TvPackTransfer, CancellationToken, Task<UploadResult>>? TvSubtitlesSender", StringComparison.Ordinal)
-                  && tvstCoord.Contains("public sealed record TvPackTransfer(", StringComparison.Ordinal),
-                "F-M643: the collector hands the container to a sender for the second source — the collection itself is shared");
+            Check(tvstCoord.Contains("public Func<PackPlan, Sources.ISourceEngine, CancellationToken, Task<Sources.SourcePackRequest>>? PackRequest", StringComparison.Ordinal)
+                  && tvstCoord.Contains("Sources.SourcePackRequest NeutralPackRequest(", StringComparison.Ordinal),
+                "F-M687: the collector hands the container to the ONE send path — what a source needs for its payload is asked of the run, the send itself is the order");
 
             // Der echte Behälter: der Koordinator baut ihn in einer privaten Hilfsmethode, die Seite
             // liest die Folgen aus den Eintragsnamen. Beides wird hier wirklich ausgefuehrt.
@@ -1140,28 +1153,32 @@ internal static class Program
                   && tvstCoord.Contains("SeasonPack.NeutralFileName(", StringComparison.Ordinal),
                 "F-M643/F-M647: the plan carries BOTH namings — the tvst entries with the season, the SubDL members without it");
 
-            // Der Versand: Ticket mit SeasonPack=true in den Staffel-Slot, Schalter der GUI, Quelle tvst.
-            int packVersand = tvstPipe.IndexOf("private async Task<UploadResult> SendPackToTvSubtitlesAsync(", StringComparison.Ordinal);
+            // Der Versand: EIN Auftrag mit AsPack=true an die Engine — mit der Nummer, die der Lauf
+            // aufgelöst hat, dem fertigen Behälter und dem Pack-Namen im release-Feld.
+            int packVersand = tvstPipe.IndexOf("private async Task<Sources.SourcePackRequest> PackRequestForAsync(", StringComparison.Ordinal);
             int packEnde = packVersand < 0 ? -1 : tvstPipe.IndexOf("private async Task<UploadResult> SendToTvSubtitlesAsync(", packVersand, StringComparison.Ordinal);
             string sender = packVersand < 0 || packEnde < 0 ? string.Empty : tvstPipe[packVersand..packEnde];
-            Check(sender.Contains("SeasonPack: true", StringComparison.Ordinal)
-                  && sender.Contains("TvstShowId: show.ShowId", StringComparison.Ordinal)
-                  && sender.Contains("seasonPacks: _config.UploadSeasonPacks", StringComparison.Ordinal)
-                  && sender.Contains("registry: Registry", StringComparison.Ordinal),
-                "F-M643: the container goes as a pack ticket into the season slot, with the GUI's pack switch and the store");
-            Check(sender.Contains("uebergabe.Hi", StringComparison.Ordinal)
-                  && sender.Contains("DoubleEpisode: false", StringComparison.Ordinal),
-                "F-M643: hi describes the WHOLE container — the collector builds one container per (language, variant), never a mixture");
+            Check(sender.Contains("AsPack = true", StringComparison.Ordinal)
+                  && sender.Contains("MediaId = show.ShowId", StringComparison.Ordinal)
+                  && sender.Contains("Bytes = plan.TvstZip ?? Array.Empty<byte>()", StringComparison.Ordinal)
+                  && sender.Contains("Quality = Api.TvSubtitlesClient.RipFromQuality(plan.Ordered[0].Quality)", StringComparison.Ordinal),
+                "F-M687: the container is ONE order with AsPack=true — the finished archive, the source's own rip value and the number the run resolved");
+            Check(sender.Contains("HearingImpaired = plan.Hi", StringComparison.Ordinal)
+                  && sender.Contains("Episode: 0", StringComparison.Ordinal),
+                "F-M687: hi describes the WHOLE container — the collector builds one container per (language, variant), never a mixture; episode 0 is the season slot");
 
             // F-M647: EIN Slot je Paar. Bis 12.2.0.8 standen hier zwei Phasen — erst
             // `PlanPacksFromStore(completeSeasons)`, danach ein zweiter Block mit
             // `PlanPacksFromStore(completeSeasons, source: TvSubtitlesSource)` und einer zweiten
             // `FillOnlyAsync`-Schleife. Jetzt gibt es EINE Paar-Schleife, EINEN Sammler und EINEN Slot.
-            int tvstSlot = tvstPipe.IndexOf("var slotQuellen = new List<string> { PackEntity.SubdlSource };", StringComparison.Ordinal);
+            // F-M680: der Slot holt seine Quellen aus EINER Antwort (`PackSlotSources`); die Inline-Kopie
+            // mit dem Ankunftslauf-Sonderfall ist gefallen. Damit steht die zweite Quelle im selben Slot,
+            // sobald ihr Schalter an ist — unabhängig davon, welcher Art der Lauf ist.
+            int tvstSlot = tvstPipe.IndexOf("var slotQuellen = PackSlotSources();", StringComparison.Ordinal);
             Check(tvstSlot > 0
-                  && tvstPipe.IndexOf("else if (!SourceAllowed(Configuration.SubtitleProvider.TvSubtitles))", tvstSlot, StringComparison.Ordinal) > tvstSlot
-                  && tvstPipe.IndexOf("slotQuellen.Add(PackEntity.TvSubtitlesSource);", tvstSlot, StringComparison.Ordinal) > tvstSlot,
-                "F-M643/F-M647: the second source joins the SAME slot, only when the run is a full run and the source may upload");
+                  && tvstPipe.IndexOf("PlanPacksFromStore(completeSeasons, sources: slotQuellen)", tvstSlot, StringComparison.Ordinal) > tvstSlot
+                  && tvstPipe.IndexOf("var draussen = _sources.PackSlotExcluded();", tvstSlot, StringComparison.Ordinal) > tvstSlot,
+                "F-M643/F-M647/F-M680: the second source joins the SAME slot, from the switch alone — the run's kind no longer decides");
 
             int paarSchleife = tvstPipe.IndexOf("foreach (var (packImdb, packSeason, packLang, packHi) in packPaare)", StringComparison.Ordinal);
             int sammler = paarSchleife < 0 ? -1 : tvstPipe.IndexOf("FillAsync(packImdb, packSeason, packLang, packHi, slotQuellen, runCt)", paarSchleife, StringComparison.Ordinal);
@@ -1179,9 +1196,9 @@ internal static class Program
                   && tvstPipe.Split("PlanPacksFromStore(completeSeasons").Length - 1 == 1,
                 "F-M647: the second pack phase is gone — no second plan, no second collector loop, no two sources in sequence");
 
-            Check(tvstPipe.Contains("packCoordinator.TvSubtitlesSender = SendPackToTvSubtitlesAsync;", StringComparison.Ordinal)
+            Check(tvstPipe.Contains("packCoordinator.PackRequest = PackRequestForAsync;", StringComparison.Ordinal)
                   && tvstPipe.Contains("geplantProStaffel[(packImdb, packSeason)]", StringComparison.Ordinal),
-                "F-M643: the run wires the sender, and a tvst pair counts as the season's one line (F-M640)");
+                "F-M687: the run wires the request builder, and a tvst pair counts as the season's one line (F-M640)");
         }
 
         // ── 10. F-M647/F-M648/F-M649: EIN Slot je Paar, beide Quellen ------------------------------
@@ -1274,11 +1291,18 @@ internal static class Program
                   && uploadSrc.Contains("var gepackt = PacksOfAllSlotSources(entry.Key.Item1, entry.Key.Item2);", StringComparison.Ordinal),
                 "F-M654: BOTH places use it — the early season end and the pair filter");
 
-            Check(uploadSrc.Contains("private List<string> PackSlotSources()", StringComparison.Ordinal)
-                  && uploadSrc.Contains("quellen.Add(PackEntity.TvSubtitlesSource)", StringComparison.Ordinal)
-                  && uploadSrc.IndexOf("if (!IsArrivalRun && SourceAllowed(Configuration.SubtitleProvider.TvSubtitles))", StringComparison.Ordinal)
-                     < uploadSrc.IndexOf("quellen.Add(PackEntity.TvSubtitlesSource)", StringComparison.Ordinal),
-                "F-M654: the slot names its sources — tvst only in a full run and only with its switch on (F-M495)");
+            // F-M680: der Quellen-Sonderfall „nur im vollen Lauf" ist gefallen. Der Slot antwortet für
+            // JEDEN Lauf gleich; die Frage „packt dieser Lauf überhaupt?" steht eine Etage höher.
+            // F-M682: die Antwort kommt aus der Registry und ihren Fähigkeiten — der Ablauf nennt keinen
+            // Quellenamen mehr. Die Schalter-Frage steht jetzt in der Registrierung, nicht im Slot.
+            var slotRegistrySrc = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Sources/SourceRegistry.cs"));
+            Check(uploadSrc.Contains("private List<string> PackSlotSources() => _sources.PackSlot().ToList();", StringComparison.Ordinal)
+                  && !uploadSrc.Contains("quellen.Add(PackEntity.TvSubtitlesSource)", StringComparison.Ordinal)
+                  && slotRegistrySrc.Contains("seasonPacks: config.IsUploadEnabled(SubtitleProvider.TvSubtitles)", StringComparison.Ordinal)
+                  && slotRegistrySrc.Contains("e.Capabilities.CanSeasonPacks", StringComparison.Ordinal),
+                "F-M680/F-M682: the slot names its sources symmetrically — the switch decides, not the run's kind (F-M495)");
+            Check(uploadSrc.Contains("var slotQuellen = PackSlotSources();", StringComparison.Ordinal),
+                "F-M680: one answer for the slot's sources — the inline copy of the same question is gone");
 
             Check(uploadSrc.Contains("already up as a pack for {Sources}", StringComparison.Ordinal),
                 "F-M654: the one line names the sources the pairs are packed for");
@@ -1372,7 +1396,7 @@ internal static class Program
 
                     // (d) Der GUI-Reset (F-M620) raeumt die Signatur mit weg — sonst bliebe der Pack fuer
                     // immer geschlossen.
-                    reg.EnsureMedia("ffffffffffffffffffffffffffffffff", patch: m =>
+                    reg.EnsureFile("ffffffffffffffffffffffffffffffff", patch: m =>
                     {
                         m.ImdbId = "tt650";
                         m.Season = 2;

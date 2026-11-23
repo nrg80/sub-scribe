@@ -139,13 +139,13 @@ internal static class ReportingRun
             "the empty-payload reject remembers the defect");
         Check(!pipeline.Contains("previous == null", StringComparison.Ordinal),
             "no defect waits for a second sighting any more");
-        Check(pipeline.Contains("if (row != null && row.ReportedUtc == null)", StringComparison.Ordinal),
+        Check(pipeline.Contains("if (row != null && row.ReportedAt == null)", StringComparison.Ordinal),
             "a row is filed once — ReportedUtc, not a second failure, keeps it from repeating");
-        Check(pipeline.Contains("qaKnownRejected.Contains(row.SubdlId, StringComparer.Ordinal)", StringComparison.Ordinal),
+        Check(pipeline.Contains("qaKnownRejected.Contains(row.SourceId, StringComparer.Ordinal)", StringComparison.Ordinal),
             "the skip path still files a report — the safety net for rows remembered with the switch off");
         Check(pipeline.Contains("summary.ReportsDeferred++", StringComparison.Ordinal),
             "a report SubDL does not take stays open for the next run");
-        Check(pipeline.Contains("qaRejectedReleases.Contains(row.SubdlId, StringComparer.Ordinal)", StringComparison.Ordinal),
+        Check(pipeline.Contains("qaRejectedReleases.Contains(row.SourceId, StringComparer.Ordinal)", StringComparison.Ordinal),
             "a measured gate verdict is reported in the same run — no second sighting is awaited");
         Check(pipeline.Contains("gateFinding += \" ('\" + packFile.Name + \"')\"", StringComparison.Ordinal),
             "the pipeline puts the resolved pack member into the finding");
@@ -169,30 +169,41 @@ internal static class ReportingRun
             "an accepted report is marked on the row");
 
         string tracker = Read(plugin, "Registry/QaFailTracker.cs");
-        Check(tracker.Contains("ReportedUtc = reportedUtc", StringComparison.Ordinal),
+        Check(tracker.Contains("DateTime? reportedAt = previous?.ReportedAt;", StringComparison.Ordinal)
+              && tracker.Contains("SourceStore.RecordBadApple(", StringComparison.Ordinal),
             "re-recording a row keeps an existing report timestamp");
         Check(tracker.Contains("!string.Equals(x.Kind, \"empty\", StringComparison.Ordinal)", StringComparison.Ordinal),
             "an empty-payload memo does not turn into a skip memo");
 
         string db = Read(plugin, "Data/ScribeDbContext.cs");
-        Check(db.Contains("ALTER TABLE rejected_candidates ADD COLUMN NId", StringComparison.Ordinal)
+        string storeSrc = Read(plugin, "Data/SourceStore.cs");
+        Check(storeSrc.Contains("ALTER TABLE badapple ADD COLUMN Finding", StringComparison.Ordinal)
               && db.Contains("EnsureReportColumns();", StringComparison.Ordinal),
             "an upgraded data file gets the report columns (EnsureCreated never alters a table)");
         // F-M486/F-M488/F-M490: 10 provenance, 11 the four own marks, 12 the per-source upload times.
         // F-M501: 13 carries media.TvstShowId — der Marker wird mit jeder Spalte gehoben, die ein
         // aelterer Build beim Schreiben verlieren wuerde.
         // F-M507: der Marker steht auf 14 — die Spalten der dritten Quelle (Filme) kamen dazu.
-        Check(db.Contains("CurrentSchemaVersion = 17", StringComparison.Ordinal)
-              && db.Contains("ALTER TABLE sidecars ADD COLUMN Origin", StringComparison.Ordinal)
-              && db.Contains("ALTER TABLE sidecars ADD COLUMN TvSubtitlesUploadId", StringComparison.Ordinal),
-            "the schema version is bumped with the columns (11 carries source and direction marks)");
+        // F-M668: Schema 19 — die Marken-Spalten von damals sind entfallen (Quelle ist ein WERT in
+        // `source_matrix`); die Herkunft (F-M486) steht weiter an der Zeile und wird nachgezogen.
+        // F-M669: 20 — die Spur-Position gehört in den Schlüssel der Spur-Arten.
+        // F-M671: Schema 22. Die vier Entity-Tabellen tragen ihre Kennung im Schlüssel (`FileId`,
+        // `TrackId`, `PackId`); die Herkunft einer Spur ist der Quellen-NAME, eine Quellen-Id steht
+        // in `reference`. Die alten Marken-Spalten an `sidecars` gibt es nicht mehr — und keine
+        // Nachzieh-Anweisung dafür.
+        // F-M679: 24 — `badapple` traegt den Member im Schluessel.
+        Check(db.Contains("CurrentSchemaVersion = 24", StringComparison.Ordinal)
+              && db.Contains("CREATE TABLE IF NOT EXISTS file (", StringComparison.Ordinal)
+              && db.Contains("+ \"FileId TEXT NOT NULL PRIMARY KEY, \"", StringComparison.Ordinal)
+              && !db.Contains("ALTER TABLE sidecars ADD COLUMN TvSubtitlesUploadId", StringComparison.Ordinal),
+            "the schema version is bumped with the tables (24 carries the four entity levels, their readable ids, the three source tables and the member key of badapple)");
 
         string api = Read(plugin, "Api/ScribeApiClient.cs");
         Check(api.Contains("\"subtitlePage\"", StringComparison.Ordinal) && api.Contains("c.NId = page[(slash + 1)..]", StringComparison.Ordinal),
             "the report id is taken from the search answer");
         Check(api.Contains("$\"{ApiBase}/report\"", StringComparison.Ordinal),
             "the report goes to the site's report endpoint");
-        Check(api.Contains("== 429", StringComparison.Ordinal) && api.Contains("ScribeReportOutcome.Deferred", StringComparison.Ordinal),
+        Check(api.Contains("== 429", StringComparison.Ordinal) && api.Contains("ScribeReportOutcome.Busy", StringComparison.Ordinal),
             "a rate-limited report is reported back as deferred");
         Check(api.Contains("ud.TryGetProperty(\"name\"", StringComparison.Ordinal),
             "the attribution uses the account name, not the login mail");
@@ -216,11 +227,17 @@ internal static class ReportingRun
         try
         {
             var store = new ScribeDbContext(dir);
+
+            // F-M672: ein verbrauchter Kandidat hängt an der DATEI des Items (Tabelle `badapple`). Ohne
+            // Datei gibt es kein Subjekt und damit nichts zu merken — im Betrieb hat der Download-Pfad
+            // die Zeile längst (`EnsureFile`), hier wird sie ausdrücklich angelegt.
+            store.EnsureFile("rep-item", "item", "/lib/item.mkv");
             var spent = new QaFailTracker(store);
             spent.RecordSkippedCandidates("item", "EN", new[] { "9100001-111111", "9100002-222222" },
                 kind: "empty");
             spent.RecordSkippedCandidates("item", "EN", new[] { "9100003-333333" }, kind: "qa");
-            var rowToReport = store.RejectedCandidates.Find(x => x.SubdlId == "9100001-111111").First();
+            var rowToReport = store.BadApples.FindAll()
+                .First(x => string.Equals(x.SourceId, "9100001-111111", StringComparison.Ordinal));
             spent.MarkReported(rowToReport);
 
             List<string> blocked = spent.GetSkippedCandidates("item", "EN");
@@ -325,7 +342,7 @@ internal static class ReportingRun
         Check(pipeline.Contains("_emptyRetried.Add(\"hi|\"", StringComparison.Ordinal),
             "F-M455/F-M460: the SDH fetch also asks once more after ten seconds before anything is said");
         Check(pipeline.Contains("QueueReport(row);", StringComparison.Ordinal)
-              && pipeline.Contains("string.Equals(row.SubdlId, hi.SubdlId, StringComparison.Ordinal)", StringComparison.Ordinal),
+              && pipeline.Contains("string.Equals(row.SourceId, hi.SubdlId, StringComparison.Ordinal)", StringComparison.Ordinal),
             "F-M460: the SDH finding is queued right there, not at a run end that only runs when nothing was saved");
 
         // F-M462 (operator order 10.11.2026): a gate verdict died as soon as a LATER candidate saved

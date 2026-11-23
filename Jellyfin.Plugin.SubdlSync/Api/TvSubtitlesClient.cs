@@ -15,6 +15,7 @@ using System.Globalization;
 using System.IO;
 using System.IO.Compression;
 using System.Linq;
+using System.Net;
 using System.Net.Http;
 using System.Text;
 using System.Text.RegularExpressions;
@@ -50,6 +51,13 @@ public sealed class TvSubtitlesClient
 {
     /// <summary>The site root. https only — the http endpoint redirects.</summary>
     public const string BaseUrl = "https://www.tvsubtitles.net";
+
+    /// <summary>
+    /// F-M678: die Browser-Kennung, die dieses Modul auch in einer eigenen Sitzung mitschickt. Die
+    /// Seite liefert ohne sie keine Formularseiten aus.
+    /// </summary>
+    private const string UserAgentString =
+        "Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36";
 
     /// <summary>
     /// F-M516: das Formular, mit dem eine Serie angelegt wird. Am 16.11.2026 wörtlich abgelesen:
@@ -250,6 +258,24 @@ public sealed class TvSubtitlesClient
     private static readonly Regex SubtitleAnchor = new(
         "<a href=\"/subtitle-(\\d+)\\.html\">", RegexOptions.CultureInvariant);
 
+    // F-M662 (21.11.2026): the ear icon is the ONLY thing that tells a hearing-impaired entry from a
+    // regular one — both carry the same name on the page (measured: MobLand 2x10, subtitle-330929
+    // regular / subtitle-330930 with `images/hi.png`, both "MobLand 2x10 (WEB.NeoNoir)").
+    private static readonly Regex HiMark = new(
+        "images/hi\\.png", RegexOptions.CultureInvariant);
+
+    // F-M662: the season pack link on /subtitle-<show>-<season>-<lang>.html.
+    private static readonly Regex SeasonDownload = new(
+        "href=\"?(?:/)?(download-\\d+-\\d+-([a-z]{2,3})\\.html)", RegexOptions.CultureInvariant);
+
+    // F-M662: "MobLand - 2x05 - Birdland.WEB.NeoNoir.HI.en.srt" — episode number, HI marker, language.
+    private static readonly Regex PackMember = new(
+        "(\\d+)x(\\d+)", RegexOptions.CultureInvariant);
+    private static readonly Regex PackHi = new(
+        "\\.hi\\.", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+    private static readonly Regex PackLanguage = new(
+        "\\.([a-z]{2,3})\\.srt$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
     // ============================================================
     // F-M543 (16.11.2026): was in diesem Lauf schon gefragt wurde, wird nicht erneut gefragt.
     //
@@ -369,6 +395,13 @@ public sealed class TvSubtitlesClient
     private readonly HttpClient _http;
 
     /// <summary>
+    /// F-M665: der Archiv-Cache des Laufs, oder <c>null</c> (dann nur Merker). Es ist DIESELBE Instanz,
+    /// die auch jede andere Engine benutzt — der Cache trennt die Quellen ueber den Schluessel,
+    /// nicht ueber das Verzeichnis.
+    /// </summary>
+    private readonly ArchiveDiskCache? _archives;
+
+    /// <summary>
     /// F-M521: the debug channel for this site. Two lines per request ("API call", "API response"),
     /// Debug only — the same shape SubDL has always used. Both directions go through it, because
     /// searching, fetching and uploading share the same three HTTP call sites.
@@ -377,6 +410,14 @@ public sealed class TvSubtitlesClient
 
     /// <summary>Gets the status code of the last request; 0 when no answer arrived.</summary>
     public int LastStatus { get; private set; }
+
+    /// <summary>
+    /// F-M686: wie viele Einträge der LETZTEN Suche verworfen wurden, weil ein Feld dem Vokabular der
+    /// Seite widersprach (F-M533). Der Zähler steht am CLIENT und nicht am Suchendpunkt, weil die Suche
+    /// seit F-M686 hinter der Engine liegt: der Lauf liest ihn über denselben Client, den er der Engine
+    /// reicht — eine zweite Zählstelle gäbe es sonst nicht mehr zu lesen.
+    /// </summary>
+    public int LastRejectedByFormat { get; set; }
 
     /// <summary>
     /// F-M522: the show list, remembered for as long as this client lives — one fetch per run instead of
@@ -420,12 +461,31 @@ public sealed class TvSubtitlesClient
     /// <param name="http">The HttpClient to use. <see cref="ScribeApiClient.NewHttpClient"/> gives one
     /// that identifies itself as this plugin; a caller may pass its own for a test.</param>
     public TvSubtitlesClient(HttpClient http)
+        : this(http, null)
+    {
+    }
+
+    /// <summary>
+    /// Initializes a new instance of the <see cref="TvSubtitlesClient"/> class with the run's archive
+    /// cache (F-M665).
+    /// <para>
+    /// Der Cache ist der BESTEHENDE (<see cref="ArchiveDiskCache"/>, F-M370) und er gehoert keiner
+    /// Quelle: eine Ablage, eine Frist, eine Groessengrenze, die zwei vorhandenen GUI-Felder. Jede
+    /// Engine bekommt dieselbe Instanz; welche Quelle eine Datei geliefert hat, steht im Schluessel
+    /// (<see cref="ArchiveKey.ForTvstSeason"/>). Ein Client ohne Cache verhaelt sich wie vorher:
+    /// die Staffel-ZIP lebt dann nur im Merker des Laufs.
+    /// </para>
+    /// </summary>
+    /// <param name="http">The HttpClient to use.</param>
+    /// <param name="archiveCache">The run's disk cache, or <c>null</c> to keep the season archive in
+    /// memory only.</param>
+    public TvSubtitlesClient(HttpClient http, ArchiveDiskCache? archiveCache)
     {
         _http = http ?? throw new ArgumentNullException(nameof(http));
+        _archives = archiveCache;
         if (_http.DefaultRequestHeaders.UserAgent.Count == 0)
         {
-            _http.DefaultRequestHeaders.UserAgent.ParseAdd(
-                "Mozilla/5.0 (X11; Linux aarch64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120 Safari/537.36");
+            _http.DefaultRequestHeaders.UserAgent.ParseAdd(UserAgentString);
         }
     }
 
@@ -890,7 +950,7 @@ public sealed class TvSubtitlesClient
 
         if ((int)response.StatusCode == 429)
         {
-            return ScribeReportOutcome.Deferred;
+            return ScribeReportOutcome.Busy;
         }
 
         if (!response.IsSuccessStatusCode)
@@ -1026,7 +1086,8 @@ public sealed class TvSubtitlesClient
                 flag.Groups[1].Value.ToLowerInvariant(),
                 rip.Success ? rip.Groups[1].Value.Trim() : string.Empty,
                 release.Success ? release.Groups[1].Value.Trim() : string.Empty,
-                age.Success ? age.Groups[1].Value.Trim() : string.Empty));
+                age.Success ? age.Groups[1].Value.Trim() : string.Empty,
+                HiMark.IsMatch(block)));
         }
 
         return entries;
@@ -1124,6 +1185,298 @@ public sealed class TvSubtitlesClient
         using var buffer = new MemoryStream();
         await entryStream.CopyToAsync(buffer, cancellationToken).ConfigureAwait(false);
         return (member.Name, buffer.ToArray());
+    }
+
+    /// <summary>
+    /// F-M662 (Bediener-Anweisung 21.11.2026: „bevorzugt staffelpacks von tvst und die dann auch cachen",
+    /// „Auch auf tvst regulär und hi suchen"): the season archive of ONE language.
+    /// <para>
+    /// Measured 21.11.2026 on MobLand S02: <c>/subtitle-3234-2-en.html</c> ("Download subtitles for
+    /// MobLand season 2 (season 2 episode 1-10)") carries the link <c>download-3234-2-en.html</c>,
+    /// which answers with a redirect to <c>/files/seasons/MobLand - season 2.en.zip</c> — 610.807 B,
+    /// 27 members for 9 episodes. BOTH sides are inside that ONE archive, told apart by <c>.HI.</c>
+    /// in the member name, so no source needs two separate season packs.
+    /// </para>
+    /// <para>
+    /// The season page is fetched first because the download page only answers with the cookie that
+    /// page sets — without it the site replies "your browser cookies are disabled".
+    /// </para>
+    /// </summary>
+    /// <param name="showId">The site's show id (<c>tvshow-&lt;id&gt;.html</c>).</param>
+    /// <param name="season">Season number.</param>
+    /// <param name="language">The site's two/three letter language code, e.g. <c>en</c>.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The archive bytes, or null when the site carries no pack for this language.</returns>
+    public async Task<byte[]?> DownloadSeasonArchiveAsync(
+        int showId, int season, string language, CancellationToken cancellationToken = default)
+    {
+        if (showId <= 0 || season <= 0 || string.IsNullOrWhiteSpace(language))
+        {
+            return null;
+        }
+
+        string lang = language.Trim().ToLowerInvariant();
+        string page = string.Format(
+            CultureInfo.InvariantCulture, "{0}/subtitle-{1}-{2}-{3}.html", BaseUrl, showId, season, lang);
+
+        // F-M678: die Download-Seite verlangt ein Cookie, das die Staffelseite setzt; ohne Sitzung
+        // antwortet sie mit 171 Bytes "Your request could not be served … cookies disabled". Der
+        // gemeinsame HttpClient dieses Clients haelt keine Cookies, deshalb lieferte Stufe 1 fuer JEDE
+        // Sprache nichts und der Einzelweg der Folgenseite musste einspringen. Die Cookies der
+        // Staffelseite werden darum aus ihren Set-Cookie-Koepfen gelesen und beim Download
+        // mitgeschickt — ueber DENSELBEN Client, damit der Abruf im selben Handler bleibt.
+        var staffel = await GetWithCookiesAsync(page, null, null, cancellationToken).ConfigureAwait(false);
+        var html = Encoding.UTF8.GetString(staffel.Body);
+        if (string.IsNullOrEmpty(html))
+        {
+            return null;
+        }
+
+        string? link = null;
+        foreach (Match m in SeasonDownload.Matches(html))
+        {
+            if (m.Groups[2].Value.Equals(lang, StringComparison.OrdinalIgnoreCase))
+            {
+                link = m.Groups[1].Value;
+                break;
+            }
+        }
+
+        if (link == null)
+        {
+            return null;
+        }
+
+        string downloadPage = BaseUrl + "/" + Uri.EscapeUriString(link);
+        var answer = (await GetWithCookiesAsync(downloadPage, page, staffel.Cookies, cancellationToken).ConfigureAwait(false)).Body;
+        if (IsZip(answer))
+        {
+            return answer;
+        }
+
+        var name = ParseDownloadFileName(Encoding.UTF8.GetString(answer));
+        if (string.IsNullOrWhiteSpace(name))
+        {
+            return null;
+        }
+
+        string url = BaseUrl + "/" + Uri.EscapeUriString(name).Replace("?", "%3F", StringComparison.Ordinal);
+        var zip = (await GetWithCookiesAsync(url, downloadPage, staffel.Cookies, cancellationToken).ConfigureAwait(false)).Body;
+        return IsZip(zip) ? zip : null;
+    }
+
+    /// <summary>
+    /// F-M662: splits a season archive into its episodes, keeping the two sides apart.
+    /// <para>
+    /// Member names look like <c>MobLand - 2x05 - Birdland.WEB.NeoNoir.HI.en.srt</c> — the episode
+    /// number sits between the dashes, the language is the last token before <c>.srt</c>, and
+    /// <c>.HI.</c> marks the hearing-impaired side. A Hindi file would be named <c>…​.hi.srt</c> and
+    /// therefore never matches <c>.hi.</c> (the trailing dot is what separates the two).
+    /// </para>
+    /// </summary>
+    /// <param name="zip">The archive bytes.</param>
+    /// <returns>One entry per <c>.srt</c> member, in archive order.</returns>
+    public static IReadOnlyList<TvSubtitlesPackFile> ReadSeasonArchive(byte[] zip)
+    {
+        var files = new List<TvSubtitlesPackFile>();
+        if (!IsZip(zip))
+        {
+            return files;
+        }
+
+        using var stream = new MemoryStream(zip, writable: false);
+        using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
+        foreach (var entry in archive.Entries)
+        {
+            if (!entry.Name.EndsWith(".srt", StringComparison.OrdinalIgnoreCase))
+            {
+                continue;
+            }
+
+            var number = PackMember.Match(entry.Name);
+            if (!number.Success)
+            {
+                continue;
+            }
+
+            var language = PackLanguage.Match(entry.Name);
+            using var member = entry.Open();
+            using var buffer = new MemoryStream();
+            member.CopyTo(buffer);
+            files.Add(new TvSubtitlesPackFile(
+                entry.Name,
+                int.Parse(number.Groups[1].Value, CultureInfo.InvariantCulture),
+                int.Parse(number.Groups[2].Value, CultureInfo.InvariantCulture),
+                language.Success ? language.Groups[1].Value.ToLowerInvariant() : string.Empty,
+                PackHi.IsMatch(entry.Name),
+                buffer.ToArray()));
+        }
+
+        return files;
+    }
+
+    /// <summary>
+    /// F-M663 (21.11.2026): EIN Abruf je (Serie, Staffel, Sprache) pro Lauf.
+    /// <para>
+    /// Der Lauf fragt jede Folge EINZELN an (<c>SearchAsync</c> je Medium), die ZIP gilt aber fuer die
+    /// ganze Staffel: bei MobLand S02 sind das 9 Folgen je 610.807 B fuer dieselben 27 Dateien. Der
+    /// Merker haelt die GELESENEN Eintraege samt Bytes, damit sowohl die naechste Folge (Suche) als
+    /// auch der Abruf eines Treffers keine zweite Anfrage kosten.
+    /// </para>
+    /// <para>
+    /// Ein Fehlschlag wird MITGEMERKT (leere Liste plus Grund): „ein Abruf je Staffel und Sprache" gilt
+    /// auch dann, wenn er schiefgeht — sonst klopfte jede der neun Folgen erneut an eine Seite, die
+    /// schon nicht geantwortet hat.
+    /// </para>
+    /// </summary>
+    private readonly System.Collections.Generic.Dictionary<
+        (int ShowId, int Season, string Language),
+        (IReadOnlyList<TvSubtitlesPackFile> Files, string? Error)> _seasonPacks = new();
+
+    /// <summary>
+    /// F-M663: warum die Staffel-ZIP des zuletzt gefragten (Serie, Staffel, Sprache) nicht nutzbar
+    /// war — null, wenn sie gelesen wurde. Nur fuer die Logzeile des Laufs; hier wirft nichts.
+    /// </summary>
+    public string? LastSeasonPackError { get; private set; }
+
+    /// <summary>
+    /// F-M663: die Eintraege der Staffel-ZIP einer Sprache — geholt beim ERSTEN Aufruf, danach aus dem
+    /// Merker (<see cref="_seasonPacks"/>). Leer, wenn die Seite keine ZIP fuer diese Sprache traegt
+    /// oder sie nicht lesbar ist; der Grund steht dann in <see cref="LastSeasonPackError"/>.
+    /// <para>
+    /// F-M665 (Bediener-Entscheidung 21.11.2026): vor dem Merker steht der Archiv-Cache. Die ZIP liegt
+    /// in <see cref="ArchiveDiskCache"/> — der Ablage, die jede Engine benutzt —, unter eigenem
+    /// Schluesselraum je Quelle (<see cref="ArchiveKey.ForTvstSeason"/>) und unter der Frist und der
+    /// Groessengrenze, die fuer die ganze Ablage gelten. Ein Treffer wird gelesen, nicht geholt: ein
+    /// Lauf, der die Staffel schon bezahlt hat, zahlt sie im naechsten nicht wieder. Ein Fehlschlag
+    /// landet NICHT auf der Platte — er wird nur im Merker gemerkt, damit ein kaputter Abruf den
+    /// naechsten Lauf nicht blockiert.
+    /// </para>
+    /// <para>
+    /// Es wird NICHTS geworfen ausser einem echten Abbruch: Stufe 1 ist eine Abkuerzung, kein Muss —
+    /// faellt sie aus, laeuft der Einzelweg der Folgenseite weiter.
+    /// </para>
+    /// </summary>
+    /// <param name="showId">The site's show id.</param>
+    /// <param name="season">Season number.</param>
+    /// <param name="language">The site's language code, e.g. <c>en</c>.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>One entry per <c>.srt</c> member; empty when there is no usable archive.</returns>
+    public async Task<IReadOnlyList<TvSubtitlesPackFile>> SeasonPackAsync(
+        int showId, int season, string language, CancellationToken cancellationToken = default)
+    {
+        string lang = (language ?? string.Empty).Trim().ToLowerInvariant();
+        lock (_seasonPacks)
+        {
+            if (_seasonPacks.TryGetValue((showId, season, lang), out var gemerkt))
+            {
+                LastSeasonPackError = gemerkt.Error;
+                return gemerkt.Files;
+            }
+        }
+
+        IReadOnlyList<TvSubtitlesPackFile> files = Array.Empty<TvSubtitlesPackFile>();
+        string? fehler = null;
+
+        // F-M665: eigener Schluesselraum je Quelle, gebildet aus dem, was den Abruf bestimmt — Serie,
+        // Staffel, Sprache. Welche Quelle geliefert hat, steht im Praefix, nicht im Verzeichnis.
+        string? schluessel = ArchiveKey.ForTvstSeason(showId, season, lang);
+        try
+        {
+            byte[]? zip;
+            if (_archives is not null
+                && _archives.TryGet(schluessel, out byte[]? gespeichert)
+                && gespeichert is { Length: > 0 })
+            {
+                // Treffer: die Bytes kommen von der Platte, es geht KEINE Anfrage raus.
+                zip = gespeichert;
+            }
+            else
+            {
+                zip = await DownloadSeasonArchiveAsync(showId, season, lang, cancellationToken).ConfigureAwait(false);
+
+                // Nur ein gelungener Abruf wird abgelegt. Ein Fehlschlag bleibt im Merker (unten).
+                if (zip is not null)
+                {
+                    _archives?.Put(schluessel, zip);
+                }
+            }
+
+            if (zip is null)
+            {
+                fehler = "die Staffelseite trug keine ZIP fuer " + lang;
+            }
+            else
+            {
+                files = ReadSeasonArchive(zip);
+                if (files.Count == 0)
+                {
+                    fehler = "die ZIP (" + zip.Length.ToString(CultureInfo.InvariantCulture) + " B) trug keinen lesbaren .srt-Eintrag";
+                }
+            }
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            fehler = "keine Antwort der Seite (Client-Timeout)";
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // F-M663: kaputte ZIP, halbe Antwort, was auch immer — EINE Zeile Grund, kein Abbruch.
+            fehler = ex.GetType().Name + ": " + ex.Message;
+        }
+
+        LastSeasonPackError = fehler;
+        lock (_seasonPacks)
+        {
+            if (_seasonPacks.Count >= MemoLimit)
+            {
+                _seasonPacks.Clear();
+            }
+
+            _seasonPacks[(showId, season, lang)] = (files, fehler);
+        }
+
+        return files;
+    }
+
+    /// <summary>
+    /// F-M663: verwirft die gemerkten Staffel-ZIPs (Bytes und Fehlschlag). Noetig, wenn WIR eine Staffel
+    /// veraendern — dieselbe Regel wie <see cref="ClearSeasonMemos"/> fuer die Folgenliste.
+    /// </summary>
+    public void ClearSeasonPacks()
+    {
+        lock (_seasonPacks)
+        {
+            _seasonPacks.Clear();
+        }
+    }
+
+    /// <summary>
+    /// F-M663: EIN Mitglied der gemerkten Staffel-ZIP, ohne zweite Anfrage — der Treffer der Stufe 1
+    /// traegt nur seine Nummer im Archiv, die Bytes liegen im Merker.
+    /// </summary>
+    /// <param name="showId">The site's show id.</param>
+    /// <param name="season">Season number.</param>
+    /// <param name="language">The site's language code.</param>
+    /// <param name="index">Position in <see cref="SeasonPackAsync"/>'s list.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The member name and its raw bytes.</returns>
+    public async Task<(string Name, byte[] Data)> DownloadPackMemberAsync(
+        int showId, int season, string language, int index, CancellationToken cancellationToken = default)
+    {
+        var files = await SeasonPackAsync(showId, season, language, cancellationToken).ConfigureAwait(false);
+        if (index < 0 || index >= files.Count)
+        {
+            throw new InvalidOperationException(
+                "the season archive carries no member #" + index.ToString(CultureInfo.InvariantCulture)
+                + " (" + files.Count.ToString(CultureInfo.InvariantCulture) + " available, tvsubtitles.net)");
+        }
+
+        return (files[index].Name, files[index].Data);
     }
 
     /// <summary>
@@ -1733,6 +2086,54 @@ public sealed class TvSubtitlesClient
         response.EnsureSuccessStatusCode();
         return await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
     }
+
+    /// <summary>
+    /// F-M678: derselbe GET wie <see cref="GetBytesAsync"/>, aber er liefert die Cookies zurueck, die
+    /// die Antwort gesetzt hat, und schickt uebergebene Cookies mit — die Staffel-ZIP gibt es nur,
+    /// wenn die Cookies der Staffelseite mitgehen.
+    /// </summary>
+    /// <param name="url">Absolute URL.</param>
+    /// <param name="referer">Referer to send, or <c>null</c>.</param>
+    /// <param name="cookies">Cookie header from the previous step, or <c>null</c>.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The body and the cookie header the answer carries.</returns>
+    private async Task<(byte[] Body, string Cookies)> GetWithCookiesAsync(
+        string url, string? referer, string? cookies, CancellationToken cancellationToken)
+    {
+        var ziel = WithClient(url);
+        using var request = new HttpRequestMessage(HttpMethod.Get, ziel);
+        if (!string.IsNullOrEmpty(referer))
+        {
+            request.Headers.Referrer = new Uri(referer);
+        }
+
+        if (!string.IsNullOrEmpty(cookies))
+        {
+            request.Headers.TryAddWithoutValidation("Cookie", cookies);
+        }
+
+        DebugTrace?.Invoke(SiteTrace.Call("GET", ziel));
+        using var response = await _http.SendAsync(request, cancellationToken).ConfigureAwait(false);
+        LastStatus = (int)response.StatusCode;
+        DebugTrace?.Invoke(SiteTrace.Response("GET", ziel, LastStatus));
+        response.EnsureSuccessStatusCode();
+        var body = await response.Content.ReadAsByteArrayAsync(cancellationToken).ConfigureAwait(false);
+
+        var jar = new List<string>();
+        if (response.Headers.TryGetValues("Set-Cookie", out var setCookies))
+        {
+            foreach (var raw in setCookies)
+            {
+                var pair = raw.Split(';')[0];
+                if (pair.Contains('=', StringComparison.Ordinal))
+                {
+                    jar.Add(pair);
+                }
+            }
+        }
+
+        return (body, string.Join("; ", jar));
+    }
 }
 
 /// <summary>
@@ -1743,8 +2144,21 @@ public sealed class TvSubtitlesClient
 /// <param name="Rip">The rip cell's text, empty when the entry has none.</param>
 /// <param name="Release">The release cell's text, empty when the entry has none.</param>
 /// <param name="Age">The timestamp the page shows, as written.</param>
+/// <param name="HearingImpaired">F-M662: the entry carries the site's ear icon (<c>images/hi.png</c>).</param>
 public sealed record TvSubtitlesEntry(
-    string SubtitleId, string Language, string Rip, string Release, string Age);
+    string SubtitleId, string Language, string Rip, string Release, string Age, bool HearingImpaired = false);
+
+/// <summary>
+/// F-M662: one member of a tvsubtitles season archive.
+/// </summary>
+/// <param name="Name">The member name as written in the archive.</param>
+/// <param name="Season">Season number read from the member name.</param>
+/// <param name="Episode">Episode number read from the member name.</param>
+/// <param name="Language">Language code from the member name's last token, e.g. <c>en</c>.</param>
+/// <param name="HearingImpaired">The member carries the <c>.HI.</c> marker.</param>
+/// <param name="Data">The subtitle bytes, untouched.</param>
+public sealed record TvSubtitlesPackFile(
+    string Name, int Season, int Episode, string Language, bool HearingImpaired, byte[] Data);
 
 /// <summary>
 /// F-M480: a finished upload payload — the form's fields, the file and the two derived names.

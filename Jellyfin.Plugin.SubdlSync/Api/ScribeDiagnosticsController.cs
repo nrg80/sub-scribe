@@ -66,12 +66,12 @@ public class ScribeDiagnosticsController : ControllerBase
                 })
                 .ToList();
 
-            var embeds = db.Embeds.FindAll().ToList();
+            var embeds = db.Tracks.FindAll().ToList();
             var sidecars = db.Sidecars.FindAll().ToList();
-            var media = db.Media.FindAll().ToList();
+            var media = db.Files.FindAll().ToList();
             var runs = db.Runs.FindAll().OrderByDescending(r => r.Started).Take(20).ToList();
             var oshashes = db.Oshashes.Count();
-            var burnedCandidates = db.RejectedCandidates.Count();
+            var burnedCandidates = db.BadApples.Count();
 
             var mediaByUploadState = media
                 .GroupBy(m => m.SubtitlesUploadedAt != null)
@@ -83,7 +83,7 @@ public class ScribeDiagnosticsController : ControllerBase
                 .Take(20)
                 .Select(m => new
                 {
-                    m.Id,
+                    m.FileId,
                     m.Path,
                     m.ImdbId,
                     m.TmdbId,
@@ -108,8 +108,10 @@ public class ScribeDiagnosticsController : ControllerBase
                     .Concat(sidecars.Where(s => s.Reason != null).Select(s => s.Reason!))
                     .GroupBy(r => r)
                     .ToDictionary(g => g.Key, g => g.Count()),
-                WithSubdlId = embeds.Count(s => !string.IsNullOrWhiteSpace(s.SubdlId))
-                            + sidecars.Count(s => !string.IsNullOrWhiteSpace(s.SubdlId))
+                // F-M670: die Zahl kommt aus der Marken-Matrix — es gibt keine Id-Spalte an `embeds`/
+                // `sidecars` mehr, aus der sie gezählt werden könnte. „Mit Id" heißt: die Marke führt eine
+                // Eintrags- oder Einsende-Id bei SubDL.
+                WithSubdlId = SourceStore.CountWithId(db, SourceStore.Subdl)
             };
 
             var result = new

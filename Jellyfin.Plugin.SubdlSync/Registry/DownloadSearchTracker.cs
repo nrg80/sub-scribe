@@ -22,7 +22,7 @@ namespace Jellyfin.Plugin.SubScribe.Registry;
 /// Per-file download search tracker.
 /// <para>
 /// The search timestamp and the language list it belongs to live on the file record itself
-/// (area 2, <see cref="MediaEntity.LastSearchUtc"/> / <see cref="MediaEntity.LastSearchLanguages"/>),
+/// (area 2, <see cref="FileEntity.LastSearchUtc"/> / <see cref="FileEntity.LastSearchLanguages"/>),
 /// because that is what they describe: this file was searched, for these languages. The previous
 /// separate table kept them next to a duplicated global "last languages" row and needed an explicit
 /// reset whenever the configured languages changed.
@@ -43,6 +43,22 @@ public sealed class DownloadSearchTracker
     /// </summary>
     /// <param name="db">Database context.</param>
     /// <param name="logger">Optional logger.</param>
+    /// <summary>
+    /// F-M661: factor by which an EMPTY answer stretches the refetch gap. A title no source carries
+    /// is not asked again every day — that spent ~2.000 SubDL searches per run on 1.160 targets, of
+    /// which 1.128 came back empty. Any search that returns something clears the mark and the
+    /// normal interval applies again. Capped so a title never sleeps longer than a month.
+    /// </summary>
+    public const int EmptySearchFactor = 7;
+
+    /// <summary>The stretch of time an empty answer buys. Zero gap stays zero (never held back).</summary>
+    /// <param name="gap">Configured refetch gap.</param>
+    /// <returns>The gap to use while the last answer was empty.</returns>
+    public static TimeSpan EmptyGap(TimeSpan gap)
+        => gap <= TimeSpan.Zero
+            ? TimeSpan.Zero
+            : TimeSpan.FromDays(Math.Min(30d, gap.TotalDays * EmptySearchFactor));
+
     public DownloadSearchTracker(ScribeDbContext db, ILogger? logger = null)
     {
         _db = db;
@@ -50,7 +66,7 @@ public sealed class DownloadSearchTracker
     }
 
     /// <summary>Number of files that carry a search timestamp.</summary>
-    public int Count => _db.Media.Count(x => x.LastSearchUtc != null);
+    public int Count => _db.Files.Count(x => x.LastSearchUtc != null);
 
     /// <summary>
     /// True when this Jellyfin item is due for a (re-)search: never searched, searched under a
@@ -75,7 +91,11 @@ public sealed class DownloadSearchTracker
             return true;
         }
 
-        return DateTime.UtcNow - media.LastSearchUtc.Value >= gap;
+        // F-M661: a search that came back empty does not buy the configured gap but the longer one
+        // — the language list has already been checked above, so the mark belongs to what is asked
+        // now. A search that found something clears the mark in MarkSearched.
+        TimeSpan effective = media.LastSearchEmptyUtc != null ? EmptyGap(gap) : gap;
+        return DateTime.UtcNow - media.LastSearchUtc.Value >= effective;
     }
 
     /// <summary>Is this item due, ignoring the language list.</summary>
@@ -104,8 +124,9 @@ public sealed class DownloadSearchTracker
 
         media.LastSearchUtc = null;
         media.LastSearchLanguages = null;
-        _db.Media.Update(media);
-        LogUtil.Detail(_logger, "[Sub Scribe-DB] search stamp cleared for {Item} — rework due now", itemId);
+        media.LastSearchEmptyUtc = null; // F-M661: der Leer-Merker haengt am Such-Stempel
+        _db.Files.Update(media);
+        LogUtil.Debug(_logger, "[Sub Scribe-DB] search stamp cleared for {Item} — rework due now", itemId);
         return true;
     }
 
@@ -117,19 +138,43 @@ public sealed class DownloadSearchTracker
         var media = FindByItemId(itemId);
         if (media == null)
         {
-            LogUtil.Detail(_logger, "[Sub Scribe-DB] search stamp skipped — no media record for item {Item}", itemId);
+            LogUtil.Debug(_logger, "[Sub Scribe-DB] search stamp skipped — no media record for item {Item}", itemId);
             return;
         }
 
         media.LastSearchUtc = DateTime.UtcNow;
         media.LastSearchLanguages = Normalize(currentLanguages);
-        _db.Media.Update(media);
-        LogUtil.Detail(_logger, "[Sub Scribe-DB] search stamp {Item} langs={Langs}", itemId, media.LastSearchLanguages);
+
+        // F-M661: dieser Stempel heisst "gefragt, und es kam etwas" — ein alter Leer-Merker faellt.
+        media.LastSearchEmptyUtc = null;
+        _db.Files.Update(media);
+        LogUtil.Debug(_logger, "[Sub Scribe-DB] search stamp {Item} langs={Langs}", itemId, media.LastSearchLanguages);
     }
 
     /// <summary>Records a search with no language list.</summary>
     /// <param name="itemId">Jellyfin item id.</param>
     public void MarkSearched(string itemId) => MarkSearched(itemId, new List<string>());
+
+    /// <summary>
+    /// F-M661: notes that the search for this item came back EMPTY — no candidate from any asked
+    /// source. The stamp only rides on a search that really ran (there must be a
+    /// <see cref="FileEntity.LastSearchUtc"/>), so an item that was never asked is not deferred.
+    /// </summary>
+    /// <param name="itemId">Jellyfin item id.</param>
+    /// <returns>True when the mark was stored.</returns>
+    public bool MarkSearchEmpty(string itemId)
+    {
+        var media = FindByItemId(itemId);
+        if (media?.LastSearchUtc == null)
+        {
+            return false;
+        }
+
+        media.LastSearchEmptyUtc = DateTime.UtcNow;
+        _db.Files.Update(media);
+        LogUtil.Debug(_logger, "[Sub Scribe-DB] empty search noted for {Item} — the next ask waits for the longer clock (F-M661)", itemId);
+        return true;
+    }
 
     /// <summary>
     /// Clears every search stamp, forcing all files due at the next run.
@@ -141,15 +186,16 @@ public sealed class DownloadSearchTracker
     /// <returns>Number of stamps cleared.</returns>
     public int ResetAll()
     {
-        var stamped = _db.Media.Find(x => x.LastSearchUtc != null).ToList();
+        var stamped = _db.Files.Find(x => x.LastSearchUtc != null).ToList();
         foreach (var media in stamped)
         {
             media.LastSearchUtc = null;
             media.LastSearchLanguages = null;
-            _db.Media.Update(media);
+            media.LastSearchEmptyUtc = null; // F-M661
+            _db.Files.Update(media);
         }
 
-        LogUtil.Detail(_logger, "[Sub Scribe-DB] search stamps cleared: {Count}", stamped.Count);
+        LogUtil.Debug(_logger, "[Sub Scribe-DB] search stamps cleared: {Count}", stamped.Count);
         return stamped.Count;
     }
 
@@ -158,7 +204,7 @@ public sealed class DownloadSearchTracker
     /// <returns>Number of stamps cleared.</returns>
     public int PruneDeadItems(Func<string, bool> itemExists)
     {
-        var dead = _db.Media.Find(x => x.LastSearchUtc != null)
+        var dead = _db.Files.Find(x => x.LastSearchUtc != null)
             .Where(m => !string.IsNullOrEmpty(m.JellyfinItemId) && !itemExists(m.JellyfinItemId!))
             .ToList();
 
@@ -166,12 +212,13 @@ public sealed class DownloadSearchTracker
         {
             media.LastSearchUtc = null;
             media.LastSearchLanguages = null;
-            _db.Media.Update(media);
+            media.LastSearchEmptyUtc = null; // F-M661
+            _db.Files.Update(media);
         }
 
         if (dead.Count > 0)
         {
-            LogUtil.Detail(_logger, "[Sub Scribe-DB] search stamp prune {Removed}", dead.Count);
+            LogUtil.Debug(_logger, "[Sub Scribe-DB] search stamp prune {Removed}", dead.Count);
         }
 
         return dead.Count;
@@ -182,8 +229,8 @@ public sealed class DownloadSearchTracker
     {
     }
 
-    private MediaEntity? FindByItemId(string itemId)
-        => _db.Media.FindOne(x => x.JellyfinItemId == itemId);
+    private FileEntity? FindByItemId(string itemId)
+        => _db.Files.FindOne(x => x.JellyfinItemId == itemId);
 
     private static string Normalize(IReadOnlyList<string> languages)
         => string.Join(",", languages.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));

@@ -65,7 +65,7 @@ internal static class LogRun
                 DownloadDryRun = downDry
             };
             string h1 = reg.GetMediaHash(work)!;
-            reg.EnsureMedia(h1, "aabbccdd11223344aabbccdd11223344", work);
+            reg.EnsureFile(h1, "aabbccdd11223344aabbccdd11223344", work);
             long sz1 = new FileInfo(work).Length;
             long mt1 = new FileInfo(work).LastWriteTimeUtc.Ticks;
 
@@ -107,7 +107,7 @@ internal static class LogRun
             using var db = new ScribeDbContext(dbDir, null);
             var reg = new ContentHashRegistry(db, null, null);
             var cfg = new PluginConfiguration { LogMode = mode, AllocateMissingLanguageCodes = true };
-            reg.EnsureMedia(reg.GetMediaHash(work)!, "aabbccdd11223344aabbccdd11223344", work);
+            reg.EnsureFile(reg.GetMediaHash(work)!, "aabbccdd11223344aabbccdd11223344", work);
 
             var cap = new Cap();
             var gate = new LanguageTagGate(cap, cfg, reg);

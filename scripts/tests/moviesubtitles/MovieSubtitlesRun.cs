@@ -956,8 +956,8 @@ internal static class Program
                 Path.Combine(fm517Root, "mit-zeile"), null))
             {
                 var reg = new Jellyfin.Plugin.SubScribe.Registry.ContentHashRegistry(db, null, null);
-                reg.EnsureMedia(fm517Hash, jellyfinItemId: null, path: fm517Pfad);
-                int vorher = db.Media.Count();
+                reg.EnsureFile(fm517Hash, jellyfinItemId: null, path: fm517Pfad);
+                int vorher = db.Files.Count();
 
                 var aufloeser = new MsubMovieResolver(new MovieSubtitlesClient(new HttpClient(pfadSeite)), null);
                 var ohneHash = await aufloeser
@@ -970,13 +970,13 @@ internal static class Program
                         mediaPath: fm517Pfad)
                     .ConfigureAwait(false);
 
-                int nachher = db.Media.Count();
+                int nachher = db.Files.Count();
                 Check("ohne Medien-Hash, aber mit Pfad-Zeile: die gefundene Filmnummer steht danach in der Zeile (F-M517)",
                     ohneHash.Resolved && ohneHash.MovieId == 13392 && ohneHash.Status == MsubMovieStatus.Found
-                    && db.Media.FindById(fm517Hash)?.MsubMovieId == "13392"
+                    && db.Files.FindById(fm517Hash)?.MsubMovieId == "13392"
                     && reg.MsubMovieIdAtPath(fm517Pfad) == "13392"
                     && nachher == vorher && vorher == 1,
-                    "id=" + (db.Media.FindById(fm517Hash)?.MsubMovieId ?? "<null>")
+                    "id=" + (db.Files.FindById(fm517Hash)?.MsubMovieId ?? "<null>")
                     + " zeilen=" + vorher + "->" + nachher);
 
                 // Der Pfad ist danach auch die LESE-Adresse: der zweite Aufruf sucht nicht mehr.
@@ -1012,12 +1012,12 @@ internal static class Program
                     .ConfigureAwait(false);
                 Check("ohne Hash UND ohne Pfad-Zeile: nichts geschrieben, die Nummer gilt nur fuer diesen Lauf (F-M517)",
                     ohneZeile.Resolved && ohneZeile.MovieId == 13392
-                    && dbLeer.Media.Count() == 0
+                    && dbLeer.Files.Count() == 0
                     && MediaNumberNote.Of(Jellyfin.Plugin.SubScribe.Registry.MediaNumberWrite.None) == MediaNumberNote.NotStored
                     && MediaNumberNote.NotStored.Contains("gilt nur für diesen Lauf", StringComparison.Ordinal)
                     && MediaNumberNote.Of(Jellyfin.Plugin.SubScribe.Registry.MediaNumberWrite.ByPath)
                         == MediaNumberNote.ByPath,
-                    "zeilen=" + dbLeer.Media.Count());
+                    "zeilen=" + dbLeer.Files.Count());
             }
 
             // (c) Zwei Zeilen mit demselben Pfad: der Pfad ist dann KEINE Adresse — keine wird gewaehlt.
@@ -1025,8 +1025,8 @@ internal static class Program
                 Path.Combine(fm517Root, "mehrdeutig"), null))
             {
                 var regViel = new Jellyfin.Plugin.SubScribe.Registry.ContentHashRegistry(dbViel, null, null);
-                regViel.EnsureMedia("1111222233334444", jellyfinItemId: null, path: fm517Pfad);
-                regViel.EnsureMedia("5555666677778888", jellyfinItemId: null, path: fm517Pfad);
+                regViel.EnsureFile("1111222233334444", jellyfinItemId: null, path: fm517Pfad);
+                regViel.EnsureFile("5555666677778888", jellyfinItemId: null, path: fm517Pfad);
                 var geschrieben = regViel.SetMsubMovieId(null, fm517Pfad, 13392);
                 Check("ein Pfad, den MEHRERE Zeilen tragen, ist keine Adresse — nichts geschrieben, nichts geraten (F-M517)",
                     geschrieben == Jellyfin.Plugin.SubScribe.Registry.MediaNumberWrite.None
