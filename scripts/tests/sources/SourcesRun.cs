@@ -546,6 +546,109 @@ internal static class Program
                 "F-M694: die Karte fuehrt API key, Email und Password — so, wie der Betreiber sie nennt",
                 string.Join(" | ", zugang.Select(f => f.Key + "/" + f.Label + "/" + f.Kind)));
 
+            // -------------------------------------------------------------------------------------
+            // F-M709 (Betreiberfrage 22.11.2026: "Bitte einmal schauen ob die schalter auch alle
+            // ausgewertet werden. Fuer die endpoints insbesondere" und "Mst geht nicht off"): JEDER
+            // Schalter JEDER Quelle muss eine Wirkung haben, die man messen kann — nicht nur in der
+            // Datei stehen. Geprueft wird je Quelle: Richtung aus -> IsDownloadEnabled/IsUploadEnabled
+            // falsch, Pack aus -> PackSlot ohne die Quelle, Meldung aus -> CanReport falsch.
+            // -------------------------------------------------------------------------------------
+            string schalterDir = Path.Combine(Path.GetTempPath(), "sub-scribe-schalter-" + Guid.NewGuid().ToString("N"));
+            Directory.CreateDirectory(Path.Combine(schalterDir, "sources"));
+            Func<string?> vorherSchalter = SourceSwitches.DataFolder;
+            SourceSwitches.DataFolder = () => schalterDir;
+            try
+            {
+                var schalterConfig = new PluginConfiguration();
+
+                // (1) Alle vier an: die Quelle nimmt teil, steht im Pack-Slot und darf melden.
+                QuelleSchreiben(schalterDir, SubdlEngine.SourceKey, SubdlEngine.Declared, new());
+                QuelleSchreiben(schalterDir, TvstEngine.SourceKey, TvstEngine.Declared, new());
+                QuelleSchreiben(schalterDir, MsubEngine.SourceKey, MsubEngine.Declared, new());
+
+                var alleAn = SourceRegistry.Build(kontext, schalterConfig);
+                Check(schalterConfig.IsDownloadEnabled(SubtitleProvider.MovieSubtitles)
+                      && schalterConfig.IsDownloadEnabled(SubtitleProvider.TvSubtitles)
+                      && schalterConfig.IsDownloadEnabled(SubtitleProvider.Subdl),
+                    "F-M709: mit den vier Schaltern an laufen alle drei Quellen",
+                    "subdl/tvst/mst = "
+                    + schalterConfig.IsDownloadEnabled(SubtitleProvider.Subdl) + "/"
+                    + schalterConfig.IsDownloadEnabled(SubtitleProvider.TvSubtitles) + "/"
+                    + schalterConfig.IsDownloadEnabled(SubtitleProvider.MovieSubtitles));
+
+                Check(alleAn.PackSlot().SequenceEqual(new[] { "subdl", "tvsubtitles" }),
+                    "F-M709: mit Packs an stehen beide Behaelter-Quellen im Slot",
+                    string.Join(", ", alleAn.PackSlot()));
+
+                Check(alleAn.ByKey(SubdlEngine.SourceKey)!.Capabilities.CanReport
+                      && alleAn.ByKey(TvstEngine.SourceKey)!.Capabilities.CanReport,
+                    "F-M709: mit Meldung an haben subdl und tvst einen Meldeweg");
+
+                // (2) moviesubtitles.org: Download aus — der Betreiberbefund "Mst geht nicht off".
+                QuelleSchreiben(schalterDir, MsubEngine.SourceKey, MsubEngine.Declared, new()
+                {
+                    [MsubEngine.FieldDownloadEnabled] = "false",
+                });
+                Check(!schalterConfig.IsDownloadEnabled(SubtitleProvider.MovieSubtitles),
+                    "F-M709: moviesubtitles.org geht mit seinem Download-Schalter WIRKLICH aus",
+                    "IsDownloadEnabled(MovieSubtitles) = "
+                    + schalterConfig.IsDownloadEnabled(SubtitleProvider.MovieSubtitles));
+                Check(schalterConfig.IsDownloadEnabled(SubtitleProvider.Subdl),
+                    "F-M709: und reisst die anderen Quellen nicht mit",
+                    "subdl = " + schalterConfig.IsDownloadEnabled(SubtitleProvider.Subdl));
+
+                // (3) tvsubtitles.net: Download aus.
+                QuelleSchreiben(schalterDir, TvstEngine.SourceKey, TvstEngine.Declared, new()
+                {
+                    [SourceSwitches.DownloadField] = "false",
+                });
+                Check(!schalterConfig.IsDownloadEnabled(SubtitleProvider.TvSubtitles),
+                    "F-M709: tvsubtitles.net geht mit seinem Download-Schalter aus",
+                    "IsDownloadEnabled(TvSubtitles) = "
+                    + schalterConfig.IsDownloadEnabled(SubtitleProvider.TvSubtitles));
+
+                // (4) Packs aus: die Quelle faellt aus dem Slot, wird aber als "draussen" genannt.
+                QuelleSchreiben(schalterDir, SubdlEngine.SourceKey, SubdlEngine.Declared, new()
+                {
+                    [SourceSwitches.PacksField] = "false",
+                });
+                var ohnePacks = SourceRegistry.Build(kontext, schalterConfig);
+                Check(!ohnePacks.ByKey(SubdlEngine.SourceKey)!.Capabilities.CanSeasonPacks,
+                    "F-M709: der Pack-Schalter von SubDL wirkt auf die Faehigkeit",
+                    "CanSeasonPacks = " + ohnePacks.ByKey(SubdlEngine.SourceKey)!.Capabilities.CanSeasonPacks);
+                Check(ohnePacks.PackSlot().SequenceEqual(new[] { "tvsubtitles" }),
+                    "F-M709: und nimmt SubDL aus dem Pack-Slot",
+                    string.Join(", ", ohnePacks.PackSlot()));
+                Check(ohnePacks.PackSlotExcluded().Contains(SubdlEngine.SourceKey),
+                    "F-M709: die ausgeschlossene Quelle wird als Grund genannt, nicht verschwiegen",
+                    string.Join(", ", ohnePacks.PackSlotExcluded()));
+
+                // (5) Meldung aus.
+                QuelleSchreiben(schalterDir, SubdlEngine.SourceKey, SubdlEngine.Declared, new()
+                {
+                    [SourceSwitches.ReportField] = "false",
+                });
+                var ohneMeldung = SourceRegistry.Build(kontext, schalterConfig);
+                Check(!ohneMeldung.ByKey(SubdlEngine.SourceKey)!.Capabilities.CanReport,
+                    "F-M709: der Melde-Schalter von SubDL wirkt auf die Faehigkeit",
+                    "CanReport = " + ohneMeldung.ByKey(SubdlEngine.SourceKey)!.Capabilities.CanReport);
+
+                // (6) Upload aus (nur die Quellen, die hochladen koennen).
+                QuelleSchreiben(schalterDir, TvstEngine.SourceKey, TvstEngine.Declared, new()
+                {
+                    [SourceSwitches.UploadField] = "false",
+                });
+                Check(!schalterConfig.IsUploadEnabled(SubtitleProvider.TvSubtitles),
+                    "F-M709: tvsubtitles.net geht mit seinem Upload-Schalter aus",
+                    "IsUploadEnabled(TvSubtitles) = "
+                    + schalterConfig.IsUploadEnabled(SubtitleProvider.TvSubtitles));
+            }
+            finally
+            {
+                SourceSwitches.DataFolder = vorherSchalter;
+                try { Directory.Delete(schalterDir, true); } catch (IOException) { }
+            }
+
             string zugangDir = Path.Combine(Path.GetTempPath(), "sub-scribe-zugang-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path.Combine(zugangDir, "sources"));
             Func<string?> vorherZugang = SourceSwitches.DataFolder;

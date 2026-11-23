@@ -1,7 +1,7 @@
 # Requirements Specification — Jellyfin Plugin "Sub Scribe" (Upload + Download)
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.13.
+**Status:** Implementation — v12.3.8.14.
 
 **Die Begründungen (warum eine Regel gilt, Messungen, Vorfälle) stehen nicht hier, sondern lokal in der Methodik-Ablage, nach Kapiteln sortiert und mit der Requirement-Nummer
 markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test — sonst nichts.**
@@ -33,7 +33,7 @@ markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
 - [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 46 requirements
-- [14. Data Model and Persistence](#14-data-model-and-persistence) — 63 requirements
+- [14. Data Model and Persistence](#14-data-model-and-persistence) — 64 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 51 requirements
 - [16. Non-Goals](#16-non-goals)
 - [17. Non-Functional Requirements](#17-non-functional-requirements)
@@ -1992,6 +1992,8 @@ Grund (gemessen 18.11.2026): die Queue entsteht nur aus offenen Stempeln (F-M557
 
 **F-M708 [D]:** **Die Rückmeldung nennt den Namen und den Zustand — „off" rot mit Kreuz —, und die Ampel der Reihenfolge folgt der Teilnahme, nicht der Vollständigkeit.** Betreiberbefund 22.11.2026, wörtlich: „Download enabled off ist lustiges wording. Download on/off. Off message bitte rot und mit rotem kreuzchen statt haken. Das on unter change order geht nie off." Drei Folgen: **(a)** die Meldung nennt die **Beschriftung** des Feldes und den Zustand (`Download off`, vorher `downloadEnabled: off` — der Schlüssel mit „Enabled" las sich wie „eingeschaltet"); **(b)** ein ausgeschalteter Zustand steht **rot mit ✖**, ein eingeschalteter grün mit ✔; **(c)** die Ampel der Reihenfolge hing an `Configured` — also nur an der Vollständigkeit der Datei. Wer **beide Richtungen** einer Quelle ausschaltet, hat weiter eine vollständige Datei, und die Ampel blieb für immer `on`. Der Endpunkt liefert deshalb neu **`Participates`** (eingerichtet **und** mindestens eine Richtung offen, gelesen aus derselben Datei wie der Lauf), die Ampel hängt daran, und nach einem Speichern wird die Reihenfolge aus der Antwort neu gezeichnet — sonst zeigte sie bis zum nächsten Laden den alten Zustand.
 
+**F-M709 [D]:** **Jeder Schalter jeder Quelle hat eine messbare Wirkung — nachgewiesen, nicht behauptet.** Betreiberfrage 22.11.2026, wörtlich: „Bitte einmal schauen ob die schalter auch alle ausgewertet werden. Für die endpoints insbesondere" und „Mst geht nicht off". Die Prüfung steht in der Suite `sources` und fährt je Quelle eine eigene Datei: **aus** heißt überall **wirklich aus**. Gemessen: `moviesubtitles.org` mit `downloadEnabled = false` → `IsDownloadEnabled(MovieSubtitles) = False`, und die anderen Quellen bleiben an (`subdl = True`); `tvsubtitles.net` mit `downloadEnabled = false` → `False`; `packsEnabled = false` bei SubDL → `CanSeasonPacks = False`, der Pack-Slot führt nur noch `tvsubtitles` und `PackSlotExcluded()` nennt `subdl` als Grund; `reportEnabled = false` → `CanReport = False`; `uploadEnabled = false` bei tvst → `IsUploadEnabled(TvSubtitles) = False`. Die Lesestellen sind: Richtungen über `PluginConfiguration.IsDownloadEnabled/IsUploadEnabled` (Tore in `DownloadPipeline.SourceAllowed`, `UploadPipeline.SourceAllowed`, `SubtitleEndpoints.EnabledDownloads/EnabledUploads`, Scheduler, Seeder, `WorkerOffState`), Pack über `CanSeasonPacks` → `SourceRegistry.PackSlot()` → `UploadPipeline.PackSlotSources()`, Meldung über `CanReport` → `AuditedSourceEngine.ReportAsync`. **Zeitverhalten:** die Richtungsschalter antwortet die Datei bei **jedem** Aufruf, Pack und Meldung liest der Lauf beim Bau seiner Registry — also ab dem **nächsten** Lauf, ohne Neustart.
+
 #### 14.9 Die Marken-Matrix — die einzige Wahrheit (bis Schema 22; abgelöst durch 14.11)
 
 Die Matrix ist seit 12.3.0.0 der **einzige** Ort, an dem ein Quellen-Urteil steht: eine Zeile je (Medium, Quelle, Art) in der Tabelle `source_matrix` — und bei `track`/`track-hi` je (Medium, Quelle, Art, Sprache, HI, **Position**) (Schema 20, F-M669). Seit 12.3.0.2 (Schema 21, F-M670) ist sie auch der einzige Ort für die **Quellen-Ids**: es gibt keine Alt-Tabelle `source_marks` und keine Spalte `SubdlId` mehr. Die breiten Spalten, aus denen sie bis 12.2.0.28 gefüllt wurde, sind aus der Live-Datei **entfernt**; der Altbestand lebt allein in der Sicherungsdatei weiter. Es gibt keinen zweiten Datenbestand und keinen zweiten Lesepfad.
@@ -2858,6 +2860,8 @@ Kein Grund, keine Vorgeschichte, keine Bitte, kein Vorschlag. Gebaut in `Pipelin
 **T371:** Endpoint order ohne Medienart, Ampel mittig (F-M707), in `gui-structure` — **2 Prüfungen**: die Ueberschrift lautet `Endpoint order`, eine Zeile baut kein `subdl-order-tag` mehr, und die Ampel steht ueber `flex: 0 0 3.2em; text-align: center` in ihrer Spalte. Die Pruefung F-M704 (c) wandert mit — sie verlangte die Art in der Zeile.
 
 **T372:** Rückmeldung und Ampel (F-M708), in `gui-structure` — **2 Prüfungen**: die Meldung baut `<Beschriftung> on|off` und waehlt `fail` mit ✖ beim Ausschalten, und die Ampel der Reihenfolge liest `participates` und wird nach dem Speichern neu gezeichnet.
+
+**T373:** Jeder Schalter wirkt (F-M709), in `sources` — **9 Prüfungen**: mit allen Schaltern an laufen drei Quellen und beide Behälter-Quellen im Slot; `downloadEnabled=false` schaltet moviesubtitles.org **und** tvsubtitles.net wirklich ab, ohne die andere Quelle mitzureißen; `packsEnabled=false` nimmt SubDL aus dem Slot und nennt es als Grund; `reportEnabled=false` nimmt den Meldeweg; `uploadEnabled=false` schaltet den tvst-Upload ab.
 
 **T336:** Die vier Ebenen und die drei Quellen-Tabellen seit Schema 23 (F-M672…F-M677), in `storex` gegen echte Altdateien: Kennungsformen `[xxxx]`/`#yyyyy`/`#yyyyy#zzz`/`#yyyyy&zzz`, ein Nummernkreis je Datei über Spur und Seitenwagen, `pack_track` mit Fremdschlüsseln, `upload`/`reference`/`badapple` mit einer Subjekt-Spalte, keine fremde Kennung außerhalb `reference`/`badapple`, `source_matrix` und `rejected_candidates` nach dem Aufstieg weg, `OriginId` ohne Wertverlust nach `reference`, Aufstieg 17→23 und 22→23 mit genau einer Sicherung und einem zweiten Start, der nichts tut — **15 Prüfungen**, die letzte für die Quellenneutralitaet von `badapple` (auch eine nicht-numerische Kennung wie `download-3234-2-en` neben einer SubDL-Nummer).
 
