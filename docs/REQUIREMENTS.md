@@ -1,7 +1,7 @@
 # Requirements Specification — Jellyfin Plugin "Sub Scribe" (Upload + Download)
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.22.
+**Status:** Implementation — v12.3.8.23.
 
 **Die Begründungen (warum eine Regel gilt, Messungen, Vorfälle) stehen nicht hier, sondern lokal in der Methodik-Ablage, nach Kapiteln sortiert und mit der Requirement-Nummer
 markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test — sonst nichts.**
@@ -33,7 +33,7 @@ markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
 - [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 46 requirements
-- [14. Data Model and Persistence](#14-data-model-and-persistence) — 72 requirements
+- [14. Data Model and Persistence](#14-data-model-and-persistence) — 73 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 51 requirements
 - [16. Non-Goals](#16-non-goals)
 - [17. Non-Functional Requirements](#17-non-functional-requirements)
@@ -2010,6 +2010,8 @@ Grund (gemessen 18.11.2026): die Queue entsteht nur aus offenen Stempeln (F-M557
 
 **F-M717 [D]:** **Der Wiederholungsversuch läuft in einer Schleife.** Messung 23.11.2026, 20:11 auf prod (12.3.8.21): der Refresh brach trotz F-M716 wieder ab. Der Log zeigt beides hintereinander — „1 row(s) were already gone when the write ran … dropped as done and the write was retried" und direkt danach dieselbe `DbUpdateConcurrencyException` aus `PruneOrphanedPacks` → `ForgetSubject`. Grund: die Ausnahme nennt nur die Einträge **eines** Befehls aus dem Stapel; der eine Wiederholungsversuch traf die nächste von der Kaskade geräumte Zeile (`pack_track` → `pack`/`track`, `ON DELETE CASCADE`, `ScribeDbContext.cs:270–271`). Neu: `RetryAfterVanishedRows` hakt in jeder Runde die gemeldeten Einträge ab (`Detached`) und wiederholt den Schreibvorgang, bis keine „schon weg"-Zeile mehr im Stapel steht — Grenze 200 Runden, danach fliegt die letzte Ausnahme. Jede Runde schreibt eine Warnzeile mit Anzahl und Rundennummer.
 
+**F-M718 [G]:** **Die Status-Ampeln stehen in der Reihenfolge ihrer Wichtigkeit — TMDb zuerst.** Ansage 23.11.2026: „Und die ampeln bitte tmdb an oberste Stelle". Im Block **Status** steht deshalb oben die Ampel des Schlüssels, ohne den weder Download noch Upload startet (**TMDb API**), darunter die beiden SubDL-Konten (Login, API), dann die Erreichbarkeit der Webseiten (tvsubtitles.net, moviesubtitles.org). Die Reihenfolge steht im HTML (`#ScribeStatusBox`); die Skripte greifen über die Ids zu (`#TmdbApiStatus`, `#SubdlLoginStatus`, `#ScribeApiStatus`, `#TvstStatus`, `#MstStatus`) und sind von der Position unabhängig.
+
 #### 14.9 Die Marken-Matrix — die einzige Wahrheit (bis Schema 22; abgelöst durch 14.11)
 
 Die Matrix ist seit 12.3.0.0 der **einzige** Ort, an dem ein Quellen-Urteil steht: eine Zeile je (Medium, Quelle, Art) in der Tabelle `source_matrix` — und bei `track`/`track-hi` je (Medium, Quelle, Art, Sprache, HI, **Position**) (Schema 20, F-M669). Seit 12.3.0.2 (Schema 21, F-M670) ist sie auch der einzige Ort für die **Quellen-Ids**: es gibt keine Alt-Tabelle `source_marks` und keine Spalte `SubdlId` mehr. Die breiten Spalten, aus denen sie bis 12.2.0.28 gefüllt wurde, sind aus der Live-Datei **entfernt**; der Altbestand lebt allein in der Sicherungsdatei weiter. Es gibt keinen zweiten Datenbestand und keinen zweiten Lesepfad.
@@ -2894,6 +2896,8 @@ Kein Grund, keine Vorgeschichte, keine Bitte, kein Vorschlag. Gebaut in `Pipelin
 **T380:** Eine verschwundene Zeile beendet den Aufräumlauf nicht (F-M716), in `seasonpack` — **2 Prüfungen**: `DeleteMany` überspringt `EntityState.Deleted`, und `SaveChanges` fängt die `DbUpdateConcurrencyException`, hakt die Zeile als erledigt ab und wiederholt den Schreibvorgang.
 
 **T381:** Die Wiederholung nach einer verschwundenen Zeile läuft in Schleife (F-M717), in `seasonpack` — **2 Prüfungen**: `RetryAfterVanishedRows` wird gerufen, und die Schleife (`runde <= 200`) schreibt je Runde eine Zeile mit Anzahl und Rundennummer.
+
+**T382:** TMDb steht als erste Ampel (F-M718), in `gui-structure` — **1 Prüfung**: die fünf Status-Zeilen liegen in dieser Reihenfolge innerhalb `#ScribeStatusBox`.
 
 **T336:** Die vier Ebenen und die drei Quellen-Tabellen seit Schema 23 (F-M672…F-M677), in `storex` gegen echte Altdateien: Kennungsformen `[xxxx]`/`#yyyyy`/`#yyyyy#zzz`/`#yyyyy&zzz`, ein Nummernkreis je Datei über Spur und Seitenwagen, `pack_track` mit Fremdschlüsseln, `upload`/`reference`/`badapple` mit einer Subjekt-Spalte, keine fremde Kennung außerhalb `reference`/`badapple`, `source_matrix` und `rejected_candidates` nach dem Aufstieg weg, `OriginId` ohne Wertverlust nach `reference`, Aufstieg 17→23 und 22→23 mit genau einer Sicherung und einem zweiten Start, der nichts tut — **15 Prüfungen**, die letzte für die Quellenneutralitaet von `badapple` (auch eine nicht-numerische Kennung wie `download-3234-2-en` neben einer SubDL-Nummer).
 

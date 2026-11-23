@@ -2546,6 +2546,18 @@ def main():
           and ".subdl-source-serves" in page_src,
           "Kennzeichen aus den Faehigkeiten, nicht aus dem Namen")
 
+    # F-M718 (Ansage 23.11.2026): "Und die ampeln bitte tmdb an oberste Stelle" — die Status-Ampeln
+    # stehen in der Reihenfolge, in der ein Nutzer sie braucht: erst der Schlüssel, ohne den nichts
+    # laeuft (TMDb), dann die Konten, dann die Erreichbarkeit der beiden Webseiten. Die Reihenfolge
+    # steht im HTML; die Skripte greifen ueber die Ids zu und sind davon unabhaengig.
+    box = page_src.find('id="ScribeStatusBox"')
+    reihenfolge = [page_src.find('id="%s"' % i, box) for i in
+                   ('TmdbApiStatus', 'SubdlLoginStatus', 'ScribeApiStatus', 'TvstStatus', 'MstStatus')]
+    check("F-M718: TMDb steht als erste Ampel, danach Konten, dann die beiden Webseiten",
+          box > 0 and all(p > box for p in reihenfolge)
+          and reihenfolge == sorted(reihenfolge),
+          "Positionen: %s" % reihenfolge)
+
     probe_ok, probe_detail = run_case_probe(page_src)
     check("F-M689: the translation runs against a real endpoint answer (all six field kinds)",
           probe_ok, probe_detail)
