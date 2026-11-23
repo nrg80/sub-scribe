@@ -2087,11 +2087,32 @@ def main():
           "? 'set' : 'not set';" in page_src
           and "'set' ? true : false" not in page_src,
           "Bedingungssprache bleibt 'set'")
-    # (c) die Reihenfolge nennt je Zeile die Art und traegt ihre Ampel.
-    check("F-M704: every order row carries the source's kind and its lamp",
+    # (c) F-M707 (Betreiberansage 22.11.2026: "Tvshows movies etc muss bei endpoint order nicht stehen.
+    # Das on/off bitte in der spalte zentrieren"): die Zeile traegt NUR die Ampel — die Art steht auf
+    # der Karte —, und die Ampel hat eine eigene Spalte mit mittiger Ausrichtung.
+    check("F-M707: an order row carries the lamp only, centred in its own column",
           "subdl-order-state" in page_src
-          and "subdlSourceEl('span', 'subdl-order-tag'" in page_src,
-          "Art + Ampel je Zeile")
+          and "subdlSourceEl('span', 'subdl-order-tag'" not in page_src
+          and "flex: 0 0 3.2em; text-align: center" in page_src,
+          "nur Ampel, mittig in eigener Spalte")
+    # F-M708 (Betreiberbefund 22.11.2026: "Download enabled off ist lustiges wording. Download on/off.
+    # Off message bitte rot und mit rotem kreuzchen statt haken. Das on unter change order geht nie off"):
+    # die Meldung nennt die Beschriftung und den Zustand, "off" steht rot mit Kreuz, und die Ampel der
+    # Reihenfolge haengt an "participates" statt an "configured".
+    check("F-M708: a save answers with the field label and its state, off in red with a cross",
+          "bez + ' ' + (rumpf[feldName] ? 'on' : 'off')" in page_src
+          and "(aus ? '\u2716 ' : '\u2714 ')" in page_src
+          and "subdlSourceResult(key, aus ? 'fail' : 'ok'" in page_src,
+          "Download off, rot mit Kreuz")
+    check("F-M708: the order lamp follows participation, not completeness of the file",
+          "quelle.participates ? 'on' : 'off'" in page_src
+          and "subdlSourceWert(eintrag, 'participates') === true" in page_src
+          and "subdlOrderDraw(window.__subdlQuellen)" in page_src,
+          "Ampel an participates, Neuzeichnung nach dem Speichern")
+
+    check("F-M707: the block is titled 'Endpoint order'",
+          ">Endpoint order</label>" in page_src,
+          "Ueberschrift Endpoint order")
 
     # F-M705 (Betreiberbefund 22.11.2026: "Wenn ich auf save druecke kommt immer download enabled auch
     # wenn ich ausschalte. Ist eigentlich durch die tickbox abgedeckt"): nur Geaendertes geht mit, und
@@ -2363,8 +2384,10 @@ def main():
           and 'ApiClient.updatePluginConfiguration' not in quellen,
           "one button per card; the page-wide save must stay out of the card's path")
 
-    check("F-M688: the state word is 'on' or 'off', taken from the endpoint's configured flag",
-          "quelle.configured ? 'on' : 'off'" in quellen,
+    # F-M708: das Wort kommt weiter vom Endpunkt, jetzt aber aus "participates" — sonst blieb die
+    # Ampel auf "on", wenn beide Richtungen einer Quelle aus sind.
+    check("F-M688: the state word is 'on' or 'off', taken from the endpoint's participation flag",
+          "quelle.participates ? 'on' : 'off'" in page_src,
           "the operator named the two states himself")
 
     # F-M693 (Betreiberansage 22.11.2026: "Badges upload /download /packs / report. Each with it's own
@@ -2440,7 +2463,7 @@ def main():
     # kein angezeigtes Wort — angezeigt werden nur on/off und Save.
     check("F-M690: the card's own words are English (on/off, Save) and the schema's "
           "condition value is language-neutral",
-          "quelle.configured ? 'on' : 'off'" in page_src
+          "quelle.participates ? 'on' : 'off'" in page_src
           and "save.textContent = 'Save';" in page_src
           and "'nicht gesetzt'" not in page_src
           and "field.gesetzt ? 'gesetzt'" not in page_src

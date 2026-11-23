@@ -127,7 +127,7 @@
      Quellen-Endpunkts (eine Zeile je Quelle, jede Anzahl), der alte Zwei-Werte-Kasten ist weg.
      F-M698 (Liste statt zwei Werten) und F-M701 (Vorbelegung aus der alten Einstellung) gelten weiter. -->
                         <div class="selectContainer" id="SourceOrderBlock">
-                            <label class="selectLabel">Source order</label>
+                            <label class="selectLabel">Endpoint order</label>
                             <div class="fieldDescription">Asked in this order — the first one that has the subtitle wins.</div>
                             <div id="SourceOrderRows"></div>
                             <input id="SourceOrderValue" name="SourceOrderValue" type="hidden" value="" />
@@ -801,7 +801,9 @@
            Reihe bleiben. */
         .subdl-badge .fieldDescription { display: none; }
         .subdl-source-hint { font-size: 0.9em; color: #ffc107; margin: 0.3em 0; }
-        .subdl-order-state { margin-left: 0.4em; font-size: 0.85em; }
+        /* F-M707 (Betreiberansage 22.11.2026: "Das on/off bitte in der spalte zentrieren"): die Ampel
+           bekommt eine eigene Spalte fester Breite und steht darin mittig. */
+        .subdl-order-state { flex: 0 0 3.2em; text-align: center; font-size: 0.85em; }
         .subdl-order-state.on { color: #52b54b; }
         .subdl-order-state.off { color: #c0392b; }
         .subdl-source-serves { margin-left: 0.5em; padding: 0.05em 0.5em; border-radius: 0.7em;
@@ -810,8 +812,7 @@
         .subdl-order-row { display: flex; align-items: center; gap: 0.5em; padding: 0.2em 0; }
         /* F-M706: die Pfeile stehen rechts — der freie Raum liegt VOR dem ersten Pfeil. */
         .subdl-order-row .subdl-order-move:first-of-type { margin-left: auto; }
-        .subdl-order-name { min-width: 12em; }
-        .subdl-order-tag { font-size: 0.78em; opacity: 0.7; }
+        .subdl-order-name { flex: 1 1 auto; min-width: 12em; }
         .subdl-order-move { padding: 0 0.5em; line-height: 1.6; }
         .subdl-source-save { margin: 0.6em 0 0 0; }
         .subdl-source-result { min-height: 1.2em; margin-top: 0.4em; }
@@ -2061,6 +2062,7 @@ workers.forEach(function (w) {
                     key: subdlSourceWert(eintrag, 'key'),
                     displayName: subdlSourceWert(eintrag, 'displayName'),
                     configured: subdlSourceWert(eintrag, 'configured') === true,
+                    participates: subdlSourceWert(eintrag, 'participates') === true,
                     hint: subdlSourceWert(eintrag, 'hint'),
                     file: subdlSourceWert(eintrag, 'file'),
                     capabilities: subdlSourceFaehigkeiten(subdlSourceWert(eintrag, 'capabilities')),
@@ -2113,6 +2115,10 @@ workers.forEach(function (w) {
                 var row = document.createElement('div');
                 row.setAttribute('data-source-field-row', field.key);
                 row.setAttribute('data-source-field-kind', field.kind);
+
+                // F-M708: die Rueckmeldung nennt den Namen, der am Feld steht ("Download off"), nicht
+                // den Schluessel ("downloadEnabled: off") — das las sich wie ein Zustand.
+                row.setAttribute('data-source-field-label', field.label || field.key);
                 if (field.visibleWhen) {
                     row.setAttribute('data-visible-when-field', field.visibleWhen.field);
                     row.setAttribute('data-visible-when-value', field.visibleWhen.value);
@@ -2404,6 +2410,8 @@ workers.forEach(function (w) {
             // in seiner Datei, wie es war. Ein leeres Geheimfeld heisst "unveraendert lassen".
             function subdlSourceBody(card) {
                 var body = {};
+                window.__subdlSourceLabels = {};   // F-M708: Schluessel -> Beschriftung, fuer die Meldung
+                var labels = window.__subdlSourceLabels;
                 var rows = card.querySelectorAll('[data-source-field-row]');
                 for (var i = 0; i < rows.length; i++) {
                     var row = rows[i];
@@ -2413,6 +2421,7 @@ workers.forEach(function (w) {
                     var key = row.getAttribute('data-source-field-row');
                     var kind = row.getAttribute('data-source-field-kind');
                     var wert;
+                    var name = row.getAttribute('data-source-field-label') || key;
                     if (kind === 'switch') { wert = !!ctrl.checked; }
                     else if (kind === 'secret') {
                         // Ein Geheimnis geht nur mit, wenn wirklich etwas getippt wurde.
@@ -2429,6 +2438,7 @@ workers.forEach(function (w) {
                     } else if (wert === row.getAttribute('data-value')) { continue; }
 
                     body[key] = wert;
+                    labels[key] = name;
                 }
                 return body;
             }
@@ -2475,23 +2485,41 @@ workers.forEach(function (w) {
                         card.parentNode.replaceChild(neu, card);
                         subdlSourceApplyValues(neu);
                         subdlSourceApplyVisibility(neu);
+
+                        // F-M708: die Ampel der Reihenfolge haengt an "participates" — sie muss nach
+                        // dem Schalten sofort mitgehen, sonst steht dort weiter "on".
+                        if (window.__subdlQuellen) {
+                            var liste = window.__subdlQuellen.quellen || [];
+                            for (var q = 0; q < liste.length; q++) {
+                                if (liste[q].key === key) { liste[q] = ant.quelle; }
+                            }
+                            subdlOrderDraw(window.__subdlQuellen);
+                        }
                     }
                     // F-M706 (Betreiberbefund 22.11.2026: "Wenn ich in den sources was austicke … als
                     // Rueckmeldung kommt enabled"): die Meldung nannte nur den FELDNAMEN, und
                     // "downloadEnabled" liest sich wie "eingeschaltet" — auch wenn gerade AUSgeTickt
                     // wurde. Jetzt steht der neue Zustand dabei: "downloadEnabled: off".
+                    // F-M708 (Betreiberbefund 22.11.2026: "Download enabled off ist lustiges wording.
+                    // Download on/off. Off message bitte rot und mit rotem kreuzchen statt haken"):
+                    // die Meldung nennt die Beschriftung des Feldes und den Zustand — "Download off" —,
+                    // und ein ausgeschalteter Zustand steht rot mit Kreuz. Ein "on" bleibt gruen mit Haken.
+                    var namen = window.__subdlSourceLabels || {};
                     var teile = [];
+                    var aus = false;
                     for (var feldName in rumpf) {
+                        var bez = namen[feldName] || feldName;
                         if (typeof rumpf[feldName] === 'boolean') {
-                            teile.push(feldName + ': ' + (rumpf[feldName] ? 'on' : 'off'));
+                            teile.push(bez + ' ' + (rumpf[feldName] ? 'on' : 'off'));
+                            if (!rumpf[feldName]) { aus = true; }
                         } else {
-                            teile.push(feldName);
+                            teile.push(bez);
                         }
                     }
                     var geschrieben = teile.length
                         ? teile.join(', ')
                         : ((ant && ant.geschrieben.length) ? ant.geschrieben.join(', ') : '—');
-                    subdlSourceResult(key, 'ok', '✔ ' + geschrieben);
+                    subdlSourceResult(key, aus ? 'fail' : 'ok', (aus ? '✖ ' : '✔ ') + geschrieben);
                 }).catch(function (err) {
                     // Eine Abweisung steht im KLARTEXT der Antwort an der Karte (400, unbekanntes
                     // Feld, Pflichtfeld leer, Grenze verletzt, Adresse ungueltig).
@@ -2551,16 +2579,20 @@ workers.forEach(function (w) {
                     row.appendChild(subdlSourceEl('span', 'subdl-order-name',
                         (pos + 1) + '. ' + quelle.displayName));
 
-                    // F-M704: JEDE Zeile nennt die Art der Quelle und traegt ihre Ampel — dieselben
-                    // Woerter und dieselbe Ampel wie die Karte weiter unten, aus derselben Antwort.
-                    var art = subdlSourceServes(quelle);
-                    if (art) { row.appendChild(subdlSourceEl('span', 'subdl-order-tag', art.textContent)); }
-
-                    var licht = subdlSourceEl('span', 'subdl-order-state ' + (quelle.configured ? 'on' : 'off'),
-                        quelle.configured ? 'on' : 'off');
-                    licht.title = quelle.configured
-                        ? 'This source is complete and takes part in the run.'
-                        : 'This source is missing a required field and stays out of the run.';
+                    // F-M707 (Betreiberansage 22.11.2026: "Tvshows movies etc muss bei endpoint order nicht
+                    // stehen"): die Art steht auf der KARTE, nicht in der Reihenfolge — die Zeile nennt
+                    // nur Nummer, Name, Ampel und die zwei Pfeile.
+                    // F-M708 (Betreiberbefund 22.11.2026: "Das on unter change order geht nie off"): die
+                    // Ampel hing an "configured" — also nur an der Vollstaendigkeit der Datei. Wer beide
+                    // Richtungen ausschaltet, hat trotzdem eine vollstaendige Datei, und die Ampel blieb
+                    // auf "on". Jetzt haengt sie an "participates" (eingerichtet UND eine Richtung offen).
+                    var licht = subdlSourceEl('span', 'subdl-order-state ' + (quelle.participates ? 'on' : 'off'),
+                        quelle.participates ? 'on' : 'off');
+                    licht.title = quelle.participates
+                        ? 'This source takes part in the run.'
+                        : (quelle.configured
+                            ? 'Both directions are switched off — this source stays out of the run.'
+                            : 'This source is missing a required field and stays out of the run.');
                     row.appendChild(licht);
 
                     var hoch = subdlOrderButton('\u25B2', pos === 0, function () { subdlOrderMove(pos, -1, payload); });
@@ -2600,6 +2632,10 @@ workers.forEach(function (w) {
                 var box = document.getElementById('SourceCards');
                 if (!box) { return; }
                 box.innerHTML = '';
+
+                // F-M708: die Antwort bleibt stehen — nach einem Speichern wird die Reihenfolge daraus
+                // neu gezeichnet, damit die Ampel sofort den neuen Zustand zeigt.
+                window.__subdlQuellen = payload;
                 // F-M689: `payload` ist die schon uebersetzte Antwort (subdlSourceAntwort) —
                 // die Schreibweise des Endpunkts kommt hier nicht mehr durch.
                 var list = (payload && payload.quellen) ? payload.quellen : [];

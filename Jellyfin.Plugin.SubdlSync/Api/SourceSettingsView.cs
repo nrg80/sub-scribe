@@ -105,6 +105,12 @@ public sealed record SourceEntryView(
     string Key,
     string DisplayName,
     bool Configured,
+
+    // F-M708 (Betreiberbefund 22.11.2026: "Das on unter change order geht nie off"): die Ampel der
+    // Reihenfolge zeigte "configured" — also nur, ob die Datei vollstaendig ist. Wer beide Richtungen
+    // einer Quelle ausschaltet, liest die Datei weiter als vollstaendig, und die Ampel blieb auf "on".
+    // "Participates" ist die richtige Auskunft: eingerichtet UND mindestens eine Richtung offen.
+    bool Participates,
     string? Hint,
     string? File,
     SourceCapabilityView Capabilities,
@@ -265,10 +271,18 @@ public static class SourceSettingsView
             }
         }
 
+        // F-M708: nimmt diese Quelle am Lauf teil? Die Datei sagt es (Schalter fragen die Datei zuerst
+        // und fallen auf den Alt-Wert zurueck) — genau so entscheidet auch der Lauf.
+        // Die Datei antwortet je Quellenschluessel; sagt sie nichts, gilt der Alt-Wert — der ist fuer
+        // alle drei Quellen "an", also nimmt die Quelle teil.
+        bool richtung = (SourceSwitches.Flag(key, SourceSwitches.UploadField) ?? true)
+            || (SourceSwitches.Flag(key, SourceSwitches.DownloadField) ?? true);
+
         return new SourceEntryView(
             key,
             engine.Capabilities.DisplayName,
             eingerichtet,
+            eingerichtet && richtung,
             hinweis,
             RelativeFile(key),
             Capabilities(engine.Capabilities),

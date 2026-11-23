@@ -851,6 +851,14 @@
     "T370": {
       "suite": "gui-structure",
       "checks": 5
+    },
+    "T371": {
+      "suite": "gui-structure",
+      "checks": 2
+    },
+    "T372": {
+      "suite": "gui-structure",
+      "checks": 2
     }
   }
 }
