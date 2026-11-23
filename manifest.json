@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.15",
-        "changelog": "v12.3.8.15: the Endpoint order block carries its name only.",
+        "version": "12.3.8.16",
+        "changelog": "v12.3.8.16: the last three SubDL-only settings live in the SubDL card, and the \"SubDL only\" badge is gone.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.15-dev/Jellyfin.Plugin.SubdlSync_12.3.8.15.zip",
-        "checksum": "395b0ff84c2a203ef14d16557d7c1fd8",
-        "timestamp": "2026-11-23T17:11:17Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.16-dev/Jellyfin.Plugin.SubdlSync_12.3.8.16.zip",
+        "checksum": "82652e89a283b20d29497da78cd88fb4",
+        "timestamp": "2026-11-23T17:26:45Z"
       }
     ]
   }
