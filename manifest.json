@@ -12,9 +12,9 @@
         "version": "12.3.8.21",
         "changelog": "v12.3.8.21: a row that is already gone no longer aborts the database cleanup — \"already gone\" counts as done.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.21-dev/Jellyfin.Plugin.SubdlSync_12.3.8.21.zip",
-        "checksum": "584ef48e1838b58afeb070073a110dfe",
-        "timestamp": "2026-11-23T19:05:33Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.21/Jellyfin.Plugin.SubdlSync_12.3.8.21.zip",
+        "checksum": "2dfb7d4831ea1fb78e1ba2be5156888a",
+        "timestamp": "2026-11-23T19:09:40Z"
       }
     ]
   }
