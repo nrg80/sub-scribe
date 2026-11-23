@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.25",
-        "changelog": "v12.3.8.25: cross-contamination is coded per source — each source declares where a subtitle downloaded there may still go. All three declare: nowhere.",
+        "version": "12.3.8.26",
+        "changelog": "v12.3.8.26: the upload gate loops over a list of sources instead of naming three — one rule, and a fourth source joins by itself.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.25-dev/Jellyfin.Plugin.SubdlSync_12.3.8.25.zip",
-        "checksum": "fcbbfe9a3aa982ae9b3ed1ae47167d12",
-        "timestamp": "2026-11-23T21:49:40Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.26-dev/Jellyfin.Plugin.SubdlSync_12.3.8.26.zip",
+        "checksum": "c801936a1c9fa892b6a0cee20a5d88d0",
+        "timestamp": "2026-11-23T22:03:56Z"
       }
     ]
   }
