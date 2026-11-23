@@ -823,6 +823,22 @@
     "T363": {
       "suite": "gui-structure",
       "checks": 1
+    },
+    "T364": {
+      "suite": "gui-structure",
+      "checks": 1
+    },
+    "T365": {
+      "suite": "sources",
+      "checks": 1
+    },
+    "T366": {
+      "suite": "gui-structure",
+      "checks": 1
+    },
+    "T367": {
+      "suite": "gui-structure",
+      "checks": 1
     }
   }
 }

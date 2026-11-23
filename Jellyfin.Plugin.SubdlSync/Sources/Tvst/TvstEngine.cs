@@ -73,19 +73,19 @@ public sealed class TvstEngine : ISourceEngine
         // Die Vorgaben sind die des Betreibers vom 15.11.2026 (F-M503): Download an, Upload aus — ein
         // Upload verlässt den Rechner und ist deshalb opt-in.
         new(FieldUploadEnabled, "Upload", SourceFieldKind.Switch, Default: "false", Group: SourceField.Badges,
-            Help: "Default: off."),
+            Help: null),
         new(FieldDownloadEnabled, "Download", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
-            Help: "Default: on."),
+            Help: null),
         new(FieldPacksEnabled, "Packs", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
-            Help: "Default: on."),
+            Help: null),
         new(FieldReportEnabled, "Report", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
-            Help: "Default: on."),
+            Help: null),
 
         // F-M693 (Betreiberansage 22.11.2026: „Seadon zip toggle also for tvst"): Stufe 1 der Suche ist
         // die Staffel-ZIP — EIN Abruf für die ganze Staffel statt einer je Folge. Der Schalter sagt, ob
         // dieser Weg zuerst gegangen wird; aus heißt: nur der Einzelweg der Folgenseite.
         new(FieldPreferSeasonZip, "Prefer season ZIPs", SourceFieldKind.Switch, Default: "true",
-            Help: "One request per season."),
+            Help: null),
         // F-M692: die Adresse ist kein Feld mehr — sie steht fest im Client dieses Builds.
     };
 

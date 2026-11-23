@@ -2072,17 +2072,20 @@ def main():
           and "config.MovieSubtitlesDownloadEnabled =" not in page_src,
           "Zuweisungen an die Alt-Felder in der Seite")
 
-    # F-M698 (Betreiberansage 22.11.2026: "Und order muss jetzt auf der general gui sein. Und fuer jede
-    # Anzahl quellen funktionieren. Dh da muss auch iwie das Eingabefeld angepasst werden"): der alte
-    # Zwei-Werte-Kasten ist WEG. Die Reihenfolge steht auf dem General-Reiter und wird aus der Antwort des
-    # Quellen-Endpunkts gebaut — eine Zeile je Quelle, jede mit zwei Pfeilen.
-    check("F-M698: the order lives on the General tab and no two-value order box survives",
-          'id="SourceOrderBlock"' in general_part
-          and 'id="SourceOrderRows"' in general_part
-          and 'id="SourceOrderValue"' in general_part
+    # F-M703 (Betreiberansage 22.11.2026: "Source order bitte direkt bei endpoints unter der Ueberschrift
+    # einsortieren"): der Block steht im Abschnitt "Endpoints" — direkt unter der Ueberschrift und VOR den
+    # Karten. Der Abschnitt liegt im General-Reiter; entscheidend ist die Position im Abschnitt.
+    _ep_start = page_src.find('<h3>Endpoints</h3>')
+    _ep_ende = page_src.find('<h3>Media files</h3>', _ep_start)
+    bereich = page_src[_ep_start:_ep_ende if _ep_ende > _ep_start else len(page_src)]
+    check("F-M703: the order sits under the Endpoints heading, before the cards",
+          bereich.find('id="SourceOrderBlock"') >= 0
+          and bereich.find('id="SourceOrderBlock"') < bereich.find('id="SourceCards"')
+          and 'id="SourceOrderRows"' in bereich
+          and 'id="SourceOrderValue"' in bereich
           and 'id="DownloadOrder"' not in page_src
           and '><option value="TvSubtitlesFirst"' not in page_src,
-          "Ordnung auf General, Alt-Kasten weg")
+          "Reihenfolge im Endpoints-Abschnitt, Alt-Kasten weg")
 
     check("F-M698: the order list is built from the endpoint answer — one row per source",
           "function subdlOrderSeed(payload)" in page_src
@@ -2092,6 +2095,15 @@ def main():
           and "subdlOrderSeed(payload);" in page_src
           and "subdlOrderDraw(payload);" in page_src,
           "Zeilen aus payload.quellen, nicht aus einer festen Liste")
+
+    # F-M702 (Betreiberansage 22.11.2026: "und das bla blah weglassen. nur apikey email for login und
+    # Passwort. keine weitere Beschreibung, kein set."): kein Platzhalter, keine "set"-Zeile, keine
+    # Beschreibung an einem Geheimfeld — die Ampel sagt, ob die Datei vollstaendig ist.
+    check("F-M702: a secret field carries no placeholder and no 'set' marker",
+          "set — type to replace" not in page_src
+          and "subdl-source-secret-state" not in page_src
+          and "input.placeholder = '';" in page_src,
+          "kein Platzhalter, keine set-Zeile")
 
     # F-M700 (Betreiberansage 22.11.2026: "Und die Statusampel fur den jeweiligen endpoint oben unter der
     # Ueberschrift im jeweiligen endPoint Kaestchen anzeigen/verschieben"): die Ampel ist eine eigene Zeile
@@ -2109,6 +2121,15 @@ def main():
           "subdl-source-key" not in page_src
           and "nameTeil.title = 'source key: ' + entry.key" in page_src,
           "kein Schluessel-Element mehr im Kopf")
+
+    # F-M701: ohne gespeicherte Liste zeigt die Ordnung die ALTE Einstellung — sonst zeigt die Oberfläche
+    # die Reihenfolge der Engines (subdl zuerst), während der Lauf "tvst first" fährt. Im Browser gemessen:
+    # vor der Korrektur stand "1. SubDL" bei DownloadOrder=TvSubtitlesFirst.
+    check("F-M701: with no saved list the order shows the old two-value setting",
+          "'subdl,tvsubtitles,moviesubtitles'" in page_src
+          and "'tvsubtitles,moviesubtitles,subdl'" in page_src
+          and "if (!liste) {" in page_src,
+          "Vorbelegung aus DownloadOrder")
 
     check("F-M698: the page saves the list and derives the old two-value field from it",
           "config.SourceOrderList = ordnungFeld" in page_src
@@ -2259,10 +2280,12 @@ def main():
           and "subdlSourceApplyVisibility(card)" in quellen,
           "a condition read only at page build would leave 'account' hidden after entering a key")
 
-    check("F-M688: a secret reads as 'set' / 'not set', and a secret in the box counts as set",
-          "'set' : 'not set'" in quellen
-          and "(abgelegt || ctrl.value.length > 0)" in quellen,
-          "typing a key must reveal the field that depends on it, without a save first")
+    # F-M702 hat "set"/"not set" abgeschafft; von F-M688 bleibt die Absicht: ein getippter Schluessel
+    # muss das Feld, das von ihm abhaengt, sofort zeigen — ohne erst zu speichern.
+    check("F-M688: a typed secret reveals the field that depends on it, without a save first",
+          "(abgelegt || ctrl.value.length > 0)" in quellen
+          and "subdlSourceApplyVisibility" in quellen,
+          "Abhaengigkeit ohne Speichern sichtbar")
 
     _secret_branch = ""
     _sb = quellen.find("if (field.kind === 'secret') {")
@@ -2364,17 +2387,17 @@ def main():
 
     # Die Woerter, die eine Karte selbst schreibt: on/off, Save, set/not set. Der Bedingungswert
     # im Schema ist sprachneutral ("set"), damit die Engine nicht die Sprache der Oberflaeche kennt.
-    check("F-M690: the card's own words are English (on/off, Save, set/not set) and the schema's "
+    # F-M702: "set"/"not set" gibt es nicht mehr — die Karte zeigt nur on/off und Save.
+    check("F-M690: the card's own words are English (on/off, Save) and the schema's "
           "condition value is language-neutral",
           "entry.configured ? 'on' : 'off'" in quellen
           and "save.textContent = 'Save';" in quellen
-          and "field.gesetzt ? 'set' : 'not set'" in quellen
           # Die Anzeige ist englisch — der FELDNAME 'gesetzt'/'Gesetzt' bleibt, er ist der
           # Schluessel im Endpunkt (Gesetzt), kein angezeigtes Wort.
           and "'nicht gesetzt'" not in quellen
           and "field.gesetzt ? 'gesetzt'" not in quellen
-          and '"set")' in read_source("Sources", "Subdl", "SubdlEngine.cs"),
-          "on/off, Save, set/not set; VisibleWhen = \"set\"")
+          and "'not set'" not in quellen
+          and "'set'" not in quellen)
 
     # ---- F-M692: die Karte bleibt karg -----------------------------------------------------------
     # Betreiberbefund 22.11.2026, woertlich: "Well address is not needed. All these badges reduce to
@@ -2384,11 +2407,14 @@ def main():
     # (c) ein Geheimfeld SIEHT gefuellt aus und ist ein normales Eingabefeld — es trug ein
     # is="emby-input", das der Browser an einem per JS erzeugten Element NICHT mehr aufwertet, weshalb
     # es im dunklen Theme praktisch unsichtbar blieb.
-    check("F-M692: a secret field is a real, visible input that LOOKS filled",
+    # F-M702 hat den Platzhalter abgeschafft; von F-M692 bleibt: das Geheimfeld ist ein echtes,
+    # sichtbares Eingabefeld, und sein Wert steht nirgends im DOM.
+    check("F-M692/F-M702: a secret field is a real input with no placeholder and no value in the DOM",
           "input.style.width = '100%'" in quellen
-          and "input.placeholder = field.gesetzt ?" in quellen
-          and "input.setAttribute('is', 'emby-input')" not in quellen,
-          "Platzhalter set/not set, kein totes is=emby-input")
+          and "input.placeholder = '';" in quellen
+          and "input.type = 'password'" in quellen
+          and "Ein Geheimnis bekommt KEIN data-value" in quellen,
+          "echtes Feld, kein Platzhalter, kein Wert im DOM")
     check("F-M692: the card no longer draws an address field",
           "field.kind === 'url'" in page_src and "'SourceField-' + entry.key + '-' + field.key" in page_src,
           "die Karte kennt die Art noch, aber keine Quelle erklaert sie mehr (sources: F-M692)")

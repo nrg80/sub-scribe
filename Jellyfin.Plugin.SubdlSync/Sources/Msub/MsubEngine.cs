@@ -57,7 +57,7 @@ public sealed class MsubEngine : ISourceEngine
         // darf, wäre eine Behauptung: der Upload dieser Adresse ist bis zur belegten Sprachabbildung
         // gesperrt (F-M508, Betreiber: „Bevor wir falsche Sprachen hochladen, laden wir nix hoch.").
         new(FieldDownloadEnabled, "Download", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
-            Help: "Default: on."),
+            Help: null),
         // F-M692: die Adresse ist kein Feld mehr — sie steht fest im Client dieses Builds.
         // F-M695 (Betreiberbefund 22.11.2026: „Not sure what access means for mst."): auch das Feld
         // "Access" ist weg. Es war von Anfang an leer und sein Hilfetext sagte selbst, dass die Seite

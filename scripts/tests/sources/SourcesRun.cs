@@ -508,16 +508,16 @@ internal static class Program
             // F-M697 (Betreiberansage 22.11.2026: „Too much talk in sources gui description. See previous
             // implementation"): jede Beschreibung ist ein paar Woerter — wie in der vorherigen Umsetzung
             // („Default: off."). Ein Satz mit Begruendung gehoert in die Doku, nicht auf die Karte.
-            var zuLang = registry.Engines
-                .SelectMany(e => e.Fields.Select(f => (e.Capabilities.Key, f.Key, f.Help)))
-                .Where(t => t.Help is { Length: > 40 })
+            // F-M702 (Betreiberansage 22.11.2026: „und das bla blah weglassen … keine weitere Beschreibung"):
+            // eine Karte traegt GAR KEINE Beschreibung mehr — nur Beschriftungen und Schalter.
+            var mitText = registry.Engines
+                .SelectMany(e => e.Fields.Select(f => (Quelle: e.Capabilities.Key, Feld: f.Key, Text: f.Help)))
+                .Where(t => !string.IsNullOrWhiteSpace(t.Text))
                 .ToList();
-            Check(zuLang.Count == 0,
-                "F-M697: keine Beschreibung auf einer Karte ist laenger als 40 Zeichen",
-                zuLang.Count == 0 ? "laengste: " + registry.Engines
-                        .SelectMany(e => e.Fields.Select(f => f.Help ?? string.Empty))
-                        .OrderByDescending(h => h.Length).First()
-                    : string.Join(" | ", zuLang.Select(t => t.Item1 + "/" + t.Item2 + " = " + t.Help)));
+            Check(mitText.Count == 0,
+                "F-M702: keine Quelle haengt eine Beschreibung an ein Feld — die Karte sagt nur, was das Feld ist",
+                mitText.Count == 0 ? "0 Beschreibungen" : string.Join(" | ",
+                    mitText.Select(t => t.Quelle + "/" + t.Feld + " = " + t.Text)));
 
             // F-M696: die Art der Quelle steht als Variable in den Faehigkeiten — nicht als Name.
             var arten = registry.Engines.ToDictionary(

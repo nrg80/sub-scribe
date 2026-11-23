@@ -94,30 +94,30 @@ public sealed class SubdlEngine : ISourceEngine
         // Each with it's own toogle"). F-M691 hatte die beiden Richtungen schon hierher geholt; jetzt
         // kommen Packs und Meldung dazu, weil auch sie Eigenschaften DIESER Quelle sind.
         new(FieldUploadEnabled, "Upload", SourceFieldKind.Switch, Default: "false", Group: SourceField.Badges,
-            Help: "Default: off."),
+            Help: null),
         new(FieldDownloadEnabled, "Download", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
-            Help: "Default: on."),
+            Help: null),
         new(FieldPacksEnabled, "Packs", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
-            Help: "Default: on."),
+            Help: null),
         new(FieldReportEnabled, "Report", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
-            Help: "Default: on."),
+            Help: null),
         new(FieldApiKey, "API key", SourceFieldKind.Secret, Default: string.Empty, Required: true,
-            Help: "From your SubDL account."),
+            Help: null),
         // F-M694 (Betreiberansage 22.11.2026: „Subdl... Api key, email, password."): die drei Zugänge,
         // die ein Mensch bei SubDL einträgt. Bis hierher stand hier „Account"; die Seite sagte damit
         // nicht, was hineingehört (nämlich die E-Mail-Adresse des Kontos). Der Schlüssel in der Datei
         // bleibt `account` — er ist der stabile Name, an dem der Bestand hängt.
         new(FieldAccount, "Email", SourceFieldKind.Text,
-            Help: "Used to sign in.",
+            Help: null,
             VisibleWhen: new SourceFieldVisibility(FieldApiKey, "set")),
         new(FieldPassword, "Password", SourceFieldKind.Secret,
-            Help: "Only for uploads.",
+            Help: null,
             VisibleWhen: new SourceFieldVisibility(FieldApiKey, "set")),
         // F-M692: die Adresse ist KEIN Feld mehr (Betreiberansage 22.11.2026: „Well address is not
         // needed … Url is fixed, no gui need"). Sie steht als Konstante im Client dieses Builds; eine
         // Einstellung dafür wäre eine Frage, die niemand beantworten muss.
         new(FieldPreferSeasonZip, "Prefer season ZIPs", SourceFieldKind.Switch, Default: "true",
-            Help: "One request per season."),
+            Help: null),
     };
 
     private readonly ScribeApiClient _client;

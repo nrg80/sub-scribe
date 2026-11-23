@@ -121,6 +121,18 @@
                              dieser Seite verschwunden: ihr Wert lebt in sources/subdl.json als
                              account und apiKey (F-M683, Uebernahme beim ersten Start). -->
                         <h3>Endpoints</h3>
+<!-- F-M703 (Betreiberansage 22.11.2026: "Source order bitte direkt bei endpoints unter der Ueberschrift
+     einsortieren"): die Reihenfolge steht DIREKT unter der Ueberschrift "Endpoints", vor den Karten —
+     sie gehoert zu den Quellen, nicht zum allgemeinen Teil. Die Liste baut sich aus der Antwort des
+     Quellen-Endpunkts (eine Zeile je Quelle, jede Anzahl), der alte Zwei-Werte-Kasten ist weg.
+     F-M698 (Liste statt zwei Werten) und F-M701 (Vorbelegung aus der alten Einstellung) gelten weiter. -->
+                        <div class="selectContainer" id="SourceOrderBlock">
+                            <label class="selectLabel">Source order</label>
+                            <div class="fieldDescription">Asked in this order — the first one that has the subtitle wins.</div>
+                            <div id="SourceOrderRows"></div>
+                            <input id="SourceOrderValue" name="SourceOrderValue" type="hidden" value="" />
+                        </div>
+
                         <div id="SourceCards"></div>
 
                         <h3>Media files</h3>
@@ -195,20 +207,7 @@
                                  box-sizing together give Save's exact footprint. -->
                             <!-- F-M270: ONE page-wide refresh button at the end of the General tab reloads every live
                             readout in one click. -->
-                            <!-- F-M698 (Betreiberansage 22.11.2026: "Und order muss jetzt auf der general gui sein. Und fuer jede
-     Anzahl quellen funktionieren. Dh da muss auch iwie das Eingabefeld angepasst werden"): die
-     Reihenfolge der Quellen steht auf dem General-Reiter, und die Liste baut sich aus der Antwort des
-     Quellen-Endpunkts — eine Zeile je Quelle, egal wie viele es sind. Der alte Zwei-Werte-Kasten
-     alte Zwei-Werte-Kasten ("tvst first" / "SubDL first") faellt weg: er konnte eine dritte Quelle
-     nicht ausdruecken. -->
-                        <div class="selectContainer" id="SourceOrderBlock">
-                            <label class="selectLabel">Source order</label>
-                            <div class="fieldDescription">Asked in this order — the first one that has the subtitle wins.</div>
-                            <div id="SourceOrderRows"></div>
-                            <input id="SourceOrderValue" name="SourceOrderValue" type="hidden" value="" />
-                        </div>
-
-<!-- F-M53: manual run buttons and the statistics reset sit on the General tab. -->
+                            <!-- F-M53: manual run buttons and the statistics reset sit on the General tab. -->
                             <button is="emby-button" type="button" class="raised button-submit block emby-button" id="RefreshSubdlStatus" style="display:block;width:100%;box-sizing:border-box;background-color:#424242;border-color:#5a5a5a;color:rgba(255,255,255,0.85);">Refresh status</button>
                         </div>
 
@@ -803,7 +802,6 @@
            Reihe bleiben. */
         .subdl-badge .fieldDescription { display: none; }
         .subdl-source-hint { font-size: 0.9em; color: #ffc107; margin: 0.3em 0; }
-        .subdl-source-secret-state { font-size: 0.85em; opacity: 0.8; margin-left: 0.5em; }
         .subdl-source-state-row { margin: 0.15em 0 0.35em 0; }
         .subdl-source-serves { margin-left: 0.5em; padding: 0.05em 0.5em; border-radius: 0.7em;
             border: 1px solid rgba(255,255,255,0.25); font-size: 0.78em; opacity: 0.8;
@@ -2212,17 +2210,13 @@ workers.forEach(function (w) {
                 boxWrap.appendChild(input);
 
                 if (field.kind === 'secret') {
-                    // Der EINZIGE Ausdruck ueber den Inhalt: ob eines abgelegt ist.
+                    // F-M702 (Betreiberansage 22.11.2026: "kein set"): Das Feld traegt KEINEN Hinweis
+                    // mehr — keinen Platzhalter, kein "set", kein "not set". Ob ein Geheimnis abgelegt
+                    // ist, sagt die Ampel oben: "on" heisst, die Datei dieser Quelle ist vollstaendig
+                    // (Pflichtfeld gefuellt), "off" heisst, es fehlt etwas. Ein zweiter Hinweis im Feld
+                    // war Larm — und der Wert selbst verlaesst das Plugin nie.
                     row.setAttribute('data-gesetzt', field.gesetzt ? 'true' : 'false');
-
-                    // F-M692: das Feld SIEHT gefuellt aus, ohne den Wert zu tragen — der Platzhalter
-                    // sagt, dass ein Geheimnis abgelegt ist, und dass Tippen es ersetzt. Vorher stand die
-                    // Auskunft nur als kleines Wort neben einem leeren Kasten („Api key not filled").
-                    input.placeholder = field.gesetzt ? '•••••••• set — type to replace' : 'not set';
-                    var state = subdlSourceEl('span', 'subdl-source-secret-state',
-                        field.gesetzt ? 'set' : 'not set');
-                    state.id = 'SourceSecret-' + entry.key + '-' + field.key;
-                    boxWrap.appendChild(state);
+                    input.placeholder = '';
                 } else {
                     // Ein Geheimnis bekommt KEIN data-value — der Wert steht damit nirgends im DOM.
                     row.setAttribute('data-value',
@@ -2275,8 +2269,9 @@ workers.forEach(function (w) {
                 if (!ctrl) { return null; }
                 var kind = row.getAttribute('data-source-field-kind');
                 if (kind === 'secret') {
+                    // F-M702: beim Speichern wird nur noch der WERT geschickt, keine Auskunft darueber.
                     var abgelegt = row.getAttribute('data-gesetzt') === 'true';
-                    return (abgelegt || ctrl.value.length > 0) ? 'set' : 'not set';
+                    return (abgelegt || ctrl.value.length > 0) ? true : false;
                 }
                 if (kind === 'switch') { return ctrl.checked ? 'true' : 'false'; }
                 return String(ctrl.value);
@@ -2469,7 +2464,19 @@ workers.forEach(function (w) {
             function subdlOrderSeed(payload) {
                 var quellen = (payload && payload.quellen) || [];
                 var vorhanden = quellen.map(function (q) { return q.key; });
-                var gespeichert = ((SubdlSyncConfig.config && SubdlSyncConfig.config.SourceOrderList) || '')
+                var liste = (SubdlSyncConfig.config && SubdlSyncConfig.config.SourceOrderList) || '';
+
+                // F-M701: ist noch keine Liste gespeichert, gilt die ALTE Zwei-Werte-Einstellung — und genau
+                // die muss auch angezeigt werden. Ohne diesen Rückfall zeigte die Liste die Reihenfolge der
+                // Engines (subdl zuerst), während der Lauf mit "tvst first" arbeitet: die Oberfläche log,
+                // bis der Betreiber einmal speicherte.
+                if (!liste) {
+                    liste = (SubdlSyncConfig.config && SubdlSyncConfig.config.DownloadOrder === 'SubdlFirst')
+                        ? 'subdl,tvsubtitles,moviesubtitles'
+                        : 'tvsubtitles,moviesubtitles,subdl';
+                }
+
+                var gespeichert = liste
                     .split(',')
                     .map(function (k) { return k.trim(); })
                     .filter(function (k, i, a) { return k && a.indexOf(k) === i; });

@@ -1,7 +1,7 @@
 # Requirements Specification — Jellyfin Plugin "Sub Scribe" (Upload + Download)
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.9.
+**Status:** Implementation — v12.3.8.10.
 
 **Die Begründungen (warum eine Regel gilt, Messungen, Vorfälle) stehen nicht hier, sondern lokal in der Methodik-Ablage, nach Kapiteln sortiert und mit der Requirement-Nummer
 markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test — sonst nichts.**
@@ -33,7 +33,7 @@ markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
 - [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 46 requirements
-- [14. Data Model and Persistence](#14-data-model-and-persistence) — 55 requirements
+- [14. Data Model and Persistence](#14-data-model-and-persistence) — 58 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 51 requirements
 - [16. Non-Goals](#16-non-goals)
 - [17. Non-Functional Requirements](#17-non-functional-requirements)
@@ -1976,6 +1976,12 @@ Grund (gemessen 18.11.2026): die Queue entsteht nur aus offenen Stempeln (F-M557
 
 **F-M700 [D]:** **Die Statusampel einer Quelle steht als eigene Zeile direkt unter der Überschrift ihrer Karte.** Betreiberansage 22.11.2026, wörtlich: „Und die Statusampel fur den jeweiligen endpoint oben unter der Überschrift im jeweiligen endPoint Kästchen anzeigen/verschieben." Das `on`/`off` stand neben dem Namen in der Kopfzeile und war damit Teil einer Zeile, die zugleich Name und Art trägt; jetzt hat es seine eigene Zeile unter dem Kopf (`.subdl-source-state-row`), vor der Schalterreihe. Die Ampel sagt weiter dasselbe: `on`, wenn die Datei der Quelle lesbar ist und kein Pflichtfeld leer ist (F-M683), sonst `off` mit dem Hinweis darunter.
 
+**F-M701 [D]:** **Ohne gespeicherte Liste zeigt die Ordnung die alte Einstellung — nicht die Reihenfolge der Engines.** Beim Prüfen im Browser (Chromium, echte Seite mit gestelltem Endpunkt) stand auf dem General-Reiter „1. SubDL", während der Lauf mit `DownloadOrder = TvSubtitlesFirst` fuhr: die Liste hatte sich aus der Antwort des Endpunkts vorbelegt und damit die Wahrheit des Laufs verdeckt. Das ist die Sorte Lüge, die ein einziges Speichern in eine falsche Einstellung verwandelt. Jetzt gilt: ist `SourceOrderList` leer, wird sie aus `DownloadOrder` vorbelegt (`tvsubtitles,moviesubtitles,subdl` bzw. `subdl,tvsubtitles,moviesubtitles`) — Anzeige und Lauf sagen dasselbe. Gemessen nach der Korrektur: `1. tvsubtitles.net`, `2. moviesubtitles.org`, `3. SubDL`.
+
+**F-M702 [D]:** **Eine Karte sagt nur, was ein Feld ist — sonst nichts.** Betreiberansage 22.11.2026, wörtlich: „und das bla blah weglassen. nur apikey email for login und Passwort. keine weitere Beschreibung, kein set. kein only for uploads, kein used to sign in" und „Kein one rewuest per season an keinem der 2 pack schalter". Damit fällt die letzte Stufe der Beschreibungen weg, die F-M697 noch auf ein paar Wörter gekürzt hatte: **kein Feld einer Karte trägt einen Hilfetext** (alle Engines erklären `Help: null`), und ein Geheimfeld trägt **keinen Platzhalter und keine `set`/`not set`-Zeile** mehr. Die Auskunft „ist ein Geheimnis abgelegt?" bleibt vorhanden, aber an EINER Stelle: die Ampel oben sagt `on`, wenn die Datei der Quelle vollständig ist und kein Pflichtfeld leer ist (F-M683/F-M700) — sie ist die Zusammenfassung genau dieser Frage. Der Wert eines Geheimnisses verlässt das Plugin weiterhin nie (F-M683); beim Speichern geht nur ein wirklich getippter Wert mit, ein leeres Feld lässt das Abgelegte stehen. Auf der Karte bleiben damit: Name, Ampel, vier Schalter, die Feldbeschriftungen (`API key`, `Email`, `Password`, `Prefer season ZIPs`) mit `Required` am Pflichtfeld, und `Save`.
+
+**F-M703 [D]:** **Die Reihenfolge steht direkt unter der Überschrift „Endpoints", vor den Karten.** Betreiberansage 22.11.2026, wörtlich: „Source order bitte direkt bei endpoints unter der Überschrift einsortieren." Der Block war mit F-M698 auf den General-Reiter gewandert; dort gehört er nicht hin, denn er ordnet die Quellen und nicht den Lauf. Jetzt sitzt er im Abschnitt **Endpoints** unmittelbar nach der Überschrift und **vor** den Karten — eine Zeile je Quelle mit Name, Art (F-M696) und zwei Pfeilen, gespeichert in `SourceOrderList` (F-M698), vorbelegt aus `DownloadOrder`, solange nichts gespeichert ist (F-M701). Am General-Reiter steht er nicht mehr.
+
 #### 14.9 Die Marken-Matrix — die einzige Wahrheit (bis Schema 22; abgelöst durch 14.11)
 
 Die Matrix ist seit 12.3.0.0 der **einzige** Ort, an dem ein Quellen-Urteil steht: eine Zeile je (Medium, Quelle, Art) in der Tabelle `source_matrix` — und bei `track`/`track-hi` je (Medium, Quelle, Art, Sprache, HI, **Position**) (Schema 20, F-M669). Seit 12.3.0.2 (Schema 21, F-M670) ist sie auch der einzige Ort für die **Quellen-Ids**: es gibt keine Alt-Tabelle `source_marks` und keine Spalte `SubdlId` mehr. Die breiten Spalten, aus denen sie bis 12.2.0.28 gefüllt wurde, sind aus der Live-Datei **entfernt**; der Altbestand lebt allein in der Sicherungsdatei weiter. Es gibt keinen zweiten Datenbestand und keinen zweiten Lesepfad.
@@ -2824,6 +2830,14 @@ Kein Grund, keine Vorgeschichte, keine Bitte, kein Vorschlag. Gebaut in `Pipelin
 **T362:** Der Kartenkopf nennt den Namen einmal (F-M699), in `gui-structure` — **1 Prüfung**: kein `subdl-source-key`-Element mehr im Kartenkopf, der Schlüssel hängt als `title` am Namen.
 
 **T363:** Die Ampel steht unter der Überschrift (F-M700), in `gui-structure` — **1 Prüfung**: der Kartenkopf trägt kein `subdl-source-state`-Element mehr, die Ampel sitzt in einer eigenen Zeile (`.subdl-source-state-row`) direkt nach dem Kopf.
+
+**T364:** Die Ordnung zeigt ohne gespeicherte Liste die alte Einstellung (F-M701), in `gui-structure` — **1 Prüfung**: beide Vorbelegungen (`tvsubtitles,moviesubtitles,subdl` und `subdl,tvsubtitles,moviesubtitles`) stehen in der Seite, und der Rückfall ist an `if (!liste)` gebunden.
+
+**T365:** Eine Karte sagt nur, was ein Feld ist (F-M702) — **1 Prüfung** in `sources`: keine Engine gibt einem Feld einen Hilfetext mit (0 Beschreibungen über alle drei Quellen).
+
+**T366:** Die Reihenfolge steht unter Endpoints (F-M703), in `gui-structure` — **1 Prüfung**: der Block `SourceOrderBlock` liegt im Abschnitt zwischen der Überschrift `Endpoints` und `Media files`, **vor** `SourceCards`, und nicht mehr im General-Reiter.
+
+**T367:** Ein Geheimfeld trägt weder Platzhalter noch `set`-Zeile (F-M702), in `gui-structure` — **1 Prüfung**: `set — type to replace` und `subdl-source-secret-state` kommen in der Seite nicht vor, dafür `input.placeholder = ''`.
 
 **T336:** Die vier Ebenen und die drei Quellen-Tabellen seit Schema 23 (F-M672…F-M677), in `storex` gegen echte Altdateien: Kennungsformen `[xxxx]`/`#yyyyy`/`#yyyyy#zzz`/`#yyyyy&zzz`, ein Nummernkreis je Datei über Spur und Seitenwagen, `pack_track` mit Fremdschlüsseln, `upload`/`reference`/`badapple` mit einer Subjekt-Spalte, keine fremde Kennung außerhalb `reference`/`badapple`, `source_matrix` und `rejected_candidates` nach dem Aufstieg weg, `OriginId` ohne Wertverlust nach `reference`, Aufstieg 17→23 und 22→23 mit genau einer Sicherung und einem zweiten Start, der nichts tut — **15 Prüfungen**, die letzte für die Quellenneutralitaet von `badapple` (auch eine nicht-numerische Kennung wie `download-3234-2-en` neben einer SubDL-Nummer).
 
