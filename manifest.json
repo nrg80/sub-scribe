@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.18",
-        "changelog": "v12.3.8.18: an exhausted quota takes that one source out of the run — the other sources keep working (download and upload).",
+        "version": "12.3.8.19",
+        "changelog": "v12.3.8.19: the same rule for every failure — a rejected key or the hourly cap takes only that source out, the others keep uploading.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.18-dev/Jellyfin.Plugin.SubdlSync_12.3.8.18.zip",
-        "checksum": "23c4a9d7352e3ab14764ca33c2b5ce4f",
-        "timestamp": "2026-11-23T18:05:06Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.19-dev/Jellyfin.Plugin.SubdlSync_12.3.8.19.zip",
+        "checksum": "d024ce60135587f4f24bd8b57c7324d4",
+        "timestamp": "2026-11-23T18:10:53Z"
       }
     ]
   }
