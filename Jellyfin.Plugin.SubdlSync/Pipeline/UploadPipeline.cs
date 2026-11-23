@@ -3725,9 +3725,21 @@ public sealed class UploadPipeline : IPackFiller
                 // ausgefallen, die andere macht weiter. Vorher riss so ein Timeout den ganzen Lauf ab
                 // (gemessen 17.11.2026: moviesubtitles antwortete 90 s nicht, der Lauf endete mit
                 // „cancelled — 0 uploaded", obwohl SubDL den Untertitel schon angenommen hatte).
+                // F-M715 (Betreiberansage 22.11.2026: „Wenn eine Quelle ausfällt machen die anderen
+                // weiter" — und die ausgefallene wird nicht je Spur erneut 90 s lang gefragt): eine
+                // Quelle, die in den Timeout laeuft, ist fuer den REST des Laufs draussen. Dieselbe
+                // Regel wie F-M592 im Download; der naechste Lauf fragt sie wieder.
                 _logger.LogWarning(
                     "[Sub Scribe] source {Source} did not answer for {Name} [{Lang}] (client timeout) — the other source keeps going.",
                     Api.Endpoints.Provenance.Name(quelle), neutralName, lang);
+                if (_quellenAus.Add(quelle))
+                {
+                    _logger.LogWarning(
+                        "[Sub Scribe] {Source} stays out for the rest of this run — a source that stops answering is not "
+                        + "asked again for every track (F-M715).",
+                        Api.Endpoints.Provenance.Name(quelle));
+                }
+
                 return UploadResult.NoVerdict("timeout");
             }
             catch (OperationCanceledException)

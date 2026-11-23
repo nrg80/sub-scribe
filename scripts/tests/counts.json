@@ -883,6 +883,10 @@
     "T378": {
       "suite": "sources",
       "checks": 2
+    },
+    "T379": {
+      "suite": "sources",
+      "checks": 1
     }
   }
 }

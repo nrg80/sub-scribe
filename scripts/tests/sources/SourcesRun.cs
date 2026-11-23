@@ -692,6 +692,14 @@ internal static class Program
                 "F-M714: beide Faelle nennen die Regel im Klartext (nur diese Quelle ist draussen)",
                 "zwei Meldungen mit der Regel");
 
+            // F-M715: eine Quelle, die in den Timeout laeuft, bleibt fuer den Rest des Laufs draussen —
+            // sonst zahlt jede weitere Spur erneut den vollen Client-Timeout.
+            Check(f713Upload.Contains("_quellenAus.Add(quelle)", StringComparison.Ordinal)
+                  && f713Upload.Contains("(F-M715)", StringComparison.Ordinal)
+                  && f713Upload.Contains("the other source keeps going", StringComparison.Ordinal),
+                "F-M715: ein Timeout nimmt die Quelle fuer den Rest des Laufs heraus, die andere macht weiter",
+                "Merker + Meldung im Timeout-Zweig");
+
             string zugangDir = Path.Combine(Path.GetTempPath(), "sub-scribe-zugang-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path.Combine(zugangDir, "sources"));
             Func<string?> vorherZugang = SourceSwitches.DataFolder;
