@@ -1483,6 +1483,24 @@ public sealed class ScribeSqliteContext : DbContext
                 ex.Message);
             return base.SaveChanges();
         }
+        catch (DbUpdateConcurrencyException ex)
+        {
+            // F-M716 (Befund 23.11.2026, 19:46): eine Zeile, die beim Schreiben schon weg war, ist für ein
+            // DELETE kein Fehler — das Ziel ist erreicht. Für ein UPDATE gibt es nichts mehr zu schreiben.
+            // Vorher riss genau das den Datenbank-Refresh nach 15 s ab und der Status stand auf „fail",
+            // obwohl die Absicht (Zeile ist weg) längst erfüllt war.
+            var verschwunden = ex.Entries.ToList();
+            foreach (var eintrag in verschwunden)
+            {
+                eintrag.State = EntityState.Detached;
+            }
+
+            Logger?.LogWarning(
+                "[Sub Scribe-DB] {Count} row(s) were already gone when the write ran (delete or update hit 0 rows); "
+                + "dropped as done and the write was retried (F-M716).",
+                verschwunden.Count);
+            return base.SaveChanges();
+        }
     }
 
     /// <summary>F-M514: the one exception shape the tracker repair answers to.</summary>
@@ -2281,7 +2299,15 @@ public sealed class ScribeSet<TEntity>
         var compiled = predicate.Compile();
         lock (_db.Gate)
         {
-            var doomed = Rows().Where(compiled).ToList();
+            // F-M716 (Befund 23.11.2026, 19:46): wer dieselbe Zeile im selben Kontext zweimal zum Löschen
+            // anmeldet, dessen zweites DELETE trifft 0 Zeilen — und EF wirft dafür eine
+            // DbUpdateConcurrencyException, die den ganzen Aufraeumlauf abbrach (PruneOrphanedPacks →
+            // ForgetSubject, vier Loeschaufrufe hintereinander). Schon als gelöscht markierte Zeilen
+            // werden deshalb hier nicht noch einmal angemeldet: „ist schon weg" ist das Ziel, kein Fehler.
+            var doomed = Rows()
+                .Where(compiled)
+                .Where(e => _db.Entry(e).State != EntityState.Deleted)
+                .ToList();
             if (doomed.Count == 0)
             {
                 return 0;

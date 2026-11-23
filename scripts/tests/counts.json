@@ -887,6 +887,10 @@
     "T379": {
       "suite": "sources",
       "checks": 1
+    },
+    "T380": {
+      "suite": "seasonpack",
+      "checks": 2
     }
   }
 }
