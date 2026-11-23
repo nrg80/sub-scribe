@@ -602,15 +602,14 @@ internal static class Program
         Check("F-M656: every source of the gate is required, the film source has no default",
             !gateSrc.Contains("bool movieSubtitlesSwitch = false", StringComparison.Ordinal)
             && !gateSrc.Contains("bool movieSubtitlesAlready = false", StringComparison.Ordinal)
-            // F-M720: die Herkunftsfrage wird je Quelle gestellt und von der Herkunftsquelle beantwortet —
-            // der Rueckfrager steht in der Signatur, die drei Quellen bleiben Pflicht.
-            && gateSrc.Contains("bool movieSubtitlesSwitch, bool movieSubtitlesAlready,", StringComparison.Ordinal)
-            && gateSrc.Contains("Func<string, IReadOnlyCollection<string>>? reuploadTargetsOf = null)", StringComparison.Ordinal));
+            && gateSrc.Contains("bool movieSubtitlesSwitch, bool movieSubtitlesAlready)", StringComparison.Ordinal));
 
         Check("F-M656: the early gate asks the film source too — it used to answer 'nothing to do' for a film",
             uploadSource.Contains("var gateFrueh = Api.Endpoints.UploadGate.Decide(", StringComparison.Ordinal)
-            && uploadSource.Contains("F-M656: die Filmquelle fehlte hier", StringComparison.Ordinal)
-            && uploadSource.Contains("SourceAllowed(Configuration.SubtitleProvider.MovieSubtitles) && !isSeries", StringComparison.Ordinal));
+            // F-M721: die Filmquelle wird nicht mehr von Hand angehaengt — die Ziele kommen aus der
+            // Registry, und welche Quelle eine Medienart fuehrt, sagt die Engine selbst (F-M696).
+            && uploadSource.Contains("Api.Endpoints.UploadGate.TargetsFrom(", StringComparison.Ordinal)
+            && !uploadSource.Contains("SourceAllowed(Configuration.SubtitleProvider.MovieSubtitles) && !isSeries", StringComparison.Ordinal));
 
         Check("F-M656: the pack key and the buffered pack upload name their source too",
             !ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/ScribeDbContext.cs"))
@@ -653,8 +652,9 @@ internal static class Program
         Check("the pipeline asks per source, through the one gate — twice, never inline",
             uploadSource.Contains("UploadGate.Decide(", StringComparison.Ordinal)
             && uploadSource.Split("UploadGate.Decide(").Length - 1 >= 2
-            // F-M669: das Tor fragt die Marke DIESER POSITION, nicht die des Paares.
-            && uploadSource.Contains("Registry.IsUploadedToPosition(mediaHash, SourceStore.PositionOf(loosePath != null, subPos), lang, hearingImpaired, Configuration.SubtitleProvider.TvSubtitles)", StringComparison.Ordinal)
+            // F-M669/F-M721: das Tor fragt die Marke DIESER POSITION, und zwar ueber den einen Helfer
+            // mit dem Quellenschluessel — kein Quellenname mehr im Aufruf.
+            && uploadSource.Contains("alreadyThere: key => AlreadyAt(", StringComparison.Ordinal)
             && !uploadSource.Contains("Registry.IsUploaded(mediaHash, cand.Lang", StringComparison.Ordinal));
 
         // ---- 12. "hochgeladen" je Quelle (F-M490) ---------------------------------------------
@@ -776,8 +776,8 @@ internal static class Program
             && !uploadSource.Contains("_config.IsUploadEnabled(Configuration.SubtitleProvider.TvSubtitles)", StringComparison.Ordinal));
         Check("the provenance gate still decides PER SOURCE — a refused source is skipped, the chain runs on (F-M495/F-M508)",
             uploadSource.Contains("if (!Api.Endpoints.UploadGate.May(gate, quelle))", StringComparison.Ordinal)
-            && uploadSource.Contains("Api.Endpoints.Provenance.OriginBlockedReason(herkunft, quelle, _sources.ReuploadTargetsOf)", StringComparison.Ordinal)
-            && uploadSource.Contains("Api.Endpoints.Provenance.MayUploadTo(herkunft, quelle, _sources.ReuploadTargetsOf)", StringComparison.Ordinal)
+            && uploadSource.Contains("Api.Endpoints.Provenance.OriginBlockedReason(herkunft)", StringComparison.Ordinal)
+            && uploadSource.Contains("Api.Endpoints.Provenance.MayUploadTo(herkunft, quelle)", StringComparison.Ordinal)
             && uploadSource.Contains("Api.Endpoints.UploadGate.Decide(", StringComparison.Ordinal));
 
         // ---- 16. Trockenlauf: eine Zeile je Quelle, keine Zugangsdaten (F-M496) -----------------
@@ -1700,7 +1700,8 @@ internal static class Program
             && uploadSource586.Contains("Api.TvSubtitlesClient.SiteLanguage(language) is not null && isSeries != false", StringComparison.Ordinal)
             && uploadSource586.Contains("Api.MovieSubtitlesClient.SiteLanguage(language) is not null && isSeries != true", StringComparison.Ordinal)
             && uploadSource586.Contains("bool nurSpracheAusgeschlossen = quellen.Count < alleQuellen.Count", StringComparison.Ordinal)
-            && uploadSource586.Contains("NimmtSprache(Configuration.SubtitleProvider.TvSubtitles, language, isSeries)", StringComparison.Ordinal));
+            && uploadSource586.Contains("alsoTakes: key => Api.Endpoints.Provenance.Provider(key) is { } quelle", StringComparison.Ordinal)
+            && uploadSource586.Contains("&& NimmtSprache(quelle, language, isSeries)", StringComparison.Ordinal));
         Check("F-M586: faellt die letzte offene Quelle nur wegen ihrer Sprachliste weg, traegt das Urteil den Grund unsupported-language",
             entitiesSource586.Contains("public const string UnsupportedLanguage = \"unsupported-language\"", StringComparison.Ordinal)
             && uploadSource586.Contains("if (offen.Count == 0 && nurSpracheAusgeschlossen)", StringComparison.Ordinal)
@@ -1780,7 +1781,8 @@ internal static class Program
             && !paarFrage.Contains("SiteLanguage(", StringComparison.Ordinal)
             // F-M669: die Paar-Frage reicht eine (optionale) Position durch und liest die Marke ueber
             // EINE Stelle — mit Position die Position, ohne die des Paares.
-            && paarFrage.Contains("Marke(Configuration.SubtitleProvider.Subdl, mediaHash, language, hearingImpaired, subPos)", StringComparison.Ordinal));
+            && paarFrage.Contains("alreadyThere: key => Api.Endpoints.Provenance.Provider(key) is { } quelle", StringComparison.Ordinal)
+            && paarFrage.Contains("&& Marke(quelle, mediaHash, language, hearingImpaired, subPos)", StringComparison.Ordinal));
         Check("F-M581: ein Selbst-Echo-Urteil braucht einen Beleg — sonst bleibt die Spur ohne Urteil offen",
             uploadSource.Contains("private bool IrgendeineQuelleHat(", StringComparison.Ordinal)
             && uploadSource.Contains("if (IrgendeineQuelleHat(mediaHash, lang, streamHi, isSeries, subPos))", StringComparison.Ordinal)
@@ -2025,7 +2027,7 @@ internal static class Program
                     && !Jellyfin.Plugin.SubScribe.Api.Endpoints.Provenance.MayUploadTo(herkunft, SubtitleProvider.TvSubtitles)
                     && !settleReg.IsContentUploadedFor(hashHer, SubtitleProvider.TvSubtitles)
                     // der Settle-Weg fragt genau dieses Tor, bevor er einen Kandidaten weiterlaufen laesst
-                    && uploadSource.Contains("Api.Endpoints.Provenance.MayUploadTo(herkunft, quelle, _sources.ReuploadTargetsOf)", StringComparison.Ordinal)
+                    && uploadSource.Contains("Api.Endpoints.Provenance.MayUploadTo(herkunft, quelle)", StringComparison.Ordinal)
                     && uploadSource.Contains("string? herkunft = Registry.GetOrigin(contentHash).Origin;", StringComparison.Ordinal),
                     "herkunft=" + (herkunft ?? "-") + " subdl=" + torSubdl.Subdl + " tvst=" + torSubdl.TvSubtitles);
 
@@ -2270,7 +2272,10 @@ internal static class Program
                 Check("F-M539: a switch change re-opens the item (the pair question reads the per-source switches)",
                     uploadSource.Contains("item settled before extraction", StringComparison.Ordinal)
                     && uploadSource.Contains("public int SettledItems { get; set; }", StringComparison.Ordinal)
-                    && uploadSource.Contains("SourceAllowed(Configuration.SubtitleProvider.TvSubtitles) && isSeries", StringComparison.Ordinal));
+                    // F-M721: die Paar-Frage liest die Schalter je Quelle aus der Registry, nicht aus
+                    // zwei benannten Zeilen.
+                    && uploadSource.Contains("switchedOn: SourceAllowed,", StringComparison.Ordinal)
+                    && uploadSource.Contains("bool AnyUploadSourceStillWants(", StringComparison.Ordinal));
 
                 // ---- F-M552: ein bekanntes Item wird aufgefrischt, nicht eingefroren ----------------
                 string verteilerQuelle = await File.ReadAllTextAsync(Path.Combine(

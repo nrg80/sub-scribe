@@ -166,19 +166,6 @@ public sealed record SourceCapabilities
     public bool CanSeasonPacks { get; init; }
 
     /// <summary>
-    /// F-M720: die Quellen, an die ein Untertitel, der HIER heruntergeladen wurde, noch gehen darf —
-    /// die Quelle selbst sagt es, niemand liest es am Namen ab. Leer (die Vorgabe) heißt: an keine.
-    /// <para>
-    /// Operator-Anweisung 23.11.2026: „Auch die Querkontamination oder vielmehr ihre Vermeidung sollte
-    /// sourceabhängig kodiert werden. Quasi wenn download irgendeiner quelle, kein re-up zu irgendeiner
-    /// quelle." Die Antwort ist damit eine Matrix je Quelle statt eines einzelnen Ja/Nein: jede Engine
-    /// trägt ihre eigene Zeile, und das Tor fragt sie, statt für alle gleich zu antworten. Eine Quelle,
-    /// die einen Rückweg erlauben wollte, trägt ihn hier ein — und nur hier.
-    /// </para>
-    /// </summary>
-    public IReadOnlyCollection<string> ReuploadTargets { get; init; } = Array.Empty<string>();
-
-    /// <summary>
     /// F-M687: nimmt die Quelle den FERTIGEN Behälter (ein Archiv in EINEM Feld) statt der
     /// Einzeldateien? tvsubtitles.net legt einen Zip in ihren Staffel-Slot, SubDL baut seinen Behälter
     /// selbst aus den Mitgliedsdateien.

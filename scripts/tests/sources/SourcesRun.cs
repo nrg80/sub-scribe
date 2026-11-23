@@ -700,38 +700,50 @@ internal static class Program
                 "F-M715: ein Timeout nimmt die Quelle fuer den Rest des Laufs heraus, die andere macht weiter",
                 "Merker + Meldung im Timeout-Zweig");
 
-            // F-M720 (Ansage 23.11.2026: "Auch die Querkontamination oder vielmehr ihre Vermeidung sollte
-            // sourceabhaengig kodiert werden. Quasi wenn download irgendeiner quelle, kein re-up zu
-            // irgendeiner quelle"): die Antwort steht BEI der Quelle, nicht im Tor fuer alle.
-            var vertrag = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Sources/SourceContract.cs"));
-            Check(vertrag.Contains("public IReadOnlyCollection<string> ReuploadTargets { get; init; }", StringComparison.Ordinal),
-                "F-M720: die Quelle erklaert selbst, wohin ein Fund von ihr noch darf (ReuploadTargets)");
+            // F-M721 (Ansage 23.11.2026: "Eine regel statt 3 ist besser. Geht mehr darum den code so zu
+            // formulieren, das er auch mit einer vierten, fuenften, etc... Endpoint funktioniert"): das Tor
+            // zaehlt keine Quellen mehr auf — es laeuft eine Liste durch, und die eine Regel gilt fuer jedes
+            // Ziel. Die Ziele baut die Registry aus ihren Engines.
+            string tor = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/Endpoints/UploadGate.cs"));
+            int regelStart = tor.IndexOf("public static UploadGateResult Decide(string? origin", StringComparison.Ordinal);
+            int regelEnde = tor.IndexOf("public static IReadOnlyList<UploadTarget> TargetsFrom", StringComparison.Ordinal);
+            string regelRumpf = regelStart > 0 && regelEnde > regelStart ? tor[regelStart..regelEnde] : string.Empty;
+            Check(regelRumpf.Length > 0
+                  && regelRumpf.Contains("foreach (var ziel in targets)", StringComparison.Ordinal)
+                  && regelRumpf.Contains("Provenance.MayUploadTo(origin, ziel.Key)", StringComparison.Ordinal)
+                  && !regelRumpf.Contains("SubtitleProvider.", StringComparison.Ordinal),
+                "F-M721: die Entscheidung laeuft ueber die Liste und nennt keine Quelle — eine Regel, n Ziele",
+                "Rumpf ohne Quellenname");
 
-            var zeilen = new[] { "Subdl/SubdlEngine.cs", "Tvst/TvstEngine.cs", "Msub/MsubEngine.cs" }
-                .Select(d => File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Sources", d)))
-                .ToList();
-            Check(zeilen.All(z => z.Contains("ReuploadTargets = Array.Empty<string>()", StringComparison.Ordinal)),
-                "F-M720: jede der drei Quellen fuehrt ihre eigene Zeile — ein Download geht an keine Quelle zurueck");
+            Check(tor.Contains("foreach (var engine in sources.Engines)", StringComparison.Ordinal)
+                  && tor.Contains("if (!faehig.CanUpload)", StringComparison.Ordinal)
+                  && tor.Contains("isSeries ? !faehig.ServesSeries : !faehig.ServesMovies", StringComparison.Ordinal),
+                "F-M721: die Ziele kommen aus der Registry — eine weitere Engine ist ohne Aenderung dabei",
+                "TargetsFrom fragt jede Engine");
 
-            // Die Antwort folgt der HERKUNFT, nicht dem Ziel: eine Quelle, die ein Ziel erlaubt, laesst genau
-            // dieses Ziel zu und kein anderes. Ohne Rueckfrager bleibt die Vorgabe (nichts).
-            Func<string, IReadOnlyCollection<string>> m720Zeile = k =>
-                string.Equals(k, "subdl", StringComparison.OrdinalIgnoreCase)
-                    ? new[] { "subdl" }
-                    : Array.Empty<string>();
-            Check(Provenance.MayUploadTo("subdl", SubtitleProvider.Subdl, m720Zeile)
-                  && !Provenance.MayUploadTo("subdl", SubtitleProvider.TvSubtitles, m720Zeile)
-                  && !Provenance.MayUploadTo("tvsubtitles", SubtitleProvider.Subdl, m720Zeile)
-                  && Provenance.MayUploadTo(null, SubtitleProvider.Subdl, m720Zeile)
-                  && !Provenance.MayUploadTo("subdl", SubtitleProvider.Subdl),
-                "F-M720: das Tor fragt die Herkunftsquelle — ihre Zeile entscheidet je Ziel, ohne Zeile gilt keine",
-                "Zeile subdl->{subdl}: subdl erlaubt, tvst gesperrt");
-
-            Check(Provenance.OriginBlockedReason("subdl", SubtitleProvider.TvSubtitles, m720Zeile) is { } m720Satz
-                  && m720Satz.Contains("to tvsubtitles", StringComparison.Ordinal)
-                  && Provenance.OriginBlockedReason("subdl", SubtitleProvider.Subdl, m720Zeile) is null,
-                "F-M720: die Logzeile nennt Herkunft UND abgelehntes Ziel",
-                "Satz nennt das Ziel");
+            // Vier Quellen, davon eine gesperrt: die Regel sperrt ALLE, sobald die Herkunft bekannt ist —
+            // unabhaengig davon, wie viele Quellen es gibt.
+            var ziele = new List<UploadTarget>
+            {
+                new("subdl", true, false),
+                new("tvsubtitles", true, false),
+                new("moviesubtitles", true, false),
+                new("vierte-quelle", true, false),
+            };
+            var torBekannt = UploadGate.Decide("subdl", ziele);
+            var torUnbekannt = UploadGate.Decide(null, ziele);
+            var torMitMarke = UploadGate.Decide(null, new List<UploadTarget>
+            {
+                new("vierte-quelle", true, true),
+                new("fuenfte-quelle", false, false),
+            });
+            Check(torBekannt.AllowedCount == 0 && torBekannt.SkipReason == "origin:subdl — downloaded there, never uploaded"
+                  && torUnbekannt.AllowedCount == 4
+                  && UploadGate.May(torUnbekannt, "vierte-quelle")
+                  && !UploadGate.May(torUnbekannt, "sechste-quelle")
+                  && torMitMarke.SkipReason == "already-uploaded:vierte-quelle",
+                "F-M721: vier und fuenf Quellen laufen ohne Aenderung — bekannte Herkunft sperrt alle, Marke sperrt eine",
+                "bekannt=" + torBekannt.AllowedCount + " unbekannt=" + torUnbekannt.AllowedCount);
 
             string zugangDir = Path.Combine(Path.GetTempPath(), "sub-scribe-zugang-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path.Combine(zugangDir, "sources"));

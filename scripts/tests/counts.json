@@ -906,7 +906,7 @@
     },
     "T384": {
       "suite": "sources",
-      "checks": 4
+      "checks": 3
     }
   }
 }

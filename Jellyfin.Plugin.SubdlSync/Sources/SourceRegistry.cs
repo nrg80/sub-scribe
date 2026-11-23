@@ -175,25 +175,6 @@ public sealed class SourceRegistry
             ? null
             : _engines.FirstOrDefault(e => string.Equals(e.Capabilities.Key, key, StringComparison.Ordinal));
 
-    /// <summary>
-    /// F-M720: die Ziele, an die ein Untertitel, der bei <paramref name="sourceKey"/> heruntergeladen
-    /// wurde, noch gehen darf. Die Quelle antwortet selbst (ihre Zeile der Matrix); unbekannte Herkunft
-    /// oder keine Antwort = nichts.
-    /// </summary>
-    /// <param name="sourceKey">Der Quellenschlüssel der Herkunft.</param>
-    /// <returns>Die erlaubten Ziele, meist leer.</returns>
-    public IReadOnlyCollection<string> ReuploadTargetsOf(string? sourceKey)
-        => ByKey(sourceKey)?.Capabilities.ReuploadTargets ?? Array.Empty<string>();
-
-    /// <summary>
-    /// F-M720: derselbe Blick als Rückfrager, wie ihn <see cref="Api.Endpoints.Provenance"/> braucht —
-    /// damit das Tor die Quelle fragt und nicht selbst eine Regel für alle führt.
-    /// </summary>
-    /// <param name="sourceKey">Der Quellenschlüssel der Herkunft.</param>
-    /// <returns>Die erlaubten Ziele dieser Quelle.</returns>
-    public IReadOnlyCollection<string> Ask(string? sourceKey) => ReuploadTargetsOf(sourceKey);
-
-    /// <summary>
     /// F-M682: die Engines, die eine Fähigkeit melden — in Frage-Reihenfolge. Der Ablauf arbeitet diese
     /// Liste ab, statt je Quelle einen Zweig zu haben.
     /// </summary>

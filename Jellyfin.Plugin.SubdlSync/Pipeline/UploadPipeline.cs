@@ -2385,16 +2385,18 @@ public sealed class UploadPipeline : IPackFiller
                 // Login: der Lauf endet hier, bevor irgendein Endpunkt angefasst wird.
                 string dryHash = ContentHashRegistry.ComputeHash(cand.Srt);
                 var dryHerkunft = Registry.GetOrigin(dryHash).Origin;
+                // F-M721: die Ziele kommen aus der Registry, nicht aus einer Aufzaehlung im Aufruf —
+                // eine weitere Quelle laeuft mit, ohne dass hier eine Zeile dazukommt.
                 var dryGate = Api.Endpoints.UploadGate.Decide(
-                    SourceAllowed(Configuration.SubtitleProvider.Subdl),
-                    SourceAllowed(Configuration.SubtitleProvider.TvSubtitles),
                     dryHerkunft,
-                    // F-M669: das Tor fragt die Marke DIESER Position, nicht die irgendeiner Spur
-                    // derselben Sprache — sonst gälte die zweite Spur als erledigt.
-                    Registry.IsUploadedToPosition(mediaHash!, SourceStore.PositionOf(cand.IsLoose, cand.SubPos), cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.Subdl),
-                    Registry.IsUploadedToPosition(mediaHash!, SourceStore.PositionOf(cand.IsLoose, cand.SubPos), cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.TvSubtitles),
-                    SourceAllowed(Configuration.SubtitleProvider.MovieSubtitles),
-                    Registry.IsUploadedToPosition(mediaHash!, SourceStore.PositionOf(cand.IsLoose, cand.SubPos), cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.MovieSubtitles));
+                    Api.Endpoints.UploadGate.TargetsFrom(
+                        _sources,
+                        isSeries,
+                        switchedOn: SourceAllowed,
+                        // F-M669: das Tor fragt die Marke DIESER Position, nicht die irgendeiner Spur
+                        // derselben Sprache — sonst gälte die zweite Spur als erledigt.
+                        alreadyThere: key => AlreadyAt(
+                            key, mediaHash!, SourceStore.PositionOf(cand.IsLoose, cand.SubPos), cand.Lang, cand.HearingImpaired)));
                 foreach (var quelle in UploadSourceOrder(isSeries))
                 {
                     // F-M496: der Toggle JE QUELLE, vor ihrer Zeile — dieselbe Frage, die die Kette
@@ -2420,9 +2422,9 @@ public sealed class UploadPipeline : IPackFiller
                         LogUtil.PerItem(_config.LogMode, _logger,
                             "[Sub Scribe] {Name} [{Lang}] — source {Source} skipped: {Reason}",
                             neutralName, cand.Lang, Api.Endpoints.Provenance.Name(quelle),
-                            Api.Endpoints.Provenance.MayUploadTo(dryHerkunft, quelle, _sources.ReuploadTargetsOf)
+                            Api.Endpoints.Provenance.MayUploadTo(dryHerkunft, quelle)
                                 ? "already-uploaded:" + Api.Endpoints.Provenance.Name(quelle)
-                                : Api.Endpoints.Provenance.OriginBlockedReason(dryHerkunft, quelle, _sources.ReuploadTargetsOf)
+                                : Api.Endpoints.Provenance.OriginBlockedReason(dryHerkunft)
                                     ?? "no-upload-source");
                         continue;
                     }
@@ -2500,18 +2502,17 @@ public sealed class UploadPipeline : IPackFiller
                 // F-M489: nicht mehr "irgendwo hochgeladen", sondern je Quelle gefragt. Sonst blockierte
                 // ein tvst-Upload den SubDL-Upload und umgekehrt; und ein Reup auf dieselbe Quelle muss
                 // genauso ausbleiben wie ein Quellenwechsel.
+                // F-M721: die Filmquelle wird nicht mehr von Hand angehaengt (F-M656) — welche Quellen
+                // diese Medienart fuehren, sagt jede Engine selbst (ServesSeries/ServesMovies, F-M696).
                 var gateFrueh = Api.Endpoints.UploadGate.Decide(
-                    SourceAllowed(Configuration.SubtitleProvider.Subdl),
-                    SourceAllowed(Configuration.SubtitleProvider.TvSubtitles),
                     Registry.GetOrigin(contentHash).Origin,
-                    // F-M669: je POSITION — zwei Spuren derselben Sprache sind zwei Marken.
-                    Registry.IsUploadedToPosition(mediaHash, SourceStore.PositionOf(cand.IsLoose, cand.SubPos), cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.Subdl),
-                    Registry.IsUploadedToPosition(mediaHash, SourceStore.PositionOf(cand.IsLoose, cand.SubPos), cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.TvSubtitles),
-                    // F-M656: die Filmquelle fehlte hier. Das fruehe Tor antwortete damit fuer einen FILM
-                    // "nichts zu tun", sobald SubDL und tvst nichts wollten — moviesubtitles wurde still
-                    // uebergangen, obwohl es die Sprache nicht hatte (F-M489, F-M509).
-                    SourceAllowed(Configuration.SubtitleProvider.MovieSubtitles) && !isSeries,
-                    !isSeries && Registry.IsUploadedToPosition(mediaHash, SourceStore.PositionOf(cand.IsLoose, cand.SubPos), cand.Lang, cand.HearingImpaired, Configuration.SubtitleProvider.MovieSubtitles));
+                    Api.Endpoints.UploadGate.TargetsFrom(
+                        _sources,
+                        isSeries,
+                        switchedOn: SourceAllowed,
+                        // F-M669: je POSITION — zwei Spuren derselben Sprache sind zwei Marken.
+                        alreadyThere: key => AlreadyAt(
+                            key, mediaHash, SourceStore.PositionOf(cand.IsLoose, cand.SubPos), cand.Lang, cand.HearingImpaired)));
                 if (gateFrueh.SkipReason is not null)
                 {
                     // F-M581: das Tor kann aus drei Gruenden schweigen — Schalter aus, Herkunft bekannt,
@@ -3565,16 +3566,18 @@ public sealed class UploadPipeline : IPackFiller
         // F-M489: die Entscheidung fuer BEIDE Quellen an einer Stelle — Schalter, Herkunft (F-M487) und
         // "diese Quelle hat ihn schon" (F-M488). Ein Reup auf dieselbe Quelle ist genauso unerwuenscht
         // wie eine Kreuzkontamination, und SubDLs alter Status darf tvsubtitles nicht blockieren.
+        // F-M721: die Ziele kommen aus der Registry — welche Quelle diese Medienart fuehrt, sagt die
+        // Quelle selbst. Eine weitere Quelle laeuft mit, ohne Aenderung an dieser Stelle.
         var gate = Api.Endpoints.UploadGate.Decide(
-            SourceAllowed(Configuration.SubtitleProvider.Subdl),
-            SourceAllowed(Configuration.SubtitleProvider.TvSubtitles),
             herkunft,
-            // F-M669: die Marke dieser Spur-Position — ein Seitenwagen fragt unter seiner festen
-            // Position, eine eingebettete Spur unter ihrer Stream-Position.
-            Registry.IsUploadedToPosition(mediaHash, SourceStore.PositionOf(loosePath != null, subPos), lang, hearingImpaired, Configuration.SubtitleProvider.Subdl),
-            Registry.IsUploadedToPosition(mediaHash, SourceStore.PositionOf(loosePath != null, subPos), lang, hearingImpaired, Configuration.SubtitleProvider.TvSubtitles),
-            SourceAllowed(Configuration.SubtitleProvider.MovieSubtitles),
-            Registry.IsUploadedToPosition(mediaHash, SourceStore.PositionOf(loosePath != null, subPos), lang, hearingImpaired, Configuration.SubtitleProvider.MovieSubtitles));
+            Api.Endpoints.UploadGate.TargetsFrom(
+                _sources,
+                isSeries,
+                switchedOn: SourceAllowed,
+                // F-M669: die Marke dieser Spur-Position — ein Seitenwagen fragt unter seiner festen
+                // Position, eine eingebettete Spur unter ihrer Stream-Position.
+                alreadyThere: key => AlreadyAt(
+                    key, mediaHash, SourceStore.PositionOf(loosePath != null, subPos), lang, hearingImpaired)));
         if (gate.SkipReason is not null)
         {
             LogUtil.PerItem(_config.LogMode, _logger, "[Sub Scribe] {Name} [{Lang}] — skipped: {Reason}",
@@ -3584,7 +3587,7 @@ public sealed class UploadPipeline : IPackFiller
 
         // F-M500 (Operator-Anweisung 15.11.2026): eine bekannte Herkunft sperrt ALLE Quellen. Die Zeile
         // nennt sie, damit im Lauf steht, WOHER der Text kommt und warum er nirgends hochgeht.
-        if (Api.Endpoints.Provenance.OriginBlockedReason(herkunft, target: null, _sources.ReuploadTargetsOf) is { } herkunftGesperrt)
+        if (Api.Endpoints.Provenance.OriginBlockedReason(herkunft) is { } herkunftGesperrt)
         {
             LogUtil.PerItem(_config.LogMode, _logger,
                 "[Sub Scribe] {Name} [{Lang}] — {Reason}", neutralName, lang, herkunftGesperrt);
@@ -3658,9 +3661,9 @@ public sealed class UploadPipeline : IPackFiller
                 LogUtil.PerItem(_config.LogMode, _logger,
                     "[Sub Scribe] {Name} [{Lang}] — source {Source} skipped: {Reason}",
                     neutralName, lang, Api.Endpoints.Provenance.Name(quelle),
-                    Api.Endpoints.Provenance.MayUploadTo(herkunft, quelle, _sources.ReuploadTargetsOf)
+                    Api.Endpoints.Provenance.MayUploadTo(herkunft, quelle)
                         ? "already-uploaded:" + Api.Endpoints.Provenance.Name(quelle)
-                        : Api.Endpoints.Provenance.OriginBlockedReason(herkunft, quelle, _sources.ReuploadTargetsOf)
+                        : Api.Endpoints.Provenance.OriginBlockedReason(herkunft)
                             ?? "no-upload-source");
                 continue;
             }
@@ -7624,6 +7627,29 @@ public sealed class UploadPipeline : IPackFiller
     private bool SourceAllowed(Configuration.SubtitleProvider provider) =>
         _config.IsUploadEnabled(provider) && !_quellenAus.Contains(provider);
 
+    /// <summary>
+    /// F-M721: derselbe Schalter, gefragt mit dem Quellenschlüssel — die Form, die das Tor benutzt,
+    /// weil sie ohne Aufzählung auskommt.
+    /// </summary>
+    /// <param name="key">Der Quellenschlüssel.</param>
+    /// <returns>Wahr, wenn diese Quelle in diesem Lauf senden darf.</returns>
+    private bool SourceAllowed(string key) => Api.Endpoints.Provenance.Provider(key) is { } provider && SourceAllowed(provider);
+
+    /// <summary>
+    /// F-M721: die Marke DIESER Spur-Position bei einer Quelle — ebenfalls mit Schlüssel, damit das Tor
+    /// keine Quelle kennen muss (F-M669: die Marke dieser Position, nicht irgendeiner Spur derselben
+    /// Sprache).
+    /// </summary>
+    /// <param name="key">Der Quellenschlüssel.</param>
+    /// <param name="mediaHash">Der Hash der Mediendatei.</param>
+    /// <param name="position">Die Position der Spur.</param>
+    /// <param name="lang">Die Sprache.</param>
+    /// <param name="hearingImpaired">Ist es die gehörlosenfreundliche Fassung?</param>
+    /// <returns>Wahr, wenn diese Quelle den Text an dieser Position schon hat.</returns>
+    private bool AlreadyAt(string key, string? mediaHash, int position, string lang, bool hearingImpaired)
+        => Api.Endpoints.Provenance.Provider(key) is { } provider
+            && Registry.IsUploadedToPosition(mediaHash, position, lang, hearingImpaired, provider);
+
     /// <summary>F-M713: Quellen, die in DIESEM Lauf ausgefallen sind (Kontingent, Schlüssel). Der nächste Lauf fragt sie wieder.</summary>
     private readonly HashSet<Configuration.SubtitleProvider> _quellenAus = new();
 
@@ -7790,19 +7816,22 @@ public sealed class UploadPipeline : IPackFiller
         // Dateien „erledigt" ohne eine einzige Sendung; 5.114 solche Zeilen im Store.
         // Queue und Sprachset gehoeren in die KETTE: die Kette prueft beides selbst, bevor sie eine Quelle
         // antreten laesst (QueuedForSource im Einreiher, SiteLanguage in SendToTv/ SendToMsub, F-M538).
+        // F-M721: auch hier keine Aufzaehlung — die Medienart und die Sprache fragt das Tor je Engine,
+        // die Ziele kommen aus der Registry.
         && Api.Endpoints.UploadGate.Decide(
-            SourceAllowed(Configuration.SubtitleProvider.Subdl),
-            // F-M509: nur die Adresse der Familie, die DIESE Medienart fuehrt, kann etwas wollen.
-            SourceAllowed(Configuration.SubtitleProvider.TvSubtitles) && isSeries
-                && NimmtSprache(Configuration.SubtitleProvider.TvSubtitles, language, isSeries),
             origin: null,
-            // F-M669: mit Position fragt sie DIESE Spur; ohne (Seitenwagen, Paar-Kopf) bleibt es die
-            // Paar-Frage.
-            Marke(Configuration.SubtitleProvider.Subdl, mediaHash, language, hearingImpaired, subPos),
-            isSeries && Marke(Configuration.SubtitleProvider.TvSubtitles, mediaHash, language, hearingImpaired, subPos),
-            SourceAllowed(Configuration.SubtitleProvider.MovieSubtitles) && !isSeries
-                && NimmtSprache(Configuration.SubtitleProvider.MovieSubtitles, language, isSeries),
-            !isSeries && Marke(Configuration.SubtitleProvider.MovieSubtitles, mediaHash, language, hearingImpaired, subPos))
+            Api.Endpoints.UploadGate.TargetsFrom(
+                _sources,
+                isSeries,
+                switchedOn: SourceAllowed,
+                // F-M509: nur die Adresse der Familie, die DIESE Medienart fuehrt, kann etwas wollen —
+                // die Medienart selbst filtert TargetsFrom ueber die Auskunft der Engine.
+                alsoTakes: key => Api.Endpoints.Provenance.Provider(key) is { } quelle
+                    && NimmtSprache(quelle, language, isSeries),
+                // F-M669: mit Position fragt sie DIESE Spur; ohne (Seitenwagen, Paar-Kopf) bleibt es die
+                // Paar-Frage.
+                alreadyThere: key => Api.Endpoints.Provenance.Provider(key) is { } quelle
+                    && Marke(quelle, mediaHash, language, hearingImpaired, subPos)))
         .SkipReason is null;
 
     /// <summary>
@@ -8016,7 +8045,7 @@ public sealed class UploadPipeline : IPackFiller
             // heisst: heruntergeladen, geht nirgends hoch (F-M487) —, ist das Paar entschieden.
             string? herkunftOhneBeleg = Registry.GetOrigin(contentHash).Origin;
             var darfNoch = quellen
-                .Where(quelle => Api.Endpoints.Provenance.MayUploadTo(herkunftOhneBeleg, quelle, _sources.ReuploadTargetsOf))
+                .Where(quelle => Api.Endpoints.Provenance.MayUploadTo(herkunftOhneBeleg, quelle))
                 .ToList();
             if (darfNoch.Count > 0)
             {
@@ -8037,7 +8066,7 @@ public sealed class UploadPipeline : IPackFiller
         string? herkunft = Registry.GetOrigin(contentHash).Origin;
         var offen = quellen
             .Where(quelle => !beleg.Contains(quelle)
-                && Api.Endpoints.Provenance.MayUploadTo(herkunft, quelle, _sources.ReuploadTargetsOf))
+                && Api.Endpoints.Provenance.MayUploadTo(herkunft, quelle))
             .ToList();
 
         var belegte = beleg.ToList();
