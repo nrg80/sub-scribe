@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.23",
-        "changelog": "v12.3.8.23: the status lights list the TMDb key first — the one credential nothing runs without.",
+        "version": "12.3.8.24",
+        "changelog": "v12.3.8.24: the upload tab no longer carries its own pack switch — a source's \"Packs\" switch now covers uploading and downloading packs for that source.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.23-dev/Jellyfin.Plugin.SubdlSync_12.3.8.23.zip",
-        "checksum": "ba8fdf139790d9d9539c867868b9719a",
-        "timestamp": "2026-11-23T20:04:25Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.24-dev/Jellyfin.Plugin.SubdlSync_12.3.8.24.zip",
+        "checksum": "ef702aaf8209852ce6eb80949614d51b",
+        "timestamp": "2026-11-23T20:53:04Z"
       }
     ]
   }
