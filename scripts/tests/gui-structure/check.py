@@ -2130,21 +2130,33 @@ def main():
     # F-M702 (Betreiberansage 22.11.2026: "und das bla blah weglassen. nur apikey email for login und
     # Passwort. keine weitere Beschreibung, kein set."): kein Platzhalter, keine "set"-Zeile, keine
     # Beschreibung an einem Geheimfeld — die Ampel sagt, ob die Datei vollstaendig ist.
-    check("F-M702: a secret field carries no placeholder and no 'set' marker",
+    # F-M706: die Punkte sind zurueck ("Die .... Im feld bei api und Passwort fehlen"), das Wort "set"
+    # bleibt weg. F-M702 gilt weiter fuer den TEXT, nicht fuer das Punktmuster.
+    check("F-M702/F-M706: a secret shows dots but no word and no value",
           "set — type to replace" not in page_src
           and "subdl-source-secret-state" not in page_src
-          and "input.placeholder = '';" in page_src,
-          "kein Platzhalter, keine set-Zeile")
+          and "input.placeholder = field.gesetzt ? '••••••••' : '';" in page_src,
+          "Punkte ohne Wort")
 
-    # F-M700 (Betreiberansage 22.11.2026: "Und die Statusampel fur den jeweiligen endpoint oben unter der
-    # Ueberschrift im jeweiligen endPoint Kaestchen anzeigen/verschieben"): die Ampel ist eine eigene Zeile
-    # unter der Ueberschrift — nicht neben dem Namen.
-    check("F-M700: the state light sits on its own row right under the card heading",
-          "subdl-source-state-row" in page_src
-          and "ampel.appendChild(subdlSourceEl('span', 'subdl-source-state '" in page_src
-          and "head.appendChild(subdlSourceEl('span', 'subdl-source-state '" not in page_src
-          and ".subdl-source-state-row" in page_src,
-          "Ampel als Zeile unter der Ueberschrift")
+    # F-M706: "Die prio pfeile rechtsbuendig" und "Fuer subdl bei api key das required weg".
+    check("F-M706: the order arrows sit on the right edge",
+          ".subdl-order-row .subdl-order-move:first-of-type { margin-left: auto; }" in page_src,
+          "Pfeile rechtsbuendig")
+    check("F-M706: no Required marker on a source card",
+          "subdlSourceEl('span', 'subdl-required', 'Required')" not in page_src,
+          "Karte nennt nur den Feldnamen")
+    check("F-M706: the answer to a save names the new state of a switch",
+          "'downloadEnabled: off'" not in page_src
+          and "(rumpf[feldName] ? 'on' : 'off')" in page_src,
+          "Rueckmeldung nennt den Zustand")
+
+    # F-M706 (Betreiberansage 22.11.2026: "Das on bitte nur an einer stelle, der source order"): die
+    # Ampel steht NUR in der Reihenfolge — die Karte trug sie doppelt (F-M700 hatte sie dort eingebaut).
+    check("F-M706: the state light lives only in the source order, not on the card",
+          "subdl-source-state-row" not in page_src
+          and ".subdl-order-state" in page_src
+          and "subdlSourceEl('span', 'subdl-order-state '" in page_src,
+          "Ampel nur in der Reihenfolge")
 
     # F-M699 (Betreiberbefund 22.11.2026: "es ist komisch das subdl subdl hintereinander steht"): der
     # Kartenkopf nennt den Namen EINMAL; der Schluessel haengt als title am Namen.
@@ -2294,10 +2306,13 @@ def main():
           and "data-options" in quellen and "JSON.parse(row.getAttribute('data-options'))" in quellen,
           "min/max and the options come from the schema, not from a second list in the page")
 
-    check("F-M688: help stands under the field, and required is marked at the field",
-          "field.help" in quellen and "field.required" in quellen
-          and "subdl-required', 'Required'" in quellen,
-          "the operator asked for help as a note under the field and required visible on it")
+    # F-M702 hat die Hilfe abgeschafft, F-M706 die Pflichtmarke auf der Karte (Betreiberansage
+    # 22.11.2026: "Fuer subdl bei api key das required weg"). Von F-M688 bleibt: eine Hilfe, falls eine
+    # Engine eine erklaert, steht UNTER dem Feld — die Karte selbst bringt keine.
+    check("F-M688: a help text, if an engine declares one, stands under the field",
+          "field.help" in quellen
+          and "subdl-required', 'Required'" not in quellen,
+          "Hilfe unter dem Feld, keine Pflichtmarke auf der Karte")
 
     check("F-M688: visibleWhen is read from the schema and stored on the row it governs",
           "field.visibleWhen" in quellen and "data-visible-when-field" in quellen
@@ -2349,7 +2364,7 @@ def main():
           "one button per card; the page-wide save must stay out of the card's path")
 
     check("F-M688: the state word is 'on' or 'off', taken from the endpoint's configured flag",
-          "entry.configured ? 'on' : 'off'" in quellen,
+          "quelle.configured ? 'on' : 'off'" in quellen,
           "the operator named the two states himself")
 
     # F-M693 (Betreiberansage 22.11.2026: "Badges upload /download /packs / report. Each with it's own
@@ -2425,11 +2440,11 @@ def main():
     # kein angezeigtes Wort — angezeigt werden nur on/off und Save.
     check("F-M690: the card's own words are English (on/off, Save) and the schema's "
           "condition value is language-neutral",
-          "entry.configured ? 'on' : 'off'" in quellen
-          and "save.textContent = 'Save';" in quellen
-          and "'nicht gesetzt'" not in quellen
-          and "field.gesetzt ? 'gesetzt'" not in quellen
-          and "? 'set' : 'not set';" in quellen)
+          "quelle.configured ? 'on' : 'off'" in page_src
+          and "save.textContent = 'Save';" in page_src
+          and "'nicht gesetzt'" not in page_src
+          and "field.gesetzt ? 'gesetzt'" not in page_src
+          and "? 'set' : 'not set';" in page_src)
 
     # ---- F-M692: die Karte bleibt karg -----------------------------------------------------------
     # Betreiberbefund 22.11.2026, woertlich: "Well address is not needed. All these badges reduce to
@@ -2443,7 +2458,7 @@ def main():
     # sichtbares Eingabefeld, und sein Wert steht nirgends im DOM.
     check("F-M692/F-M702: a secret field is a real input with no placeholder and no value in the DOM",
           "input.style.width = '100%'" in quellen
-          and "input.placeholder = '';" in quellen
+          and "input.placeholder = field.gesetzt ? '••••••••' : '';" in quellen
           and "input.type = 'password'" in quellen
           and "Ein Geheimnis bekommt KEIN data-value" in quellen,
           "echtes Feld, kein Platzhalter, kein Wert im DOM")

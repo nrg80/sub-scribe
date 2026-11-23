@@ -786,7 +786,6 @@
         .subdl-source-card { border: 1px solid rgba(255,255,255,0.16); border-radius: 6px; padding: 0.8em 1em; margin: 0 0 1em 0; }
         .subdl-source-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.6em; }
         .subdl-source-name { font-weight: 600; font-size: 1.05em; }
-        .subdl-source-state { margin-left: auto; font-size: 0.85em; font-weight: 600; }
         .subdl-source-state.on { color: #107c10; }
         .subdl-source-state.off { color: #a4262c; }
         /* F-M693: die Reihe der Moeglichkeiten — vier Schalter, jeder mit seinem Namen. */
@@ -805,11 +804,12 @@
         .subdl-order-state { margin-left: 0.4em; font-size: 0.85em; }
         .subdl-order-state.on { color: #52b54b; }
         .subdl-order-state.off { color: #c0392b; }
-        .subdl-source-state-row { margin: 0.15em 0 0.35em 0; }
         .subdl-source-serves { margin-left: 0.5em; padding: 0.05em 0.5em; border-radius: 0.7em;
             border: 1px solid rgba(255,255,255,0.25); font-size: 0.78em; opacity: 0.8;
             white-space: nowrap; }
         .subdl-order-row { display: flex; align-items: center; gap: 0.5em; padding: 0.2em 0; }
+        /* F-M706: die Pfeile stehen rechts — der freie Raum liegt VOR dem ersten Pfeil. */
+        .subdl-order-row .subdl-order-move:first-of-type { margin-left: auto; }
         .subdl-order-name { min-width: 12em; }
         .subdl-order-tag { font-size: 0.78em; opacity: 0.7; }
         .subdl-order-move { padding: 0 0.5em; line-height: 1.6; }
@@ -2137,7 +2137,8 @@ workers.forEach(function (w) {
                     var text = subdlSourceEl('span', null, field.label);
                     if (field.required) {
                         text.appendChild(document.createTextNode(' '));
-                        text.appendChild(subdlSourceEl('span', 'subdl-required', 'Required'));
+                        // F-M706: keine Pflichtmarke auf der Karte.
+
                     }
                     label.appendChild(text);
                     wrap.appendChild(label);
@@ -2153,7 +2154,8 @@ workers.forEach(function (w) {
                     selLabel.setAttribute('for', id);
                     if (field.required) {
                         selLabel.appendChild(document.createTextNode(' '));
-                        selLabel.appendChild(subdlSourceEl('span', 'subdl-required', 'Required'));
+                        // F-M706: keine Pflichtmarke auf der Karte.
+
                     }
                     selWrap.appendChild(selLabel);
                     var select = document.createElement('select');
@@ -2176,10 +2178,10 @@ workers.forEach(function (w) {
                 var boxWrap = subdlSourceEl('div', 'inputContainer');
                 var inputLabel = subdlSourceEl('label', 'inputLabel inputLabelUnfocused', field.label);
                 inputLabel.setAttribute('for', id);
-                if (field.required) {
-                    inputLabel.appendChild(document.createTextNode(' '));
-                    inputLabel.appendChild(subdlSourceEl('span', 'subdl-required', 'Required'));
-                }
+                // F-M706 (Betreiberansage 22.11.2026: "Fuer subdl bei api key das required weg"): die
+                // Karte nennt nur noch den Feldnamen. Dass der Schluessel Pflicht ist, sagt die Ampel
+                // oben — sie steht auf "off", solange er fehlt, und der Lauf laesst die Quelle dann aus
+                // (die Pruefung selbst bleibt im Schema: Required = true).
                 boxWrap.appendChild(inputLabel);
 
                 // F-M695: die Kennung beim Erzeugen mitgeben — nur so wertet der Browser das Element auf
@@ -2220,7 +2222,12 @@ workers.forEach(function (w) {
                     // (Pflichtfeld gefuellt), "off" heisst, es fehlt etwas. Ein zweiter Hinweis im Feld
                     // war Larm — und der Wert selbst verlaesst das Plugin nie.
                     row.setAttribute('data-gesetzt', field.gesetzt ? 'true' : 'false');
-                    input.placeholder = '';
+
+                    // F-M706 (Betreiberansage 22.11.2026: "Die .... Im feld bei api und Passwort fehlen"):
+                    // ist ein Geheimnis abgelegt, steht im Feld ein Punktmuster — das Feld SIEHT gefuellt
+                    // aus, ohne ein Wort und ohne den Wert. F-M702 hatte den Platzhalter samt "set"
+                    // entfernt; das Wort bleibt weg, die Punkte kommen zurueck.
+                    input.placeholder = field.gesetzt ? '••••••••' : '';
                 } else {
                     // Ein Geheimnis bekommt KEIN data-value — der Wert steht damit nirgends im DOM.
                     row.setAttribute('data-value',
@@ -2340,13 +2347,8 @@ workers.forEach(function (w) {
                 // ihn beim Suchen im Log oder in der Datei braucht.
                 card.appendChild(head);
 
-                // F-M700 (Betreiberansage 22.11.2026: "Und die Statusampel fur den jeweiligen endpoint oben
-                // unter der Ueberschrift im jeweiligen endPoint Kaestchen anzeigen/verschieben"): die Ampel
-                // steht als EIGENE Zeile direkt unter der Ueberschrift — nicht mehr neben dem Namen.
-                var ampel = subdlSourceEl('div', 'subdl-source-state-row');
-                ampel.appendChild(subdlSourceEl('span', 'subdl-source-state ' + (entry.configured ? 'on' : 'off'),
-                    entry.configured ? 'on' : 'off'));
-                card.appendChild(ampel);
+                // F-M706 (Betreiberansage 22.11.2026: "Das on bitte nur an einer stelle, der source order"):
+                // die Ampel steht NUR NOCH in der Reihenfolge oben — die Karte trug sie doppelt.
 
                 // F-M693 (Betreiberansage 22.11.2026: "Badges upload /download /packs / report. Each with
                 // it's own toogle"): die Moeglichkeiten dieser Quelle stehen als Reihe oben auf der Karte,
@@ -2474,7 +2476,21 @@ workers.forEach(function (w) {
                         subdlSourceApplyValues(neu);
                         subdlSourceApplyVisibility(neu);
                     }
-                    var geschrieben = (ant && ant.geschrieben.length) ? ant.geschrieben.join(', ') : '—';
+                    // F-M706 (Betreiberbefund 22.11.2026: "Wenn ich in den sources was austicke … als
+                    // Rueckmeldung kommt enabled"): die Meldung nannte nur den FELDNAMEN, und
+                    // "downloadEnabled" liest sich wie "eingeschaltet" — auch wenn gerade AUSgeTickt
+                    // wurde. Jetzt steht der neue Zustand dabei: "downloadEnabled: off".
+                    var teile = [];
+                    for (var feldName in rumpf) {
+                        if (typeof rumpf[feldName] === 'boolean') {
+                            teile.push(feldName + ': ' + (rumpf[feldName] ? 'on' : 'off'));
+                        } else {
+                            teile.push(feldName);
+                        }
+                    }
+                    var geschrieben = teile.length
+                        ? teile.join(', ')
+                        : ((ant && ant.geschrieben.length) ? ant.geschrieben.join(', ') : '—');
                     subdlSourceResult(key, 'ok', '✔ ' + geschrieben);
                 }).catch(function (err) {
                     // Eine Abweisung steht im KLARTEXT der Antwort an der Karte (400, unbekanntes

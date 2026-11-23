@@ -1,7 +1,7 @@
 # Requirements Specification — Jellyfin Plugin "Sub Scribe" (Upload + Download)
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.11.
+**Status:** Implementation — v12.3.8.12.
 
 **Die Begründungen (warum eine Regel gilt, Messungen, Vorfälle) stehen nicht hier, sondern lokal in der Methodik-Ablage, nach Kapiteln sortiert und mit der Requirement-Nummer
 markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test — sonst nichts.**
@@ -33,7 +33,7 @@ markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
 - [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 46 requirements
-- [14. Data Model and Persistence](#14-data-model-and-persistence) — 60 requirements
+- [14. Data Model and Persistence](#14-data-model-and-persistence) — 61 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 51 requirements
 - [16. Non-Goals](#16-non-goals)
 - [17. Non-Functional Requirements](#17-non-functional-requirements)
@@ -1986,6 +1986,8 @@ Grund (gemessen 18.11.2026): die Queue entsteht nur aus offenen Stempeln (F-M557
 
 **F-M705 [D]:** **Gespeichert wird nur, was bewegt wurde — und ohne Bewegung gar nichts.** Betreiberbefund 22.11.2026, wörtlich: „Wenn ich auf save drücke kommt immer download enabled auch wenn ich ausschalte. Ist eigentlich durch die tickbox abgedeckt." Vorher schickte jedes Speichern **alle vier Schalter** mit, und die Rückmeldung nannte sie alle — „downloadEnabled" stand also auch dann in der Liste, wenn nur ein anderes Kästchen bewegt worden war; der Betreiber liest das als „es hat sich wieder eingeschaltet". Jetzt vergleicht der Rumpf jeden Wert mit dem, was in der Karte steht (`data-value`, bei Geheimnissen: leer = unverändert), und schickt **nur die Abweichung**. Ist nichts bewegt, geht **keine** Anfrage raus und die Karte meldet `✔ nothing changed`. Der Zustand der Kästchen folgt weiterhin allein der Antwort des Endpunkts (gemessen: Häkchen aus → Rumpf `{"downloadEnabled": false}` → Antwort `Value = "false"` → Kästchen bleibt aus).
 
+**F-M706 [D]:** **Eine Ampel, rechtsbündige Pfeile, keine Pflichtmarke, Punkte im Geheimfeld — und eine Rückmeldung, die den Zustand nennt.** Betreiberansage 22.11.2026, wörtlich: „Das on bitte nur an einer stelle, der source order. Die prio pfeile rechtsbündig. Wenn ich in den sources was austicke wird es grün und als Rückmeldung kommt enabled. Für subdl bei api key das rewuired weg. Die .... Im feld bei api und Passwort fehlen." Fünf Folgen: **(a)** die Ampel steht **nur** in der Reihenfolge; die eigene Zeile unter der Kartenüberschrift (F-M700) fällt weg — dieselbe Auskunft zweimal war eine Doppelung. **(b)** die Pfeile der Reihenfolge sitzen **rechts** (der freie Raum liegt vor dem ersten Pfeil). **(c)** die Karte trägt **keine** Pflichtmarke mehr; dass der API-Schlüssel Pflicht ist, sagt die Ampel (`off`, solange er fehlt, und der Lauf lässt die Quelle aus) — die Prüfung im Schema bleibt (`Required = true`). **(d)** ein Geheimfeld zeigt bei abgelegtem Wert ein **Punktmuster** (`••••••••`), aber kein Wort und keinen Wert: das Feld sieht gefüllt aus, ohne `set` (F-M702 gilt für den Text, nicht für die Punkte). **(e)** die Rückmeldung eines Speicherns nennt den **neuen Zustand** (`downloadEnabled: off`), nicht nur den Feldnamen — „downloadEnabled" allein las sich wie „eingeschaltet", auch wenn gerade ausgetickt wurde.
+
 #### 14.9 Die Marken-Matrix — die einzige Wahrheit (bis Schema 22; abgelöst durch 14.11)
 
 Die Matrix ist seit 12.3.0.0 der **einzige** Ort, an dem ein Quellen-Urteil steht: eine Zeile je (Medium, Quelle, Art) in der Tabelle `source_matrix` — und bei `track`/`track-hi` je (Medium, Quelle, Art, Sprache, HI, **Position**) (Schema 20, F-M669). Seit 12.3.0.2 (Schema 21, F-M670) ist sie auch der einzige Ort für die **Quellen-Ids**: es gibt keine Alt-Tabelle `source_marks` und keine Spalte `SubdlId` mehr. Die breiten Spalten, aus denen sie bis 12.2.0.28 gefüllt wurde, sind aus der Live-Datei **entfernt**; der Altbestand lebt allein in der Sicherungsdatei weiter. Es gibt keinen zweiten Datenbestand und keinen zweiten Lesepfad.
@@ -2846,6 +2848,8 @@ Kein Grund, keine Vorgeschichte, keine Bitte, kein Vorschlag. Gebaut in `Pipelin
 **T368:** Die Art einer Quelle und ihre Ampel kommen an (F-M704), in `gui-structure` — **3 Prüfungen**: die Fähigkeitenliste steht **einmal** und nennt `servesSeries`/`servesMovies`, ein Geheimnis antwortet der Bedingung eines anderen Felds mit `set`/`not set`, und jede Zeile der Reihenfolge trägt Art und Ampel.
 
 **T369:** Gespeichert wird nur die Bewegung (F-M705), in `gui-structure` — **1 Prüfung**: der Rumpf entsteht aus der Abweichung, `nothing changed` steht als Meldung bereit, und der alte Aufruf, der immer alle Felder schickte, kommt nicht mehr vor.
+
+**T370:** Ampel, Pfeile, Pflichtmarke, Punktmuster und Rückmeldung (F-M706), in `gui-structure` — **5 Prüfungen**: die Ampel steht nur in der Reihenfolge (kein `subdl-source-state-row`), die Pfeile hängen an `margin-left: auto`, die Karte baut keine `Required`-Marke, das Geheimfeld setzt `••••••••`, und die Rückmeldung nennt `on`/`off` je bewegtem Schalter. Die Prüfung F-M700 wandert mit (sie verlangte die Zeile in der Karte).
 
 **T336:** Die vier Ebenen und die drei Quellen-Tabellen seit Schema 23 (F-M672…F-M677), in `storex` gegen echte Altdateien: Kennungsformen `[xxxx]`/`#yyyyy`/`#yyyyy#zzz`/`#yyyyy&zzz`, ein Nummernkreis je Datei über Spur und Seitenwagen, `pack_track` mit Fremdschlüsseln, `upload`/`reference`/`badapple` mit einer Subjekt-Spalte, keine fremde Kennung außerhalb `reference`/`badapple`, `source_matrix` und `rejected_candidates` nach dem Aufstieg weg, `OriginId` ohne Wertverlust nach `reference`, Aufstieg 17→23 und 22→23 mit genau einer Sicherung und einem zweiten Start, der nichts tut — **15 Prüfungen**, die letzte für die Quellenneutralitaet von `badapple` (auch eine nicht-numerische Kennung wie `download-3234-2-en` neben einer SubDL-Nummer).
 
