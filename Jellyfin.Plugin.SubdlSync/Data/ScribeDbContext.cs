@@ -1485,22 +1485,52 @@ public sealed class ScribeSqliteContext : DbContext
         }
         catch (DbUpdateConcurrencyException ex)
         {
-            // F-M716 (Befund 23.11.2026, 19:46): eine Zeile, die beim Schreiben schon weg war, ist für ein
-            // DELETE kein Fehler — das Ziel ist erreicht. Für ein UPDATE gibt es nichts mehr zu schreiben.
-            // Vorher riss genau das den Datenbank-Refresh nach 15 s ab und der Status stand auf „fail",
-            // obwohl die Absicht (Zeile ist weg) längst erfüllt war.
-            var verschwunden = ex.Entries.ToList();
+            return RetryAfterVanishedRows(ex);
+        }
+    }
+
+    /// <summary>
+    /// F-M716/F-M717 (Befund 23.11.2026, 19:46 und 20:11): eine Zeile, die beim Schreiben schon weg ist,
+        /// ist für ein DELETE kein Fehler — das Ziel ist erreicht; für ein UPDATE gibt es nichts mehr zu
+        /// schreiben. Ursache ist die Löschweitergabe im Schema (<c>pack_track</c> hängt mit
+        /// <c>ON DELETE CASCADE</c> an <c>pack</c> und <c>track</c>): die Kaskade räumt Zeilen weg, die der
+        /// Kontext noch als „unverändert" führt, und jedes solche DELETE trifft 0 Zeilen.
+        /// <para>
+        /// WARUM IN EINER SCHLEIFE: die Ausnahme nennt nur die Einträge EINES Befehls aus dem Stapel. Ein
+        /// einzelner Wiederholungsversuch traf beim Messen (20:11) die nächste Kaskadenzeile und riss den
+        /// Refresh erneut ab. Jede Runde hakt die gemeldeten Einträge ab, bis keine „schon weg"-Zeile mehr im
+        /// Stapel steht.
+        /// </para>
+        /// </summary>
+        /// <param name="zuerst">Die Ausnahme des ersten Versuchs.</param>
+        /// <returns>Die Anzahl der geschriebenen Zeilen.</returns>
+        private int RetryAfterVanishedRows(DbUpdateConcurrencyException zuerst)
+        {
+        DbUpdateConcurrencyException offen = zuerst;
+        for (int runde = 1; runde <= 200; runde++)
+        {
+            var verschwunden = offen.Entries.ToList();
             foreach (var eintrag in verschwunden)
             {
                 eintrag.State = EntityState.Detached;
             }
 
             Logger?.LogWarning(
-                "[Sub Scribe-DB] {Count} row(s) were already gone when the write ran (delete or update hit 0 rows); "
-                + "dropped as done and the write was retried (F-M716).",
-                verschwunden.Count);
-            return base.SaveChanges();
+                "[Sub Scribe-DB] {Count} row(s) were already gone when the write ran — dropped as done, retry {Round} (F-M716/F-M717).",
+                verschwunden.Count,
+                runde);
+
+            try
+            {
+                return base.SaveChanges();
+            }
+            catch (DbUpdateConcurrencyException weiter)
+            {
+                offen = weiter;
+            }
         }
+
+        throw offen;
     }
 
     /// <summary>F-M514: the one exception shape the tracker repair answers to.</summary>

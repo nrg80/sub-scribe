@@ -1466,9 +1466,16 @@ internal static class Program
             "F-M716: eine schon gelöschte Zeile wird nicht ein zweites Mal zum Löschen angemeldet",
             "DeleteMany überspringt EntityState.Deleted");
         Check(dbQuelle.Contains("catch (DbUpdateConcurrencyException ex)", StringComparison.Ordinal)
-              && dbQuelle.Contains("dropped as done and the write was retried (F-M716)", StringComparison.Ordinal),
+              && dbQuelle.Contains("RetryAfterVanishedRows", StringComparison.Ordinal),
             "F-M716: eine beim Schreiben verschwundene Zeile wird als erledigt abgehakt statt den Lauf abzubrechen",
             "SaveChanges fängt DbUpdateConcurrencyException");
+
+        // F-M717 (Messung 23.11.2026, 20:11): der einzelne Wiederholungsversuch traf die nächste
+        // Kaskadenzeile und riss den Refresh erneut ab — die Wiederholung läuft deshalb in einer Schleife.
+        Check(dbQuelle.Contains("for (int runde = 1; runde <= 200; runde++)", StringComparison.Ordinal)
+              && dbQuelle.Contains("dropped as done, retry {Round} (F-M716/F-M717)", StringComparison.Ordinal),
+            "F-M717: die Wiederholung läuft in Schleife, bis keine „schon weg“-Zeile mehr im Stapel steht",
+            "Schleife über die gemeldeten Einträge");
 
         Console.WriteLine(Failures.Count == 0
             ? $"seasonpack: {_checks} checks, all green."
