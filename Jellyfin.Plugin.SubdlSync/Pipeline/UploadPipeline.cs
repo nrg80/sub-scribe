@@ -2422,7 +2422,7 @@ public sealed class UploadPipeline : IPackFiller
                         LogUtil.PerItem(_config.LogMode, _logger,
                             "[Sub Scribe] {Name} [{Lang}] — source {Source} skipped: {Reason}",
                             neutralName, cand.Lang, Api.Endpoints.Provenance.Name(quelle),
-                            Api.Endpoints.Provenance.MayUploadTo(dryHerkunft, quelle)
+                            Api.Endpoints.Provenance.MayUpload(dryHerkunft)
                                 ? "already-uploaded:" + Api.Endpoints.Provenance.Name(quelle)
                                 : Api.Endpoints.Provenance.OriginBlockedReason(dryHerkunft)
                                     ?? "no-upload-source");
@@ -3661,7 +3661,7 @@ public sealed class UploadPipeline : IPackFiller
                 LogUtil.PerItem(_config.LogMode, _logger,
                     "[Sub Scribe] {Name} [{Lang}] — source {Source} skipped: {Reason}",
                     neutralName, lang, Api.Endpoints.Provenance.Name(quelle),
-                    Api.Endpoints.Provenance.MayUploadTo(herkunft, quelle)
+                    Api.Endpoints.Provenance.MayUpload(herkunft)
                         ? "already-uploaded:" + Api.Endpoints.Provenance.Name(quelle)
                         : Api.Endpoints.Provenance.OriginBlockedReason(herkunft)
                             ?? "no-upload-source");
@@ -7969,7 +7969,7 @@ public sealed class UploadPipeline : IPackFiller
     /// </para>
     /// <para>
     /// "Offen" heisst: eingeschaltet und konfiguriert (<see cref="UploadSources"/>, F-M496/F-M497),
-    /// ohne den Inhalt, UND die Herkunft erlaubt diese Quelle (<see cref="Api.Endpoints.Provenance.MayUploadTo"/>,
+    /// ohne den Inhalt, UND die Herkunft erlaubt diese Quelle (<see cref="Api.Endpoints.Provenance.MayUpload"/>,
     /// F-M487). Das Herkunftstor wird hier nur GELESEN, nicht nachgebaut: ein von SubDL heruntergeladener
     /// Untertitel bleibt bei tvsubtitles <c>cross-source</c> und bekommt keinen Versuch — auch nicht auf
     /// diesem Weg.
@@ -8044,9 +8044,11 @@ public sealed class UploadPipeline : IPackFiller
             // geht der Kandidat an die Kette. Erst wenn keine Quelle ihn nehmen DARF — Herkunft bekannt
             // heisst: heruntergeladen, geht nirgends hoch (F-M487) —, ist das Paar entschieden.
             string? herkunftOhneBeleg = Registry.GetOrigin(contentHash).Origin;
-            var darfNoch = quellen
-                .Where(quelle => Api.Endpoints.Provenance.MayUploadTo(herkunftOhneBeleg, quelle))
-                .ToList();
+            // F-M722: die Herkunftsfrage gilt fuer alle Quellen gleich — sie wird EINMAL gestellt,
+            // nicht je Quelle (MayUpload hat keinen Zielparameter mehr).
+            var darfNoch = Api.Endpoints.Provenance.MayUpload(herkunftOhneBeleg)
+                ? quellen.ToList()
+                : new List<Configuration.SubtitleProvider>();
             if (darfNoch.Count > 0)
             {
                 return (ContentSettle.DueForAnotherSource, string.Join(", ", darfNoch.Select(Api.Endpoints.Provenance.Name)));
@@ -8064,10 +8066,9 @@ public sealed class UploadPipeline : IPackFiller
 
         // Dieselbe Herkunft, die auch die Kette liest (F-M487) — hier nur als Frage "darf diese Quelle ihn".
         string? herkunft = Registry.GetOrigin(contentHash).Origin;
-        var offen = quellen
-            .Where(quelle => !beleg.Contains(quelle)
-                && Api.Endpoints.Provenance.MayUploadTo(herkunft, quelle))
-            .ToList();
+        var offen = Api.Endpoints.Provenance.MayUpload(herkunft)
+            ? quellen.Where(quelle => !beleg.Contains(quelle)).ToList()
+            : new List<Configuration.SubtitleProvider>();
 
         var belegte = beleg.ToList();
         // F-M586: faellt die letzte offene Quelle nur wegen ihrer Sprachliste weg, traegt das Urteil

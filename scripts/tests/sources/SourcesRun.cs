@@ -708,11 +708,14 @@ internal static class Program
             int regelStart = tor.IndexOf("public static UploadGateResult Decide(string? origin", StringComparison.Ordinal);
             int regelEnde = tor.IndexOf("public static IReadOnlyList<UploadTarget> TargetsFrom", StringComparison.Ordinal);
             string regelRumpf = regelStart > 0 && regelEnde > regelStart ? tor[regelStart..regelEnde] : string.Empty;
+            // F-M722: die Herkunft wird EINMAL gefragt (sie haengt nicht vom Ziel ab), die Schleife fragt
+            // je Ziel nur noch Schalter und Marke. Kein Quellenname, kein Scheinziel.
             Check(regelRumpf.Length > 0
                   && regelRumpf.Contains("foreach (var ziel in targets)", StringComparison.Ordinal)
-                  && regelRumpf.Contains("Provenance.MayUploadTo(origin, ziel.Key)", StringComparison.Ordinal)
+                  && regelRumpf.Contains("var herkunftErlaubt = Provenance.MayUpload(origin);", StringComparison.Ordinal)
+                  && regelRumpf.Split("Provenance.MayUpload(origin)").Length - 1 == 1
                   && !regelRumpf.Contains("SubtitleProvider.", StringComparison.Ordinal),
-                "F-M721: die Entscheidung laeuft ueber die Liste und nennt keine Quelle — eine Regel, n Ziele",
+                "F-M721/F-M722: eine Regel, einmal gefragt, n Ziele in der Schleife — ohne Scheinziel",
                 "Rumpf ohne Quellenname");
 
             Check(tor.Contains("foreach (var engine in sources.Engines)", StringComparison.Ordinal)

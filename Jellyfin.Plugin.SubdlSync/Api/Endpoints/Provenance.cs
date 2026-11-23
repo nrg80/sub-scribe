@@ -110,25 +110,20 @@ public static class Provenance
     /// <returns>Die Quelle, oder null.</returns>
     public static SubtitleProvider? Provider(string? key) => Parse(key);
 
-    public static bool MayUploadTo(string? origin, SubtitleProvider target)
-    {
-        _ = target;
-        return Parse(origin) is null;
-    }
-
     /// <summary>
-    /// F-M721: dieselbe EINE Regel, gefragt mit dem Quellenschluessel statt mit der Aufzaehlung — so
-    /// fragt das Tor sie, und es muss keine Quelle kennen: eine bekannte Herkunft sperrt JEDES Ziel
-    /// (kein Reup, keine Kreuzkontamination), eine unbekannte sperrt keines.
+    /// F-M722: die eine Frage — und sie hat KEINEN Zielparameter, weil die Antwort nicht vom Ziel
+    /// abhaengt. Operator-Kritik 23.11.2026: „Genau das klingt falsch" — eine Funktion, die einen
+    /// Quellenschluessel entgegennimmt und ihn mit <c>_ = target;</c> wegwirft, behauptet eine
+    /// Zielabhaengigkeit, die es nicht gibt. Wer sie liest, sucht eine Quelle, die es nicht gibt.
+    /// <para>
+    /// Die Antwort haengt allein an der Herkunft: bekannt (der Text wurde bei irgendeiner Quelle
+    /// heruntergeladen) heisst NEIN fuer jede Quelle — kein Reup, keine Kreuzkontamination. Unbekannt
+    /// heisst JA; dann entscheiden je Ziel nur noch Schalter und Marke.
+    /// </para>
     /// </summary>
     /// <param name="origin">The stored provenance (null/empty = not known).</param>
-    /// <param name="targetKey">Der Schluessel der Quelle, die nehmen will.</param>
-    /// <returns>True when the upload may go there.</returns>
-    public static bool MayUploadTo(string? origin, string targetKey)
-    {
-        _ = targetKey;
-        return Parse(origin) is null;
-    }
+    /// <returns>True when a subtitle of unknown provenance may be uploaded at all.</returns>
+    public static bool MayUpload(string? origin) => Parse(origin) is null;
 
     /// <summary>
     /// F-M500: der Satz, mit dem eine gesperrte Herkunft im Log steht — er nennt WOHER der Text kommt und

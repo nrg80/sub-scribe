@@ -33,7 +33,7 @@ namespace Jellyfin.Plugin.SubScribe.Api.Endpoints;
 /// F-M721 (Ansage 23.11.2026: "Eine regel statt 3 ist besser. Geht mehr darum den code so zu formulieren,
 /// das er auch mit einer vierten, fuenften, etc... Endpoint funktioniert"): das Tor zaehlt Quellen NICHT
 /// mehr auf. Es bekommt eine Liste <see cref="UploadTarget"/> und laeuft sie durch; die eine Regel steht
-/// in <see cref="Provenance.MayUploadTo(string?, string)"/> und gilt fuer jedes Ziel gleich. Wer die Liste
+/// in <see cref="Provenance.MayUpload"/> und gilt fuer jedes Ziel gleich. Wer die Liste
 /// baut, fragt die Registry (<see cref="TargetsFrom"/>) — eine vierte Engine, die dort haengt, ist damit
 /// ohne Aenderung an diesem Tor dabei.
 /// </para>
@@ -49,10 +49,21 @@ public static class UploadGate
     /// <returns>Welche Quellen duerfen, und warum keine darf.</returns>
     public static UploadGateResult Decide(string? origin, IReadOnlyList<UploadTarget> targets)
     {
+        // F-M722: die Herkunft wird EINMAL gefragt, nicht je Ziel — sie haengt nicht vom Ziel ab.
+        // Danach entscheidet je Quelle nur noch ihr Schalter und ihre Marke.
+        var herkunftErlaubt = Provenance.MayUpload(origin);
+
+        var offen = new List<UploadTarget>();
         var darf = new List<string>();
         foreach (var ziel in targets)
         {
-            if (ziel.SwitchedOn && !ziel.AlreadyThere && Provenance.MayUploadTo(origin, ziel.Key))
+            if (!ziel.SwitchedOn)
+            {
+                continue;
+            }
+
+            offen.Add(ziel);
+            if (herkunftErlaubt && !ziel.AlreadyThere)
             {
                 darf.Add(ziel.Key);
             }
@@ -65,20 +76,21 @@ public static class UploadGate
 
         // Keine Quelle darf: die Herkunft nennt den Grund, wenn sie ihn kennt (F-M500 — eine bekannte
         // Herkunft sperrt ALLE Quellen, nicht nur die fremde).
-        if (targets.All(ziel => !ziel.SwitchedOn || !Provenance.MayUploadTo(origin, ziel.Key)))
+        if (!herkunftErlaubt)
         {
             return new UploadGateResult(
                 Array.Empty<string>(), Provenance.OriginBlockedReason(origin) ?? "no-upload-source");
         }
 
+        if (offen.Count == 0)
+        {
+            return new UploadGateResult(Array.Empty<string>(), "no-upload-source");
+        }
+
         // Sonst haben die offenen Quellen den Text schon — nur sie werden genannt, denn eine
         // abgeschaltete Quelle ist nicht "schon hochgeladen", sondern aus.
-        var schonDa = string.Join(
-            "+",
-            targets
-                .Where(ziel => ziel.SwitchedOn && Provenance.MayUploadTo(origin, ziel.Key))
-                .Select(ziel => ziel.Key));
-        return new UploadGateResult(Array.Empty<string>(), "already-uploaded:" + schonDa);
+        return new UploadGateResult(
+            Array.Empty<string>(), "already-uploaded:" + string.Join("+", offen.Select(ziel => ziel.Key)));
     }
 
     /// <summary>

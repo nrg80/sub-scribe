@@ -491,10 +491,10 @@ internal static class Program
         // nicht zurueck zur eigenen Quelle (Reup) und nicht zur anderen (Kreuzkontamination). Vorher galt
         // "bekannt = nur zur eigenen Quelle"; das ist aufgehoben.
         Check("a tvsubtitles find goes nowhere — not to SubDL and not back to tvsubtitles",
-            !Provenance.MayUploadTo("tvsubtitles", SubtitleProvider.Subdl)
-            && !Provenance.MayUploadTo("tvsubtitles", SubtitleProvider.TvSubtitles)
-            && !Provenance.MayUploadTo("subdl", SubtitleProvider.TvSubtitles)
-            && !Provenance.MayUploadTo("subdl", SubtitleProvider.Subdl));
+            !Provenance.MayUpload("tvsubtitles")
+            && !Provenance.MayUpload("tvsubtitles")
+            && !Provenance.MayUpload("subdl")
+            && !Provenance.MayUpload("subdl"));
         Check("the origin is named in the reason the run logs",
             Provenance.OriginBlockedReason("subdl") is { } subdlSatz
             && subdlSatz.Contains("origin:subdl", StringComparison.Ordinal)
@@ -504,9 +504,9 @@ internal static class Program
             && Provenance.OriginBlockedReason(null) is null,
             (Provenance.OriginBlockedReason("subdl") ?? "-") + " | " + (Provenance.OriginBlockedReason("tvsubtitles") ?? "-"));
         Check("unknown provenance stays allowed everywhere — a hand copy or an embedded track",
-            Provenance.MayUploadTo(null, SubtitleProvider.Subdl)
-            && Provenance.MayUploadTo(null, SubtitleProvider.TvSubtitles)
-            && Provenance.MayUploadTo(string.Empty, SubtitleProvider.Subdl));
+            Provenance.MayUpload(null)
+            && Provenance.MayUpload(null)
+            && Provenance.MayUpload(string.Empty));
         Check("the refusal sentence names both sides",
             Provenance.CrossSourceReason("tvsubtitles", SubtitleProvider.Subdl)
                 .Contains("tvsubtitles", StringComparison.Ordinal)
@@ -777,7 +777,7 @@ internal static class Program
         Check("the provenance gate still decides PER SOURCE — a refused source is skipped, the chain runs on (F-M495/F-M508)",
             uploadSource.Contains("if (!Api.Endpoints.UploadGate.May(gate, quelle))", StringComparison.Ordinal)
             && uploadSource.Contains("Api.Endpoints.Provenance.OriginBlockedReason(herkunft)", StringComparison.Ordinal)
-            && uploadSource.Contains("Api.Endpoints.Provenance.MayUploadTo(herkunft, quelle)", StringComparison.Ordinal)
+            && uploadSource.Contains("Api.Endpoints.Provenance.MayUpload(herkunft)", StringComparison.Ordinal)
             && uploadSource.Contains("Api.Endpoints.UploadGate.Decide(", StringComparison.Ordinal));
 
         // ---- 16. Trockenlauf: eine Zeile je Quelle, keine Zugangsdaten (F-M496) -----------------
@@ -1996,8 +1996,8 @@ internal static class Program
                 var beideRow = settleReg.GetEmbed("eeee5555ffff6666", 0);
                 Check("unbekannte/externe Herkunft: BEIDE Quellen duerfen hochladen, jede mit eigener Marke (F-M487/F-M500)",
                     torUnbekannt.Subdl && torUnbekannt.TvSubtitles && torUnbekannt.SkipReason is null
-                    && Jellyfin.Plugin.SubScribe.Api.Endpoints.Provenance.MayUploadTo(null, SubtitleProvider.Subdl)
-                    && Jellyfin.Plugin.SubScribe.Api.Endpoints.Provenance.MayUploadTo(null, SubtitleProvider.TvSubtitles)
+                    && Jellyfin.Plugin.SubScribe.Api.Endpoints.Provenance.MayUpload(null)
+                    && Jellyfin.Plugin.SubScribe.Api.Endpoints.Provenance.MayUpload(null)
                     // F-M668: die zwei Marken stehen als ZWEI Zeilen derselben Spur in der Matrix — je
                     // Quelle eine, jede mit ihrer eigenen Einsende-Id (vorher: zwei Spalten einer Zeile).
                     && beideRow != null
@@ -2023,11 +2023,11 @@ internal static class Program
                     herkunft == "subdl"
                     && !torSubdl.Subdl && !torSubdl.TvSubtitles
                     && torSubdl.SkipReason == "origin:subdl — downloaded there, never uploaded"
-                    && !Jellyfin.Plugin.SubScribe.Api.Endpoints.Provenance.MayUploadTo(herkunft, SubtitleProvider.Subdl)
-                    && !Jellyfin.Plugin.SubScribe.Api.Endpoints.Provenance.MayUploadTo(herkunft, SubtitleProvider.TvSubtitles)
+                    && !Jellyfin.Plugin.SubScribe.Api.Endpoints.Provenance.MayUpload(herkunft)
+                    && !Jellyfin.Plugin.SubScribe.Api.Endpoints.Provenance.MayUpload(herkunft)
                     && !settleReg.IsContentUploadedFor(hashHer, SubtitleProvider.TvSubtitles)
                     // der Settle-Weg fragt genau dieses Tor, bevor er einen Kandidaten weiterlaufen laesst
-                    && uploadSource.Contains("Api.Endpoints.Provenance.MayUploadTo(herkunft, quelle)", StringComparison.Ordinal)
+                    && uploadSource.Contains("Api.Endpoints.Provenance.MayUpload(herkunft)", StringComparison.Ordinal)
                     && uploadSource.Contains("string? herkunft = Registry.GetOrigin(contentHash).Origin;", StringComparison.Ordinal),
                     "herkunft=" + (herkunft ?? "-") + " subdl=" + torSubdl.Subdl + " tvst=" + torSubdl.TvSubtitles);
 
@@ -2042,8 +2042,8 @@ internal static class Program
                     herkunftTv == "tvsubtitles"
                     && !torTv.Subdl && !torTv.TvSubtitles
                     && torTv.SkipReason == "origin:tvsubtitles — downloaded there, never uploaded"
-                    && !Jellyfin.Plugin.SubScribe.Api.Endpoints.Provenance.MayUploadTo(herkunftTv, SubtitleProvider.Subdl)
-                    && !Jellyfin.Plugin.SubScribe.Api.Endpoints.Provenance.MayUploadTo(herkunftTv, SubtitleProvider.TvSubtitles)
+                    && !Jellyfin.Plugin.SubScribe.Api.Endpoints.Provenance.MayUpload(herkunftTv)
+                    && !Jellyfin.Plugin.SubScribe.Api.Endpoints.Provenance.MayUpload(herkunftTv)
                     // F-M668: die Inhaltsfrage antwortet über das PAAR dieser Zeile. Für SubDL ist das
                     // Paar (fileA, DE) bereits oben (Settle oben) — die Antwort ist deshalb „ja", und
                     // zwar aus demselben Grund, aus dem das Tor es sagen würde. Für tvst ist das Paar
@@ -2795,10 +2795,10 @@ internal static class Program
             Provenance.Name(SubtitleProvider.MovieSubtitles) == "moviesubtitles"
             && Provenance.Parse("moviesubtitles") == SubtitleProvider.MovieSubtitles
             && Provenance.Parse("MovieSubtitles") == SubtitleProvider.MovieSubtitles
-            && !Provenance.MayUploadTo("moviesubtitles", SubtitleProvider.MovieSubtitles)
-            && !Provenance.MayUploadTo("moviesubtitles", SubtitleProvider.Subdl)
-            && !Provenance.MayUploadTo("moviesubtitles", SubtitleProvider.TvSubtitles)
-            && Provenance.MayUploadTo(null, SubtitleProvider.MovieSubtitles)
+            && !Provenance.MayUpload("moviesubtitles")
+            && !Provenance.MayUpload("moviesubtitles")
+            && !Provenance.MayUpload("moviesubtitles")
+            && Provenance.MayUpload(null)
             && Provenance.OriginBlockedReason("moviesubtitles")!.Contains("moviesubtitles", StringComparison.Ordinal));
 
         // (g) Operator-Auflage 15.11.2026 („Bevor wir falsche Sprachen hochladen, laden wir nix hoch."):
