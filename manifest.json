@@ -12,9 +12,9 @@
         "version": "12.3.8.24",
         "changelog": "v12.3.8.24: the upload tab no longer carries its own pack switch — a source's \"Packs\" switch now covers uploading and downloading packs for that source.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.24-dev/Jellyfin.Plugin.SubdlSync_12.3.8.24.zip",
-        "checksum": "ef702aaf8209852ce6eb80949614d51b",
-        "timestamp": "2026-11-23T20:53:04Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.24/Jellyfin.Plugin.SubdlSync_12.3.8.24.zip",
+        "checksum": "7b2ac8fea9417ed647046c70c6be20ee",
+        "timestamp": "2026-11-23T21:05:43Z"
       }
     ]
   }
