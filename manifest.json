@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.6",
-        "changelog": "v12.3.8.6: the SubDL card carries the three credentials — API key, email, password —, the download and upload tabs no longer describe the sources at all, no source carries a field that asks nothing, and the card buttons and inputs are real Emby elements.",
+        "version": "12.3.8.9",
+        "changelog": "v12.3.8.9: the state light of a source sits on its own row under the card heading.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.6-dev/Jellyfin.Plugin.SubdlSync_12.3.8.6.zip",
-        "checksum": "9f0456dc20e5ae6b932fcac26eaac529",
-        "timestamp": "2026-11-22T19:16:12Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.9-dev/Jellyfin.Plugin.SubdlSync_12.3.8.9.zip",
+        "checksum": "9f04184dff7b4bfefbf6a977ecd34cc3",
+        "timestamp": "2026-11-23T07:04:51Z"
       }
     ]
   }
