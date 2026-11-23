@@ -2747,13 +2747,22 @@ public sealed class UploadPipeline : IPackFiller
                     return summary;
                 }
 
-                if (_api.ServerRateLimited)
+                // F-M713 (Betreiberansage 22.11.2026: „Nur subdl fällt aus"): ein erschöpftes SubDL-Konto
+                // nimmt NUR SubDL aus dem Lauf. Die Prüfung gilt deshalb nur, solange SubDL noch
+                // mitmacht — sonst würde sie jeden weiteren Eintrag erneut auslösen und den Lauf
+                // genau so beenden, wie es hier vorher stand.
+                if (_api.ServerRateLimited && !_quellenAus.Contains(Configuration.SubtitleProvider.Subdl))
                 {
                     // Arrival runs never wait out the daily limit
                     if (IsArrivalRun)
                     {
-                        _logger.LogWarning("[Sub Scribe] Daily limit (429), arrival run — pass stopped, next scheduled run.");
-                        return summary;
+                        summary.QuotaStopped++;
+                        _quellenAus.Add(Configuration.SubtitleProvider.Subdl);
+                        _api.ResetRateLimitFlag();
+                        _logger.LogWarning(
+                            "[Sub Scribe] Daily limit (429), arrival run — SubDL is out for the rest of this run; "
+                            + "the other sources keep uploading (F-M713).");
+                        continue;
                     }
 
                     if (await WaitOutDailyLimitAsync(watchdog, runCt).ConfigureAwait(false))
@@ -2764,10 +2773,15 @@ public sealed class UploadPipeline : IPackFiller
                     else
                     {
                         var fireInfoUp = ScheduledTasks.ScribeSchedulerCoordinator.Instance?.GetPendingFireUtc(upload: true);
-                        _logger.LogWarning("[Sub Scribe] SubDL account daily limit (HTTP 429) — stopping upload run early. Restart: {FireLocal} local time.{Pending}",
-                            fireInfoUp?.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture) ?? "see scheduler log", fireInfoUp.HasValue ? string.Empty : " (no pending fire — will re-fire at next scheduled run)");
                         summary.QuotaStopped++;
-                        return summary;
+                        _quellenAus.Add(Configuration.SubtitleProvider.Subdl);
+                        _api.ResetRateLimitFlag();
+                        _logger.LogWarning(
+                            "[Sub Scribe] SubDL account daily limit (HTTP 429) — SubDL is out for the rest of this run; "
+                            + "the other sources keep uploading (F-M713). SubDL restarts {FireLocal} local.{Pending}",
+                            fireInfoUp?.ToString("yyyy-MM-dd HH:mm", System.Globalization.CultureInfo.InvariantCulture) ?? "see scheduler log",
+                            fireInfoUp.HasValue ? string.Empty : " (no pending fire — SubDL rejoins at the next scheduled run)");
+                        continue;
                     }
                 }
 
@@ -7572,7 +7586,16 @@ public sealed class UploadPipeline : IPackFiller
     /// </summary>
     /// <param name="provider">Die Quelle, die hochladen soll.</param>
     /// <returns>Wahr, wenn diese Quelle per Upload-Schalter freigeschaltet ist.</returns>
-    private bool SourceAllowed(Configuration.SubtitleProvider provider) => _config.IsUploadEnabled(provider);
+    /// <summary>
+    /// F-M713 (Betreiberansage 22.11.2026: „Nur subdl fällt aus"): der Schalter der Quelle UND — ob sie
+    /// in diesem Lauf noch mitmacht. Ein erschöpftes SubDL-Konto nimmt nur SubDL aus dem Lauf; die
+    /// übrigen Quellen senden weiter, weil ihr Versand kein SubDL-Kontingent verbraucht.
+    /// </summary>
+    private bool SourceAllowed(Configuration.SubtitleProvider provider) =>
+        _config.IsUploadEnabled(provider) && !_quellenAus.Contains(provider);
+
+    /// <summary>F-M713: Quellen, die in DIESEM Lauf ausgefallen sind (Kontingent, Schlüssel). Der nächste Lauf fragt sie wieder.</summary>
+    private readonly HashSet<Configuration.SubtitleProvider> _quellenAus = new();
 
     /// <summary>
     /// F-M499 (gemessen 15.11.2026, 16:17): die Quellen, die in DIESEM Lauf wirklich antreten — die

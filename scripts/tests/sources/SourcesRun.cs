@@ -653,6 +653,33 @@ internal static class Program
                 try { Directory.Delete(schalterDir, true); } catch (IOException) { }
             }
 
+            // -------------------------------------------------------------------------------------
+            // F-M713 (Betreiberansage 22.11.2026: „Nur subdl fällt aus"): ein erschöpftes Kontingent
+            // oder ein abgelehnter Schlüssel nimmt EINE Quelle aus dem Lauf — nicht den Lauf.
+            // -------------------------------------------------------------------------------------
+            string f713Download = File.ReadAllText(Path.Combine(plugin, "Pipeline", "DownloadPipeline.cs"));
+            Check(!f713Download.Contains("_stopRun = true", StringComparison.Ordinal)
+                  && !f713Download.Contains("_stopRun = false", StringComparison.Ordinal),
+                "F-M713: der Download-Lauf kennt keinen Abbruch des GANZEN Laufs wegen eines Kontingents mehr",
+                "_stopRun ist aus dem Code verschwunden");
+            Check(f713Download.Contains("MerkeQuelleTot(Configuration.SubtitleProvider.Subdl)", StringComparison.Ordinal),
+                "F-M713: ein Download-429 nimmt SubDL aus dem Lauf",
+                "MerkeQuelleTot(Subdl) im 429-Zweig");
+            Check(f713Download.Contains("if (!hauptsucheLief)", StringComparison.Ordinal)
+                  && f713Download.Contains("if (!hauptsucheLief)", StringComparison.Ordinal)
+                  && f713Download.Contains("F-M713: die Hauptsuche ist ausgefallen", StringComparison.Ordinal),
+                "F-M713: faellt die Hauptsuche aus, arbeitet der Vorgang mit den anderen Quellen weiter",
+                "continue statt return");
+
+            string f713Upload = File.ReadAllText(Path.Combine(plugin, "Pipeline", "UploadPipeline.cs"));
+            Check(f713Upload.Contains("_config.IsUploadEnabled(provider) && !_quellenAus.Contains(provider)", StringComparison.Ordinal),
+                "F-M713: der Upload fragt Schalter UND Ausfall — eine ausgefallene Quelle tritt nicht mehr an",
+                "_config.IsUploadEnabled(provider) && !_quellenAus.Contains(provider)");
+            Check(f713Upload.Contains("_quellenAus.Add(Configuration.SubtitleProvider.Subdl)", StringComparison.Ordinal)
+                  && !f713Upload.Contains("stopping upload run early", StringComparison.Ordinal),
+                "F-M713: ein Upload-429 nimmt SubDL aus dem Lauf, statt den Lauf zu beenden",
+                "kein 'stopping upload run early' mehr");
+
             string zugangDir = Path.Combine(Path.GetTempPath(), "sub-scribe-zugang-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path.Combine(zugangDir, "sources"));
             Func<string?> vorherZugang = SourceSwitches.DataFolder;

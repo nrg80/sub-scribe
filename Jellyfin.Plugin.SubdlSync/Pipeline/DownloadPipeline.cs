@@ -352,11 +352,12 @@ public sealed class DownloadPipeline : IDisposable
     private RunWatchdog? _watchdog;
 
     /// <summary>
-    /// F-M48 fix (08.09.2026): set when the hourly rate cap or a server 429 is hit —
-    /// the item loop aborts so remaining items keep their refetch-due state instead
-    /// of being marked "searched" with fail-open empty results.
+    /// F-M713 (Betreiberansage 22.11.2026: „Nur subdl fällt aus"): kein Kennzeichen mehr für
+    /// „ganzer Lauf zu Ende". Ein erschöpftes Kontingent oder ein abgelehnter Schlüssel betrifft EINE
+    /// Quelle; sie fällt über <see cref="MerkeQuelleTot"/> für diesen Lauf aus, die anderen arbeiten
+    /// weiter. Der Lauf endet erst, wenn keine Quelle mehr übrig ist (<see cref="_stopRunNoSources" />).
     /// </summary>
-    private bool _stopRun;
+    private const bool StopRunRemoved = false;
 
     /// <summary>
     /// F-M591 (Operator-Anweisung 17.11.2026, gleiche Regel wie F-M590 beim Upload): ob die zuletzt
@@ -821,15 +822,8 @@ public sealed class DownloadPipeline : IDisposable
                 break;
             }
 
-            if (_stopRun)
-            {
-                // F-M48 fix (08.09.2026): quota/rate-limit exhausted mid-run — stop
-                // instead of marking the remaining items "searched" with garbage results.
-                _logger.LogWarning(
-                    "[Sub Scribe-D] Run aborted after {Done}/{Total} queued items — quota/rate limit hit; remaining items stay due for the next run.",
-                    idx, queuedTotal);
-                break;
-            }
+            // F-M713: hier stand der Ausstieg für den ganzen Lauf (F-M48). Eine Quelle, die ihr
+            // Kontingent verbraucht hat, fällt jetzt allein aus — der Lauf arbeitet weiter.
 
             idx++;
             // Fine-grained progress: item start + item done (streams inside report via 0.5 steps)
@@ -1752,11 +1746,14 @@ public sealed class DownloadPipeline : IDisposable
             // stay due for the next run instead of being poisoned with garbage results.
             if (ergebnis.Candidates == null)
             {
-                _stopRun = true;
+                // F-M713: NICHT der ganze Lauf endet hier — nur diese Quelle. Sie wird für den Rest
+                // des Laufs nicht mehr gefragt (MerkeQuelleTot), die anderen bedienen weiter.
                 if (_api.AuthBroken)
                 {
-                    _logger.LogError("[Sub Scribe-D] API key rejected (403) — run stopped at {File}, check credentials.",
+                    _logger.LogError("[Sub Scribe-D] API key rejected (403) at {File} — this source is out for the rest "
+                        + "of the run, the other sources keep working; check credentials (F-M713).",
                         Path.GetFileName(mediaPath));
+                    MerkeQuelleTot(MainSearchSource);
                 }
                 else if (_api.TransientOverload)
                 {
@@ -1766,6 +1763,7 @@ public sealed class DownloadPipeline : IDisposable
                     _logger.LogWarning(
                         "[Sub Scribe-D] SubDL still overloaded (429 service_busy) after {Max} retries — stopping run at {File}; item stays due for the overload fire.",
                         maxTransientRetries, Path.GetFileName(mediaPath));
+                    MerkeQuelleTot(MainSearchSource);   // F-M713
                 }
                 else
                 {
@@ -1787,7 +1785,6 @@ public sealed class DownloadPipeline : IDisposable
                     if (stop == QuotaStop.Respaced)
                     {
                         _api.ResetRateLimitFlag();
-                        _stopRun = false;
                         ScheduledTasks.ScribeSchedulerCoordinator.Instance?.ScheduleOverloadFire(upload: false, DateTime.UtcNow);
                         _logger.LogWarning(
                             "[Sub Scribe-D] 429 at {File} is a short-term rate limit — search allowance still has {Remaining}/{Limit} left; "
@@ -1801,6 +1798,7 @@ public sealed class DownloadPipeline : IDisposable
                         // Done, removing it from the queue. `QuotaStopped` is the only flag the
                         // dispatcher reads (ScribeEventDispatcher.CleanupDirectionQueue).
                         summary.QuotaStopped++;
+                        MerkeQuelleTot(MainSearchSource);   // F-M713: nur SubDL faellt aus
                         // Day-long: anchor on the server's reset (or the fail-safe midnight),
                         // exactly like the download-429 path. Without this the search path
                         // stopped without scheduling anything and nothing retried until the
@@ -1818,8 +1816,9 @@ public sealed class DownloadPipeline : IDisposable
                         // A spent allowance with a clean stop and no fire — still a quota stop (the work
                         // did not happen), so the counter and the queue guard apply.
                         summary.QuotaStopped++;
+                        MerkeQuelleTot(MainSearchSource);   // F-M713: nur SubDL faellt aus
                         _logger.LogWarning(
-                            "[Sub Scribe-D] Search allowance spent — run stopped at {File}; no recovery fire (continue-after-limit is off or arrival run) (F-M238).",
+                            "[Sub Scribe-D] Search allowance spent — this source is out at {File}; no recovery fire (continue-after-limit is off or arrival run) (F-M238).",
                             Path.GetFileName(mediaPath));
                     }
                 }
@@ -1897,7 +1896,11 @@ public sealed class DownloadPipeline : IDisposable
 
                 if (!hauptsucheLief)
                 {
-                    return;
+                    // F-M713: die Hauptsuche ist ausgefallen — der Vorgang läuft mit den übrigen
+                    // Quellen weiter (sie werden in dieser Schleife danach gefragt). Vorher endete
+                    // hier der ganze Lauf; damit standen auch Einträge still, die tvst oder mst
+                    // bedienen konnten.
+                    continue;
                 }
 
                 _letzteFrageOhneAntwort = false;
@@ -2974,7 +2977,11 @@ public sealed class DownloadPipeline : IDisposable
                 {
                     // Quota reset info is logged once by WaitForDailyLimitResetAsync; no second line here.
                     summary.QuotaStopped++;
-                    _stopRun = true; // F-M65 fix (09.09.2026): a download-429 must END the run, not just this item — otherwise the loop keeps hammering the dead quota item after item.
+                    // F-M713 (Betreiberansage 22.11.2026: „Nur subdl fällt aus"): der 429 beendet
+                    // NICHT den Lauf, sondern nimmt diese Quelle für den Rest des Laufs heraus. Der
+                    // Eintrag bleibt fällig (nicht als gesucht verbucht), die nächsten Einträge laufen
+                    // mit den übrigen Quellen weiter.
+                    MerkeQuelleTot(Configuration.SubtitleProvider.Subdl);
                     return;
                 }
 
@@ -3857,7 +3864,7 @@ public sealed class DownloadPipeline : IDisposable
         // Wer hier „QA budget" liest, sucht einen QA-Fehlerzaehler, den es nicht gibt. Was die Zeile
         // meint, ist „diese Sprache ist fuer diesen Lauf erledigt" (would-save, gespeichert oder nicht
         // verfuegbar); der Grund steht in der Zeile eine Ebene hoeher.
-        if (!_stopRun && missing.Count > 0 && missing.All(l => closedLangs.Contains(l)))
+        if (!_stopRunNoSources && missing.Count > 0 && missing.All(l => closedLangs.Contains(l)))
         {
             LogUtil.PerItem(
                 _config.LogMode,

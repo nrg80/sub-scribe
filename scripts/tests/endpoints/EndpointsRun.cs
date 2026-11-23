@@ -765,7 +765,8 @@ internal static class Program
             && uploadSource.Contains("bool dritteGenommen = Genommen(Configuration.SubtitleProvider.MovieSubtitles);", StringComparison.Ordinal)
             && !uploadSource.Contains("var vonZweiter = false;", StringComparison.Ordinal));
         Check("each endpoint's switch is asked right before its start — through ONE helper, skip instead of break (F-M495)",
-            uploadSource.Contains("private bool SourceAllowed(Configuration.SubtitleProvider provider) => _config.IsUploadEnabled(provider);", StringComparison.Ordinal)
+            // F-M713: derselbe eine Helfer, jetzt mit dem Ausfall-Zusatz.
+            uploadSource.Contains("_config.IsUploadEnabled(provider) && !_quellenAus.Contains(provider)", StringComparison.Ordinal)
             && uploadSource.Contains("if (!SourceAllowed(quelle))", StringComparison.Ordinal)
             && uploadSource.Contains("source {Source} skipped: that source is switched off, nothing sent", StringComparison.Ordinal)
             && !uploadSource.Contains("_config.IsUploadEnabled(Configuration.SubtitleProvider.Subdl)", StringComparison.Ordinal)
@@ -3057,7 +3058,9 @@ internal static class Program
             !uploadSource.Contains("MovieSubtitlesUploadEnabled", StringComparison.Ordinal)
             && !uploadSource.Contains("TvSubtitlesUploadEnabled", StringComparison.Ordinal)
             && !uploadSource.Contains("SubdlUploadEnabled", StringComparison.Ordinal)
-            && uploadSource.Contains("private bool SourceAllowed(Configuration.SubtitleProvider provider) => _config.IsUploadEnabled(provider);", StringComparison.Ordinal));
+            // F-M713: der eine Prüfpunkt fragt Schalter UND Ausfall — die Kette liest weiterhin keinen
+            // Schalter direkt, sie fragt nur diesen Helfer.
+            && uploadSource.Contains("_config.IsUploadEnabled(provider) && !_quellenAus.Contains(provider)", StringComparison.Ordinal));
 
         // Die Marke der Film-Adresse haelt nur fuer sie — und sie schreibt ihre eigenen Spalten.
         string msubMarkRoot = Path.Combine(Path.GetTempPath(), "endpoints-msubmark-" + Environment.ProcessId);
