@@ -700,6 +700,54 @@ internal static class Program
                 "F-M715: ein Timeout nimmt die Quelle fuer den Rest des Laufs heraus, die andere macht weiter",
                 "Merker + Meldung im Timeout-Zweig");
 
+            // F-M721 (Ansage 23.11.2026: "Eine regel statt 3 ist besser. Geht mehr darum den code so zu
+            // formulieren, das er auch mit einer vierten, fuenften, etc... Endpoint funktioniert"): das Tor
+            // zaehlt keine Quellen mehr auf — es laeuft eine Liste durch, und die eine Regel gilt fuer jedes
+            // Ziel. Die Ziele baut die Registry aus ihren Engines.
+            string tor = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/Endpoints/UploadGate.cs"));
+            int regelStart = tor.IndexOf("public static UploadGateResult Decide(string? origin", StringComparison.Ordinal);
+            int regelEnde = tor.IndexOf("public static IReadOnlyList<UploadTarget> TargetsFrom", StringComparison.Ordinal);
+            string regelRumpf = regelStart > 0 && regelEnde > regelStart ? tor[regelStart..regelEnde] : string.Empty;
+            // F-M722: die Herkunft wird EINMAL gefragt (sie haengt nicht vom Ziel ab), die Schleife fragt
+            // je Ziel nur noch Schalter und Marke. Kein Quellenname, kein Scheinziel.
+            Check(regelRumpf.Length > 0
+                  && regelRumpf.Contains("foreach (var ziel in targets)", StringComparison.Ordinal)
+                  && regelRumpf.Contains("var herkunftErlaubt = Provenance.MayUpload(origin);", StringComparison.Ordinal)
+                  && regelRumpf.Split("Provenance.MayUpload(origin)").Length - 1 == 1
+                  && !regelRumpf.Contains("SubtitleProvider.", StringComparison.Ordinal),
+                "F-M721/F-M722: eine Regel, einmal gefragt, n Ziele in der Schleife — ohne Scheinziel",
+                "Rumpf ohne Quellenname");
+
+            Check(tor.Contains("foreach (var engine in sources.Engines)", StringComparison.Ordinal)
+                  && tor.Contains("if (!faehig.CanUpload)", StringComparison.Ordinal)
+                  && tor.Contains("isSeries ? !faehig.ServesSeries : !faehig.ServesMovies", StringComparison.Ordinal),
+                "F-M721: die Ziele kommen aus der Registry — eine weitere Engine ist ohne Aenderung dabei",
+                "TargetsFrom fragt jede Engine");
+
+            // Vier Quellen, davon eine gesperrt: die Regel sperrt ALLE, sobald die Herkunft bekannt ist —
+            // unabhaengig davon, wie viele Quellen es gibt.
+            var ziele = new List<UploadTarget>
+            {
+                new("subdl", true, false),
+                new("tvsubtitles", true, false),
+                new("moviesubtitles", true, false),
+                new("vierte-quelle", true, false),
+            };
+            var torBekannt = UploadGate.Decide("subdl", ziele);
+            var torUnbekannt = UploadGate.Decide(null, ziele);
+            var torMitMarke = UploadGate.Decide(null, new List<UploadTarget>
+            {
+                new("vierte-quelle", true, true),
+                new("fuenfte-quelle", false, false),
+            });
+            Check(torBekannt.AllowedCount == 0 && torBekannt.SkipReason == "origin:subdl — downloaded there, never uploaded"
+                  && torUnbekannt.AllowedCount == 4
+                  && UploadGate.May(torUnbekannt, "vierte-quelle")
+                  && !UploadGate.May(torUnbekannt, "sechste-quelle")
+                  && torMitMarke.SkipReason == "already-uploaded:vierte-quelle",
+                "F-M721: vier und fuenf Quellen laufen ohne Aenderung — bekannte Herkunft sperrt alle, Marke sperrt eine",
+                "bekannt=" + torBekannt.AllowedCount + " unbekannt=" + torUnbekannt.AllowedCount);
+
             string zugangDir = Path.Combine(Path.GetTempPath(), "sub-scribe-zugang-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path.Combine(zugangDir, "sources"));
             Func<string?> vorherZugang = SourceSwitches.DataFolder;

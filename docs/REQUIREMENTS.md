@@ -1,7 +1,7 @@
 # Requirements Specification — Jellyfin Plugin "Sub Scribe" (Upload + Download)
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.24.
+**Status:** Implementation — v12.3.8.27.
 
 **Die Begründungen (warum eine Regel gilt, Messungen, Vorfälle) stehen nicht hier, sondern lokal in der Methodik-Ablage, nach Kapiteln sortiert und mit der Requirement-Nummer
 markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test — sonst nichts.**
@@ -33,7 +33,7 @@ markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
 - [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 46 requirements
-- [14. Data Model and Persistence](#14-data-model-and-persistence) — 74 requirements
+- [14. Data Model and Persistence](#14-data-model-and-persistence) — 76 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 51 requirements
 - [16. Non-Goals](#16-non-goals)
 - [17. Non-Functional Requirements](#17-non-functional-requirements)
@@ -2014,6 +2014,11 @@ Grund (gemessen 18.11.2026): die Queue entsteht nur aus offenen Stempeln (F-M557
 
 **F-M719 [G]:** **Der Pack-Schalter steht nur noch bei der Quelle und meint beide Richtungen.** Ansage 23.11.2026: „Upload tab / upload season packs kann dann entfallen. Pack ein bedeutet upload und download für packs des jeweiligen endpoints ok". Damit fällt das Kästchen **Upload season packs** aus dem Upload-Abschnitt weg (samt Feld `PluginConfiguration.UploadSeasonPacks`) — die Frage „wird überhaupt gepackt?" beantwortet jetzt der Schalter **Packs** der Quellenkarte (`packsEnabled`): steht er bei einer Quelle offen, packt der Lauf und spricht genau diese Quelle an (`PackSlotSources().Count > 0` in `UploadPipeline`), und beim **Holen** verlangt dieselbe Quelle nur dann ein Staffel-Archiv (`PreferSeasonZip` gilt nur noch, wenn `packsEnabled` offen ist). F-M641 (ein quellenblinder Schalter für beide Quellen) ist damit abgelöst; gespeicherte Altwerte im Feld `UploadSeasonPacks` werden beim Lesen ignoriert, weil das Feld nicht mehr existiert.
 
+**F-M721 [U]:** **Eine Herkunftsregel, beliebig viele Quellen — das Tor zählt keine Quelle auf.** Ansage 23.11.2026, nach dem ersten Versuch (F-M720, zurückgenommen): „Eine regel statt 3 ist besser. Geht mehr darum den code so zu formulieren, das er auch mit einer vierten, fünften, etc... Endpoint funktioniert." F-M720 hatte die Regel je Quelle als Zeile in die Engine gelegt — drei Zeilen für drei Quellen, also dasselbe Zählen an anderer Stelle. F-M721 macht es umgekehrt: die Regel bleibt **eine**, und `UploadGate.Decide(string? origin, IReadOnlyList<UploadTarget>)` läuft eine **Liste** durch — kein Quellenname im Rumpf. Die Liste baut `UploadGate.TargetsFrom(SourceRegistry, isSeries, switchedOn, alreadyThere, alsoTakes?)` aus `sources.Engines`: je Engine „kann hochladen?", „führt diese Medienart?" (die Quelle erklärt es selbst, F-M696), Schalter, Marke, Sprache. Die vier Aufrufstellen im Upload (`Trockenlauf`, `frühes Tor`, `Kette`, `Paar-Frage`) bauen ihre Ziele so. Eine vierte oder fünfte Engine, die die Registry baut, ist **ohne Änderung am Tor** dabei — nur ihre Marke im Bestand und ihr Schalter in `sources/<key>.json` müssen den neuen Schlüssel kennen.
+
+**F-M722 [U]:** **Die Herkunftsfrage hat kein Ziel — sie wird einmal gestellt.** Präzisierung des Betreibers 23.11.2026: „Ist dieses sub/sidecar jemals von uns von irgendeiner 1...10 Quellen geladen worden, dann kein upload", und zu F-M721: „Genau das klingt falsch." Berechtigt: `Provenance.MayUploadTo(origin, target)` nahm einen Quellenschlüssel entgegen und warf ihn mit `_ = target;` weg — eine Zielabhängigkeit, die es nicht gibt, und damit eine Suche nach einer Quelle, die niemand benutzt. Neu: **`Provenance.MayUpload(string? origin)`** ohne Zielparameter; `UploadGate.Decide` fragt sie **einmal** vor der Schleife (`herkunftErlaubt`), und je Ziel bleiben nur zwei Fragen — steht der Schalter offen (`SwitchedOn`), und hat diese Quelle den Text an dieser Position schon (`AlreadyThere`, F-M669/F-M488). Die Herkunft selbst ist ein **dauerhafter Beleg**: sie wird beim Herunterladen an `track.Origin` und `sidecar.Origin` geschrieben (F-M486/F-M493, vier Schreibstellen im Download) und weder vom Refresh noch von einem neuen Urteil gelöscht; sie hängt am **Inhalt** (Hash), also sperrt sie jedes spätere Hochladen desselben Textes, unabhängig davon, wie viele Quellen inzwischen dazukommen.
+
+
 #### 14.9 Die Marken-Matrix — die einzige Wahrheit (bis Schema 22; abgelöst durch 14.11)
 
 Die Matrix ist seit 12.3.0.0 der **einzige** Ort, an dem ein Quellen-Urteil steht: eine Zeile je (Medium, Quelle, Art) in der Tabelle `source_matrix` — und bei `track`/`track-hi` je (Medium, Quelle, Art, Sprache, HI, **Position**) (Schema 20, F-M669). Seit 12.3.0.2 (Schema 21, F-M670) ist sie auch der einzige Ort für die **Quellen-Ids**: es gibt keine Alt-Tabelle `source_marks` und keine Spalte `SubdlId` mehr. Die breiten Spalten, aus denen sie bis 12.2.0.28 gefüllt wurde, sind aus der Live-Datei **entfernt**; der Altbestand lebt allein in der Sicherungsdatei weiter. Es gibt keinen zweiten Datenbestand und keinen zweiten Lesepfad.
@@ -2902,6 +2907,8 @@ Kein Grund, keine Vorgeschichte, keine Bitte, kein Vorschlag. Gebaut in `Pipelin
 **T382:** TMDb steht als erste Ampel (F-M718), in `gui-structure` — **1 Prüfung**: die fünf Status-Zeilen liegen in dieser Reihenfolge innerhalb `#ScribeStatusBox`.
 
 **T383:** Der Pack-Schalter gehört der Quelle und meint beide Richtungen (F-M719), in `seasonpack` — **3 Prüfungen**: das Konfigurationsfeld ist entfallen, die Upload-Seite führt kein Kästchen, und `UploadPipeline` packt bei `PackSlotSources().Count > 0`. Ergänzend in `gui-structure` und `endpoints` je eine Prüfung, dass das Kästchen nicht zurückkommt.
+
+**T384:** Eine Regel, n Quellen (F-M721/F-M722), in `sources` — **3 Prüfungen**: der Entscheidungsrumpf läuft über die Liste und nennt keine Quelle, `TargetsFrom` fragt jede Engine der Registry, und vier bzw. fünf Ziele laufen ohne Änderung (bekannte Herkunft sperrt alle, eine Marke sperrt genau eine). Die Herkunft wird dabei genau **einmal** je Entscheidung gefragt und nimmt kein Ziel entgegen.
 
 **T336:** Die vier Ebenen und die drei Quellen-Tabellen seit Schema 23 (F-M672…F-M677), in `storex` gegen echte Altdateien: Kennungsformen `[xxxx]`/`#yyyyy`/`#yyyyy#zzz`/`#yyyyy&zzz`, ein Nummernkreis je Datei über Spur und Seitenwagen, `pack_track` mit Fremdschlüsseln, `upload`/`reference`/`badapple` mit einer Subjekt-Spalte, keine fremde Kennung außerhalb `reference`/`badapple`, `source_matrix` und `rejected_candidates` nach dem Aufstieg weg, `OriginId` ohne Wertverlust nach `reference`, Aufstieg 17→23 und 22→23 mit genau einer Sicherung und einem zweiten Start, der nichts tut — **15 Prüfungen**, die letzte für die Quellenneutralitaet von `badapple` (auch eine nicht-numerische Kennung wie `download-3234-2-en` neben einer SubDL-Nummer).
 

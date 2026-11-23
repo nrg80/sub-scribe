@@ -175,7 +175,6 @@ public sealed class SourceRegistry
             ? null
             : _engines.FirstOrDefault(e => string.Equals(e.Capabilities.Key, key, StringComparison.Ordinal));
 
-    /// <summary>
     /// F-M682: die Engines, die eine Fähigkeit melden — in Frage-Reihenfolge. Der Ablauf arbeitet diese
     /// Liste ab, statt je Quelle einen Zweig zu haben.
     /// </summary>

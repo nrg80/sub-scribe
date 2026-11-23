@@ -8,9 +8,11 @@
 // without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
 // PARTICULAR PURPOSE. See the GNU General Public License for more details.
 
+using System;
 using System.Collections.Generic;
 using System.Linq;
 using Jellyfin.Plugin.SubScribe.Configuration;
+using Jellyfin.Plugin.SubScribe.Sources;
 
 namespace Jellyfin.Plugin.SubScribe.Api.Endpoints;
 
@@ -19,105 +21,192 @@ namespace Jellyfin.Plugin.SubScribe.Api.Endpoints;
 /// rein reup von tvst auf tvst. Kein reup von subdl auf subdl"): which sources may still take THIS
 /// subtitle, decided in ONE place.
 /// <para>
-/// Two independent reasons can forbid a source, and both must be answered per source, not per run:
+/// Zwei unabhaengige Gruende koennen eine Quelle sperren, und beide werden JE QUELLE beantwortet:
 /// </para>
 /// <list type="bullet">
-/// <item><description>the switch is off, or the provenance is KNOWN at all (F-M487, verschaerft: ein
+/// <item><description>ihr Schalter steht aus, oder die Herkunft ist BEKANNT (F-M487 verschaerft: ein
 /// Download geht nirgends hoch — weder zurueck zur eigenen Quelle noch zur anderen);</description></item>
-/// <item><description>that source ALREADY has this subtitle — its own upload mark is in the store
-/// (F-M488). A re-upload to the same source is exactly as unwanted as a cross-source upload.</description></item>
+/// <item><description>diese Quelle hat den Untertitel SCHON — ihre eigene Marke liegt im Bestand
+/// (F-M488). Ein Reup auf dieselbe Quelle ist so unerwuenscht wie eine Kreuzkontamination.</description></item>
 /// </list>
 /// <para>
-/// The consequence is the case that used to be invisible: a subtitle uploaded to tvsubtitles.net long ago
-/// is still allowed to go to SubDL, and a subtitle that SubDL already has is still allowed to go to
-/// tvsubtitles.net. Only the pair "same source, again" is refused.
-/// </para>
-/// <para>
-/// F-M508: die dritte Adresse (moviesubtitles.org) wird genauso gefragt wie die beiden anderen — je
-/// Adresse eigener Schalter, eigene Marke, eigene Antwort. Sie ist die Film-Adresse derselben Familie;
-/// ob sie in diesem Lauf überhaupt zuständig ist, entscheidet die Medienart im Aufrufer
-/// (<see cref="SourceOrder.AppliesTo"/>), nicht dieses Tor.
+/// F-M721 (Ansage 23.11.2026: "Eine regel statt 3 ist besser. Geht mehr darum den code so zu formulieren,
+/// das er auch mit einer vierten, fuenften, etc... Endpoint funktioniert"): das Tor zaehlt Quellen NICHT
+/// mehr auf. Es bekommt eine Liste <see cref="UploadTarget"/> und laeuft sie durch; die eine Regel steht
+/// in <see cref="Provenance.MayUpload"/> und gilt fuer jedes Ziel gleich. Wer die Liste
+/// baut, fragt die Registry (<see cref="TargetsFrom"/>) — eine vierte Engine, die dort haengt, ist damit
+/// ohne Aenderung an diesem Tor dabei.
 /// </para>
 /// </summary>
 public static class UploadGate
 {
     /// <summary>
-    /// F-M489: the decision for every source at once. Only the answers of the sources that are switched on
-    /// are meaningful; a source that is off is false here, and the caller names it as "switched off"
-    /// instead of "already uploaded".
+    /// F-M721: die Entscheidung ueber eine beliebig lange Quellenliste. Je Ziel dieselben zwei Fragen
+    /// (Schalter an? Marke schon da?) und dieselbe eine Herkunftsregel.
     /// </summary>
-    /// <param name="subdlSwitch">Is the SubDL upload switch on?</param>
-    /// <param name="tvSubtitlesSwitch">Is the tvsubtitles.net upload switch on?</param>
-    /// <param name="origin">The subtitle's provenance as stored (null/empty = unknown).</param>
-    /// <param name="subdlAlready">Does SubDL already have this subtitle (its own mark in the store)?</param>
-    /// <param name="tvSubtitlesAlready">Does tvsubtitles.net already have it?</param>
-    /// <param name="movieSubtitlesSwitch">F-M508: is the moviesubtitles.org upload switch on?</param>
-    /// <param name="movieSubtitlesAlready">F-M508: does moviesubtitles.org already have it?</param>
-    /// <returns>Which sources may run, and why nothing runs when none of them may.</returns>
-    // F-M656: alle drei Quellen sind Pflicht. Mit Vorgabewerten `false` fuer die Filmquelle liess ein
-    // vergessener Aufruf moviesubtitles still aus — genau das war an einer Stelle der Fall.
-    public static UploadGateResult Decide(
-        bool subdlSwitch, bool tvSubtitlesSwitch, string? origin, bool subdlAlready, bool tvSubtitlesAlready,
-        bool movieSubtitlesSwitch, bool movieSubtitlesAlready)
+    /// <param name="origin">Die Herkunft, wie sie im Bestand steht (null/leer = unbekannt).</param>
+    /// <param name="targets">Die Quellen dieses Laufs, in Frage-Reihenfolge.</param>
+    /// <returns>Welche Quellen duerfen, und warum keine darf.</returns>
+    public static UploadGateResult Decide(string? origin, IReadOnlyList<UploadTarget> targets)
     {
-        var subdlSwitched = subdlSwitch && Provenance.MayUploadTo(origin, SubtitleProvider.Subdl);
-        var tvSwitched = tvSubtitlesSwitch && Provenance.MayUploadTo(origin, SubtitleProvider.TvSubtitles);
-        var msubSwitched = movieSubtitlesSwitch && Provenance.MayUploadTo(origin, SubtitleProvider.MovieSubtitles);
+        // F-M722: die Herkunft wird EINMAL gefragt, nicht je Ziel — sie haengt nicht vom Ziel ab.
+        // Danach entscheidet je Quelle nur noch ihr Schalter und ihre Marke.
+        var herkunftErlaubt = Provenance.MayUpload(origin);
 
-        var subdl = subdlSwitched && !subdlAlready;
-        var tv = tvSwitched && !tvSubtitlesAlready;
-        var msub = msubSwitched && !movieSubtitlesAlready;
-
-        if (subdl || tv || msub)
+        var offen = new List<UploadTarget>();
+        var darf = new List<string>();
+        foreach (var ziel in targets)
         {
-            return new UploadGateResult(subdl, tv, msub, null);
+            if (!ziel.SwitchedOn)
+            {
+                continue;
+            }
+
+            offen.Add(ziel);
+            if (herkunftErlaubt && !ziel.AlreadyThere)
+            {
+                darf.Add(ziel.Key);
+            }
         }
 
-        // Why not — the most specific answer wins, because it is the one that explains the row.
-        if (!subdlSwitched && !tvSwitched && !msubSwitched)
+        if (darf.Count > 0)
         {
-            // F-M500 (Operator-Anweisung 15.11.2026): eine BEKANNTE Herkunft sperrt ALLE Quellen — nicht
-            // nur die fremde. Der Grund nennt sie, statt nur "cross-source" zu sagen.
-            return new UploadGateResult(false, false, false,
-                Provenance.OriginBlockedReason(origin) ?? "no-upload-source");
+            return new UploadGateResult(darf, null);
         }
 
-        // Nur die Quellen nennen, die ueberhaupt duerften — eine abgeschaltete Quelle ist nicht
-        // "schon hochgeladen", sondern aus.
-        var already = string.Join(
-            "+",
-            new[] { (subdlSwitched, "subdl"), (tvSwitched, "tvsubtitles"), (msubSwitched, "moviesubtitles") }
-                .Where(pair => pair.Item1)
-                .Select(pair => pair.Item2));
-        return new UploadGateResult(false, false, false, "already-uploaded:" + already);
+        // Keine Quelle darf: die Herkunft nennt den Grund, wenn sie ihn kennt (F-M500 — eine bekannte
+        // Herkunft sperrt ALLE Quellen, nicht nur die fremde).
+        if (!herkunftErlaubt)
+        {
+            return new UploadGateResult(
+                Array.Empty<string>(), Provenance.OriginBlockedReason(origin) ?? "no-upload-source");
+        }
+
+        if (offen.Count == 0)
+        {
+            return new UploadGateResult(Array.Empty<string>(), "no-upload-source");
+        }
+
+        // Sonst haben die offenen Quellen den Text schon — nur sie werden genannt, denn eine
+        // abgeschaltete Quelle ist nicht "schon hochgeladen", sondern aus.
+        return new UploadGateResult(
+            Array.Empty<string>(), "already-uploaded:" + string.Join("+", offen.Select(ziel => ziel.Key)));
     }
 
     /// <summary>
-    /// F-M508: darf DIESE Quelle in diesem Lauf? Die Kette liest ihre Antwort hier und nicht aus drei
-    /// Feldern, damit ein vierter Anbieter nicht an vier Stellen nachgetragen werden muss.
+    /// F-M508/F-M721: die Ziele dieses Laufs — aus der REGISTRY, nicht aus einer Aufzaehlung im Tor.
+    /// <para>
+    /// Je Engine: kann sie ueberhaupt hochladen, fuehrt sie diese Medienart (die Quelle erklaert es
+    /// selbst, F-M696), ist ihr Schalter offen, hat sie den Text schon. Eine vierte Engine, die die
+    /// Registry baut, erscheint hier automatisch.
+    /// </para>
     /// </summary>
-    /// <param name="result">Das Urteil von <see cref="Decide"/>.</param>
+    /// <param name="sources">Die Registry dieses Laufs.</param>
+    /// <param name="isSeries">Ist die Medienart eine Serie?</param>
+    /// <param name="switchedOn">Der Upload-Schalter dieser Quelle (Schluessel).</param>
+    /// <param name="alreadyThere">Hat diese Quelle den Text schon (Schluessel)?</param>
+    /// <param name="alsoTakes">Weitere Bedingung des Aufrufers, etwa die Sprache (Schluessel).</param>
+    /// <returns>Die Ziele in Frage-Reihenfolge.</returns>
+    public static IReadOnlyList<UploadTarget> TargetsFrom(
+        SourceRegistry sources,
+        bool isSeries,
+        Func<string, bool> switchedOn,
+        Func<string, bool> alreadyThere,
+        Func<string, bool>? alsoTakes = null)
+    {
+        var ziele = new List<UploadTarget>();
+        foreach (var engine in sources.Engines)
+        {
+            var faehig = engine.Capabilities;
+            if (!faehig.CanUpload)
+            {
+                continue;
+            }
+
+            // F-M696: die Medienart ist eine Auskunft der Quelle, kein Namensvergleich.
+            if (isSeries ? !faehig.ServesSeries : !faehig.ServesMovies)
+            {
+                continue;
+            }
+
+            var key = faehig.Key;
+            var an = switchedOn(key) && (alsoTakes is null || alsoTakes(key));
+            ziele.Add(new UploadTarget(key, an, alreadyThere(key)));
+        }
+
+        return ziele;
+    }
+
+    /// <summary>
+    /// F-M489/F-M508: die alte Form mit den drei festen Quellen. Sie uebersetzt sich in die generische
+    /// Liste und enthaelt selbst keine Regel; neue Aufrufer bauen ihre Ziele mit <see cref="TargetsFrom"/>.
+    /// </summary>
+    /// <param name="subdlSwitch">Ist der Upload-Schalter von SubDL offen?</param>
+    /// <param name="tvSubtitlesSwitch">Ist der von tvsubtitles.net offen?</param>
+    /// <param name="origin">Die Herkunft.</param>
+    /// <param name="subdlAlready">Hat SubDL den Text schon?</param>
+    /// <param name="tvSubtitlesAlready">Hat tvsubtitles.net ihn schon?</param>
+    /// <param name="movieSubtitlesSwitch">Ist der von moviesubtitles.org offen?</param>
+    /// <param name="movieSubtitlesAlready">Hat moviesubtitles.org ihn schon?</param>
+    /// <returns>Dasselbe Urteil wie <see cref="Decide(string?, IReadOnlyList{UploadTarget})"/>.</returns>
+    public static UploadGateResult Decide(
+        bool subdlSwitch, bool tvSubtitlesSwitch, string? origin, bool subdlAlready, bool tvSubtitlesAlready,
+        bool movieSubtitlesSwitch, bool movieSubtitlesAlready)
+        => Decide(
+            origin,
+            new[]
+            {
+                new UploadTarget(Provenance.Name(SubtitleProvider.Subdl), subdlSwitch, subdlAlready),
+                new UploadTarget(Provenance.Name(SubtitleProvider.TvSubtitles), tvSubtitlesSwitch, tvSubtitlesAlready),
+                new UploadTarget(Provenance.Name(SubtitleProvider.MovieSubtitles), movieSubtitlesSwitch, movieSubtitlesAlready),
+            });
+
+    /// <summary>
+    /// F-M508: darf DIESE Quelle in diesem Lauf? Die Kette liest ihre Antwort hier, statt drei Felder
+    /// abzufragen — ein vierter Anbieter braucht damit keine Zeile in der Kette.
+    /// </summary>
+    /// <param name="result">Das Urteil von <see cref="Decide(string?, IReadOnlyList{UploadTarget})"/>.</param>
     /// <param name="provider">Die gefragte Quelle.</param>
     /// <returns>Wahr, wenn diese Quelle den Untertitel nehmen darf.</returns>
-    public static bool May(this UploadGateResult result, SubtitleProvider provider) => provider switch
-    {
-        SubtitleProvider.Subdl => result.Subdl,
-        SubtitleProvider.TvSubtitles => result.TvSubtitles,
-        SubtitleProvider.MovieSubtitles => result.MovieSubtitles,
-        _ => false,
-    };
+    public static bool May(this UploadGateResult result, SubtitleProvider provider)
+        => result.May(Provenance.Name(provider));
+
+    /// <summary>
+    /// F-M721: dieselbe Frage mit dem Quellenschluessel — das ist die Form, die ohne Aufzaehlung
+    /// funktioniert.
+    /// </summary>
+    /// <param name="result">Das Urteil.</param>
+    /// <param name="key">Der Quellenschluessel.</param>
+    /// <returns>Wahr, wenn diese Quelle darf.</returns>
+    public static bool May(this UploadGateResult result, string key)
+        => result.Allowed.Contains(key, StringComparer.Ordinal);
 }
 
 /// <summary>
-/// F-M489: the result of <see cref="UploadGate.Decide"/>.
+/// F-M721: eine Quelle, wie das Tor sie fragt — Schluessel, Schalter, Marke. Mehr weiss das Tor nicht,
+/// und mehr braucht es nicht, damit eine weitere Quelle ohne Aenderung mitlaeuft.
 /// </summary>
-/// <param name="Subdl">May the subtitle go to SubDL in this run?</param>
-/// <param name="TvSubtitles">May it go to tvsubtitles.net in this run?</param>
-/// <param name="MovieSubtitles">F-M508: may it go to moviesubtitles.org in this run?</param>
-/// <param name="SkipReason">Why no source may run, or null when at least one may.</param>
-public readonly record struct UploadGateResult(
-    bool Subdl, bool TvSubtitles, bool MovieSubtitles, string? SkipReason)
+/// <param name="Key">Der Quellenschluessel (etwa <c>subdl</c>).</param>
+/// <param name="SwitchedOn">Ist der Upload dieser Quelle offen?</param>
+/// <param name="AlreadyThere">Hat diese Quelle den Text schon?</param>
+public readonly record struct UploadTarget(string Key, bool SwitchedOn, bool AlreadyThere);
+
+/// <summary>
+/// F-M489/F-M721: the result of <see cref="UploadGate.Decide(string?, IReadOnlyList{UploadTarget})"/>.
+/// </summary>
+/// <param name="Allowed">Die Quellen, die den Text nehmen duerfen — leer heisst: keine.</param>
+/// <param name="SkipReason">Warum keine Quelle darf, oder null, wenn mindestens eine darf.</param>
+public readonly record struct UploadGateResult(IReadOnlyList<string> Allowed, string? SkipReason)
 {
-    /// <summary>F-M508: how many sources may take it — 0 means "nothing runs".</summary>
-    public int AllowedCount => (Subdl ? 1 : 0) + (TvSubtitles ? 1 : 0) + (MovieSubtitles ? 1 : 0);
+    /// <summary>Gets F-M508: wie viele Quellen ihn nehmen duerfen — 0 heisst "nichts laeuft".</summary>
+    public int AllowedCount => Allowed.Count;
+
+    /// <summary>Gets F-M489: darf er zu SubDL?</summary>
+    public bool Subdl => Allowed.Contains("subdl", StringComparer.Ordinal);
+
+    /// <summary>Gets F-M489: darf er zu tvsubtitles.net?</summary>
+    public bool TvSubtitles => Allowed.Contains("tvsubtitles", StringComparer.Ordinal);
+
+    /// <summary>Gets F-M508: darf er zu moviesubtitles.org?</summary>
+    public bool MovieSubtitles => Allowed.Contains("moviesubtitles", StringComparer.Ordinal);
 }
