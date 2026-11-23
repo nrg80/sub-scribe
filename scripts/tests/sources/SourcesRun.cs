@@ -680,6 +680,18 @@ internal static class Program
                 "F-M713: ein Upload-429 nimmt SubDL aus dem Lauf, statt den Lauf zu beenden",
                 "kein 'stopping upload run early' mehr");
 
+            // F-M714 (Betreiberansage 22.11.2026: „Gilt eigentlich generell. Wenn eine Quelle ausfällt
+            // machen die anderen weiter"): die Regel gilt für JEDEN Ausfallgrund einer Quelle, nicht nur
+            // für das Kontingent.
+            Check(!f713Upload.Contains("API key rejected (403) — upload stopped", StringComparison.Ordinal)
+                  && !f713Upload.Contains("hourly cap (500/h) — run stopped", StringComparison.Ordinal),
+                "F-M714: auch ein abgelehnter Schlüssel und das Stundenbudget beenden den Upload-Lauf nicht mehr",
+                "kein 'upload stopped' und kein 'run stopped' mehr");
+            Check(f713Upload.Contains("the other sources keep uploading. Check the credentials (F-M714)", StringComparison.Ordinal)
+                  && f713Upload.Contains("the other sources keep uploading (F-M714). Next SubDL budget", StringComparison.Ordinal),
+                "F-M714: beide Faelle nennen die Regel im Klartext (nur diese Quelle ist draussen)",
+                "zwei Meldungen mit der Regel");
+
             string zugangDir = Path.Combine(Path.GetTempPath(), "sub-scribe-zugang-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path.Combine(zugangDir, "sources"));
             Func<string?> vorherZugang = SourceSwitches.DataFolder;

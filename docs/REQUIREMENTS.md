@@ -1,7 +1,7 @@
 # Requirements Specification — Jellyfin Plugin "Sub Scribe" (Upload + Download)
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.18.
+**Status:** Implementation — v12.3.8.19.
 
 **Die Begründungen (warum eine Regel gilt, Messungen, Vorfälle) stehen nicht hier, sondern lokal in der Methodik-Ablage, nach Kapiteln sortiert und mit der Requirement-Nummer
 markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test — sonst nichts.**
@@ -33,7 +33,7 @@ markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
 - [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 46 requirements
-- [14. Data Model and Persistence](#14-data-model-and-persistence) — 68 requirements
+- [14. Data Model and Persistence](#14-data-model-and-persistence) — 69 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 51 requirements
 - [16. Non-Goals](#16-non-goals)
 - [17. Non-Functional Requirements](#17-non-functional-requirements)
@@ -2002,6 +2002,8 @@ Grund (gemessen 18.11.2026): die Queue entsteht nur aus offenen Stempeln (F-M557
 
 **F-M713 [D]:** **Ein erschöpftes Kontingent nimmt EINE Quelle aus dem Lauf — nicht den Lauf.** Betreiberansage 22.11.2026, wörtlich: „Nur subdl fällt aus." Vorher galt das Gegenteil: ein Such-429 mit verbrauchtem Kontingent setzte `_stopRun` (DownloadPipeline.cs, gelesen in der Hauptschleife), ein Download-429 ebenfalls (F-M65), und der Upload brach mit „stopping upload run early" ab — obwohl tvst und mst weder SubDLs Schlüssel noch SubDLs Kontingent brauchen und Einträge bedienen konnten, die auf ihrer Seite lagen. Neu: **Download** — alle vier Endfälle der Hauptsuche (Schlüssel abgelehnt/403, anhaltende Überlast, Tageskontingent mit und ohne Nachfeuer) melden die Quelle über `MerkeQuelleTot(MainSearchSource)` als ausgefallen, ein Download-429 über `MerkeQuelleTot(Subdl)`; `if (!hauptsucheLief)` macht mit den übrigen Quellen weiter (`continue` statt `return`), und das Kennzeichen `_stopRun` ist ersatzlos entfallen. **Upload** — `SourceAllowed` fragt jetzt Schalter **und** Ausfall (`_config.IsUploadEnabled(provider) && !_quellenAus.Contains(provider)`), beide 429-Zweige (Ankunftslauf und Tageslimit) tragen SubDL in `_quellenAus` ein und setzen den Lauf mit den anderen Quellen fort. **Grenze:** der Lauf endet weiterhin, wenn **keine** Quelle mehr übrig ist (`_stopRunNoSources`, F-M592) — „erst wenn alle weg sind, ist der Lauf ein Abbruch".
 
+**F-M714 [D]:** **Die Regel gilt für jeden Ausfallgrund, nicht nur für das Kontingent.** Betreiberansage 22.11.2026, wörtlich: „Gilt eigentlich generell. Wenn eine Quelle ausfällt machen die anderen weiter." Nach F-M713 endeten im Upload noch zwei Fälle den ganzen Lauf, obwohl nur SubDL betroffen war: ein abgelehnter Schlüssel (403, „upload stopped") und das Stundenbudget (500/h, „run stopped"). Beide nehmen jetzt **nur SubDL** aus dem Lauf (`_quellenAus.Add(Subdl)`, danach sagt `SourceAllowed` Nein) und der Lauf geht mit den übrigen Quellen weiter; beide Meldungen sagen das im Klartext (F-M714). Der Trockenlauf und das Stundenfeuer entfallen dabei, weil SubDL im nächsten geplanten Lauf von selbst wieder mitmacht. Unverändert: der Lauf endet, wenn **keine** Quelle mehr übrig ist (`_stopRunNoSources` F-M592 im Download, `alleQuellenWeg` F-M590 im Upload), und die Staffelpack-Phase war schon immer je Quelle gebucht (`PackSend(source, …)`) — ein abgelehnter Behälter bei einer Quelle stoppt die andere nicht.
+
 #### 14.9 Die Marken-Matrix — die einzige Wahrheit (bis Schema 22; abgelöst durch 14.11)
 
 Die Matrix ist seit 12.3.0.0 der **einzige** Ort, an dem ein Quellen-Urteil steht: eine Zeile je (Medium, Quelle, Art) in der Tabelle `source_matrix` — und bei `track`/`track-hi` je (Medium, Quelle, Art, Sprache, HI, **Position**) (Schema 20, F-M669). Seit 12.3.0.2 (Schema 21, F-M670) ist sie auch der einzige Ort für die **Quellen-Ids**: es gibt keine Alt-Tabelle `source_marks` und keine Spalte `SubdlId` mehr. Die breiten Spalten, aus denen sie bis 12.2.0.28 gefüllt wurde, sind aus der Live-Datei **entfernt**; der Altbestand lebt allein in der Sicherungsdatei weiter. Es gibt keinen zweiten Datenbestand und keinen zweiten Lesepfad.
@@ -2878,6 +2880,8 @@ Kein Grund, keine Vorgeschichte, keine Bitte, kein Vorschlag. Gebaut in `Pipelin
 **T376:** moviesubtitles.org erklärt beide Richtungen, der Upload steht auf aus (F-M712), in `sources` — **2 Prüfungen**: das Feld `uploadEnabled` mit Vorgabe `false` neben `downloadEnabled`, und die Badge-Reihe der Karte lautet `uploadEnabled, downloadEnabled` (vorher nur der Download).
 
 **T377:** Ein Kontingent nimmt nur die eine Quelle aus dem Lauf (F-M713), in `sources` — **5 Prüfungen**: kein `_stopRun` mehr im Download-Pfad, `MerkeQuelleTot(Subdl)` im 429-Zweig, `continue` statt `return` beim Ausfall der Hauptsuche, `SourceAllowed` mit `_quellenAus` und das Ende von „stopping upload run early" im Upload-Pfad.
+
+**T378:** Jeder Ausfallgrund nimmt nur die betroffene Quelle heraus (F-M714), in `sources` — **2 Prüfungen**: „upload stopped" (403) und „run stopped" (Stundenbudget) kommen im Upload-Pfad nicht mehr vor, und beide Ersatzmeldungen nennen die Regel im Klartext.
 
 **T336:** Die vier Ebenen und die drei Quellen-Tabellen seit Schema 23 (F-M672…F-M677), in `storex` gegen echte Altdateien: Kennungsformen `[xxxx]`/`#yyyyy`/`#yyyyy#zzz`/`#yyyyy&zzz`, ein Nummernkreis je Datei über Spur und Seitenwagen, `pack_track` mit Fremdschlüsseln, `upload`/`reference`/`badapple` mit einer Subjekt-Spalte, keine fremde Kennung außerhalb `reference`/`badapple`, `source_matrix` und `rejected_candidates` nach dem Aufstieg weg, `OriginId` ohne Wertverlust nach `reference`, Aufstieg 17→23 und 22→23 mit genau einer Sicherung und einem zweiten Start, der nichts tut — **15 Prüfungen**, die letzte für die Quellenneutralitaet von `badapple` (auch eine nicht-numerische Kennung wie `download-3234-2-en` neben einer SubDL-Nummer).
 

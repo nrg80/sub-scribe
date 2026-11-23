@@ -2729,22 +2729,33 @@ public sealed class UploadPipeline : IPackFiller
                         break;
                 }
 
-                if (_api.AuthBroken)
+                // F-M714 (Betreiberansage 22.11.2026: „Gilt eigentlich generell. Wenn eine Quelle ausfällt
+                // machen die anderen weiter"): auch ein abgelehnter Schlüssel nimmt nur DIESE Quelle aus
+                // dem Lauf. Die anderen senden weiter — ihr Versand braucht diesen Schlüssel nicht.
+                if (_api.AuthBroken && !_quellenAus.Contains(Configuration.SubtitleProvider.Subdl))
                 {
-                    _logger.LogError("[Sub Scribe] API key rejected (403) — upload stopped, check credentials.");
-                    return summary;
+                    summary.QuotaStopped++;
+                    _quellenAus.Add(Configuration.SubtitleProvider.Subdl);
+                    _api.ResetRateLimitFlag();
+                    _logger.LogError("[Sub Scribe] SubDL API key rejected (403) — SubDL is out for the rest of this run; "
+                        + "the other sources keep uploading. Check the credentials (F-M714).");
+                    continue;
                 }
 
                 // F-M72: upload hourly cap (500/h) — HTTP 200 + status:false, NOT a 429.
                 // The candidate stays due (skip, not fail); the run stops cleanly and
                 // the overload-recovery fire retries within 10–30 min when the next
                 // hourly budget is available.
-                if (_api.HourlyUploadCapHit)
+                if (_api.HourlyUploadCapHit && !_quellenAus.Contains(Configuration.SubtitleProvider.Subdl))
                 {
-                    _logger.LogWarning("[Sub Scribe] Upload hourly cap (500/h) — run stopped, next hourly budget.");
+                    // F-M714: das Stundenbudget gehört dem SubDL-Konto — es nimmt SubDL aus dem Lauf,
+                    // nicht die anderen Quellen.
+                    summary.QuotaStopped++;
+                    _quellenAus.Add(Configuration.SubtitleProvider.Subdl);
                     _api.ResetHourlyCapFlag();
-                    ScheduledTasks.ScribeSchedulerCoordinator.Instance?.ScheduleOverloadFire(upload: true, DateTime.UtcNow);
-                    return summary;
+                    _logger.LogWarning("[Sub Scribe] SubDL hourly cap (500/h) — SubDL is out for the rest of this run; "
+                        + "the other sources keep uploading (F-M714). Next SubDL budget: next hour.");
+                    continue;
                 }
 
                 // F-M713 (Betreiberansage 22.11.2026: „Nur subdl fällt aus"): ein erschöpftes SubDL-Konto

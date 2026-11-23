@@ -10,7 +10,7 @@
 # See the GNU General Public License for more details.
 name: "Sub Scribe"
 guid: "7d1c5a2e-3f4b-4d6e-9a8b-5c2f8e1d4a9b"
-version: "12.3.8.18"
+version: "12.3.8.19"
 targetAbi: "12.1.0.0"
 framework: "net10.0"
 owner: "nrg80"
@@ -26,6 +26,7 @@ artifacts:
 - "Jellyfin.Plugin.SubdlSync.dll"
 - "LanguageDetection.dll"
 changelog: >
+  v12.3.8.19: the same rule for every failure — a rejected key or the hourly cap takes only that source out, the others keep uploading.
   v12.3.8.18: an exhausted quota takes that one source out of the run — the other sources keep working (download and upload).
   v12.3.8.17: moviesubtitles.org offers an upload switch (off by default) — the upload path has been in use since F-M508.
   v12.3.8.16: the last three SubDL-only settings live in the SubDL card, and the "SubDL only" badge is gone.

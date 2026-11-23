@@ -879,6 +879,10 @@
     "T377": {
       "suite": "sources",
       "checks": 5
+    },
+    "T378": {
+      "suite": "sources",
+      "checks": 2
     }
   }
 }
