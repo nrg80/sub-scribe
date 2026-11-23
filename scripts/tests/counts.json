@@ -895,6 +895,14 @@
     "T381": {
       "suite": "seasonpack",
       "checks": 2
+    },
+    "T382": {
+      "suite": "gui-structure",
+      "checks": 1
+    },
+    "T383": {
+      "suite": "seasonpack",
+      "checks": 3
     }
   }
 }

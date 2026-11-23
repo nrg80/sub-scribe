@@ -114,7 +114,10 @@ public sealed class TvstEngine : ISourceEngine
         _client = client ?? new TvSubtitlesClient(context.Http, context.ArchiveCache);
         _weg = new Api.Endpoints.TvSubtitlesDownloadEndpoint(_client);
         Settings = settings ?? SourceSettings.Empty(SourceKey, Declared);
-        PreferSeasonZip = Settings.Switch(FieldPreferSeasonZip);
+        // F-M719: der Schalter "Packs" gilt fuer beide Richtungen — steht er aus, wird auch beim
+        // Holen kein Staffel-Archiv verlangt (die Vorliebe bleibt zusaetzlich ihr eigener Schalter).
+        PreferSeasonZip = (SourceSwitches.Flag(SourceKey, FieldPacksEnabled) ?? seasonPacks)
+            && Settings.Switch(FieldPreferSeasonZip);
 
         // F-M692: kein Adressvergleich mehr — die Adresse ist kein Feld.
 

@@ -1838,15 +1838,11 @@ def main():
           "its single upload is deleted from SubDL first" not in html
           and "instead of one upload per episode" not in html,
           "the old season pack description is still there")
-    _season_pack_block = ""
-    _idx = html.find('id="UploadSeasonPacks"')
-    if _idx >= 0:
-        _end = html.find("</div>", html.find("</label>", _idx))
-        _season_pack_block = html[_idx:_end] if _end > _idx else html[_idx:_idx + 400]
-    check("F-M585: only the tick and its label remain around the switch",
-          'id="UploadSeasonPacks"' in html
-          and "fieldDescription" not in _season_pack_block
-          and "Upload season packs" in _season_pack_block)
+    # F-M719 (Ansage 23.11.2026: "Upload tab / upload season packs kann dann entfallen"): das Kaestchen
+    # ist weg — beide Richtungen haengen jetzt am Schalter "Packs" der jeweiligen Quellenkarte.
+    check("F-M719: the 'Upload season packs' tickbox is gone from the upload section",
+          'id="UploadSeasonPacks"' not in html
+          and "<span>Upload season packs</span>" not in html)
 
     # ---- F-M497 (Operator-Anweisung 15.11.2026: „Pflichtkonfiguration ist tmdb key … Kennzeichnung
     # als required for subdl"): Pflicht ist ALLEIN der TMDb-Schlüssel. Die drei SubDL-Felder sagen
@@ -2266,12 +2262,16 @@ def main():
     check("F-M526: no marker claims a tvst-only setting that does not exist",
           page_src.count("src-tvst") == 0)  # F-M711: keine Merker mehr, auch keine Gestalt
 
-    # F-M641: der Pack-Schalter wirkt auf BEIDE Quellen (SubDL und tvst bauen Packs) und darf
-    # deshalb keinen Quellenmerker tragen.
-    check("F-M641: the pack switch carries no source marker — both sources build packs",
-          'id="UploadSeasonPacks"' in page_src
-          and 'src-subdl' not in page_src[max(0, page_src.find('id="UploadSeasonPacks"') - 300):
-                                          page_src.find('id="UploadSeasonPacks"') + 300])
+    # F-M719: den quellenblinden Pack-Schalter gibt es nicht mehr. Der Schalter "Packs" steht auf jeder
+    # Quellenkarte und meint beide Richtungen (F-M719 ersetzt F-M641, das den Schalter fuer beide
+    # Quellen fuehrte).
+    # Die Karte baut ihre Felder zur Laufzeit aus dem Schema der Quelle (SourceField-<key>-<field>);
+    # das Feld "Packs" heisst dort packsEnabled und wird von SubDL und tvst gleich erklärt.
+    _subdl_src = read_source("Sources", "Subdl", "SubdlEngine.cs")
+    check("F-M719: the global pack switch is gone — the per-source 'Packs' switch carries both directions",
+          'id="UploadSeasonPacks"' not in page_src
+          and 'var id = \'SourceField-\' + entry.key + \'-\' + field.key;' in page_src
+          and 'new(FieldPacksEnabled, "Packs", SourceFieldKind.Switch' in _subdl_src)
 
     # F-M533: der Melde-Schalter wirkt auf BEIDE Quellen und darf keinen Quellenmerker tragen.
     check("F-M533: the report switch carries no source marker any more",
@@ -2545,6 +2545,18 @@ def main():
           and "subdl-source-serves" in quellen
           and ".subdl-source-serves" in page_src,
           "Kennzeichen aus den Faehigkeiten, nicht aus dem Namen")
+
+    # F-M718 (Ansage 23.11.2026): "Und die ampeln bitte tmdb an oberste Stelle" — die Status-Ampeln
+    # stehen in der Reihenfolge, in der ein Nutzer sie braucht: erst der Schlüssel, ohne den nichts
+    # laeuft (TMDb), dann die Konten, dann die Erreichbarkeit der beiden Webseiten. Die Reihenfolge
+    # steht im HTML; die Skripte greifen ueber die Ids zu und sind davon unabhaengig.
+    box = page_src.find('id="ScribeStatusBox"')
+    reihenfolge = [page_src.find('id="%s"' % i, box) for i in
+                   ('TmdbApiStatus', 'SubdlLoginStatus', 'ScribeApiStatus', 'TvstStatus', 'MstStatus')]
+    check("F-M718: TMDb steht als erste Ampel, danach Konten, dann die beiden Webseiten",
+          box > 0 and all(p > box for p in reihenfolge)
+          and reihenfolge == sorted(reihenfolge),
+          "Positionen: %s" % reihenfolge)
 
     probe_ok, probe_detail = run_case_probe(page_src)
     check("F-M689: the translation runs against a real endpoint answer (all six field kinds)",

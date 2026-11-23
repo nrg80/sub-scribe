@@ -171,7 +171,10 @@ public sealed class SubdlEngine : ISourceEngine
         }
 
         Account = Settings.Text(FieldAccount);
-        PreferSeasonZip = Settings.Switch(FieldPreferSeasonZip);
+        // F-M719: der Schalter "Packs" gilt fuer beide Richtungen — steht er aus, wird auch beim
+        // Holen kein Staffel-Archiv verlangt (die Vorliebe bleibt zusaetzlich ihr eigener Schalter).
+        PreferSeasonZip = (SourceSwitches.Flag(SourceKey, FieldPacksEnabled) ?? seasonPacks)
+            && Settings.Switch(FieldPreferSeasonZip);
 
         // F-M694: E-Mail und Passwort aus der Datei an DENSELBEN Client, den der Lauf benutzt (die
         // Registry reicht eine Instanz an alle Etagen). Die Datei antwortet zuerst; steht dort nichts,

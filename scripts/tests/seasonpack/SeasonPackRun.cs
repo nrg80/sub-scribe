@@ -282,14 +282,19 @@ internal static class Program
         // ── 6. The rules in the code, not only in the arithmetic ────────────────
         Console.WriteLine("6. Rules wired");
         var config = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Configuration/PluginConfiguration.cs"));
-        Check(config.Contains("public bool UploadSeasonPacks { get; set; } = true;", StringComparison.Ordinal),
-            "the switch exists and is on by default");
+        // F-M719 (Ansage 23.11.2026): der globale Pack-Schalter der GUI ist entfallen. Gepackt wird,
+        // wenn mindestens eine Quelle ihren Schalter "Packs" offen hat; angesprochen wird nur, wer ihn
+        // offen hat. Drei Pruefungen halten das fest — alte und neue Wahrheit.
+        Check(!config.Contains("UploadSeasonPacks", StringComparison.Ordinal),
+            "F-M719: das Konfigurationsfeld UploadSeasonPacks ist entfallen");
 
         var page = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Configuration/configPage.html"));
-        Check(page.Contains("id=\"UploadSeasonPacks\"", StringComparison.Ordinal), "the switch is a field in the upload section");
-        Check(page.Contains("config.UploadSeasonPacks = document.querySelector", StringComparison.Ordinal)
-              && page.Contains("document.querySelector('#UploadSeasonPacks').checked = config.UploadSeasonPacks", StringComparison.Ordinal),
-            "the config page reads and writes it");
+        Check(!page.Contains("id=\"UploadSeasonPacks\"", StringComparison.Ordinal),
+            "F-M719: die Upload-Seite fuehrt kein Feld 'Upload season packs' mehr");
+
+        var uploadPipeline = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Pipeline/UploadPipeline.cs"));
+        Check(uploadPipeline.Contains("if (PackSlotSources().Count > 0)", StringComparison.Ordinal),
+            "F-M719: gepackt wird, wenn mindestens eine Quelle ihren Packs-Schalter offen hat");
 
         Check(api.Contains("public async Task<UploadResult> UploadSeasonPackAsync", StringComparison.Ordinal), "the pack has its own upload call");
 
