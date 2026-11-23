@@ -700,6 +700,39 @@ internal static class Program
                 "F-M715: ein Timeout nimmt die Quelle fuer den Rest des Laufs heraus, die andere macht weiter",
                 "Merker + Meldung im Timeout-Zweig");
 
+            // F-M720 (Ansage 23.11.2026: "Auch die Querkontamination oder vielmehr ihre Vermeidung sollte
+            // sourceabhaengig kodiert werden. Quasi wenn download irgendeiner quelle, kein re-up zu
+            // irgendeiner quelle"): die Antwort steht BEI der Quelle, nicht im Tor fuer alle.
+            var vertrag = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Sources/SourceContract.cs"));
+            Check(vertrag.Contains("public IReadOnlyCollection<string> ReuploadTargets { get; init; }", StringComparison.Ordinal),
+                "F-M720: die Quelle erklaert selbst, wohin ein Fund von ihr noch darf (ReuploadTargets)");
+
+            var zeilen = new[] { "Subdl/SubdlEngine.cs", "Tvst/TvstEngine.cs", "Msub/MsubEngine.cs" }
+                .Select(d => File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Sources", d)))
+                .ToList();
+            Check(zeilen.All(z => z.Contains("ReuploadTargets = Array.Empty<string>()", StringComparison.Ordinal)),
+                "F-M720: jede der drei Quellen fuehrt ihre eigene Zeile — ein Download geht an keine Quelle zurueck");
+
+            // Die Antwort folgt der HERKUNFT, nicht dem Ziel: eine Quelle, die ein Ziel erlaubt, laesst genau
+            // dieses Ziel zu und kein anderes. Ohne Rueckfrager bleibt die Vorgabe (nichts).
+            Func<string, IReadOnlyCollection<string>> m720Zeile = k =>
+                string.Equals(k, "subdl", StringComparison.OrdinalIgnoreCase)
+                    ? new[] { "subdl" }
+                    : Array.Empty<string>();
+            Check(Provenance.MayUploadTo("subdl", SubtitleProvider.Subdl, m720Zeile)
+                  && !Provenance.MayUploadTo("subdl", SubtitleProvider.TvSubtitles, m720Zeile)
+                  && !Provenance.MayUploadTo("tvsubtitles", SubtitleProvider.Subdl, m720Zeile)
+                  && Provenance.MayUploadTo(null, SubtitleProvider.Subdl, m720Zeile)
+                  && !Provenance.MayUploadTo("subdl", SubtitleProvider.Subdl),
+                "F-M720: das Tor fragt die Herkunftsquelle — ihre Zeile entscheidet je Ziel, ohne Zeile gilt keine",
+                "Zeile subdl->{subdl}: subdl erlaubt, tvst gesperrt");
+
+            Check(Provenance.OriginBlockedReason("subdl", SubtitleProvider.TvSubtitles, m720Zeile) is { } m720Satz
+                  && m720Satz.Contains("to tvsubtitles", StringComparison.Ordinal)
+                  && Provenance.OriginBlockedReason("subdl", SubtitleProvider.Subdl, m720Zeile) is null,
+                "F-M720: die Logzeile nennt Herkunft UND abgelehntes Ziel",
+                "Satz nennt das Ziel");
+
             string zugangDir = Path.Combine(Path.GetTempPath(), "sub-scribe-zugang-" + Guid.NewGuid().ToString("N"));
             Directory.CreateDirectory(Path.Combine(zugangDir, "sources"));
             Func<string?> vorherZugang = SourceSwitches.DataFolder;

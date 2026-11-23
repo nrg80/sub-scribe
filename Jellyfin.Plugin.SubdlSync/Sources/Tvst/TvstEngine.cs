@@ -132,6 +132,10 @@ public sealed class TvstEngine : ISourceEngine
 
             // F-M693: Meldung und Staffelpack sind Schalter DIESER Quelle — die Datei antwortet zuerst.
             CanReport = SourceSwitches.Flag(SourceKey, FieldReportEnabled) ?? true,
+            // F-M720: ein hier heruntergeladener Untertitel geht an KEINE Quelle zurück — auch nicht
+            // an tvsubtitles.net selbst. Die Zeile steht bei der Quelle, damit eine spätere Quelle eine andere
+            // Antwort geben kann, ohne dass jemand das Tor umbaut.
+            ReuploadTargets = Array.Empty<string>(),
             CanHearingImpaired = true,
             CanOfferSeasonPacks = true,
             CanSeasonPacks = SourceSwitches.Flag(SourceKey, FieldPacksEnabled) ?? seasonPacks,

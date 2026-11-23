@@ -2420,9 +2420,10 @@ public sealed class UploadPipeline : IPackFiller
                         LogUtil.PerItem(_config.LogMode, _logger,
                             "[Sub Scribe] {Name} [{Lang}] — source {Source} skipped: {Reason}",
                             neutralName, cand.Lang, Api.Endpoints.Provenance.Name(quelle),
-                            Api.Endpoints.Provenance.MayUploadTo(dryHerkunft, quelle)
+                            Api.Endpoints.Provenance.MayUploadTo(dryHerkunft, quelle, _sources.ReuploadTargetsOf)
                                 ? "already-uploaded:" + Api.Endpoints.Provenance.Name(quelle)
-                                : Api.Endpoints.Provenance.OriginBlockedReason(dryHerkunft) ?? "no-upload-source");
+                                : Api.Endpoints.Provenance.OriginBlockedReason(dryHerkunft, quelle, _sources.ReuploadTargetsOf)
+                                    ?? "no-upload-source");
                         continue;
                     }
 
@@ -3583,7 +3584,7 @@ public sealed class UploadPipeline : IPackFiller
 
         // F-M500 (Operator-Anweisung 15.11.2026): eine bekannte Herkunft sperrt ALLE Quellen. Die Zeile
         // nennt sie, damit im Lauf steht, WOHER der Text kommt und warum er nirgends hochgeht.
-        if (Api.Endpoints.Provenance.OriginBlockedReason(herkunft) is { } herkunftGesperrt)
+        if (Api.Endpoints.Provenance.OriginBlockedReason(herkunft, target: null, _sources.ReuploadTargetsOf) is { } herkunftGesperrt)
         {
             LogUtil.PerItem(_config.LogMode, _logger,
                 "[Sub Scribe] {Name} [{Lang}] — {Reason}", neutralName, lang, herkunftGesperrt);
@@ -3657,9 +3658,10 @@ public sealed class UploadPipeline : IPackFiller
                 LogUtil.PerItem(_config.LogMode, _logger,
                     "[Sub Scribe] {Name} [{Lang}] — source {Source} skipped: {Reason}",
                     neutralName, lang, Api.Endpoints.Provenance.Name(quelle),
-                    Api.Endpoints.Provenance.MayUploadTo(herkunft, quelle)
+                    Api.Endpoints.Provenance.MayUploadTo(herkunft, quelle, _sources.ReuploadTargetsOf)
                         ? "already-uploaded:" + Api.Endpoints.Provenance.Name(quelle)
-                        : Api.Endpoints.Provenance.OriginBlockedReason(herkunft) ?? "no-upload-source");
+                        : Api.Endpoints.Provenance.OriginBlockedReason(herkunft, quelle, _sources.ReuploadTargetsOf)
+                            ?? "no-upload-source");
                 continue;
             }
 
@@ -8014,7 +8016,7 @@ public sealed class UploadPipeline : IPackFiller
             // heisst: heruntergeladen, geht nirgends hoch (F-M487) —, ist das Paar entschieden.
             string? herkunftOhneBeleg = Registry.GetOrigin(contentHash).Origin;
             var darfNoch = quellen
-                .Where(quelle => Api.Endpoints.Provenance.MayUploadTo(herkunftOhneBeleg, quelle))
+                .Where(quelle => Api.Endpoints.Provenance.MayUploadTo(herkunftOhneBeleg, quelle, _sources.ReuploadTargetsOf))
                 .ToList();
             if (darfNoch.Count > 0)
             {
@@ -8034,7 +8036,8 @@ public sealed class UploadPipeline : IPackFiller
         // Dieselbe Herkunft, die auch die Kette liest (F-M487) — hier nur als Frage "darf diese Quelle ihn".
         string? herkunft = Registry.GetOrigin(contentHash).Origin;
         var offen = quellen
-            .Where(quelle => !beleg.Contains(quelle) && Api.Endpoints.Provenance.MayUploadTo(herkunft, quelle))
+            .Where(quelle => !beleg.Contains(quelle)
+                && Api.Endpoints.Provenance.MayUploadTo(herkunft, quelle, _sources.ReuploadTargetsOf))
             .ToList();
 
         var belegte = beleg.ToList();

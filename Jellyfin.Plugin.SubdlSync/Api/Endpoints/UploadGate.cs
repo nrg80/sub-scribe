@@ -11,6 +11,7 @@
 using System.Collections.Generic;
 using System.Linq;
 using Jellyfin.Plugin.SubScribe.Configuration;
+using System;
 
 namespace Jellyfin.Plugin.SubScribe.Api.Endpoints;
 
@@ -58,11 +59,15 @@ public static class UploadGate
     // vergessener Aufruf moviesubtitles still aus — genau das war an einer Stelle der Fall.
     public static UploadGateResult Decide(
         bool subdlSwitch, bool tvSubtitlesSwitch, string? origin, bool subdlAlready, bool tvSubtitlesAlready,
-        bool movieSubtitlesSwitch, bool movieSubtitlesAlready)
+        bool movieSubtitlesSwitch, bool movieSubtitlesAlready,
+        Func<string, IReadOnlyCollection<string>>? reuploadTargetsOf = null)
     {
-        var subdlSwitched = subdlSwitch && Provenance.MayUploadTo(origin, SubtitleProvider.Subdl);
-        var tvSwitched = tvSubtitlesSwitch && Provenance.MayUploadTo(origin, SubtitleProvider.TvSubtitles);
-        var msubSwitched = movieSubtitlesSwitch && Provenance.MayUploadTo(origin, SubtitleProvider.MovieSubtitles);
+        // F-M720: die Herkunftsfrage wird JE QUELLE gestellt und von der Herkunftsquelle beantwortet
+        // (ihre Zeile der Matrix) — nicht mehr von einer Regel, die für alle gleich gilt.
+        var subdlSwitched = subdlSwitch && Provenance.MayUploadTo(origin, SubtitleProvider.Subdl, reuploadTargetsOf);
+        var tvSwitched = tvSubtitlesSwitch && Provenance.MayUploadTo(origin, SubtitleProvider.TvSubtitles, reuploadTargetsOf);
+        var msubSwitched = movieSubtitlesSwitch
+            && Provenance.MayUploadTo(origin, SubtitleProvider.MovieSubtitles, reuploadTargetsOf);
 
         var subdl = subdlSwitched && !subdlAlready;
         var tv = tvSwitched && !tvSubtitlesAlready;

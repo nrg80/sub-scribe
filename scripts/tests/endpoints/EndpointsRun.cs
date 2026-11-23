@@ -602,7 +602,10 @@ internal static class Program
         Check("F-M656: every source of the gate is required, the film source has no default",
             !gateSrc.Contains("bool movieSubtitlesSwitch = false", StringComparison.Ordinal)
             && !gateSrc.Contains("bool movieSubtitlesAlready = false", StringComparison.Ordinal)
-            && gateSrc.Contains("bool movieSubtitlesSwitch, bool movieSubtitlesAlready)"));
+            // F-M720: die Herkunftsfrage wird je Quelle gestellt und von der Herkunftsquelle beantwortet —
+            // der Rueckfrager steht in der Signatur, die drei Quellen bleiben Pflicht.
+            && gateSrc.Contains("bool movieSubtitlesSwitch, bool movieSubtitlesAlready,", StringComparison.Ordinal)
+            && gateSrc.Contains("Func<string, IReadOnlyCollection<string>>? reuploadTargetsOf = null)", StringComparison.Ordinal));
 
         Check("F-M656: the early gate asks the film source too — it used to answer 'nothing to do' for a film",
             uploadSource.Contains("var gateFrueh = Api.Endpoints.UploadGate.Decide(", StringComparison.Ordinal)
@@ -773,8 +776,8 @@ internal static class Program
             && !uploadSource.Contains("_config.IsUploadEnabled(Configuration.SubtitleProvider.TvSubtitles)", StringComparison.Ordinal));
         Check("the provenance gate still decides PER SOURCE — a refused source is skipped, the chain runs on (F-M495/F-M508)",
             uploadSource.Contains("if (!Api.Endpoints.UploadGate.May(gate, quelle))", StringComparison.Ordinal)
-            && uploadSource.Contains("Api.Endpoints.Provenance.OriginBlockedReason(herkunft)", StringComparison.Ordinal)
-            && uploadSource.Contains("Api.Endpoints.Provenance.MayUploadTo(herkunft, quelle)", StringComparison.Ordinal)
+            && uploadSource.Contains("Api.Endpoints.Provenance.OriginBlockedReason(herkunft, quelle, _sources.ReuploadTargetsOf)", StringComparison.Ordinal)
+            && uploadSource.Contains("Api.Endpoints.Provenance.MayUploadTo(herkunft, quelle, _sources.ReuploadTargetsOf)", StringComparison.Ordinal)
             && uploadSource.Contains("Api.Endpoints.UploadGate.Decide(", StringComparison.Ordinal));
 
         // ---- 16. Trockenlauf: eine Zeile je Quelle, keine Zugangsdaten (F-M496) -----------------
@@ -2022,7 +2025,7 @@ internal static class Program
                     && !Jellyfin.Plugin.SubScribe.Api.Endpoints.Provenance.MayUploadTo(herkunft, SubtitleProvider.TvSubtitles)
                     && !settleReg.IsContentUploadedFor(hashHer, SubtitleProvider.TvSubtitles)
                     // der Settle-Weg fragt genau dieses Tor, bevor er einen Kandidaten weiterlaufen laesst
-                    && uploadSource.Contains("Api.Endpoints.Provenance.MayUploadTo(herkunft, quelle)", StringComparison.Ordinal)
+                    && uploadSource.Contains("Api.Endpoints.Provenance.MayUploadTo(herkunft, quelle, _sources.ReuploadTargetsOf)", StringComparison.Ordinal)
                     && uploadSource.Contains("string? herkunft = Registry.GetOrigin(contentHash).Origin;", StringComparison.Ordinal),
                     "herkunft=" + (herkunft ?? "-") + " subdl=" + torSubdl.Subdl + " tvst=" + torSubdl.TvSubtitles);
 

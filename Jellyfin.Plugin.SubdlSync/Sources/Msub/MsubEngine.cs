@@ -117,6 +117,10 @@ public sealed class MsubEngine : ISourceEngine
             ServesSeries = false,
             ServesMovies = true,
             CanReport = false,
+            // F-M720: ein hier heruntergeladener Untertitel geht an KEINE Quelle zurück — auch nicht
+            // an moviesubtitles.org selbst. Die Zeile steht bei der Quelle, damit eine spätere Quelle eine andere
+            // Antwort geben kann, ohne dass jemand das Tor umbaut.
+            ReuploadTargets = Array.Empty<string>(),
             CanHearingImpaired = false,
             CanOfferSeasonPacks = false,
             CanSeasonPacks = false,

@@ -11,6 +11,8 @@
 
 using System;
 using Jellyfin.Plugin.SubScribe.Configuration;
+using System.Collections.Generic;
+using System.Linq;
 
 namespace Jellyfin.Plugin.SubScribe.Api.Endpoints;
 
@@ -101,9 +103,33 @@ public static class Provenance
     /// <param name="target">The source that would take the upload.</param>
     /// <returns>True when the upload may go there.</returns>
     public static bool MayUploadTo(string? origin, SubtitleProvider target)
+        => MayUploadTo(origin, target, reuploadTargetsOf: null);
+
+    /// <summary>
+    /// F-M720: dieselbe Frage, aber quellenabhängig beantwortet — die Herkunft fragt IHRE eigene Zeile
+    /// der Matrix („wohin darf ein Fund von mir noch?"), statt dass das Tor für alle Quellen gleich
+    /// antwortet. Operator-Anweisung 23.11.2026: „Quasi wenn download irgendeiner quelle, kein re-up zu
+    /// irgendeiner quelle" — genau das ist die Vorgabe jeder Quelle (leere Menge), aber sie steht jetzt
+    /// BEI der Quelle und wird über <paramref name="reuploadTargetsOf"/> erfragt.
+    /// <para>
+    /// Ohne Rückfrager (oder wenn niemand die Herkunft kennt) gilt die Vorgabe: nichts darf zurück.
+    /// Unbekannte Herkunft bleibt überall erlaubt — eine Handkopie oder eine alte Zeile sagt nichts.
+    /// </para>
+    /// </summary>
+    /// <param name="origin">The stored provenance (null/empty = not known).</param>
+    /// <param name="target">The source that would take the upload.</param>
+    /// <param name="reuploadTargetsOf">Fragt die Herkunftsquelle nach ihren erlaubten Zielen.</param>
+    /// <returns>True when the upload may go there.</returns>
+    public static bool MayUploadTo(
+        string? origin, SubtitleProvider target, Func<string, IReadOnlyCollection<string>>? reuploadTargetsOf)
     {
-        _ = target;
-        return Parse(origin) is null;
+        if (Parse(origin) is not { } quelle)
+        {
+            return true;
+        }
+
+        var erlaubt = reuploadTargetsOf?.Invoke(Name(quelle)) ?? Array.Empty<string>();
+        return erlaubt.Contains(Name(target), StringComparer.OrdinalIgnoreCase);
     }
 
     /// <summary>
@@ -113,9 +139,34 @@ public static class Provenance
     /// <param name="origin">The stored provenance (null/empty = not known).</param>
     /// <returns>The sentence for the log, or null.</returns>
     public static string? OriginBlockedReason(string? origin)
-        => Parse(origin) is { } bekannt
-            ? "origin:" + Name(bekannt) + " — downloaded there, never uploaded"
-            : null;
+        => OriginBlockedReason(origin, target: null, reuploadTargetsOf: null);
+
+    /// <summary>
+    /// F-M720: derselbe Satz, aber mit dem Ziel darin — er nennt die Herkunft UND die Quelle, die
+    /// abgelehnt hat, damit im Lauf steht, welche Zeile der Matrix gegriffen hat.
+    /// </summary>
+    /// <param name="origin">The stored provenance.</param>
+    /// <param name="target">The refused source, or null for the general sentence.</param>
+    /// <param name="reuploadTargetsOf">Fragt die Herkunftsquelle nach ihren erlaubten Zielen.</param>
+    /// <returns>The sentence for the log, or null when nothing blocks.</returns>
+    public static string? OriginBlockedReason(
+        string? origin, SubtitleProvider? target, Func<string, IReadOnlyCollection<string>>? reuploadTargetsOf)
+    {
+        if (Parse(origin) is not { } bekannt)
+        {
+            return null;
+        }
+
+        var erlaubt = reuploadTargetsOf?.Invoke(Name(bekannt)) ?? Array.Empty<string>();
+        if (target is { } ziel && erlaubt.Contains(Name(ziel), StringComparer.OrdinalIgnoreCase))
+        {
+            return null;
+        }
+
+        return target is { } abgelehnt
+            ? "origin:" + Name(bekannt) + " — downloaded there, never uploaded to " + Name(abgelehnt)
+            : "origin:" + Name(bekannt) + " — downloaded there, never uploaded";
+    }
 
     /// <summary>
     /// F-M488 (operator decision 15.11.2026: "aber dann vergeben wir eine upload id"): an upload always

@@ -1,7 +1,7 @@
 # Requirements Specification — Jellyfin Plugin "Sub Scribe" (Upload + Download)
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.24.
+**Status:** Implementation — v12.3.8.25.
 
 **Die Begründungen (warum eine Regel gilt, Messungen, Vorfälle) stehen nicht hier, sondern lokal in der Methodik-Ablage, nach Kapiteln sortiert und mit der Requirement-Nummer
 markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test — sonst nichts.**
@@ -33,7 +33,7 @@ markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
 - [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 46 requirements
-- [14. Data Model and Persistence](#14-data-model-and-persistence) — 74 requirements
+- [14. Data Model and Persistence](#14-data-model-and-persistence) — 75 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 51 requirements
 - [16. Non-Goals](#16-non-goals)
 - [17. Non-Functional Requirements](#17-non-functional-requirements)
@@ -2014,6 +2014,8 @@ Grund (gemessen 18.11.2026): die Queue entsteht nur aus offenen Stempeln (F-M557
 
 **F-M719 [G]:** **Der Pack-Schalter steht nur noch bei der Quelle und meint beide Richtungen.** Ansage 23.11.2026: „Upload tab / upload season packs kann dann entfallen. Pack ein bedeutet upload und download für packs des jeweiligen endpoints ok". Damit fällt das Kästchen **Upload season packs** aus dem Upload-Abschnitt weg (samt Feld `PluginConfiguration.UploadSeasonPacks`) — die Frage „wird überhaupt gepackt?" beantwortet jetzt der Schalter **Packs** der Quellenkarte (`packsEnabled`): steht er bei einer Quelle offen, packt der Lauf und spricht genau diese Quelle an (`PackSlotSources().Count > 0` in `UploadPipeline`), und beim **Holen** verlangt dieselbe Quelle nur dann ein Staffel-Archiv (`PreferSeasonZip` gilt nur noch, wenn `packsEnabled` offen ist). F-M641 (ein quellenblinder Schalter für beide Quellen) ist damit abgelöst; gespeicherte Altwerte im Feld `UploadSeasonPacks` werden beim Lesen ignoriert, weil das Feld nicht mehr existiert.
 
+**F-M720 [U]:** **Die Vermeidung von Querkontamination ist quellenabhängig kodiert.** Operator-Anweisung 23.11.2026: „Auch die Querkontamination oder vielmehr ihre Vermeidung sollte sourceabhängig kodiert werden. Quasi wenn download irgendeiner quelle, kein re-up zu irgendeiner quelle". Bis dahin antwortete das Tor für alle Ziele gleich (`MayUploadTo` verwarf den Parameter `target` mit `_ = target;`): die Regel war ein einzelnes Ja/Nein, nicht eine Aussage über Quellen. Jetzt trägt **jede Engine ihre eigene Zeile**: `SourceCapabilities.ReuploadTargets` sagt, an welche Quellen ein **hier** heruntergeladener Untertitel noch gehen darf — bei SubDL, tvsubtitles.net und moviesubtitles.org ist die Menge **leer** (ein Download ist ein Fund, kein Kandidat). `Provenance.MayUploadTo(origin, target, reuploadTargetsOf)` fragt die Herkunftsquelle über `SourceRegistry.ReuploadTargetsOf`; ohne Antwort gilt die Vorgabe „an keine". Die Logzeile nennt jetzt Herkunft **und** abgelehntes Ziel („origin:subdl — downloaded there, never uploaded to tvsubtitles"). Eine künftige Quelle, die einen Rückweg erlauben will, trägt ihn in ihrer Zeile ein — niemand muss dafür das Tor umbauen.
+
 #### 14.9 Die Marken-Matrix — die einzige Wahrheit (bis Schema 22; abgelöst durch 14.11)
 
 Die Matrix ist seit 12.3.0.0 der **einzige** Ort, an dem ein Quellen-Urteil steht: eine Zeile je (Medium, Quelle, Art) in der Tabelle `source_matrix` — und bei `track`/`track-hi` je (Medium, Quelle, Art, Sprache, HI, **Position**) (Schema 20, F-M669). Seit 12.3.0.2 (Schema 21, F-M670) ist sie auch der einzige Ort für die **Quellen-Ids**: es gibt keine Alt-Tabelle `source_marks` und keine Spalte `SubdlId` mehr. Die breiten Spalten, aus denen sie bis 12.2.0.28 gefüllt wurde, sind aus der Live-Datei **entfernt**; der Altbestand lebt allein in der Sicherungsdatei weiter. Es gibt keinen zweiten Datenbestand und keinen zweiten Lesepfad.
@@ -2902,6 +2904,8 @@ Kein Grund, keine Vorgeschichte, keine Bitte, kein Vorschlag. Gebaut in `Pipelin
 **T382:** TMDb steht als erste Ampel (F-M718), in `gui-structure` — **1 Prüfung**: die fünf Status-Zeilen liegen in dieser Reihenfolge innerhalb `#ScribeStatusBox`.
 
 **T383:** Der Pack-Schalter gehört der Quelle und meint beide Richtungen (F-M719), in `seasonpack` — **3 Prüfungen**: das Konfigurationsfeld ist entfallen, die Upload-Seite führt kein Kästchen, und `UploadPipeline` packt bei `PackSlotSources().Count > 0`. Ergänzend in `gui-structure` und `endpoints` je eine Prüfung, dass das Kästchen nicht zurückkommt.
+
+**T384:** Die Herkunftsregel folgt der Quelle (F-M720), in `sources` — **4 Prüfungen**: der Vertrag erklärt `ReuploadTargets`, alle drei Engines führen die leere Zeile, das Tor fragt die Herkunftsquelle (eine Zeile, die `subdl` erlaubt, lässt genau `subdl` zu und sperrt `tvsubtitles`), und die Logzeile nennt das abgelehnte Ziel.
 
 **T336:** Die vier Ebenen und die drei Quellen-Tabellen seit Schema 23 (F-M672…F-M677), in `storex` gegen echte Altdateien: Kennungsformen `[xxxx]`/`#yyyyy`/`#yyyyy#zzz`/`#yyyyy&zzz`, ein Nummernkreis je Datei über Spur und Seitenwagen, `pack_track` mit Fremdschlüsseln, `upload`/`reference`/`badapple` mit einer Subjekt-Spalte, keine fremde Kennung außerhalb `reference`/`badapple`, `source_matrix` und `rejected_candidates` nach dem Aufstieg weg, `OriginId` ohne Wertverlust nach `reference`, Aufstieg 17→23 und 22→23 mit genau einer Sicherung und einem zweiten Start, der nichts tut — **15 Prüfungen**, die letzte für die Quellenneutralitaet von `badapple` (auch eine nicht-numerische Kennung wie `download-3234-2-en` neben einer SubDL-Nummer).
 
