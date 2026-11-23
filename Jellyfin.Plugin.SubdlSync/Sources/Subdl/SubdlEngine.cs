@@ -57,6 +57,19 @@ public sealed class SubdlEngine : ISourceEngine
     /// <summary>F-M693: der Melde-Schalter in der eigenen Datei dieser Quelle.</summary>
     public const string FieldReportEnabled = SourceSwitches.ReportField;
 
+    /// <summary>
+    /// F-M711 (Betreiberansage 22.11.2026: „Die 2 verbleibenden subdl only Einstellungen können dann auch
+    /// in den endpoint kasten und das badge subdl only kann entfallen"): die drei Einstellungen, die in
+    /// der Oberfläche den Merker „SubDL only" trugen, gehören in die Karte DIESER Quelle.
+    /// </summary>
+    public const string FieldUploadContinueAfterLimit = "uploadContinueAfterLimit";
+
+    /// <summary>F-M711: Fortsetzen nach der Tagesgrenze — Download-Richtung.</summary>
+    public const string FieldDownloadContinueAfterLimit = "downloadContinueAfterLimit";
+
+    /// <summary>F-M711: maschinell übersetzte Einreichungen (SUBDL AI) zulassen.</summary>
+    public const string FieldAllowAiTranslatedSubs = "allowAiTranslatedSubs";
+
     /// <summary>F-M683: der Schlüssel des API-Schlüssels in der eigenen Datei dieser Quelle.</summary>
     public const string FieldApiKey = "apiKey";
 
@@ -118,6 +131,14 @@ public sealed class SubdlEngine : ISourceEngine
         // Einstellung dafür wäre eine Frage, die niemand beantworten muss.
         new(FieldPreferSeasonZip, "Prefer season ZIPs", SourceFieldKind.Switch, Default: "true",
             Help: null),
+        // F-M711: die drei frueheren "SubDL only"-Einstellungen der Weboberflaeche. Die Vorgaben sind
+        // genau die Alt-Werte der Konfiguration (on/on/off) — der Nachtrag aendert kein Verhalten.
+        new(FieldUploadContinueAfterLimit, "Continue after limit (upload)", SourceFieldKind.Switch,
+            Default: "true", Help: null),
+        new(FieldDownloadContinueAfterLimit, "Continue after limit (download)", SourceFieldKind.Switch,
+            Default: "true", Help: null),
+        new(FieldAllowAiTranslatedSubs, "Allow AI translated subs", SourceFieldKind.Switch,
+            Default: "false", Help: null),
     };
 
     private readonly ScribeApiClient _client;

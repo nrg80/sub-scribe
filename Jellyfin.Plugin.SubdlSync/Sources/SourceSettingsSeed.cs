@@ -217,6 +217,78 @@ public static class SourceSettingsSeed
         SourceSettingsFile.RestrictToOwner(marke);
         return ergaenzt;
     }
+    /// <summary>
+    /// F-M711: der Nachtrag für die frueheren „SubDL only"-Einstellungen. Sie stehen jetzt als Felder in
+    /// der Datei der SubDL-Quelle (<see cref="SubdlEngine.Declared"/>), die Oberflaeche zeigt sie in der
+    /// Karte. Der uebernommene Wert ist der, der HEUTE gilt; eine bereits gespeicherte Datei wird nur um
+    /// die fehlenden drei Felder ergaenzt, sonst nicht angefasst.
+    /// </summary>
+    /// <param name="dataDir">Der Datenordner des Plugins (null/leer = nichts tun).</param>
+    /// <param name="config">Die Konfiguration dieses Laufs.</param>
+    /// <returns>Die Schlüssel der Quellen, deren Datei in DIESEM Aufruf ergänzt wurde.</returns>
+    public static IReadOnlyList<string> EnsureSubdlSwitches(string? dataDir, PluginConfiguration? config)
+    {
+        var ergaenzt = new List<string>();
+        if (string.IsNullOrWhiteSpace(dataDir) || config is null)
+        {
+            return ergaenzt;
+        }
+
+        string ordner = SourceSettingsFile.DirIn(dataDir);
+        string marke = Path.Combine(ordner, SubdlMarkerName);
+        if (File.Exists(marke))
+        {
+            return ergaenzt;
+        }
+
+        string key = SubdlEngine.SourceKey;
+        IReadOnlyList<SourceField> schema = SubdlEngine.Declared;
+        string datei = SourceSettingsFile.PathIn(dataDir, key);
+        if (File.Exists(datei))
+        {
+            SourceSettings vorhanden = SourceSettingsFile.Load(dataDir, key, schema);
+            if (vorhanden.Problem is null)
+            {
+                var werte = new Dictionary<string, string>(vorhanden.Stored, StringComparer.Ordinal);
+                bool fehltEtwas = false;
+                foreach ((string feld, bool wert) in new[]
+                {
+                    (SubdlEngine.FieldUploadContinueAfterLimit, config.UploadContinueAfterLimit),
+                    (SubdlEngine.FieldDownloadContinueAfterLimit, config.DownloadContinueAfterLimit),
+                    (SubdlEngine.FieldAllowAiTranslatedSubs, config.AllowAiTranslatedSubs),
+                })
+                {
+                    if (!vorhanden.Has(feld))
+                    {
+                        werte[feld] = wert ? "true" : "false";
+                        fehltEtwas = true;
+                    }
+                }
+
+                if (fehltEtwas)
+                {
+                    SourceSettingsFile.Save(dataDir, key, schema, werte);
+                    ergaenzt.Add(key);
+                }
+            }
+        }
+
+        Directory.CreateDirectory(ordner);
+        SourceSettingsFile.RestrictFolderToOwner(ordner);
+        try
+        {
+            File.WriteAllText(marke, DateTime.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture));
+        }
+        catch (IOException)
+        {
+        }
+
+        return ergaenzt;
+    }
+
+    /// <summary>F-M711: die Marke dieses Nachtrags — eine eigene, damit er auch auf prod noch ankommt.</summary>
+    public const string SubdlMarkerName = ".seed-subdl-switches-1";
+
 
     /// <summary>F-M694: die eigene Marke des Nachtrags für das Kontopasswort.</summary>
     public const string CredentialMarkerName = ".seed-credentials-1";

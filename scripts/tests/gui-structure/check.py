@@ -991,9 +991,7 @@ def main():
     pos_fu = dl_section.find('id="FollowUpRoundsDownload"')
     pos_sync = dl_section.find('id="QaDownloadAutoSync"')
     pos_gates = dl_section.find("Quality gates (before download save)")
-    check("download: Continue after daily limit comes before Follow-up rounds",
-          pos_limit != -1 and pos_fu != -1 and pos_limit < pos_fu,
-          "limit=%d follow-up=%d" % (pos_limit, pos_fu))
+    # F-M711: der Kasten ist entfernt — die Reihenfolge-Pruefung entfaellt mit ihm.
     check("download: Follow-up rounds comes before Automatically synchronize",
           pos_fu != -1 and pos_sync != -1 and pos_fu < pos_sync,
           "follow-up=%d sync=%d" % (pos_fu, pos_sync))
@@ -1070,15 +1068,9 @@ def main():
 
     up_label = _visible_label(up_pos)
     dl_label = _visible_label(dl_pos)
-    check("F-M338: the upload label carries no 'API'",
-          up_label != "" and "API" not in up_label,
-          "the operator asked for it without the word; measured label=%r" % up_label)
-    check("F-M338: both directions read the SAME sentence",
-          up_label != "" and up_label == dl_label,
-          "upload=%r download=%r - a wording difference reads as a behaviour difference" % (up_label, dl_label))
-    check("F-M338: the download label is unchanged",
-          dl_label == "Continue after daily limit",
-          "the fix is on the upload side only; measured download=%r" % dl_label)
+    # F-M711: der Kasten "Continue after daily limit" steht nicht mehr in der Weboberfläche — die
+    # Einstellung ist ein Feld der SubDL-Karte geworden. Damit entfällt die Satzgleichheit beider
+    # Richtungen; die Prüfung auf das Verschwinden steht weiter unten, wo `page_src` vorliegt.
 
     # ---- F-M337 (operator order 09.10.2026): the General tab carries everything that matters ----
     # "Target languages (download, required)" moves up under the library selection, so the first
@@ -2234,15 +2226,26 @@ def main():
     # F-M664 (Operator 21.11.2026): auch der HI-Schalter ist nicht mehr SubDL-only — mit der
     # Ohr-Marke der Eintragsseite und dem .HI.-Marker der Staffel-ZIP liefert tvst HI-Fassungen
     # ebenso. Bleiben drei Merker: die zwei Tageslimit-Schalter und der AI-Schalter.
-    subdl_only = ("UploadContinueAfterLimit", "DownloadContinueAfterLimit",
-                  "AllowAiTranslatedSubs")
-    for cid in subdl_only:
-        # Der Merker steht mal hinter dem Kaestchen (Checkbox), mal im Label DAVOR (Zahlenfeld) —
-        # gesucht wird deshalb in einem Fenster um das Control, nicht nur dahinter.
-        pos = page_src.find('id="%s"' % cid)
-        check("F-M526: %s carries the SubDL-only marker" % cid,
-              pos > 0 and 'src-subdl' in page_src[max(0, pos - 400):pos + 400],
-              "kein Merker" if pos > 0 else "Control fehlt")
+    # F-M711 (Betreiberansage 22.11.2026: „Die 2 verbleibenden subdl only Einstellungen können dann auch
+    # in den endpoint kasten und das badge subdl only kann entfallen"): das Tupel ist LEER — die drei
+    # letzten Merker sind weg, ihre Einstellungen stehen als Felder in der Karte der Quelle.
+    subdl_only = ()
+
+    # F-M711: der Text und die Felder — der Kasten ist weg, die Einstellung steht in der Quelle.
+    check("F-M711: the 'Continue after daily limit' box is gone from the page",
+          "Continue after daily limit" not in page_src
+          and 'id="UploadContinueAfterLimit"' not in page_src
+          and 'id="DownloadContinueAfterLimit"' not in page_src
+          and 'id="AllowAiTranslatedSubs"' not in page_src,
+          "kein Kasten mehr in der Oberflaeche")
+    _subdl_quelle = os.path.join(
+        os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))),
+        "Jellyfin.Plugin.SubdlSync", "Sources", "Subdl", "SubdlEngine.cs")
+    _subdl_text = open(_subdl_quelle, encoding="utf-8").read() if os.path.exists(_subdl_quelle) else ""
+    check("F-M711: the three settings are declared by the SubDL source itself",
+          all(k in _subdl_text for k in ("uploadContinueAfterLimit", "downloadContinueAfterLimit",
+                                         "allowAiTranslatedSubs")),
+          "Felder in der Erklaerung der Quelle")
 
     # F-M527: Jellyfin zeichnet das Haekchen ueber die Nachbar-Kette
     # `.emby-checkbox:checked + span + .checkboxOutline` — das Outline-<span> haengt der Baustein
@@ -2253,18 +2256,15 @@ def main():
     check("F-M527: no badge sits between the label text and Jellyfin's checkbox outline",
           '</span> <span class="src-badge' not in page_src,
           "%d kaputte Ketten" % page_src.count('</span> <span class="src-badge'))
-    for cid in ("UploadContinueAfterLimit", "DownloadContinueAfterLimit",
-                "AllowAiTranslatedSubs"):
-        pos = page_src.find('id="%s"' % cid)
-        check("F-M527: %s keeps the marker nested inside its label text" % cid,
-              pos > 0 and 'SubDL only</span></span>' in page_src[pos:pos + 700])
+    # F-M711: die drei Controls, die diesen Merker trugen, stehen nicht mehr in der Seite.
 
-    check("F-M526: the marker has its own two styles and spells the source out",
-          ".src-badge {" in page_src and ".src-subdl {" in page_src and ".src-tvst" in page_src
-          and ">SubDL only</span>" in page_src)
+    # F-M711: es gibt keinen Quellenmerker mehr — auch keine eigene Gestalt dafür.
+    check("F-M711: no source badge and no badge styling survive in the page",
+          "src-subdl" not in page_src and "src-tvst" not in page_src,
+          "kein Merker, keine Gestalt")
 
     check("F-M526: no marker claims a tvst-only setting that does not exist",
-          page_src.count("src-tvst") == 1)  # nur die CSS-Klasse, kein gesetztes Abzeichen
+          page_src.count("src-tvst") == 0)  # F-M711: keine Merker mehr, auch keine Gestalt
 
     # F-M641: der Pack-Schalter wirkt auf BEIDE Quellen (SubDL und tvst bauen Packs) und darf
     # deshalb keinen Quellenmerker tragen.
@@ -2275,7 +2275,7 @@ def main():
 
     # F-M533: der Melde-Schalter wirkt auf BEIDE Quellen und darf keinen Quellenmerker tragen.
     check("F-M533: the report switch carries no source marker any more",
-          page_src.count('>SubDL only</span>') == 3,
+          page_src.count('>SubDL only</span>') == 0,
           "%d Abzeichen (erwartet 3: Tageslimit x2 und AI — Melde-, Pack-, Cache- und HI-Schalter tragen keins)"
           % page_src.count('>SubDL only</span>'))
     check("F-M533: the report switch is named without a source",

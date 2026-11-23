@@ -867,6 +867,10 @@
     "T374": {
       "suite": "gui-structure",
       "checks": 1
+    },
+    "T375": {
+      "suite": "gui-structure",
+      "checks": 4
     }
   }
 }

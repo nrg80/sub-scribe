@@ -77,6 +77,7 @@ public sealed class SourceRegistry
         // Eine eigene Marke, damit der Nachtrag auch auf einer Instanz ankommt, deren Übernahme
         // (F-M683) längst gelaufen ist.
         var richtungen = SourceSettingsSeed.EnsureDirectionSwitches(context.DataFolder, config);
+        _ = SourceSettingsSeed.EnsureSubdlSwitches(context.DataFolder, config);   // F-M711
         if (richtungen.Count > 0)
         {
             context.Logger?.LogInformation(

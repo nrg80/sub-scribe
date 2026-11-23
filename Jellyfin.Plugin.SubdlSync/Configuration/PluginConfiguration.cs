@@ -565,7 +565,19 @@ public class PluginConfiguration : BasePluginConfiguration
     /// downloaded. Off by default — the switch is applied to the SEARCH RESULT, so such a candidate
     /// neither enters the ranking nor costs a download unit.
     /// </summary>
-    public bool AllowAiTranslatedSubs { get; set; } = false;
+    public bool AllowAiTranslatedSubs
+    {
+        // F-M711: die Datei der Quelle antwortet zuerst (wie bei den Richtungsschaltern, F-M691); sagt
+        // sie nichts, gilt der Alt-Wert aus der Plugin-Konfiguration.
+        get => Sources.SourceSwitches.Flag(Sources.Subdl.SubdlEngine.SourceKey,
+                   Sources.Subdl.SubdlEngine.FieldAllowAiTranslatedSubs) ?? _allowAiTranslatedSubs;
+        set => _allowAiTranslatedSubs = value;
+    }
+
+    // F-M711: die Alt-Werte als Rueckfall — sie kommen aus der XML und bleiben unveraendert lesbar.
+    private bool _allowAiTranslatedSubs = false;
+    private bool _downloadContinueAfterLimit = true;
+    private bool _uploadContinueAfterLimit = true;
 
     /// <summary>
     /// F-M450: report a subtitle that failed twice (download delivered no data, or the file did not
@@ -708,7 +720,13 @@ public class PluginConfiguration : BasePluginConfiguration
     /// waits (once per run, at most 24 h) until the server-reported reset time and
     /// retries the current candidate; a second 429 in the same run stops.
     /// </summary>
-    public bool DownloadContinueAfterLimit { get; set; } = true;
+    public bool DownloadContinueAfterLimit
+    {
+        // F-M711: Datei zuerst, dann der Alt-Wert.
+        get => Sources.SourceSwitches.Flag(Sources.Subdl.SubdlEngine.SourceKey,
+                   Sources.Subdl.SubdlEngine.FieldDownloadContinueAfterLimit) ?? _downloadContinueAfterLimit;
+        set => _downloadContinueAfterLimit = value;
+    }
 
     /// <summary>
     /// Gets or sets a value indicating whether the UPLOAD pipeline waits out the
@@ -721,7 +739,13 @@ public class PluginConfiguration : BasePluginConfiguration
     /// (user decision: download can hit TWO quotas — API requests AND ~50 downloads/day —
     /// while upload only hits the API quota).
     /// </summary>
-    public bool UploadContinueAfterLimit { get; set; } = true;
+    public bool UploadContinueAfterLimit
+    {
+        // F-M711: Datei zuerst, dann der Alt-Wert.
+        get => Sources.SourceSwitches.Flag(Sources.Subdl.SubdlEngine.SourceKey,
+                   Sources.Subdl.SubdlEngine.FieldUploadContinueAfterLimit) ?? _uploadContinueAfterLimit;
+        set => _uploadContinueAfterLimit = value;
+    }
 
     #endregion
 

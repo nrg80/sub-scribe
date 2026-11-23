@@ -125,6 +125,9 @@ public class Plugin : BasePlugin<Configuration.PluginConfiguration>, IHasWebPage
             // F-M691: die Richtungsschalter nachtragen. Eigene Marke, eigener Aufruf — die Übernahme von
             // F-M683 ist auf einer laufenden Instanz längst gelaufen, dieser Nachtrag aber noch nicht.
             var richtungen = Sources.SourceSettingsSeed.EnsureDirectionSwitches(DataFolderPath, Configuration);
+
+            // F-M711: die frueheren "SubDL only"-Einstellungen in die Datei der Quelle nachtragen.
+            _ = Sources.SourceSettingsSeed.EnsureSubdlSwitches(DataFolderPath, Configuration);
             if (richtungen.Count > 0)
             {
                 _loggerFactory?.CreateLogger("SubDL-Start")?.LogInformation(

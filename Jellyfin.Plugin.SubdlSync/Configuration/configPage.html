@@ -444,13 +444,7 @@
                             <div class="fieldDescription">Upload shortly after new media arrives. Only the new arrivals are checked. Default: on.</div>
                         </div>
 
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="UploadContinueAfterLimit" name="UploadContinueAfterLimit" type="checkbox" is="emby-checkbox" />
-                                <span>Continue after daily limit <span class="src-badge src-subdl" title="Only this source is affected — tvst does not have this">SubDL only</span></span>
-                            </label>
-                            <div class="fieldDescription">On 429/overload, schedule one automatic retry. Default: on.</div>
-                        </div>
+                        
 
                         <div class="checkboxContainer checkboxContainer-withDescription">
                         <label class="emby-checkbox-label">
@@ -516,13 +510,7 @@
                         </div>
 
                         <!-- F-M111: per-direction scheduling removed — unified RefetchInterval (General tab). -->
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="DownloadContinueAfterLimit" name="DownloadContinueAfterLimit" type="checkbox" is="emby-checkbox" />
-                                <span>Continue after daily limit <span class="src-badge src-subdl" title="Only this source is affected — tvst does not have this">SubDL only</span></span>
-                            </label>
-                            <div class="fieldDescription">On 429/overload, schedule one automatic retry. Default: on.</div>
-                        </div>
+                        
 
                         <div class="checkboxContainer checkboxContainer-withDescription">
                         <label class="emby-checkbox-label">
@@ -586,13 +574,7 @@
                             <div class="fieldDescription">Rejects files with too few cues. Default: on.</div>
                         </div>
 
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="AllowAiTranslatedSubs" name="AllowAiTranslatedSubs" type="checkbox" is="emby-checkbox" />
-                                <span>Allow AI translated subs (SUBDL AI) <span class="src-badge src-subdl" title="Only this source is affected — tvst does not have this">SubDL only</span></span>
-                            </label>
-                            <div class="fieldDescription">Candidates from the machine-translation account are dropped at the search result while this is off. Default: off.</div>
-                        </div>
+                        
 
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
@@ -672,10 +654,7 @@
         .subdl-outcome { font-weight: 600; }
         /* Dry-run note: plain grey text beside the result word, NOT a badge and NOT its own
            column. It must not inherit the result colour (that stays the outcome's own colour). */
-        .src-badge { display: inline-block; margin-left: .4em; padding: 0 .45em; border-radius: .6em;
             font-size: 78%; font-weight: 600; letter-spacing: .02em; vertical-align: middle; }
-        .src-subdl { background: #e8eef7; color: #2f4d7a; }
-        .src-tvst  { background: #eef2e6; color: #4a5c28; }
         .subdl-dryrun { color: #767676; margin-left: 0.25em; }
         /* Workers section only: ONE worker = ONE line, never wrapped.
            Four columns, in this order: light, name, time, result -- ALL left-aligned, so every
@@ -1154,14 +1133,11 @@
                         document.querySelector('#QaDownloadVerifyLanguage').checked = config.QaDownloadVerifyLanguage;
                         document.querySelector('#QaDownloadAutoSync').checked = config.QaDownloadAutoSync !== false;
                         document.querySelector('#RefreshLibraryAfterDownload').checked = config.RefreshLibraryAfterDownload !== false;
-                        document.querySelector('#AllowAiTranslatedSubs').checked = config.AllowAiTranslatedSubs === true;
                         document.querySelector('#ReportBrokenSubtitles').checked = config.ReportBrokenSubtitles !== false;
                         document.querySelector('#DownloadScoreWeightGroup').value = config.DownloadScoreWeightGroup;
                         document.querySelector('#DownloadScoreWeightToken').value = config.DownloadScoreWeightToken;
                         document.querySelector('#DownloadScoreWeightDownload').value = config.DownloadScoreWeightDownload;
                                                 document.querySelector('#DownloadOnArrival').checked = config.DownloadOnArrival;
-                        document.querySelector('#UploadContinueAfterLimit').checked = config.UploadContinueAfterLimit;
-                        document.querySelector('#DownloadContinueAfterLimit').checked = config.DownloadContinueAfterLimit;
                         document.querySelector('#DownloadDryRun').checked = config.DownloadDryRun;
                         document.querySelector('#DownloadArchiveCacheDays').value = config.DownloadArchiveCacheDays ?? 7;
                         document.querySelector('#DownloadArchiveCacheMaxMb').value = config.DownloadArchiveCacheMaxMb ?? 256;
@@ -1827,7 +1803,6 @@ workers.forEach(function (w) {
                         config.QaVerifyLanguage = document.querySelector('#QaVerifyLanguage').checked;
                         config.UploadResolveUnd = document.querySelector('#UploadResolveUnd').checked;
                         config.QaMinCues = document.querySelector('#QaMinCues').checked;
-                        config.UploadContinueAfterLimit = document.querySelector('#UploadContinueAfterLimit').checked;
                         config.SkipDirPatterns = document.querySelector('#SkipDirs').value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
                         config.SkipFilePatterns = document.querySelector('#SkipFiles').value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
                         // F-M698: die Liste ist die Wahrheit. Die alte Zwei-Werte-Einstellung wird daraus
@@ -1847,13 +1822,11 @@ workers.forEach(function (w) {
                         config.QaDownloadVerifyLanguage = document.querySelector('#QaDownloadVerifyLanguage').checked;
                         config.QaDownloadAutoSync = document.querySelector('#QaDownloadAutoSync').checked;
                         config.RefreshLibraryAfterDownload = document.querySelector('#RefreshLibraryAfterDownload').checked;
-                        config.AllowAiTranslatedSubs = document.querySelector('#AllowAiTranslatedSubs').checked;
                         config.ReportBrokenSubtitles = document.querySelector('#ReportBrokenSubtitles').checked;
                         config.DownloadScoreWeightGroup = parseInt(document.querySelector('#DownloadScoreWeightGroup').value) || 1000;
                         config.DownloadScoreWeightToken = parseInt(document.querySelector('#DownloadScoreWeightToken').value) || 10;
                         config.DownloadScoreWeightDownload = parseInt(document.querySelector('#DownloadScoreWeightDownload').value, 10); if (isNaN(config.DownloadScoreWeightDownload)) { config.DownloadScoreWeightDownload = 1; }
                                                 config.DownloadOnArrival = document.querySelector('#DownloadOnArrival').checked;
-                        config.DownloadContinueAfterLimit = document.querySelector('#DownloadContinueAfterLimit').checked;
                         config.DownloadDryRun = document.querySelector('#DownloadDryRun').checked;
                         config.DownloadArchiveCacheDays = Math.max(0, parseInt(document.querySelector('#DownloadArchiveCacheDays').value || '0', 10) || 0);
                         config.DownloadArchiveCacheMaxMb = Math.max(0, parseInt(document.querySelector('#DownloadArchiveCacheMaxMb').value || '0', 10) || 0);

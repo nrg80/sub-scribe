@@ -441,6 +441,9 @@ internal static class Program
                 "subdl packsEnabled = true", "subdl reportEnabled = true",
                 "subdl apiKey = [leer]", "subdl account = [leer]", "subdl password = [leer]",
                 "subdl preferSeasonZip = true",
+                // F-M711: die drei frueheren "SubDL only"-Einstellungen sind jetzt Felder dieser Quelle.
+                "subdl uploadContinueAfterLimit = true", "subdl downloadContinueAfterLimit = true",
+                "subdl allowAiTranslatedSubs = false",
                 "tvsubtitles uploadEnabled = false", "tvsubtitles downloadEnabled = true",
                 "tvsubtitles packsEnabled = true", "tvsubtitles reportEnabled = true",
                 "tvsubtitles preferSeasonZip = true",
