@@ -183,6 +183,17 @@ public sealed record SourceCapabilities
     /// <summary>F-M625: führt die Quelle ein Kontingent und antwortet mit Erschöpfung?</summary>
     public bool CanQuota { get; init; }
 
+    /// <summary>
+    /// F-M696: bedient die Quelle FERNSEHSERIEN? Betreiberansage 22.11.2026: „Der der gui evtl mitgeben
+    /// ob sie tvshows, movies oder nur eins von beiden macht als tag." Die Auskunft steht hier, damit sie
+    /// als Kennzeichen auf der Karte stehen kann UND als Variable zur Verfügung steht — der Seeder
+    /// entscheidet die Art heute an festen Quellennamen (ScribeSeeder.cs), nicht an einer Erklärung.
+    /// </summary>
+    public bool ServesSeries { get; init; }
+
+    /// <summary>F-M696: bedient die Quelle FILME?</summary>
+    public bool ServesMovies { get; init; }
+
     /// <summary>Gets findet die Quelle über eine IMDb-Kennung?</summary>
     public bool SearchesByImdb { get; init; }
 

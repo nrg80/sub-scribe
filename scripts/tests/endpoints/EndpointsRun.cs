@@ -271,8 +271,8 @@ internal static class Program
             pipeline664.Contains("var hiCandidates = HiPoolForLanguage(quellenReihenfolge, hiProQuelle, lang);", StringComparison.Ordinal)
             && pipeline664.Contains("public static List<SubtitleCandidate> HiPoolForLanguage(", StringComparison.Ordinal)
             && pipeline664.Contains("foreach (var quelle in quellenReihenfolge)", StringComparison.Ordinal));
-        Check("F-M664: die Reihenfolge der ENGINES bleibt die GUI-Einstellung",
-            pipeline664.Contains("Api.Endpoints.SourceOrder.ForMedia(_config.DownloadOrder, isSeries)", StringComparison.Ordinal)
+        Check("F-M698: die Reihenfolge der ENGINES kommt aus der gespeicherten Liste",
+            pipeline664.Contains("Api.Endpoints.SourceOrder.Sequence(_config, isSeries)", StringComparison.Ordinal)
             && pipeline664.Contains("var quellenReihenfolge = DownloadQueryOrder(isSeries);", StringComparison.Ordinal)
             && pipeline664.IndexOf("var quellenReihenfolge = DownloadQueryOrder(isSeries);", StringComparison.Ordinal)
                < pipeline664.IndexOf("var hiCandidates = HiPoolForLanguage(quellenReihenfolge, hiProQuelle, lang);", StringComparison.Ordinal),
@@ -686,9 +686,9 @@ internal static class Program
             downloadSource.Contains("DownloadOrder", StringComparison.Ordinal)
             && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Configuration/PluginConfiguration.cs"))
                 .Contains("DownloadSourceOrder.TvSubtitlesFirst;", StringComparison.Ordinal));
-        Check("the GUI offers the order under downloads and saves the chosen value",
+        Check("F-M698: the GUI offers the order on the general tab as a list and saves it",
             ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Configuration/configPage.html"))
-                .Contains("id=\"DownloadOrder\"", StringComparison.Ordinal)
+                .Contains("id=\"SourceOrderValue\"", StringComparison.Ordinal)
             && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Configuration/configPage.html"))
                 .Contains("config.DownloadOrder =", StringComparison.Ordinal));
         Check("every source is asked and the candidates are MERGED, not replaced (F-M494/F-M504)",
@@ -754,7 +754,7 @@ internal static class Program
         // ---- 15. Upload: beide Endpunkte hintereinander (F-M495) --------------------------------
         Check("the upload walks the sources of the configured order — one loop, one result per source (F-M495/F-M509)",
             uploadSource.Contains("var quellenReihenfolge = UploadSourceOrder(isSeries);", StringComparison.Ordinal)
-            && uploadSource.Contains("Api.Endpoints.SourceOrder.ForMedia(_config.DownloadOrder, art)", StringComparison.Ordinal)
+            && uploadSource.Contains("Api.Endpoints.SourceOrder.Sequence(_config, art)", StringComparison.Ordinal)
             && orderSource.Contains("PluginConfiguration.DownloadSourceOrder.SubdlFirst", StringComparison.Ordinal)
             && uploadSource.Contains("foreach (var quelle in quellenReihenfolge)", StringComparison.Ordinal)
             && uploadSource.Contains("var ergebnisse = new Dictionary<Configuration.SubtitleProvider, UploadResult>();", StringComparison.Ordinal)
@@ -2677,7 +2677,7 @@ internal static class Program
 
         // (d) ausgeschaltete Quelle: der Filter steht JE QUELLE in der Liste, die die Schleife abarbeitet.
         Check("a switched-off source is never asked — the loop runs over the switch-filtered order (F-M504)",
-            downloadSource.Contains("Api.Endpoints.SourceOrder.ForMedia(_config.DownloadOrder, isSeries)", StringComparison.Ordinal)
+            downloadSource.Contains("Api.Endpoints.SourceOrder.Sequence(_config, isSeries)", StringComparison.Ordinal)
             && downloadSource.Contains(".Where(SourceAllowed)", StringComparison.Ordinal)
             && downloadSource.Contains("var quellenReihenfolge = DownloadQueryOrder(isSeries);", StringComparison.Ordinal)
             && downloadSource.Contains("foreach (var quelle in quellenReihenfolge)", StringComparison.Ordinal)
@@ -2823,7 +2823,7 @@ internal static class Program
             downloadSource.Contains("private List<Configuration.SubtitleProvider> DownloadQueryOrder(bool isSeries)", StringComparison.Ordinal)
             // F-M509: die Medienart schneidet die Liste, und sie tut es IN SourceOrder.ForMedia — die
             // Pipeline fragt nur noch nach der Reihenfolge dieser Medienart.
-            && downloadSource.Contains("Api.Endpoints.SourceOrder.ForMedia(_config.DownloadOrder, isSeries)", StringComparison.Ordinal)
+            && downloadSource.Contains("Api.Endpoints.SourceOrder.Sequence(_config, isSeries)", StringComparison.Ordinal)
             && downloadSource.Contains("var quellenReihenfolge = DownloadQueryOrder(isSeries);", StringComparison.Ordinal)
             && downloadSource.Contains("if (!Api.Endpoints.SourceOrder.AppliesTo(quelle, isSeries))", StringComparison.Ordinal)
             && downloadSource.Contains("if (!_config.IsConfiguredForDownload(quelle))", StringComparison.Ordinal)

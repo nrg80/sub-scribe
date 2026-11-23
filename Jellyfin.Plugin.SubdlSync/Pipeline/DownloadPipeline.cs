@@ -4747,7 +4747,7 @@ public sealed class DownloadPipeline : IDisposable
     /// <param name="isSeries">Wahr fuer eine Serie, falsch fuer einen Film (aus TMDb).</param>
     /// <returns>Die Quellen dieses Laufs, zuerst gefragte zuerst.</returns>
     private List<Configuration.SubtitleProvider> DownloadQueryOrder(bool isSeries) =>
-        Api.Endpoints.SourceOrder.ForMedia(_config.DownloadOrder, isSeries)
+        Api.Endpoints.SourceOrder.Sequence(_config, isSeries)
             .Where(SourceAllowed)
             .Where(quelle => EndpointFor(quelle) is { Wired: true })
             .ToList();

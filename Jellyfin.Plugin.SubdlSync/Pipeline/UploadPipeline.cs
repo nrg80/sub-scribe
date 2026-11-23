@@ -7659,10 +7659,12 @@ public sealed class UploadPipeline : IPackFiller
     /// <param name="isSeries">Wahr für eine Serie, falsch für einen Film, null wenn nicht bekannt.</param>
     /// <returns>Die Quellen in der Reihenfolge, in der sie angetreten werden — ohne Quellen, die keinen Upload-Weg haben.</returns>
     private Configuration.SubtitleProvider[] UploadSourceOrder(bool? isSeries) =>
+        // F-M698: die Reihenfolge kommt aus der gespeicherten Liste (jede Anzahl Quellen), nicht mehr
+        // aus zwei Werten. Ist die Medienart unbekannt, zaehlen beide Arten — jede Quelle einmal.
         (isSeries is { } art
-            ? Api.Endpoints.SourceOrder.ForMedia(_config.DownloadOrder, art)
-            : Api.Endpoints.SourceOrder.ForMedia(_config.DownloadOrder, isSeries: true)
-                .Concat(Api.Endpoints.SourceOrder.ForMedia(_config.DownloadOrder, isSeries: false))
+            ? Api.Endpoints.SourceOrder.Sequence(_config, art)
+            : Api.Endpoints.SourceOrder.Sequence(_config, isSeries: true)
+                .Concat(Api.Endpoints.SourceOrder.Sequence(_config, isSeries: false))
                 .Distinct())
             .Where(Api.Endpoints.SubtitleEndpointCatalog.HasUploadPath)
             .ToArray();

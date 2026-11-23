@@ -10,7 +10,7 @@
 # See the GNU General Public License for more details.
 name: "Sub Scribe"
 guid: "7d1c5a2e-3f4b-4d6e-9a8b-5c2f8e1d4a9b"
-version: "12.3.8.6"
+version: "12.3.8.9"
 targetAbi: "12.1.0.0"
 framework: "net10.0"
 owner: "nrg80"
@@ -26,6 +26,9 @@ artifacts:
 - "Jellyfin.Plugin.SubdlSync.dll"
 - "LanguageDetection.dll"
 changelog: >
+  v12.3.8.9: the state light of a source sits on its own row under the card heading.
+  v12.3.8.8: the source order lives on the general tab and is a list that grows with every source, and a card head names its source once instead of twice.
+  v12.3.8.7: card checkboxes toggle again, each source carries a TV shows / movies tag from its own declaration, and the card descriptions are back to a few words.
   v12.3.8.6: the SubDL card carries the three credentials — API key, email, password —, the download and upload tabs no longer describe the sources at all, no source carries a field that asks nothing, and the card buttons and inputs are real Emby elements.
   v12.3.8.5: upload, download, packs and report are switches on each source card, the season-ZIP preference reaches every source that has one, and the card saves with the same button as the rest of the page.
   v12.3.8.4: no more address warnings — the source files no longer declare an address, so the leftover comparison logged an empty address on every request.

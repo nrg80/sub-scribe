@@ -446,6 +446,16 @@ public class PluginConfiguration : BasePluginConfiguration
     /// </summary>
     public DownloadSourceOrder DownloadOrder { get; set; } = DownloadSourceOrder.TvSubtitlesFirst;
 
+    /// <summary>
+    /// F-M698 (Betreiberansage 22.11.2026: „Und order muss jetzt auf der general gui sein. Und für jede
+    /// Anzahl quellen funktionieren."): die Reihenfolge der Quellen als Liste von Quellenschlüsseln,
+    /// durch Komma getrennt — in der Reihenfolge, in der gefragt wird. Die alte Einstellung
+    /// (<see cref="DownloadOrder"/>) kennt genau zwei Werte und kann eine dritte Quelle nicht ausdrücken;
+    /// sie bleibt als Rückfall und als Vorbelegung erhalten (der Nachtrag schreibt sie einmal in die Liste).
+    /// Leer heißt: es gilt weiter <see cref="DownloadOrder"/>.
+    /// </summary>
+    public string SourceOrderList { get; set; } = string.Empty;
+
     /// <summary>Gets or sets the target languages, e.g. "EN, FR, ES" (F-M42). Empty = download disabled. (user decision 08.09.2026, Arabic added 30.09.2026): default AR, EN, ES, FR, HI, ZH (alphabetical) — DE/RU/PT were removed deliberately (DE is uploaded by hand, RU/PT have thin coverage).</summary>
     public string DownloadLanguages { get; set; } = "AR, EN, ES, FR, HI, ZH";
 

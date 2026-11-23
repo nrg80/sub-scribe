@@ -94,30 +94,30 @@ public sealed class SubdlEngine : ISourceEngine
         // Each with it's own toogle"). F-M691 hatte die beiden Richtungen schon hierher geholt; jetzt
         // kommen Packs und Meldung dazu, weil auch sie Eigenschaften DIESER Quelle sind.
         new(FieldUploadEnabled, "Upload", SourceFieldKind.Switch, Default: "false", Group: SourceField.Badges,
-            Help: "Offer our own subtitles to this source. Off unless you switch it on."),
+            Help: "Default: off."),
         new(FieldDownloadEnabled, "Download", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
-            Help: "Search and fetch subtitles from this source."),
+            Help: "Default: on."),
         new(FieldPacksEnabled, "Packs", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
-            Help: "Send a whole season as ONE archive. Off means every episode goes on its own."),
+            Help: "Default: on."),
         new(FieldReportEnabled, "Report", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
-            Help: "Tell this source when one of its subtitles was unusable."),
+            Help: "Default: on."),
         new(FieldApiKey, "API key", SourceFieldKind.Secret, Default: string.Empty, Required: true,
-            Help: "Sent as a bearer token. Without a key SubDL neither searches nor downloads."),
+            Help: "From your SubDL account."),
         // F-M694 (Betreiberansage 22.11.2026: „Subdl... Api key, email, password."): die drei Zugänge,
         // die ein Mensch bei SubDL einträgt. Bis hierher stand hier „Account"; die Seite sagte damit
         // nicht, was hineingehört (nämlich die E-Mail-Adresse des Kontos). Der Schlüssel in der Datei
         // bleibt `account` — er ist der stabile Name, an dem der Bestand hängt.
         new(FieldAccount, "Email", SourceFieldKind.Text,
-            Help: "The email address of the SubDL account — used to sign in and in the report text.",
+            Help: "Used to sign in.",
             VisibleWhen: new SourceFieldVisibility(FieldApiKey, "set")),
         new(FieldPassword, "Password", SourceFieldKind.Secret,
-            Help: "The account password. Only needed for uploads — sign-in happens with email and password.",
+            Help: "Only for uploads.",
             VisibleWhen: new SourceFieldVisibility(FieldApiKey, "set")),
         // F-M692: die Adresse ist KEIN Feld mehr (Betreiberansage 22.11.2026: „Well address is not
         // needed … Url is fixed, no gui need"). Sie steht als Konstante im Client dieses Builds; eine
         // Einstellung dafür wäre eine Frage, die niemand beantworten muss.
         new(FieldPreferSeasonZip, "Prefer season ZIPs", SourceFieldKind.Switch, Default: "true",
-            Help: "Bei gewünschtem Behälter zuerst die Staffel-ZIPs anbieten (weniger Abrufe je Staffel)."),
+            Help: "One request per season."),
     };
 
     private readonly ScribeApiClient _client;
@@ -175,6 +175,9 @@ public sealed class SubdlEngine : ISourceEngine
             Key = SourceKey,
             DisplayName = "SubDL",
             CanUpload = true,
+            // F-M696: SubDL fuehrt Serien UND Filme.
+            ServesSeries = true,
+            ServesMovies = true,
 
             // F-M693: Meldung und Staffelpack sind Schalter DIESER Quelle. Die Datei antwortet zuerst,
             // der Alt-Wert (bzw. der Slot des Laufs) nur, solange sie nichts sagt.

@@ -75,6 +75,12 @@ public sealed record SourceCapabilityView(
     bool CanSeasonPacks,
     bool CanCreateTitle,
     bool CanQuota,
+
+    /// <summary>F-M696: bedient die Quelle Fernsehserien?</summary>
+    bool ServesSeries,
+
+    /// <summary>F-M696: bedient die Quelle Filme?</summary>
+    bool ServesMovies,
     bool SearchesByImdb,
     bool SearchesByTmdb,
     bool SearchesByName,
@@ -243,8 +249,10 @@ public static class SourceSettingsView
         bool eingerichtet = settings.IsConfigured;
         if (!settings.IsConfigured)
         {
-            hinweis = engine.Capabilities.DisplayName + " gilt als nicht eingerichtet: " + settings.Problem
-                + ". Die anderen Quellen lesen ihre eigenen Dateien und laufen weiter.";
+            // F-M697 (Betreiberansage 22.11.2026: „Too much talk in sources gui description."): kurz,
+            // englisch, ohne Belehrung. Die Seite ist englisch; ein deutscher Satz mitten in der Karte war
+            // der auffälligste Rest der alten Umsetzung.
+            hinweis = "Not configured: " + settings.Problem + ".";
         }
         else
         {
@@ -253,8 +261,7 @@ public static class SourceSettingsView
             if (fehlend is not null)
             {
                 eingerichtet = false;
-                hinweis = engine.Capabilities.DisplayName + " gilt als nicht eingerichtet: das Pflichtfeld '"
-                    + fehlend.Label + "' ist leer.";
+                hinweis = "Not configured: '" + fehlend.Label + "' is empty.";
             }
         }
 
@@ -285,6 +292,11 @@ public static class SourceSettingsView
             capabilities.CanSeasonPacks,
             capabilities.CanCreateTitle,
             capabilities.CanQuota,
+
+            // F-M696: die Art der Quelle steht als Variable in der Antwort — der Ablauf kann sie lesen,
+            // statt Quellennamen zu vergleichen, und die Karte schreibt daraus ihr Kennzeichen.
+            capabilities.ServesSeries,
+            capabilities.ServesMovies,
             capabilities.SearchesByImdb,
             capabilities.SearchesByTmdb,
             capabilities.SearchesByName,

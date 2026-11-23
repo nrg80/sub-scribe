@@ -2010,6 +2010,13 @@ def main():
     nxt = [n for n in nxt if n > 0]
     down_part = rest[:min(nxt)] if nxt else rest
 
+    # F-M698: der General-Reiter — die Ordnung steht dort.
+    gen_i = page_src.find('data-tab-content="general"')
+    gen_j = page_src.find('data-tab-content="', gen_i + 10)
+    general_part = page_src[gen_i:gen_j if gen_j != -1 else len(page_src)]
+    if '<script' in general_part:
+        general_part = general_part[:general_part.find('<script')]
+
     # Der Reiter "download" ist der LETZTE — sein Ausschnitt laeuft sonst bis ins Seitenende und damit
     # durch den ganzen JavaScript-Block. Geprueft wird das MARKUP eines Reiters, nicht der Code: ein
     # Kommentar im Skript ist kein Text, den der Betreiber liest (F-M694).
@@ -2065,14 +2072,48 @@ def main():
           and "config.MovieSubtitlesDownloadEnabled =" not in page_src,
           "Zuweisungen an die Alt-Felder in der Seite")
 
-    check("F-M509: the order field keeps exactly TWO values — the family is ordered, not its addresses",
-          'id="DownloadOrder"' in down_part
-          and down_part.count('<option value="TvSubtitlesFirst">tvst first</option>') == 1
-          and down_part.count('<option value="SubdlFirst">SubDL first</option>') == 1
-          and down_part.count("<option value=") == 2)
+    # F-M698 (Betreiberansage 22.11.2026: "Und order muss jetzt auf der general gui sein. Und fuer jede
+    # Anzahl quellen funktionieren. Dh da muss auch iwie das Eingabefeld angepasst werden"): der alte
+    # Zwei-Werte-Kasten ist WEG. Die Reihenfolge steht auf dem General-Reiter und wird aus der Antwort des
+    # Quellen-Endpunkts gebaut — eine Zeile je Quelle, jede mit zwei Pfeilen.
+    check("F-M698: the order lives on the General tab and no two-value order box survives",
+          'id="SourceOrderBlock"' in general_part
+          and 'id="SourceOrderRows"' in general_part
+          and 'id="SourceOrderValue"' in general_part
+          and 'id="DownloadOrder"' not in page_src
+          and '><option value="TvSubtitlesFirst"' not in page_src,
+          "Ordnung auf General, Alt-Kasten weg")
 
-    check("F-M525: the order field names the sources in the same words as the switches",
-          '>tvst first<' in down_part and '>SubDL first<' in down_part)
+    check("F-M698: the order list is built from the endpoint answer — one row per source",
+          "function subdlOrderSeed(payload)" in page_src
+          and "function subdlOrderDraw(payload)" in page_src
+          and "function subdlOrderMove(pos, schritt, payload)" in page_src
+          and "subdlOrderKeys.forEach" in page_src
+          and "subdlOrderSeed(payload);" in page_src
+          and "subdlOrderDraw(payload);" in page_src,
+          "Zeilen aus payload.quellen, nicht aus einer festen Liste")
+
+    # F-M700 (Betreiberansage 22.11.2026: "Und die Statusampel fur den jeweiligen endpoint oben unter der
+    # Ueberschrift im jeweiligen endPoint Kaestchen anzeigen/verschieben"): die Ampel ist eine eigene Zeile
+    # unter der Ueberschrift — nicht neben dem Namen.
+    check("F-M700: the state light sits on its own row right under the card heading",
+          "subdl-source-state-row" in page_src
+          and "ampel.appendChild(subdlSourceEl('span', 'subdl-source-state '" in page_src
+          and "head.appendChild(subdlSourceEl('span', 'subdl-source-state '" not in page_src
+          and ".subdl-source-state-row" in page_src,
+          "Ampel als Zeile unter der Ueberschrift")
+
+    # F-M699 (Betreiberbefund 22.11.2026: "es ist komisch das subdl subdl hintereinander steht"): der
+    # Kartenkopf nennt den Namen EINMAL; der Schluessel haengt als title am Namen.
+    check("F-M699: the card head names the source once, the key rides as a tooltip",
+          "subdl-source-key" not in page_src
+          and "nameTeil.title = 'source key: ' + entry.key" in page_src,
+          "kein Schluessel-Element mehr im Kopf")
+
+    check("F-M698: the page saves the list and derives the old two-value field from it",
+          "config.SourceOrderList = ordnungFeld" in page_src
+          and "config.DownloadOrder = (erste === 'subdl')" in page_src,
+          "SourceOrderList ist die Wahrheit, DownloadOrder wird abgeleitet")
 
     check("F-M508: the addresses are data, not controls — no address switch survives in the page",
           page_src.count('id="MovieSubtitlesUploadEnabled"') == 0
@@ -2384,11 +2425,24 @@ def main():
           and 'document.createElement(tag, { is: isName })' in quellen
           and "class=\"raised button-submit" in page_src,
           "createElement mit is-Option, sonst keine Aufwertung")
-    check("F-M695: inputs and checkboxes of a card are created the same way",
-          "subdlSourceButton('input', 'emby-input')" in quellen
-          and "subdlSourceButton('input', 'emby-checkbox')" in quellen
-          and "subdlSourceButton('select', 'emby-select')" in quellen,
-          "dieselbe Aufwertung fuer Felder, Kaestchen und Auswahl")
+    # F-M696 (Betreiberbefund 22.11.2026: "Einige Tickboxen in der gui klappen nicht."): Felder, Kaestchen
+    # und Auswahl werden NICHT aufgewertet — ein Element, das aufgewertet wird, bevor type/id/name stehen,
+    # ist halbfertig, und ein Teil der Kaestchen laesst sich dann nicht mehr anklicken. Die Gestalt kommt
+    # aus den Klassen. Nur der Knopf wird aufgewertet (F-M695, er ist blau).
+    check("F-M696: inputs, checkboxes and selects are plain elements wearing the emby classes",
+          "subdlSourceButton('input'" not in quellen
+          and "subdlSourceButton('select'" not in quellen
+          and "box.className = 'emby-checkbox'" in quellen
+          and "input.className = 'emby-input'" in quellen
+          and "select.className = 'emby-select'" in quellen,
+          "Kaestchen/Felder ohne Aufwertung, mit Klasse")
+    check("F-M696: the card head carries the kind of the source as a tag",
+          "subdlSourceServes(entry)" in quellen
+          and "faehig.servesSeries" in quellen
+          and "faehig.servesMovies" in quellen
+          and "subdl-source-serves" in quellen
+          and ".subdl-source-serves" in page_src,
+          "Kennzeichen aus den Faehigkeiten, nicht aus dem Namen")
 
     probe_ok, probe_detail = run_case_probe(page_src)
     check("F-M689: the translation runs against a real endpoint answer (all six field kinds)",

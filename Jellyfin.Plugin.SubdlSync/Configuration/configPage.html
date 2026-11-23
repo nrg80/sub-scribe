@@ -195,7 +195,20 @@
                                  box-sizing together give Save's exact footprint. -->
                             <!-- F-M270: ONE page-wide refresh button at the end of the General tab reloads every live
                             readout in one click. -->
-                            <!-- F-M53: manual run buttons and the statistics reset sit on the General tab. -->
+                            <!-- F-M698 (Betreiberansage 22.11.2026: "Und order muss jetzt auf der general gui sein. Und fuer jede
+     Anzahl quellen funktionieren. Dh da muss auch iwie das Eingabefeld angepasst werden"): die
+     Reihenfolge der Quellen steht auf dem General-Reiter, und die Liste baut sich aus der Antwort des
+     Quellen-Endpunkts — eine Zeile je Quelle, egal wie viele es sind. Der alte Zwei-Werte-Kasten
+     alte Zwei-Werte-Kasten ("tvst first" / "SubDL first") faellt weg: er konnte eine dritte Quelle
+     nicht ausdruecken. -->
+                        <div class="selectContainer" id="SourceOrderBlock">
+                            <label class="selectLabel">Source order</label>
+                            <div class="fieldDescription">Asked in this order — the first one that has the subtitle wins.</div>
+                            <div id="SourceOrderRows"></div>
+                            <input id="SourceOrderValue" name="SourceOrderValue" type="hidden" value="" />
+                        </div>
+
+<!-- F-M53: manual run buttons and the statistics reset sit on the General tab. -->
                             <button is="emby-button" type="button" class="raised button-submit block emby-button" id="RefreshSubdlStatus" style="display:block;width:100%;box-sizing:border-box;background-color:#424242;border-color:#5a5a5a;color:rgba(255,255,255,0.85);">Refresh status</button>
                         </div>
 
@@ -496,15 +509,6 @@
 
                     <div class="subdl-tab" data-tab-content="download" style="display:none">
 
-                        <div class="selectContainer">
-                            <label class="selectLabel" for="DownloadOrder">Download order</label>
-                            <select id="DownloadOrder" name="DownloadOrder" is="emby-select-withcolor" class="emby-select-withcolor emby-select">
-                                <option value="TvSubtitlesFirst">tvst first</option>
-                                <option value="SubdlFirst">SubDL first</option>
-                            </select>
-                            <div class="fieldDescription">Which source is asked first.</div>
-                        </div>
-
                         <div class="checkboxContainer checkboxContainer-withDescription">
                             <label class="emby-checkbox-label">
                                 <input id="DownloadOnArrival" name="DownloadOnArrival" type="checkbox" is="emby-checkbox" />
@@ -783,7 +787,6 @@
         .subdl-source-card { border: 1px solid rgba(255,255,255,0.16); border-radius: 6px; padding: 0.8em 1em; margin: 0 0 1em 0; }
         .subdl-source-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.6em; }
         .subdl-source-name { font-weight: 600; font-size: 1.05em; }
-        .subdl-source-key { font-size: 0.8em; opacity: 0.65; font-family: monospace; }
         .subdl-source-state { margin-left: auto; font-size: 0.85em; font-weight: 600; }
         .subdl-source-state.on { color: #107c10; }
         .subdl-source-state.off { color: #a4262c; }
@@ -801,6 +804,14 @@
         .subdl-badge .fieldDescription { display: none; }
         .subdl-source-hint { font-size: 0.9em; color: #ffc107; margin: 0.3em 0; }
         .subdl-source-secret-state { font-size: 0.85em; opacity: 0.8; margin-left: 0.5em; }
+        .subdl-source-state-row { margin: 0.15em 0 0.35em 0; }
+        .subdl-source-serves { margin-left: 0.5em; padding: 0.05em 0.5em; border-radius: 0.7em;
+            border: 1px solid rgba(255,255,255,0.25); font-size: 0.78em; opacity: 0.8;
+            white-space: nowrap; }
+        .subdl-order-row { display: flex; align-items: center; gap: 0.5em; padding: 0.2em 0; }
+        .subdl-order-name { min-width: 12em; }
+        .subdl-order-tag { font-size: 0.78em; opacity: 0.7; }
+        .subdl-order-move { padding: 0 0.5em; line-height: 1.6; }
         .subdl-source-save { margin: 0.6em 0 0 0; }
         .subdl-source-result { min-height: 1.2em; margin-top: 0.4em; }
         .subdl-source-result.ok { color: #107c10; font-weight: 600; }
@@ -1119,9 +1130,19 @@
                                '.!qb', '.!ut', '.bc!', '.!bt', '.az!', '.bt!', '.part', '.partial', '.downloading',
                                '.crdownload', '.opdownload',
                                '.ob!', '.fb!', '.jc!', '.td', '.dtapart', '.tmp'].join('\n');
-                        document.querySelector('#DownloadOrder').value = config.DownloadOrder === 'SubdlFirst'
-                            ? 'SubdlFirst'
-                            : 'TvSubtitlesFirst';
+                        // F-M698: die Reihenfolge steht jetzt als Liste auf dem General-Reiter. Gespeichert
+                        // ist sie in SourceOrderList; leer heisst "noch nie gesetzt" — dann wird sie aus der
+                        // alten Zwei-Werte-Einstellung vorbelegt, damit der Bestand unveraendert weiterlaeuft.
+                        var ordnung = document.getElementById('SourceOrderValue');
+                        if (ordnung) {
+                            var liste = config.SourceOrderList || '';
+                            if (!liste) {
+                                liste = config.DownloadOrder === 'SubdlFirst'
+                                    ? 'subdl,tvsubtitles,moviesubtitles'
+                                    : 'tvsubtitles,moviesubtitles,subdl';
+                            }
+                            ordnung.value = liste;
+                        }
                         subdlPopulateLangList(config);
                         document.querySelector('#DownloadLanguagesDisplay').value = (config.DownloadLanguages || '');
                         document.querySelector('#DownloadOnlyMissing').checked = config.DownloadOnlyMissing;
@@ -1808,9 +1829,14 @@ workers.forEach(function (w) {
                         config.UploadContinueAfterLimit = document.querySelector('#UploadContinueAfterLimit').checked;
                         config.SkipDirPatterns = document.querySelector('#SkipDirs').value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
                         config.SkipFilePatterns = document.querySelector('#SkipFiles').value.split('\n').map(function (s) { return s.trim(); }).filter(Boolean);
-                        config.DownloadOrder = document.querySelector('#DownloadOrder').value === 'TvSubtitlesFirst'
-                            ? 'TvSubtitlesFirst'
-                            : 'SubdlFirst';
+                        // F-M698: die Liste ist die Wahrheit. Die alte Zwei-Werte-Einstellung wird daraus
+                        // abgeleitet, damit jeder Leser, den es noch gibt, dieselbe Reihenfolge sieht.
+                        var ordnungFeld = document.getElementById('SourceOrderValue');
+                        config.SourceOrderList = ordnungFeld ? ordnungFeld.value : (config.SourceOrderList || '');
+                        var erste = (config.SourceOrderList || '').split(',')[0].trim();
+                        config.DownloadOrder = (erste === 'subdl')
+                            ? 'SubdlFirst'
+                            : 'TvSubtitlesFirst';
                         config.DownloadLanguages = document.querySelector('#DownloadLanguagesDisplay').value;
                         config.DownloadOnlyMissing = document.querySelector('#DownloadOnlyMissing').checked;
                         config.DownloadHearingImpaired = document.querySelector('#DownloadHearingImpaired').checked;
@@ -2093,8 +2119,15 @@ workers.forEach(function (w) {
                 if (field.kind === 'switch') {
                     var wrap = subdlSourceEl('div', 'checkboxContainer checkboxContainer-withDescription');
                     var label = subdlSourceEl('label', 'emby-checkbox-label');
-                    var box = subdlSourceButton('input', 'emby-checkbox');
+                    // F-M696 (Betreiberbefund 22.11.2026: „Einige Tickboxen in der gui klappen nicht."):
+                    // KEINE Aufwertung fuer Kaestchen. Ein mit { is: 'emby-checkbox' } erzeugtes Feld wird
+                    // sofort aufgewertet — zu einem Zeitpunkt, an dem sein type noch "text" ist und weder
+                    // id noch name stehen. Das Widget uebernimmt dann ein halbfertiges Element, und ein
+                    // Teil der Kaestchen laesst sich nicht mehr anklicken. Die Gestalt kommt ohnehin aus
+                    // den Klassen (emby-checkbox), nicht aus der Aufwertung.
+                    var box = document.createElement('input');
                     box.type = 'checkbox';
+                    box.className = 'emby-checkbox';
                     box.setAttribute('is', 'emby-checkbox');
                     box.id = id;
                     box.name = field.key;
@@ -2121,7 +2154,8 @@ workers.forEach(function (w) {
                         selLabel.appendChild(subdlSourceEl('span', 'subdl-required', 'Required'));
                     }
                     selWrap.appendChild(selLabel);
-                    var select = subdlSourceButton('select', 'emby-select');
+                    var select = document.createElement('select');
+                    select.className = 'emby-select';
                     select.id = id;
                     select.name = field.key;
                     select.className = 'emby-select-withcolor emby-select';
@@ -2148,7 +2182,9 @@ workers.forEach(function (w) {
 
                 // F-M695: die Kennung beim Erzeugen mitgeben — nur so wertet der Browser das Element auf
                 // (das galt fuer das Geheimfeld genauso: es blieb ohne Aufwertung unformatiert).
-                var input = subdlSourceButton('input', 'emby-input');
+                // F-M696: auch die Textfelder ohne Aufwertung — ein Feld, das aufgewertet wird, bevor
+                // type/placeholder/id stehen, ist ein halbfertiges Element (siehe Kaestchen oben).
+                var input = document.createElement('input');
                 input.id = id;
                 input.name = field.key;
                 input.className = 'emby-input';
@@ -2261,6 +2297,24 @@ workers.forEach(function (w) {
                 }
             }
 
+            // F-M696: "TV shows", "Movies" oder beides — aus den Fähigkeiten der Quelle gelesen.
+            function subdlSourceServes(entry) {
+                var faehig = entry.capabilities || {};
+                var serien = faehig.servesSeries === true;
+                var filme = faehig.servesMovies === true;
+                var wort = serien && filme ? 'TV shows + movies'
+                    : serien ? 'TV shows'
+                    : filme ? 'Movies'
+                    : '';
+                if (!wort) { return null; }
+                var tag = subdlSourceEl('span', 'subdl-source-serves', wort);
+                tag.title = serien && filme
+                    ? 'This source carries series and films.'
+                    : serien ? 'This source carries series only.'
+                    : 'This source carries films only.';
+                return tag;
+            }
+
             function subdlSourceRenderCard(entry) {
                 var card = document.createElement('div');
                 card.className = 'subdl-source-card';
@@ -2268,11 +2322,29 @@ workers.forEach(function (w) {
                 card.setAttribute('data-source-key', entry.key);
 
                 var head = subdlSourceEl('div', 'subdl-source-head');
-                head.appendChild(subdlSourceEl('span', 'subdl-source-name', entry.displayName));
-                head.appendChild(subdlSourceEl('span', 'subdl-source-key', entry.key));
-                head.appendChild(subdlSourceEl('span', 'subdl-source-state ' + (entry.configured ? 'on' : 'off'),
-                    entry.configured ? 'on' : 'off'));
+                var nameTeil = subdlSourceEl('span', 'subdl-source-name', entry.displayName);
+                nameTeil.title = 'source key: ' + entry.key;
+                head.appendChild(nameTeil);
+
+                // F-M696 (Betreiberansage 22.11.2026: "Der der gui evtl mitgeben ob sie tvshows, movies
+                // oder nur eins von beiden macht als tag"): die Art der Quelle als Kennzeichen. Die
+                // Auskunft kommt aus der Antwort der Engine (capabilities.servesSeries/servesMovies),
+                // nicht aus ihrem Namen — deshalb steht sie auch als Variable im Endpunkt.
+                var art = subdlSourceServes(entry);
+                if (art) { head.appendChild(art); }
+                // F-M699 (Betreiberbefund 22.11.2026: „es ist komisch dass subdl subdl hintereinander
+                // steht. Fuer tvst und mst genauso"): der Schluessel steht NICHT mehr neben dem Namen —
+                // "SubDL subdl" sagte dasselbe zweimal. Er bleibt als Titel am Namen erreichbar, weil man
+                // ihn beim Suchen im Log oder in der Datei braucht.
                 card.appendChild(head);
+
+                // F-M700 (Betreiberansage 22.11.2026: "Und die Statusampel fur den jeweiligen endpoint oben
+                // unter der Ueberschrift im jeweiligen endPoint Kaestchen anzeigen/verschieben"): die Ampel
+                // steht als EIGENE Zeile direkt unter der Ueberschrift — nicht mehr neben dem Namen.
+                var ampel = subdlSourceEl('div', 'subdl-source-state-row');
+                ampel.appendChild(subdlSourceEl('span', 'subdl-source-state ' + (entry.configured ? 'on' : 'off'),
+                    entry.configured ? 'on' : 'off'));
+                card.appendChild(ampel);
 
                 // F-M693 (Betreiberansage 22.11.2026: "Badges upload /download /packs / report. Each with
                 // it's own toogle"): die Moeglichkeiten dieser Quelle stehen als Reihe oben auf der Karte,
@@ -2388,6 +2460,82 @@ workers.forEach(function (w) {
                 });
             }
 
+            // F-M698: die Reihenfolge der Quellen — eine Zeile je Quelle, gebaut aus der Antwort des
+            // Endpunkts (also aus dem, was die Engines erklaeren), nicht aus einer festen Liste auf der
+            // Seite. Jede Zeile traegt ihren Namen, ihre Art (F-M696) und zwei Pfeile. Der Wert steht im
+            // versteckten Feld SourceOrderValue und geht beim Speichern der Seite mit.
+            var subdlOrderKeys = [];
+
+            function subdlOrderSeed(payload) {
+                var quellen = (payload && payload.quellen) || [];
+                var vorhanden = quellen.map(function (q) { return q.key; });
+                var gespeichert = ((SubdlSyncConfig.config && SubdlSyncConfig.config.SourceOrderList) || '')
+                    .split(',')
+                    .map(function (k) { return k.trim(); })
+                    .filter(function (k, i, a) { return k && a.indexOf(k) === i; });
+
+                // Gespeicherte Reihenfolge zuerst, Unbekanntes faellt weg, Ungenanntes wird angehaengt —
+                // eine neue Quelle verschwindet nicht, sie steht hinten.
+                var reihe = gespeichert.filter(function (k) { return vorhanden.indexOf(k) >= 0; });
+                for (var i = 0; i < vorhanden.length; i++) {
+                    if (reihe.indexOf(vorhanden[i]) < 0 && vorhanden[i]) { reihe.push(vorhanden[i]); }
+                }
+                subdlOrderKeys = reihe;
+            }
+
+            function subdlOrderDraw(payload) {
+                var rows = document.getElementById('SourceOrderRows');
+                if (!rows) { return; }
+                var quellen = (payload && payload.quellen) || [];
+                rows.innerHTML = '';
+                subdlOrderKeys.forEach(function (key, pos) {
+                    var quelle = null;
+                    for (var j = 0; j < quellen.length; j++) {
+                        if (quellen[j].key === key) { quelle = quellen[j]; }
+                    }
+                    if (!quelle) { return; }
+
+                    var row = subdlSourceEl('div', 'subdl-order-row');
+                    row.setAttribute('data-source-key', key);
+                    row.appendChild(subdlSourceEl('span', 'subdl-order-name',
+                        (pos + 1) + '. ' + quelle.displayName));
+
+                    var art = subdlSourceServes(quelle);
+                    if (art) { row.appendChild(subdlSourceEl('span', 'subdl-order-tag', art.textContent)); }
+
+                    var hoch = subdlOrderButton('\u25B2', pos === 0, function () { subdlOrderMove(pos, -1, payload); });
+                    hoch.title = 'ask earlier';
+                    var runter = subdlOrderButton('\u25BC', pos === subdlOrderKeys.length - 1,
+                        function () { subdlOrderMove(pos, 1, payload); });
+                    runter.title = 'ask later';
+                    row.appendChild(hoch);
+                    row.appendChild(runter);
+                    rows.appendChild(row);
+                });
+
+                var feld = document.getElementById('SourceOrderValue');
+                if (feld) { feld.value = subdlOrderKeys.join(','); }
+            }
+
+            function subdlOrderButton(text, aus, klick) {
+                var b = subdlSourceButton('button', 'emby-button');
+                b.type = 'button';
+                b.className = 'raised emby-button subdl-order-move';
+                b.textContent = text;
+                b.disabled = aus;
+                if (!aus) { b.addEventListener('click', klick); }
+                return b;
+            }
+
+            function subdlOrderMove(pos, schritt, payload) {
+                var ziel = pos + schritt;
+                if (ziel < 0 || ziel >= subdlOrderKeys.length) { return; }
+                var hilfe = subdlOrderKeys[pos];
+                subdlOrderKeys[pos] = subdlOrderKeys[ziel];
+                subdlOrderKeys[ziel] = hilfe;
+                subdlOrderDraw(payload);
+            }
+
             function subdlSourcesRender(payload) {
                 var box = document.getElementById('SourceCards');
                 if (!box) { return; }
@@ -2401,6 +2549,10 @@ workers.forEach(function (w) {
                     subdlSourceApplyValues(card);
                     subdlSourceApplyVisibility(card);
                 }
+
+                // F-M698: dieselbe Antwort traegt die Reihenfolge — eine Zeile je Quelle.
+                subdlOrderSeed(payload);
+                subdlOrderDraw(payload);
             }
 
             function subdlLoadSources() {

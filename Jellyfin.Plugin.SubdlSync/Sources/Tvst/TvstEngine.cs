@@ -73,19 +73,19 @@ public sealed class TvstEngine : ISourceEngine
         // Die Vorgaben sind die des Betreibers vom 15.11.2026 (F-M503): Download an, Upload aus — ein
         // Upload verlässt den Rechner und ist deshalb opt-in.
         new(FieldUploadEnabled, "Upload", SourceFieldKind.Switch, Default: "false", Group: SourceField.Badges,
-            Help: "Offer our own subtitles to this site. Off unless you switch it on."),
+            Help: "Default: off."),
         new(FieldDownloadEnabled, "Download", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
-            Help: "Search and fetch subtitles from this site."),
+            Help: "Default: on."),
         new(FieldPacksEnabled, "Packs", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
-            Help: "Accept a whole season as ONE archive. Off means every episode goes on its own."),
+            Help: "Default: on."),
         new(FieldReportEnabled, "Report", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
-            Help: "Tell this site when one of its subtitles was unusable."),
+            Help: "Default: on."),
 
         // F-M693 (Betreiberansage 22.11.2026: „Seadon zip toggle also for tvst"): Stufe 1 der Suche ist
         // die Staffel-ZIP — EIN Abruf für die ganze Staffel statt einer je Folge. Der Schalter sagt, ob
         // dieser Weg zuerst gegangen wird; aus heißt: nur der Einzelweg der Folgenseite.
         new(FieldPreferSeasonZip, "Prefer season ZIPs", SourceFieldKind.Switch, Default: "true",
-            Help: "Try the season ZIP first — one request for the whole season instead of one per episode."),
+            Help: "One request per season."),
         // F-M692: die Adresse ist kein Feld mehr — sie steht fest im Client dieses Builds.
     };
 
@@ -123,6 +123,9 @@ public sealed class TvstEngine : ISourceEngine
             Key = SourceKey,
             DisplayName = "tvsubtitles.net",
             CanUpload = true,
+            // F-M696: tvsubtitles.net fuehrt ausschliesslich Serien.
+            ServesSeries = true,
+            ServesMovies = false,
 
             // F-M693: Meldung und Staffelpack sind Schalter DIESER Quelle — die Datei antwortet zuerst.
             CanReport = SourceSwitches.Flag(SourceKey, FieldReportEnabled) ?? true,

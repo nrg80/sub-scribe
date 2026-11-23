@@ -464,6 +464,72 @@ internal static class Program
                 + "Meldung ueber ein nicht erklartes Feld ist Rauschen",
                 string.Join(" | ", adressMeldungen));
 
+            // F-M698 (Betreiberansage 22.11.2026: „Und order muss jetzt auf der general gui sein. Und für
+            // jede Anzahl quellen funktionieren."): die Reihenfolge ist eine LISTE von Schluesseln und
+            // wirkt fuer jede Anzahl. Die Familie wird auf ihre Seite fuer die Medienart aufgeloest,
+            // Unbekanntes faellt weg, Ungenanntes wird angehaengt, und ohne Liste gilt der Alt-Wert.
+            var reiheKonfig = new Jellyfin.Plugin.SubScribe.Configuration.PluginConfiguration
+            {
+                SourceOrderList = "moviesubtitles,subdl,tvsubtitles,unbekannt",
+            };
+            var reiheFilm = Jellyfin.Plugin.SubScribe.Api.Endpoints.SourceOrder.Sequence(reiheKonfig, isSeries: false);
+            var reiheSerie = Jellyfin.Plugin.SubScribe.Api.Endpoints.SourceOrder.Sequence(reiheKonfig, isSeries: true);
+            Check(reiheFilm.Count == 2
+                  && reiheFilm[0] == Jellyfin.Plugin.SubScribe.Configuration.SubtitleProvider.MovieSubtitles
+                  && reiheFilm[1] == Jellyfin.Plugin.SubScribe.Configuration.SubtitleProvider.Subdl,
+                "F-M698: die gespeicherte Liste gilt fuer Filme — die Familie wird auf ihre Filmseite aufgeloest",
+                string.Join(", ", reiheFilm));
+            Check(reiheSerie.Count == 2
+                  && reiheSerie[0] == Jellyfin.Plugin.SubScribe.Configuration.SubtitleProvider.TvSubtitles
+                  && reiheSerie[1] == Jellyfin.Plugin.SubScribe.Configuration.SubtitleProvider.Subdl,
+                "F-M698: dieselbe Liste gilt fuer Serien — dort fuehrt tvsubtitles.net",
+                string.Join(", ", reiheSerie));
+
+            var nurSubdl = new Jellyfin.Plugin.SubScribe.Configuration.PluginConfiguration
+            {
+                SourceOrderList = "subdl",
+            };
+            var restFilm = Jellyfin.Plugin.SubScribe.Api.Endpoints.SourceOrder.Sequence(nurSubdl, isSeries: false);
+            Check(restFilm.Count == 2
+                  && restFilm[0] == Jellyfin.Plugin.SubScribe.Configuration.SubtitleProvider.Subdl
+                  && restFilm[1] == Jellyfin.Plugin.SubScribe.Configuration.SubtitleProvider.MovieSubtitles,
+                "F-M698: was die Liste nicht nennt, wird angehaengt — keine Quelle faellt still heraus",
+                string.Join(", ", restFilm));
+
+            var ohneListe = new Jellyfin.Plugin.SubScribe.Configuration.PluginConfiguration
+            {
+                DownloadOrder = Jellyfin.Plugin.SubScribe.Configuration.PluginConfiguration.DownloadSourceOrder.SubdlFirst,
+            };
+            var altSerie = Jellyfin.Plugin.SubScribe.Api.Endpoints.SourceOrder.Sequence(ohneListe, isSeries: true);
+            Check(altSerie[0] == Jellyfin.Plugin.SubScribe.Configuration.SubtitleProvider.Subdl,
+                "F-M698: ohne gespeicherte Liste gilt weiter die alte Zwei-Werte-Einstellung",
+                string.Join(", ", altSerie));
+
+            // F-M697 (Betreiberansage 22.11.2026: „Too much talk in sources gui description. See previous
+            // implementation"): jede Beschreibung ist ein paar Woerter — wie in der vorherigen Umsetzung
+            // („Default: off."). Ein Satz mit Begruendung gehoert in die Doku, nicht auf die Karte.
+            var zuLang = registry.Engines
+                .SelectMany(e => e.Fields.Select(f => (e.Capabilities.Key, f.Key, f.Help)))
+                .Where(t => t.Help is { Length: > 40 })
+                .ToList();
+            Check(zuLang.Count == 0,
+                "F-M697: keine Beschreibung auf einer Karte ist laenger als 40 Zeichen",
+                zuLang.Count == 0 ? "laengste: " + registry.Engines
+                        .SelectMany(e => e.Fields.Select(f => f.Help ?? string.Empty))
+                        .OrderByDescending(h => h.Length).First()
+                    : string.Join(" | ", zuLang.Select(t => t.Item1 + "/" + t.Item2 + " = " + t.Help)));
+
+            // F-M696: die Art der Quelle steht als Variable in den Faehigkeiten — nicht als Name.
+            var arten = registry.Engines.ToDictionary(
+                e => e.Capabilities.Key,
+                e => (e.Capabilities.ServesSeries, e.Capabilities.ServesMovies));
+            Check(arten["subdl"] == (true, true)
+                  && arten["tvsubtitles"] == (true, false)
+                  && arten["moviesubtitles"] == (false, true),
+                "F-M696: jede Quelle sagt, ob sie Serien, Filme oder beides fuehrt",
+                string.Join(", ", arten.Select(kv => kv.Key + "=" + (kv.Value.ServesSeries ? "S" : "")
+                    + (kv.Value.ServesMovies ? "F" : ""))));
+
             // F-M695 (Betreiberbefund 22.11.2026: „Not sure what access means for mst."): kein Feld, das
             // nichts abfragt. moviesubtitles verlangt keinen Zugang — also erklaert die Engine keinen.
             Check(MsubEngine.Declared.All(f => f.Key != MsubEngine.FieldAccess)
