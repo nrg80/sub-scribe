@@ -1,7 +1,7 @@
 # Requirements Specification — Jellyfin Plugin "Sub Scribe" (Upload + Download)
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.16.
+**Status:** Implementation — v12.3.8.17.
 
 **Die Begründungen (warum eine Regel gilt, Messungen, Vorfälle) stehen nicht hier, sondern lokal in der Methodik-Ablage, nach Kapiteln sortiert und mit der Requirement-Nummer
 markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test — sonst nichts.**
@@ -33,7 +33,7 @@ markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
 - [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 46 requirements
-- [14. Data Model and Persistence](#14-data-model-and-persistence) — 66 requirements
+- [14. Data Model and Persistence](#14-data-model-and-persistence) — 67 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 51 requirements
 - [16. Non-Goals](#16-non-goals)
 - [17. Non-Functional Requirements](#17-non-functional-requirements)
@@ -1998,6 +1998,8 @@ Grund (gemessen 18.11.2026): die Queue entsteht nur aus offenen Stempeln (F-M557
 
 **F-M711 [D]:** **Die letzten drei „SubDL only"-Einstellungen stehen in der Karte der Quelle — der Merker entfällt.** Betreiberansage 22.11.2026, wörtlich: „Die 2 verbleibenden subdl only Einstellungen können dann auch in den endpoint kasten und das badge subdl only kann entfallen." Gemeint sind die drei Schalter, die als einzige noch einen Quellenmerker trugen (die zwei Tageslimit-Schalter und der AI-Schalter) — sie sind jetzt **Felder der SubDL-Quelle**: `uploadContinueAfterLimit`, `downloadContinueAfterLimit`, `allowAiTranslatedSubs` in `SubdlEngine.Declared` (`continue … (upload)`, `… (download)`, `Allow AI translated subs`), Vorgaben `true`/`true`/`false` = die bisherigen Alt-Werte. Gelesen wird über die Eigenschaften der Konfiguration, die **die Datei zuerst** fragen und sonst auf den XML-Wert zurückfallen (wie F-M691); ein Nachtrag (`EnsureSubdlSwitches`, Marke `.seed-subdl-switches-1`) schreibt den heute gültigen Wert einmal in die vorhandene Datei. In der Weboberfläche sind die drei Kästen samt Merker **gelöscht** (`SubDL only`, `.src-badge`, `.src-subdl`, `.src-tvst` kommen in der Seite nicht mehr vor), und die Karte bleibt karg: Beschriftung plus Schalter, ohne Beschreibung.
 
+**F-M712 [D]:** **moviesubtitles.org führt einen Upload-Schalter — Vorgabe AUS.** Betreiberbefund 22.11.2026, wörtlich: „Wir haben schon auf mst hochgeladen." Der Upload dieser Adresse ist kein Vorhaben, sondern belegt: der Weg steht seit F-M508 (Etappe 2b) im Code (`MovieSubtitlesUploadEndpoint`, `MovieSubtitlesClient.BuildUpload/UploadAsync`, `FilmUsableForUploadAsync`), `SubtitleEndpointCatalog.HasUploadPath` führt die Quelle, und es wurde bereits dorthin abgegeben. Damit ist `CanUpload = false` (F-M692) falsch gewesen: die Sperre ist nicht die Fähigkeit, sondern der Schalter. Neu: `MsubEngine.Capabilities.CanUpload = true`, und die Karte erklärt als Badges **`uploadEnabled` (Vorgabe `false`)** und `downloadEnabled` (Vorgabe `true`) — hochgeladen wird also nur, wer den Schalter setzt; `IsUploadEnabled(MovieSubtitles)` fällt ohne Dateiwert weiterhin auf `false` zurück. Der Merker „SubDL only" ist damit nirgends mehr nötig.
+
 #### 14.9 Die Marken-Matrix — die einzige Wahrheit (bis Schema 22; abgelöst durch 14.11)
 
 Die Matrix ist seit 12.3.0.0 der **einzige** Ort, an dem ein Quellen-Urteil steht: eine Zeile je (Medium, Quelle, Art) in der Tabelle `source_matrix` — und bei `track`/`track-hi` je (Medium, Quelle, Art, Sprache, HI, **Position**) (Schema 20, F-M669). Seit 12.3.0.2 (Schema 21, F-M670) ist sie auch der einzige Ort für die **Quellen-Ids**: es gibt keine Alt-Tabelle `source_marks` und keine Spalte `SubdlId` mehr. Die breiten Spalten, aus denen sie bis 12.2.0.28 gefüllt wurde, sind aus der Live-Datei **entfernt**; der Altbestand lebt allein in der Sicherungsdatei weiter. Es gibt keinen zweiten Datenbestand und keinen zweiten Lesepfad.
@@ -2870,6 +2872,8 @@ Kein Grund, keine Vorgeschichte, keine Bitte, kein Vorschlag. Gebaut in `Pipelin
 **T374:** Der Block nennt nur seinen Namen (F-M710), in `gui-structure` — **1 Prüfung**: der Satz „Asked in this order" kommt in der Seite nicht mehr vor.
 
 **T375:** Die letzten Quellenmerker sind weg, ihre Einstellungen stehen in der Quelle (F-M711), in `gui-structure` — **4 Prüfungen**: kein `SubDL only` und keine Merker-Gestalt mehr in der Seite, die drei Kästen samt IDs gelöscht, und die drei Felder in `SubdlEngine.Declared` erklärt. Zwei Prüfungen aus F-M338 (Satzgleichheit der Tageslimit-Kästen) und F-M527 (Merker im Label) entfallen mit den Kästen; der GUI-Gate zählt dadurch 8 Prüfungen weniger (383 → 375).
+
+**T376:** moviesubtitles.org erklärt beide Richtungen, der Upload steht auf aus (F-M712), in `sources` — **2 Prüfungen**: das Feld `uploadEnabled` mit Vorgabe `false` neben `downloadEnabled`, und die Badge-Reihe der Karte lautet `uploadEnabled, downloadEnabled` (vorher nur der Download).
 
 **T336:** Die vier Ebenen und die drei Quellen-Tabellen seit Schema 23 (F-M672…F-M677), in `storex` gegen echte Altdateien: Kennungsformen `[xxxx]`/`#yyyyy`/`#yyyyy#zzz`/`#yyyyy&zzz`, ein Nummernkreis je Datei über Spur und Seitenwagen, `pack_track` mit Fremdschlüsseln, `upload`/`reference`/`badapple` mit einer Subjekt-Spalte, keine fremde Kennung außerhalb `reference`/`badapple`, `source_matrix` und `rejected_candidates` nach dem Aufstieg weg, `OriginId` ohne Wertverlust nach `reference`, Aufstieg 17→23 und 22→23 mit genau einer Sicherung und einem zweiten Start, der nichts tut — **15 Prüfungen**, die letzte für die Quellenneutralitaet von `badapple` (auch eine nicht-numerische Kennung wie `download-3234-2-en` neben einer SubDL-Nummer).
 

@@ -36,6 +36,14 @@ public sealed class MsubEngine : ISourceEngine
     /// <summary>Der Griff trägt seine Herkunft: <c>m:</c> + Filmnummer + <c>:</c> + Eintrags-Kennung.</summary>
     private const string HandlePrefix = "m:";
 
+    /// <summary>
+    /// F-M712 (Betreiberbefund 22.11.2026: „Wir haben schon auf mst hochgeladen"): der Upload dieser
+    /// Quelle ist belegt — der Weg steht seit F-M508 (Etappe 2b) im Code
+    /// (<see cref="Api.Endpoints.MovieSubtitlesUploadEndpoint"/>), und es wurde bereits dorthin
+    /// abgegeben. Die Vorgabe ist AUS: hochgeladen wird nur, wer den Schalter setzt.
+    /// </summary>
+    public const string FieldUploadEnabled = SourceSwitches.UploadField;
+
     /// <summary>F-M691: der Download-Schalter in der eigenen Datei dieser Quelle.</summary>
     public const string FieldDownloadEnabled = SourceSwitches.DownloadField;
 
@@ -53,9 +61,10 @@ public sealed class MsubEngine : ISourceEngine
     /// </summary>
     public static IReadOnlyList<SourceField> Declared { get; } = new SourceField[]
     {
-        // F-M691: hier steht NUR der Download-Schalter. Einen Upload-Schalter zu zeigen, der nichts tun
-        // darf, wäre eine Behauptung: der Upload dieser Adresse ist bis zur belegten Sprachabbildung
-        // gesperrt (F-M508, Betreiber: „Bevor wir falsche Sprachen hochladen, laden wir nix hoch.").
+        // F-M712: Upload und Download als Badges wie bei den anderen Quellen — der Upload ist echt (schon
+        // benutzt), steht aber auf AUS, bis der Betreiber ihn einschaltet.
+        new(FieldUploadEnabled, "Upload", SourceFieldKind.Switch, Default: "false",
+            Group: SourceField.Badges, Help: null),
         new(FieldDownloadEnabled, "Download", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
             Help: null),
         // F-M692: die Adresse ist kein Feld mehr — sie steht fest im Client dieses Builds.
@@ -99,12 +108,11 @@ public sealed class MsubEngine : ISourceEngine
             Key = SourceKey,
             DisplayName = "moviesubtitles.org",
 
-            // F-M692: KEIN Upload. Die Quelle könnte formal eine Abgabe annehmen, aber dieser Build
-            // bietet sie nicht an — die Sprachabbildung der Seite ist gegen die echte Seite nicht belegt,
-            // und der Betreiber hat gesagt, was dann gilt (F-M508: „Bevor wir falsche Sprachen hochladen,
-            // laden wir nix hoch."). Eine Fähigkeit, die niemand anbieten darf, ist keine Fähigkeit; die
-            // Karte zeigte sonst „upload" neben einem Schalter, den es nicht gibt.
-            CanUpload = false,
+            // F-M712: Upload ist eine Fähigkeit DIESER Quelle. Der Betreiber hat sie eingefordert
+            // („Wir haben schon auf mst hochgeladen"); die Sperre ist nicht die Fähigkeit, sondern der
+            // Schalter in der eigenen Datei — seine Vorgabe ist AUS (F-M508: „Bevor wir falsche Sprachen
+            // hochladen, laden wir nix hoch.").
+            CanUpload = true,
             // F-M696: moviesubtitles.org fuehrt ausschliesslich Filme.
             ServesSeries = false,
             ServesMovies = true,

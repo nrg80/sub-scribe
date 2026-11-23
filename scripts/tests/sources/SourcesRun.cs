@@ -447,7 +447,8 @@ internal static class Program
                 "tvsubtitles uploadEnabled = false", "tvsubtitles downloadEnabled = true",
                 "tvsubtitles packsEnabled = true", "tvsubtitles reportEnabled = true",
                 "tvsubtitles preferSeasonZip = true",
-                "moviesubtitles downloadEnabled = true",
+                // F-M712: moviesubtitles.org fuehrt jetzt auch einen Upload-Schalter — Vorgabe AUS.
+                "moviesubtitles uploadEnabled = false", "moviesubtitles downloadEnabled = true",
             };
             Check(!SubdlEngine.Declared.Any(f => f.Key == SubdlEngine.FieldBaseUrl)
                   && !TvstEngine.Declared.Any(f => f.Key == TvstEngine.FieldBaseUrl)
@@ -739,7 +740,7 @@ internal static class Program
             var msubBadges = MsubEngine.Declared.Where(f => f.IsBadge).Select(f => f.Key).ToList();
             Check(badges.SequenceEqual(new[] { "uploadEnabled", "downloadEnabled", "packsEnabled", "reportEnabled" })
                   && tvstBadges.SequenceEqual(badges)
-                  && msubBadges.SequenceEqual(new[] { "downloadEnabled" })
+                  && msubBadges.SequenceEqual(new[] { "uploadEnabled", "downloadEnabled" })
                   && SubdlEngine.Declared.Where(f => f.Key is "apiKey" or "account" or "preferSeasonZip").All(f => !f.IsBadge),
                 "F-M693: die Badges sind upload/download/packs/report — SubDL und tvsubtitles alle vier, "
                 + "moviesubtitles nur der Download (F-M508), und kein Zugangsfeld steht in der Reihe",
@@ -2384,10 +2385,12 @@ internal static class Program
             Check(Hat(TvstEngine.Declared, SourceSwitches.UploadField)
                   && Hat(TvstEngine.Declared, SourceSwitches.DownloadField),
                 "F-M691 (1): tvsubtitles erklärt beide Richtungen als eigenes Feld");
-            Check(Hat(MsubEngine.Declared, SourceSwitches.DownloadField)
-                  && !Hat(MsubEngine.Declared, SourceSwitches.UploadField),
-                "F-M691 (1): moviesubtitles erklärt NUR den Download — ein Upload-Schalter wäre dort eine "
-                + "Behauptung (F-M508)");
+            Check(MsubEngine.Declared.Any(f => f.Key == MsubEngine.FieldUploadEnabled
+                      && f.Default == "false")
+                  && MsubEngine.Declared.Any(f => f.Key == MsubEngine.FieldDownloadEnabled),
+                "F-M712: moviesubtitles.org erklaert BEIDE Richtungen — der Upload steht auf AUS, "
+                + "weil er nur auf Zutun des Betreibers laufen soll",
+                string.Join(", ", MsubEngine.Declared.Select(f => f.Key + "=" + f.Default)));
 
             Check(SubdlEngine.Declared.Take(2).All(f => f.Key is SourceSwitches.UploadField or SourceSwitches.DownloadField)
                   && TvstEngine.Declared.Take(2).All(f => f.Key is SourceSwitches.UploadField or SourceSwitches.DownloadField),
