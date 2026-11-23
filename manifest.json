@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.17",
-        "changelog": "v12.3.8.17: moviesubtitles.org offers an upload switch (off by default) — the upload path has been in use since F-M508.",
+        "version": "12.3.8.18",
+        "changelog": "v12.3.8.18: an exhausted quota takes that one source out of the run — the other sources keep working (download and upload).",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.17-dev/Jellyfin.Plugin.SubdlSync_12.3.8.17.zip",
-        "checksum": "03d85dc87b027672110cc37287d8d1bc",
-        "timestamp": "2026-11-23T17:32:22Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.18-dev/Jellyfin.Plugin.SubdlSync_12.3.8.18.zip",
+        "checksum": "23c4a9d7352e3ab14764ca33c2b5ce4f",
+        "timestamp": "2026-11-23T18:05:06Z"
       }
     ]
   }
