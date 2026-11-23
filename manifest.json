@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.13",
-        "changelog": "v12.3.8.13: the block is called Endpoint order, drops the media kind per row and centres the on/off; a save answers with the field label and its state, off in red with a cross; the order lamp follows participation.",
+        "version": "12.3.8.15",
+        "changelog": "v12.3.8.15: the Endpoint order block carries its name only.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.13-dev/Jellyfin.Plugin.SubdlSync_12.3.8.13.zip",
-        "checksum": "c2c87dfb0769b6e70a59c8c43f5b36a0",
-        "timestamp": "2026-11-23T13:57:13Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.15-dev/Jellyfin.Plugin.SubdlSync_12.3.8.15.zip",
+        "checksum": "395b0ff84c2a203ef14d16557d7c1fd8",
+        "timestamp": "2026-11-23T17:11:17Z"
       }
     ]
   }
