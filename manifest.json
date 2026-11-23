@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.11",
-        "changelog": "v12.3.8.11: the kind of a source and its lamp reach the card and the order again; email and password stay on the card; saving sends only what changed.",
+        "version": "12.3.8.12",
+        "changelog": "v12.3.8.12: the lamp lives only in the source order, its arrows sit right, cards carry no Required marker, secrets show dots, and a save answers with the new state.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.11-dev/Jellyfin.Plugin.SubdlSync_12.3.8.11.zip",
-        "checksum": "7f4dcec78baed8ddee0d4d494de95961",
-        "timestamp": "2026-11-23T08:54:06Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.12-dev/Jellyfin.Plugin.SubdlSync_12.3.8.12.zip",
+        "checksum": "b7aea73398181a49b68b56dc209fbd8a",
+        "timestamp": "2026-11-23T09:39:01Z"
       }
     ]
   }
