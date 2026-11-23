@@ -729,7 +729,11 @@ public sealed class UploadPipeline : IPackFiller
         // arrival run pack its own episodes is gone. An arrival run now takes no pack scope at all; it
         // says so in one line and uploads single. Only a full, refetch or manual run asks the
         // completeness question over the library.
-        if (_config.UploadSeasonPacks)
+        // F-M719 (Ansage 23.11.2026: "Upload tab / upload season packs kann dann entfallen. Pack ein
+        // bedeutet upload und download fuer packs des jeweiligen endpoints ok"): den globalen
+        // Pack-Schalter der GUI gibt es nicht mehr. Gepackt wird, wenn mindestens eine Quelle ihren
+        // Schalter "Packs" offen hat — und angesprochen wird nur, wer ihn offen hat (PackSlot).
+        if (PackSlotSources().Count > 0)
         {
             completeSeasons = await CompleteSeasonsAsync(runCt).ConfigureAwait(false);
             if (!IsArrivalRun)
@@ -862,7 +866,8 @@ public sealed class UploadPipeline : IPackFiller
             //   • ein Ankunftslauf packt gar nicht — er lädt einzeln hoch und lässt die Staffel dem
             //     nächsten vollen, Refetch- oder Manual-Lauf (F-M680, vorher F-M424),
             //   • die zweite Quelle haengt an IHREM Upload-Schalter (F-M495),
-            //   • der Pack-Schalter (UploadSeasonPacks) gilt fuer beide — einen zweiten gibt es nicht (F-M641).
+            //   • der Schalter "Packs" der Quelle gilt fuer BEIDE Richtungen (F-M719, vorher der globale
+            //     Schalter UploadSeasonPacks aus F-M641 — den gibt es seit 23.11.2026 nicht mehr).
             // F-M680 (Betreiber-Vorgabe 22.11.2026: „Season Packs nur bei Refetch- und Manual-Läufen —
             // und für alle Quellen gleich"): der Slot fragt nicht mehr, welcher ART der Lauf ist. Ein
             // Ankunftslauf kommt hier ohnehin nie mit Umfang an (oben, F-M680), und für die Quellen gilt

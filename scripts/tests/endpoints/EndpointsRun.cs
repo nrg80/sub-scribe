@@ -1719,12 +1719,11 @@ internal static class Program
             && uploadSource584.Contains("return pack.Episodes", StringComparison.Ordinal)
             && !uploadSource584.Contains("return UploadResult.Skipped(\"pack-carries-it\")", StringComparison.Ordinal));
         var configPage585 = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Configuration/configPage.html"));
-        int switchAt585 = configPage585.IndexOf("id=\"UploadSeasonPacks\"", StringComparison.Ordinal);
-        int blockEnd585 = switchAt585 < 0 ? -1 : configPage585.IndexOf("</div>", configPage585.IndexOf("</label>", switchAt585, StringComparison.Ordinal), StringComparison.Ordinal);
-        Check("F-M585: der Schalter 'Upload season packs' traegt nur das Haekchen, keinen Beschreibungstext",
-            switchAt585 > 0
-            && blockEnd585 > switchAt585
-            && !configPage585.Substring(switchAt585, blockEnd585 - switchAt585).Contains("fieldDescription", StringComparison.Ordinal));
+        // F-M719: das Kaestchen "Upload season packs" ist entfallen — die Pruefung haelt fest, dass es
+        // nicht zurueckkommt (der Schalter "Packs" der Quellenkarte deckt beide Richtungen ab).
+        Check("F-M719: die Upload-Seite fuehrt kein Kaestchen 'Upload season packs' mehr",
+            !configPage585.Contains("id=\"UploadSeasonPacks\"", StringComparison.Ordinal)
+            && !configPage585.Contains("<span>Upload season packs</span>", StringComparison.Ordinal));
 
         // --- F-M584: eine Ablehnung gilt je Quelle -----------------------------------------------
         Check("F-M584: ein Selbst-Echo sperrt die Spur nur, solange keine Quelle das Paar mehr verlangt",
