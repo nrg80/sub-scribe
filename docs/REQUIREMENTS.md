@@ -1,7 +1,7 @@
 # Requirements Specification — Jellyfin Plugin "Sub Scribe" (Upload + Download)
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.10.
+**Status:** Implementation — v12.3.8.11.
 
 **Die Begründungen (warum eine Regel gilt, Messungen, Vorfälle) stehen nicht hier, sondern lokal in der Methodik-Ablage, nach Kapiteln sortiert und mit der Requirement-Nummer
 markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test — sonst nichts.**
@@ -33,7 +33,7 @@ markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
 - [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 46 requirements
-- [14. Data Model and Persistence](#14-data-model-and-persistence) — 58 requirements
+- [14. Data Model and Persistence](#14-data-model-and-persistence) — 60 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 51 requirements
 - [16. Non-Goals](#16-non-goals)
 - [17. Non-Functional Requirements](#17-non-functional-requirements)
@@ -1982,6 +1982,10 @@ Grund (gemessen 18.11.2026): die Queue entsteht nur aus offenen Stempeln (F-M557
 
 **F-M703 [D]:** **Die Reihenfolge steht direkt unter der Überschrift „Endpoints", vor den Karten.** Betreiberansage 22.11.2026, wörtlich: „Source order bitte direkt bei endpoints unter der Überschrift einsortieren." Der Block war mit F-M698 auf den General-Reiter gewandert; dort gehört er nicht hin, denn er ordnet die Quellen und nicht den Lauf. Jetzt sitzt er im Abschnitt **Endpoints** unmittelbar nach der Überschrift und **vor** den Karten — eine Zeile je Quelle mit Name, Art (F-M696) und zwei Pfeilen, gespeichert in `SourceOrderList` (F-M698), vorbelegt aus `DownloadOrder`, solange nichts gespeichert ist (F-M701). Am General-Reiter steht er nicht mehr.
 
+**F-M704 [D]:** **Die Art der Quelle und ihre Ampel kommen an — an der Karte und in der Reihenfolge.** Betreiberbefund 22.11.2026, wörtlich: „Tvshow und movie badge bei den endpoints fehlt immer noch. Passwort Email für subdl muss bleiben. Auch die Ampeln sind nicht einsortiert." Drei Ursachen, jede einzeln belegt: **(a)** die Liste der Fähigkeiten (`SUBDL_SOURCE_CAP_KEYS`) stand **zweimal** in der Seite; die zweite Überschreibung gewann, und in ihr fehlten `servesSeries`/`servesMovies` — der Endpunkt lieferte die Werte die ganze Zeit, die Seite holte sie nie. Jetzt steht die Liste **einmal** und nennt jedes Feld, das die Seite liest; das Kennzeichen („TV shows", „Movies", „TV shows + movies") steht damit an jeder Karte **und** in jeder Zeile der Reihenfolge, samt Ampel (`on`/`off`) derselben Quelle. **(b)** die Bedingung eines anderen Felds („`VisibleWhen apiKey = set`") bekam beim Aufräumen von F-M702 einen Wahrheitswert statt `set`/`not set` — damit war sie nie erfüllt und **Email und Passwort blieben unsichtbar**. Die angezeigte Karte trägt weiterhin kein `set` (F-M702); die Bedingungssprache des Schemas bleibt neutral `set`/`not set`. **(c)** jede Zeile der Reihenfolge trägt die Ampel als eigenes Zeichen neben der Art.
+
+**F-M705 [D]:** **Gespeichert wird nur, was bewegt wurde — und ohne Bewegung gar nichts.** Betreiberbefund 22.11.2026, wörtlich: „Wenn ich auf save drücke kommt immer download enabled auch wenn ich ausschalte. Ist eigentlich durch die tickbox abgedeckt." Vorher schickte jedes Speichern **alle vier Schalter** mit, und die Rückmeldung nannte sie alle — „downloadEnabled" stand also auch dann in der Liste, wenn nur ein anderes Kästchen bewegt worden war; der Betreiber liest das als „es hat sich wieder eingeschaltet". Jetzt vergleicht der Rumpf jeden Wert mit dem, was in der Karte steht (`data-value`, bei Geheimnissen: leer = unverändert), und schickt **nur die Abweichung**. Ist nichts bewegt, geht **keine** Anfrage raus und die Karte meldet `✔ nothing changed`. Der Zustand der Kästchen folgt weiterhin allein der Antwort des Endpunkts (gemessen: Häkchen aus → Rumpf `{"downloadEnabled": false}` → Antwort `Value = "false"` → Kästchen bleibt aus).
+
 #### 14.9 Die Marken-Matrix — die einzige Wahrheit (bis Schema 22; abgelöst durch 14.11)
 
 Die Matrix ist seit 12.3.0.0 der **einzige** Ort, an dem ein Quellen-Urteil steht: eine Zeile je (Medium, Quelle, Art) in der Tabelle `source_matrix` — und bei `track`/`track-hi` je (Medium, Quelle, Art, Sprache, HI, **Position**) (Schema 20, F-M669). Seit 12.3.0.2 (Schema 21, F-M670) ist sie auch der einzige Ort für die **Quellen-Ids**: es gibt keine Alt-Tabelle `source_marks` und keine Spalte `SubdlId` mehr. Die breiten Spalten, aus denen sie bis 12.2.0.28 gefüllt wurde, sind aus der Live-Datei **entfernt**; der Altbestand lebt allein in der Sicherungsdatei weiter. Es gibt keinen zweiten Datenbestand und keinen zweiten Lesepfad.
@@ -2838,6 +2842,10 @@ Kein Grund, keine Vorgeschichte, keine Bitte, kein Vorschlag. Gebaut in `Pipelin
 **T366:** Die Reihenfolge steht unter Endpoints (F-M703), in `gui-structure` — **1 Prüfung**: der Block `SourceOrderBlock` liegt im Abschnitt zwischen der Überschrift `Endpoints` und `Media files`, **vor** `SourceCards`, und nicht mehr im General-Reiter.
 
 **T367:** Ein Geheimfeld trägt weder Platzhalter noch `set`-Zeile (F-M702), in `gui-structure` — **1 Prüfung**: `set — type to replace` und `subdl-source-secret-state` kommen in der Seite nicht vor, dafür `input.placeholder = ''`.
+
+**T368:** Die Art einer Quelle und ihre Ampel kommen an (F-M704), in `gui-structure` — **3 Prüfungen**: die Fähigkeitenliste steht **einmal** und nennt `servesSeries`/`servesMovies`, ein Geheimnis antwortet der Bedingung eines anderen Felds mit `set`/`not set`, und jede Zeile der Reihenfolge trägt Art und Ampel.
+
+**T369:** Gespeichert wird nur die Bewegung (F-M705), in `gui-structure` — **1 Prüfung**: der Rumpf entsteht aus der Abweichung, `nothing changed` steht als Meldung bereit, und der alte Aufruf, der immer alle Felder schickte, kommt nicht mehr vor.
 
 **T336:** Die vier Ebenen und die drei Quellen-Tabellen seit Schema 23 (F-M672…F-M677), in `storex` gegen echte Altdateien: Kennungsformen `[xxxx]`/`#yyyyy`/`#yyyyy#zzz`/`#yyyyy&zzz`, ein Nummernkreis je Datei über Spur und Seitenwagen, `pack_track` mit Fremdschlüsseln, `upload`/`reference`/`badapple` mit einer Subjekt-Spalte, keine fremde Kennung außerhalb `reference`/`badapple`, `source_matrix` und `rejected_candidates` nach dem Aufstieg weg, `OriginId` ohne Wertverlust nach `reference`, Aufstieg 17→23 und 22→23 mit genau einer Sicherung und einem zweiten Start, der nichts tut — **15 Prüfungen**, die letzte für die Quellenneutralitaet von `badapple` (auch eine nicht-numerische Kennung wie `download-3234-2-en` neben einer SubDL-Nummer).
 

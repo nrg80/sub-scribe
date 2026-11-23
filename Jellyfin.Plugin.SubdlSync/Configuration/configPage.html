@@ -802,6 +802,9 @@
            Reihe bleiben. */
         .subdl-badge .fieldDescription { display: none; }
         .subdl-source-hint { font-size: 0.9em; color: #ffc107; margin: 0.3em 0; }
+        .subdl-order-state { margin-left: 0.4em; font-size: 0.85em; }
+        .subdl-order-state.on { color: #52b54b; }
+        .subdl-order-state.off { color: #c0392b; }
         .subdl-source-state-row { margin: 0.15em 0 0.35em 0; }
         .subdl-source-serves { margin-left: 0.5em; padding: 0.05em 0.5em; border-radius: 0.7em;
             border: 1px solid rgba(255,255,255,0.25); font-size: 0.78em; opacity: 0.8;
@@ -1954,10 +1957,6 @@ workers.forEach(function (w) {
             // in Erklaerungsreihenfolge. In diesem Block steht deshalb KEIN Quellenname — kaeme hier
             // einer vor, waere die Karte nicht mehr aus dem Schema gebaut, sondern aus unserem Wissen
             // ueber die Quelle.
-            var SUBDL_SOURCE_CAP_KEYS = ['canUpload', 'canReport', 'canHearingImpaired',
-                'canOfferSeasonPacks', 'canSeasonPacks', 'canCreateTitle', 'canQuota',
-                'searchesByImdb', 'searchesByTmdb', 'searchesByName', 'searchesByHash'];
-
             function subdlSourceId(prefix, key) { return prefix + '-' + key; }
 
             // F-M695: ein Element erzeugen, das der Browser als Emby-Element AUFWERTET. Die Kennung muss
@@ -2026,9 +2025,14 @@ workers.forEach(function (w) {
             // F-M693: die Liste bleibt, weil die Uebersetzung der Faehigkeiten sie liest (Takt,
             // Sprachtafel, Suchschluessel). Auf der Karte steht sie nicht mehr — die vier Moeglichkeiten
             // sind jetzt Felder mit eigenem Schalter, keine Aufzaehlung.
+            // F-M704: sie stand ZWEIMAL in der Seite, und die zweite Ueberschreibung gewann — dort fehlten
+            // 'servesSeries'/'servesMovies', also kam die Art der Quelle nie an und das Kennzeichen
+            // "TV shows"/"Movies" fehlte an jeder Karte UND in der Reihenfolge, obwohl der Endpunkt die
+            // Werte liefert. Jetzt steht sie EINMAL und nennt jedes Feld, das die Seite liest.
             var SUBDL_SOURCE_CAP_KEYS = ['canUpload', 'canReport', 'canHearingImpaired',
                 'canOfferSeasonPacks', 'canSeasonPacks', 'canCreateTitle', 'canQuota',
-                'takesPrebuiltPack', 'searchesByImdb', 'searchesByTmdb', 'searchesByName', 'searchesByHash'];
+                'takesPrebuiltPack', 'servesSeries', 'servesMovies',
+                'searchesByImdb', 'searchesByTmdb', 'searchesByName', 'searchesByHash'];
 
             function subdlSourceFaehigkeiten(caps) {
                 if (!caps) { return null; }
@@ -2269,9 +2273,12 @@ workers.forEach(function (w) {
                 if (!ctrl) { return null; }
                 var kind = row.getAttribute('data-source-field-kind');
                 if (kind === 'secret') {
-                    // F-M702: beim Speichern wird nur noch der WERT geschickt, keine Auskunft darueber.
+                    // F-M704: Die BEDINGUNG eines anderen Felds spricht weiter 'set'/'not set' — das ist
+                    // die neutrale Sprache des Schemas ("VisibleWhen apiKey = set"), kein angezeigtes
+                    // Wort. F-M702 hatte hier einen Wahrheitswert zurueckgegeben; damit war die
+                    // Bedingung nie erfuellt und Email und Passwort blieben unsichtbar.
                     var abgelegt = row.getAttribute('data-gesetzt') === 'true';
-                    return (abgelegt || ctrl.value.length > 0) ? true : false;
+                    return (abgelegt || ctrl.value.length > 0) ? 'set' : 'not set';
                 }
                 if (kind === 'switch') { return ctrl.checked ? 'true' : 'false'; }
                 return String(ctrl.value);
@@ -2403,10 +2410,23 @@ workers.forEach(function (w) {
                     if (!ctrl) { continue; }
                     var key = row.getAttribute('data-source-field-row');
                     var kind = row.getAttribute('data-source-field-kind');
-                    if (kind === 'switch') { body[key] = !!ctrl.checked; }
+                    var wert;
+                    if (kind === 'switch') { wert = !!ctrl.checked; }
                     else if (kind === 'secret') {
-                        if (ctrl.value !== '') { body[key] = ctrl.value; }
-                    } else { body[key] = ctrl.value; }
+                        // Ein Geheimnis geht nur mit, wenn wirklich etwas getippt wurde.
+                        if (ctrl.value === '') { continue; }
+                        wert = ctrl.value;
+                    } else { wert = ctrl.value; }
+
+                    // F-M705: NUR Geaendertes geht mit. Vorher schickte jedes Speichern alle vier
+                    // Schalter mit, und die Rueckmeldung nannte sie alle — "download enabled" stand
+                    // also auch dann in der Liste, wenn nur ein anderes Kaestchen bewegt wurde. Was
+                    // unveraendert ist, bleibt in der Datei stehen und steht nicht in der Meldung.
+                    if (typeof wert === 'boolean') {
+                        if (row.getAttribute('data-value') === (wert ? 'true' : 'false')) { continue; }
+                    } else if (wert === row.getAttribute('data-value')) { continue; }
+
+                    body[key] = wert;
                 }
                 return body;
             }
@@ -2417,10 +2437,18 @@ workers.forEach(function (w) {
                 var card = document.getElementById(subdlSourceId('SourceCard', key));
                 if (!card) { return; }
                 subdlSourceResult(key, '', '');
+
+                // F-M705: nichts bewegt, nichts zu schreiben — dann auch keine Anfrage und keine
+                // Liste von Feldnamen, die niemand angefasst hat.
+                var rumpf = subdlSourceBody(card);
+                if (Object.keys(rumpf).length === 0) {
+                    subdlSourceResult(key, 'ok', '\u2714 nothing changed');
+                    return;
+                }
                 fetch(ApiClient.getUrl('Plugins/SubdlSync/Sources/' + encodeURIComponent(key)), {
                     method: 'POST',
                     headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
-                    body: JSON.stringify(subdlSourceBody(card))
+                    body: JSON.stringify(rumpf)
                 }).then(function (r) {
                     return r.text().then(function (text) {
                         var res = null;
@@ -2507,8 +2535,17 @@ workers.forEach(function (w) {
                     row.appendChild(subdlSourceEl('span', 'subdl-order-name',
                         (pos + 1) + '. ' + quelle.displayName));
 
+                    // F-M704: JEDE Zeile nennt die Art der Quelle und traegt ihre Ampel — dieselben
+                    // Woerter und dieselbe Ampel wie die Karte weiter unten, aus derselben Antwort.
                     var art = subdlSourceServes(quelle);
                     if (art) { row.appendChild(subdlSourceEl('span', 'subdl-order-tag', art.textContent)); }
+
+                    var licht = subdlSourceEl('span', 'subdl-order-state ' + (quelle.configured ? 'on' : 'off'),
+                        quelle.configured ? 'on' : 'off');
+                    licht.title = quelle.configured
+                        ? 'This source is complete and takes part in the run.'
+                        : 'This source is missing a required field and stays out of the run.';
+                    row.appendChild(licht);
 
                     var hoch = subdlOrderButton('\u25B2', pos === 0, function () { subdlOrderMove(pos, -1, payload); });
                     hoch.title = 'ask earlier';

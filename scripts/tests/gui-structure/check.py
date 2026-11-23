@@ -2072,6 +2072,37 @@ def main():
           and "config.MovieSubtitlesDownloadEnabled =" not in page_src,
           "Zuweisungen an die Alt-Felder in der Seite")
 
+    # F-M704 (Betreiberbefund 22.11.2026: "Tvshow und movie badge bei den endpoints fehlt immer noch.
+    # Passwort Email fuer subdl muss bleiben. Auch die Ampeln sind nicht einsortiert"): drei Ursachen,
+    # drei Pruefungen an EINER Stelle.
+    # (a) die Liste der Faehigkeiten stand ZWEIMAL in der Seite, die zweite Ueberschreibung gewann und
+    #     nannte 'servesSeries'/'servesMovies' nicht — die Art der Quelle kam nie an;
+    check("F-M704: the capability list is declared once and carries servesSeries/servesMovies",
+          page_src.count('var SUBDL_SOURCE_CAP_KEYS') == 1
+          and "'servesSeries', 'servesMovies'" in page_src,
+          "Liste einmal, mit der Art der Quelle")
+    # (b) die Bedingung eines anderen Felds ('VisibleWhen apiKey = set') bekam einen Wahrheitswert statt
+    #     'set' — Email und Passwort blieben dadurch unsichtbar;
+    check("F-M704: a secret answers the condition of another field in 'set'/'not set'",
+          "? 'set' : 'not set';" in page_src
+          and "'set' ? true : false" not in page_src,
+          "Bedingungssprache bleibt 'set'")
+    # (c) die Reihenfolge nennt je Zeile die Art und traegt ihre Ampel.
+    check("F-M704: every order row carries the source's kind and its lamp",
+          "subdl-order-state" in page_src
+          and "subdlSourceEl('span', 'subdl-order-tag'" in page_src,
+          "Art + Ampel je Zeile")
+
+    # F-M705 (Betreiberbefund 22.11.2026: "Wenn ich auf save druecke kommt immer download enabled auch
+    # wenn ich ausschalte. Ist eigentlich durch die tickbox abgedeckt"): nur Geaendertes geht mit, und
+    # ohne Aenderung stellt die Karte gar keine Anfrage.
+    check("F-M705: saving sends only what changed, and nothing at all when nothing changed",
+          "Object.keys(rumpf).length === 0" in page_src
+          and "nothing changed" in page_src
+          and "body: JSON.stringify(rumpf)" in page_src
+          and "body: JSON.stringify(subdlSourceBody(card))" not in page_src,
+          "nur die bewegten Felder")
+
     # F-M703 (Betreiberansage 22.11.2026: "Source order bitte direkt bei endpoints unter der Ueberschrift
     # einsortieren"): der Block steht im Abschnitt "Endpoints" — direkt unter der Ueberschrift und VOR den
     # Karten. Der Abschnitt liegt im General-Reiter; entscheidend ist die Position im Abschnitt.
@@ -2300,8 +2331,10 @@ def main():
           and "row.setAttribute('data-gesetzt'" in _secret_branch,
           "the endpoint sends wert=null for a secret; the page must not invent one")
 
+    # F-M705 hat die Form geaendert (frueh weiter statt Zuweisung) — geprueft wird die ABSICHT:
+    # ein leeres Geheimfeld geht nicht mit.
     check("F-M688: an empty secret field is not sent — it means 'leave it as it is'",
-          "if (ctrl.value !== '') { body[key] = ctrl.value; }" in quellen,
+          "if (ctrl.value === '') { continue; }" in quellen,
           "sending the empty box would wipe a stored key on every save")
 
     check("F-M688: a hidden field is not sent either — what the card shows is what is written",
@@ -2388,16 +2421,15 @@ def main():
     # Die Woerter, die eine Karte selbst schreibt: on/off, Save, set/not set. Der Bedingungswert
     # im Schema ist sprachneutral ("set"), damit die Engine nicht die Sprache der Oberflaeche kennt.
     # F-M702: "set"/"not set" gibt es nicht mehr — die Karte zeigt nur on/off und Save.
+    # F-M704: 'set'/'not set' ist die BEDINGUNGSSPRACHE des Schemas ('VisibleWhen apiKey = set'),
+    # kein angezeigtes Wort — angezeigt werden nur on/off und Save.
     check("F-M690: the card's own words are English (on/off, Save) and the schema's "
           "condition value is language-neutral",
           "entry.configured ? 'on' : 'off'" in quellen
           and "save.textContent = 'Save';" in quellen
-          # Die Anzeige ist englisch — der FELDNAME 'gesetzt'/'Gesetzt' bleibt, er ist der
-          # Schluessel im Endpunkt (Gesetzt), kein angezeigtes Wort.
           and "'nicht gesetzt'" not in quellen
           and "field.gesetzt ? 'gesetzt'" not in quellen
-          and "'not set'" not in quellen
-          and "'set'" not in quellen)
+          and "? 'set' : 'not set';" in quellen)
 
     # ---- F-M692: die Karte bleibt karg -----------------------------------------------------------
     # Betreiberbefund 22.11.2026, woertlich: "Well address is not needed. All these badges reduce to
