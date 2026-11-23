@@ -1,7 +1,8 @@
 # Sub Scribe
 
-Sub Scribe keeps your Jellyfin library subtitled. It draws on two sources — [SubDL](https://subdl.com)
-and [tvsubtitles.net](https://www.tvsubtitles.net) — and **downloads** missing subtitles for the
+Sub Scribe keeps your Jellyfin library subtitled. It draws on three sources — [SubDL](https://subdl.com),
+[tvsubtitles.net](https://www.tvsubtitles.net) and [moviesubtitles.org](https://www.moviesubtitles.org) —
+and **downloads** missing subtitles for the
 languages and libraries you select, **synchronizes them to the audio track**, and **uploads** the
 subtitle tracks already embedded in your own media files. Each source has its own download and upload
 switch, and the order in which the sources are asked is yours to choose.
@@ -12,10 +13,21 @@ Licensed under **GPL-3.0-or-later** — see [LICENSE](LICENSE).
 
 ## What it looks like
 
-The plugin page in one piece — libraries you opt in, target languages, quota and connection
-status, statistics, and when each worker last ran (credentials masked):
+**The page in one piece** — the libraries you opt in, target languages, refetch interval, quota and
+connection status, and the statistics with the last run of every worker (credentials masked):
 
 ![The Sub Scribe settings page](docs/images/config-general.png)
+
+**Endpoints** — the order the sources are asked in, and one card per source: its own direction
+switches (upload, download, packs, report), what it serves, and its credentials. The e-mail address
+in the SubDL card is blurred here; in the plugin it is stored in the source's own file:
+
+![Endpoints and source cards](docs/images/config-endpoints.png)
+
+**Statistics and workers** — counters since the counting start date and when each worker last ran,
+including the database and the OSHash refresh:
+
+![Statistics and worker status](docs/images/config-status.png)
 
 **Download** — what gets fetched, when a run happens, and the quality gates a subtitle has to pass
 before it is saved:
