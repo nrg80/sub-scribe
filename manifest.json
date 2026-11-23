@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.16",
-        "changelog": "v12.3.8.16: the last three SubDL-only settings live in the SubDL card, and the \"SubDL only\" badge is gone.",
+        "version": "12.3.8.17",
+        "changelog": "v12.3.8.17: moviesubtitles.org offers an upload switch (off by default) — the upload path has been in use since F-M508.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.16-dev/Jellyfin.Plugin.SubdlSync_12.3.8.16.zip",
-        "checksum": "82652e89a283b20d29497da78cd88fb4",
-        "timestamp": "2026-11-23T17:26:45Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.17-dev/Jellyfin.Plugin.SubdlSync_12.3.8.17.zip",
+        "checksum": "03d85dc87b027672110cc37287d8d1bc",
+        "timestamp": "2026-11-23T17:32:22Z"
       }
     ]
   }
