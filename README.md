@@ -13,21 +13,13 @@ Licensed under **GPL-3.0-or-later** — see [LICENSE](LICENSE).
 
 ## What it looks like
 
-**The page in one piece** — the libraries you opt in, target languages, refetch interval, quota and
-connection status, and the statistics with the last run of every worker (credentials masked):
+**General — the whole page in one piece.** The libraries you opt in, target languages, refetch
+interval, quota and connection status, the **endpoints** section with the order the sources are asked
+in and one card per source (direction switches, what it serves, credentials), then statistics and the
+last run of every worker. The e-mail address in the SubDL card is blurred; the plugin keeps it in the
+source's own file:
 
 ![The Sub Scribe settings page](docs/images/config-general.png)
-
-**Endpoints** — the order the sources are asked in, and one card per source: its own direction
-switches (upload, download, packs, report), what it serves, and its credentials. The e-mail address
-in the SubDL card is blurred here; in the plugin it is stored in the source's own file:
-
-![Endpoints and source cards](docs/images/config-endpoints.png)
-
-**Statistics and workers** — counters since the counting start date and when each worker last ran,
-including the database and the OSHash refresh:
-
-![Statistics and worker status](docs/images/config-status.png)
 
 **Download** — what gets fetched, when a run happens, and the quality gates a subtitle has to pass
 before it is saved:
