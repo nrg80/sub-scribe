@@ -1,7 +1,7 @@
 # Requirements Specification — Jellyfin Plugin "Sub Scribe" (Upload + Download)
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.20.
+**Status:** Implementation — v12.3.8.21.
 
 **Die Begründungen (warum eine Regel gilt, Messungen, Vorfälle) stehen nicht hier, sondern lokal in der Methodik-Ablage, nach Kapiteln sortiert und mit der Requirement-Nummer
 markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test — sonst nichts.**
@@ -33,7 +33,7 @@ markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
 - [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 46 requirements
-- [14. Data Model and Persistence](#14-data-model-and-persistence) — 70 requirements
+- [14. Data Model and Persistence](#14-data-model-and-persistence) — 71 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 51 requirements
 - [16. Non-Goals](#16-non-goals)
 - [17. Non-Functional Requirements](#17-non-functional-requirements)
@@ -2006,6 +2006,8 @@ Grund (gemessen 18.11.2026): die Queue entsteht nur aus offenen Stempeln (F-M557
 
 **F-M715 [D]:** **Eine Quelle, die nicht antwortet, wird nicht je Spur erneut gefragt.** Betreiberfrage 22.11.2026: „Und wenn tvst nicht da ist, was passiert dann?" Im Download galt das schon (F-M592: `MerkeQuelleTot`, ein Timeout nimmt die Quelle für den Rest des Laufs heraus). Im **Upload** fehlte es: der Timeout beendete zwar nicht den Lauf (F-M590, „die andere Quelle macht weiter"), aber tvst wurde danach für **jede weitere Spur** erneut mit dem vollen Client-Timeout (90 s) gefragt. Neu: der Timeout-Zweig trägt die Quelle in `_quellenAus` ein (eine Zeile im Log sagt es); `SourceAllowed` sagt danach Nein, der Rest des Laufs läuft mit den übrigen Quellen. Der nächste Lauf fragt sie wieder. Für die Serie heißt das: fällt tvst weg, sucht und lädt SubDL allein weiter; fällt zusätzlich SubDL weg, endet der Lauf (keine Quelle mehr übrig).
 
+**F-M716 [D]:** **„Ist schon weg" ist das Ziel, kein Fehler.** Befund 23.11.2026, 19:46 auf prod: der Datenbank-Refresh brach nach 15 s mit einer `DbUpdateConcurrencyException` ab („expected to affect 1 row(s), but actually affected 0 row(s)"), der Status zeigte `Database: fail`. Kette: `ScribeDatabaseRefreshTask` → `ContentHashRegistry.PruneOrphanedPacks()` → `SourceStore.ForgetSubject(db, pack.PackId)` → `ScribeSet.DeleteMany` → `SaveChanges`. Ursache: `DeleteMany` meldete auch Zeilen an, die im selben Kontext schon als `Deleted` markiert waren (die Schleife löscht erst die Pack-Zeile, dann die Belege desselben Subjekts; ein `pack_track` kann über `TrackId` wie über `PackId` in zwei Pässen auftauchen) — das zweite DELETE traf 0 Zeilen und EF wirft dafür. Neu: `DeleteMany` überspringt Einträge mit `EntityState.Deleted`, und `ScribeSqliteContext.SaveChanges` fängt eine `DbUpdateConcurrencyException`, hakt die betroffenen Einträge als erledigt ab (`Detached`), schreibt eine Warnzeile mit der Anzahl und wiederholt den Schreibvorgang. Für ein DELETE ist die Absicht damit erfüllt; für ein UPDATE gibt es nichts mehr zu schreiben. Kein Datenverlust, kein Abbrechen des Laufs mehr.
+
 #### 14.9 Die Marken-Matrix — die einzige Wahrheit (bis Schema 22; abgelöst durch 14.11)
 
 Die Matrix ist seit 12.3.0.0 der **einzige** Ort, an dem ein Quellen-Urteil steht: eine Zeile je (Medium, Quelle, Art) in der Tabelle `source_matrix` — und bei `track`/`track-hi` je (Medium, Quelle, Art, Sprache, HI, **Position**) (Schema 20, F-M669). Seit 12.3.0.2 (Schema 21, F-M670) ist sie auch der einzige Ort für die **Quellen-Ids**: es gibt keine Alt-Tabelle `source_marks` und keine Spalte `SubdlId` mehr. Die breiten Spalten, aus denen sie bis 12.2.0.28 gefüllt wurde, sind aus der Live-Datei **entfernt**; der Altbestand lebt allein in der Sicherungsdatei weiter. Es gibt keinen zweiten Datenbestand und keinen zweiten Lesepfad.
@@ -2886,6 +2888,8 @@ Kein Grund, keine Vorgeschichte, keine Bitte, kein Vorschlag. Gebaut in `Pipelin
 **T378:** Jeder Ausfallgrund nimmt nur die betroffene Quelle heraus (F-M714), in `sources` — **2 Prüfungen**: „upload stopped" (403) und „run stopped" (Stundenbudget) kommen im Upload-Pfad nicht mehr vor, und beide Ersatzmeldungen nennen die Regel im Klartext.
 
 **T379:** Ein Timeout nimmt die Quelle für den Rest des Laufs heraus (F-M715), in `sources` — **1 Prüfung**: der Timeout-Zweig des Uploads trägt die Quelle in `_quellenAus` ein, nennt F-M715 und lässt die andere Quelle weiterlaufen.
+
+**T380:** Eine verschwundene Zeile beendet den Aufräumlauf nicht (F-M716), in `seasonpack` — **2 Prüfungen**: `DeleteMany` überspringt `EntityState.Deleted`, und `SaveChanges` fängt die `DbUpdateConcurrencyException`, hakt die Zeile als erledigt ab und wiederholt den Schreibvorgang.
 
 **T336:** Die vier Ebenen und die drei Quellen-Tabellen seit Schema 23 (F-M672…F-M677), in `storex` gegen echte Altdateien: Kennungsformen `[xxxx]`/`#yyyyy`/`#yyyyy#zzz`/`#yyyyy&zzz`, ein Nummernkreis je Datei über Spur und Seitenwagen, `pack_track` mit Fremdschlüsseln, `upload`/`reference`/`badapple` mit einer Subjekt-Spalte, keine fremde Kennung außerhalb `reference`/`badapple`, `source_matrix` und `rejected_candidates` nach dem Aufstieg weg, `OriginId` ohne Wertverlust nach `reference`, Aufstieg 17→23 und 22→23 mit genau einer Sicherung und einem zweiten Start, der nichts tut — **15 Prüfungen**, die letzte für die Quellenneutralitaet von `badapple` (auch eine nicht-numerische Kennung wie `download-3234-2-en` neben einer SubDL-Nummer).
 

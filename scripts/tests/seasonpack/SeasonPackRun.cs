@@ -1456,6 +1456,20 @@ internal static class Program
             }
         }
 
+        // -----------------------------------------------------------------------------------------
+        // F-M716 (Befund 23.11.2026, 19:46): das Aufräumen wollte eine Zeile löschen, die schon weg war,
+        // und der Lauf brach mit einer DbUpdateConcurrencyException ab. „Ist schon weg" ist das Ziel.
+        // -----------------------------------------------------------------------------------------
+        var dbQuelle = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Data/ScribeDbContext.cs"));
+        Check(dbQuelle.Contains("EntityState.Deleted", StringComparison.Ordinal)
+              && dbQuelle.Contains("F-M716", StringComparison.Ordinal),
+            "F-M716: eine schon gelöschte Zeile wird nicht ein zweites Mal zum Löschen angemeldet",
+            "DeleteMany überspringt EntityState.Deleted");
+        Check(dbQuelle.Contains("catch (DbUpdateConcurrencyException ex)", StringComparison.Ordinal)
+              && dbQuelle.Contains("dropped as done and the write was retried (F-M716)", StringComparison.Ordinal),
+            "F-M716: eine beim Schreiben verschwundene Zeile wird als erledigt abgehakt statt den Lauf abzubrechen",
+            "SaveChanges fängt DbUpdateConcurrencyException");
+
         Console.WriteLine(Failures.Count == 0
             ? $"seasonpack: {_checks} checks, all green."
             : $"seasonpack: {_checks} checks, {Failures.Count} failed.");
