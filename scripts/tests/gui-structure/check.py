@@ -2110,6 +2110,12 @@ def main():
           and "subdlOrderDraw(window.__subdlQuellen)" in page_src,
           "Ampel an participates, Neuzeichnung nach dem Speichern")
 
+    # F-M710 (Betreiberansage 22.11.2026: "Das gui bla bla asked in this order first one wins bitte
+    # entfernen"): der Block nennt nur noch seinen Namen.
+    check("F-M710: the order block carries no description",
+          'Asked in this order' not in page_src,
+          "kein blabla am Block")
+
     check("F-M707: the block is titled 'Endpoint order'",
           ">Endpoint order</label>" in page_src,
           "Ueberschrift Endpoint order")
