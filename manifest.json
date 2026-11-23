@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.10",
-        "changelog": "v12.3.8.10: the card carries labels only — no field descriptions, no placeholder, no \"set\"; the source order sits under the Endpoints heading and shows the order the run actually uses.",
+        "version": "12.3.8.11",
+        "changelog": "v12.3.8.11: the kind of a source and its lamp reach the card and the order again; email and password stay on the card; saving sends only what changed.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.10-dev/Jellyfin.Plugin.SubdlSync_12.3.8.10.zip",
-        "checksum": "b3e5f76b9c8531d03c5d12c7ec6bd975",
-        "timestamp": "2026-11-23T08:21:27Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.11-dev/Jellyfin.Plugin.SubdlSync_12.3.8.11.zip",
+        "checksum": "7f4dcec78baed8ddee0d4d494de95961",
+        "timestamp": "2026-11-23T08:54:06Z"
       }
     ]
   }
