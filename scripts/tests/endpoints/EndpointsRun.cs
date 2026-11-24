@@ -869,7 +869,7 @@ internal static class Program
         // ("scan finished (upload) — 0 upload queued"), weil "schon hochgeladen" aus Status=Uploaded
         // gelesen wurde — also "irgendwo hochgeladen". Der zweite Endpunkt bekam nie seinen Versuch.
         Check("die Upload-Queue fragt je Quelle statt quellenblind (F-M499)",
-            seederSource.Contains("UploadTodoFor(item, mediaPath, config, quelle)", StringComparison.Ordinal)
+            seederSource.Contains("UploadTodoFor(item, mediaPath, config, quelle,", StringComparison.Ordinal)
             && seederSource.Contains("registry.ArePositionsTerminalFor(mediaHash", StringComparison.Ordinal)
             && seederSource.Contains("registry.CountKnownPairsFor(mediaHash, quelle)", StringComparison.Ordinal)
             && uploadSource.Contains("registry.IsSidecarUploadedTo(looseHash, quelle)", StringComparison.Ordinal)
@@ -2425,7 +2425,7 @@ internal static class Program
                 Check("F-M540: the queue keeps asking per source (F-M499) and no longer guesses a settled item",
                     seederSource.Contains("registry.ArePositionsTerminalFor(mediaHash", StringComparison.Ordinal)
                     && seederSource.Contains("registry.CountKnownPairsFor(mediaHash, quelle)", StringComparison.Ordinal)
-                    && seederSource.Contains("UploadTodoFor(item, mediaPath, config, quelle)", StringComparison.Ordinal));
+                    && seederSource.Contains("UploadTodoFor(item, mediaPath, config, quelle,", StringComparison.Ordinal));
                 Check("F-M540: the queue asks whether the site carries the language at all",
                     seederSource.Contains("Api.TvSubtitlesClient.SiteLanguage(mapped) is not null", StringComparison.Ordinal)
                     && seederSource.Contains("Api.MovieSubtitlesClient.SiteLanguage(mapped) is not null", StringComparison.Ordinal)
@@ -3610,6 +3610,67 @@ internal static class Program
             && guiDatei.Contains("id=\"ResetPathWhat\"", StringComparison.Ordinal)
             && guiDatei.Contains("id=\"ResetPathRun\"", StringComparison.Ordinal)
             && guiDatei.Contains("Plugins/SubdlReset/ResetPath", StringComparison.Ordinal));
+        // F-M723 (Betreiberanweisung 24.11.2026): ein Weg, der ALLES zu einer Datei nimmt — Spur-Zeilen
+        // jeden Status, ihre Seitenwagen, Stempel und die Marken der Subjekte. Das ist bewusst NICHT der
+        // Retry-Pfad (der laesst echte Urteile stehen), sondern der ausdrueckliche Wunsch des Bedieners.
+        // F-M726 (Befund 24.11.2026 an "Yaga.S01E01"): ein Abbruch beim Zuruecklesen ist kein Fehler.
+        // Vorher schrieb der allgemeine catch je Spur eine ERR-Zeile (24 fuer einen abgebrochenen
+        // Vorlauf) und die Schleife lief weiter; die Methode gab danach ExitCode 0 plus lauter nulls
+        // zurueck — von "diese Spur hat keinen Text" nicht zu unterscheiden.
+        string ffmpegDatei = await File.ReadAllTextAsync(
+            Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Pipeline", "FfmpegTools.cs")).ConfigureAwait(false);
+        int leseStart = ffmpegDatei.IndexOf("foreach (var (idx, outFile) in outputs)", StringComparison.Ordinal);
+        int leseEnde = ffmpegDatei.IndexOf("return (result, proc.ExitCode);", leseStart, StringComparison.Ordinal);
+        string leseRumpf = leseStart > 0 && leseEnde > leseStart ? ffmpegDatei[leseStart..leseEnde] : string.Empty;
+        Check(
+            "F-M726: a cancelled read-back goes through instead of being logged once per stream",
+            leseRumpf.Length > 0
+            && leseRumpf.Contains("catch (OperationCanceledException) when (ct.IsCancellationRequested)", StringComparison.Ordinal)
+            && leseRumpf.Contains("read-back of the extracted streams cancelled", StringComparison.Ordinal)
+            // der Abbruch-Fang steht VOR dem allgemeinen Fang und reicht weiter
+            && leseRumpf.IndexOf("catch (OperationCanceledException)", StringComparison.Ordinal)
+                < leseRumpf.IndexOf("logger.LogError(\"[Sub Scribe] reading extracted stream", StringComparison.Ordinal)
+            && leseRumpf.Contains("throw;", StringComparison.Ordinal));
+        string forgetRumpf = registryDatei[
+            registryDatei.IndexOf("public (int Tracks, int Sidecars, int Stamps, int Marks, int FoundTracks", StringComparison.Ordinal)..];
+        forgetRumpf = forgetRumpf[..Math.Max(0, forgetRumpf.IndexOf("\n    public ", StringComparison.Ordinal) is int e && e > 0 ? e : forgetRumpf.Length)];
+        Check(
+            "F-M723: 'everything of this file' drops all rows of the file, not just rejections",
+            resetDatei.Contains("bool alles = teile.Contains(\"all\")", StringComparison.Ordinal)
+            && resetDatei.Contains("registry.ForgetMedia(hash);", StringComparison.Ordinal)
+            && registryDatei.Contains("public (int Tracks, int Sidecars, int Stamps, int Marks, int FoundTracks, int FoundSidecars, bool Known) ForgetMedia(", StringComparison.Ordinal)
+            // alle Spuren, nicht nur die abgelehnten
+            && registryDatei.Contains("var spuren = _db.Tracks.FindAll()", StringComparison.Ordinal)
+            // F-M723a: die Datei-Kennung ist der verlaessliche Schluessel — der Medienhash einer Zeile
+            // kann von dem der Datei abweichen (neu gepackt), dann lief die Suche leer.
+            && registryDatei.Contains("|| string.Equals(t.FileId, media.FileId, StringComparison.Ordinal))", StringComparison.Ordinal)
+            && registryDatei.Contains("|| string.Equals(w.FileId, media.FileId, StringComparison.Ordinal)", StringComparison.Ordinal)
+            // F-M727a: `Delete(kennung)` vergleicht gegen den Schluessel der Menge, nicht gegen die
+            // Kennung — damit fielen 0 Zeilen. `Remove` nimmt die Zeile selbst.
+            && registryDatei.Contains("if (_db.Sidecars.Remove(wagenZeile))", StringComparison.Ordinal)
+            && registryDatei.Contains("if (_db.Tracks.Remove(spur))", StringComparison.Ordinal)
+            && !registryDatei.Contains("_db.Sidecars.Delete(wagenZeile.TrackId)", StringComparison.Ordinal)
+            && !registryDatei.Contains("_db.Tracks.Delete(spur.TrackId)", StringComparison.Ordinal)
+            && registryDatei.Contains("marken += SourceStore.ForgetSubject(_db, subjekt);", StringComparison.Ordinal)
+            // die Marken zuerst, sonst findet sie ihr Subjekt nicht mehr
+            // die Marken zuerst — geprüft IM Rumpf von ForgetMedia, denn der Aufruf kommt in der Datei
+            // sonst auch an anderen Stellen vor
+            && forgetRumpf.IndexOf("ForgetSubject(_db, subjekt)", StringComparison.Ordinal)
+                < forgetRumpf.IndexOf("_db.Tracks.Remove(spur)", StringComparison.Ordinal)
+            && guiDatei.Contains("<option value=\"all\">everything of this file</option>", StringComparison.Ordinal));
+        // F-M727 (Betreiber-Anweisung 24.11.2026 „Alle 4"): „0 geloescht" war keine Auskunft. Der Reset
+        // meldet jetzt, wie viele Zeilen er VORHER gefunden hat und ob ihm die Datei ueberhaupt bekannt
+        // war; Seitenwagen werden zusaetzlich ueber den Pfad-Stamm der Mediendatei gefunden.
+        Check(
+            "F-M727: the reset reports what it found, and sidecars answer to the file's own path stem",
+            registryDatei.Contains("bool GehoertZurDatei(string? pfad) =>", StringComparison.Ordinal)
+            && registryDatei.Contains("pfad.StartsWith(stamm + \".\", StringComparison.Ordinal)", StringComparison.Ordinal)
+            && registryDatei.Contains("|| GehoertZurDatei(w.Path))", StringComparison.Ordinal)
+            && registryDatei.Contains("return (0, 0, 0, 0, 0, 0, false);", StringComparison.Ordinal)
+            && registryDatei.Contains("return (spurWeg, wagenWeg, stempel, marken, spuren.Count, wagen.Count, true);", StringComparison.Ordinal)
+            && resetDatei.Contains("foundTracks = spurGefunden,", StringComparison.Ordinal)
+            && resetDatei.Contains("foundSidecars = wagenGefunden,", StringComparison.Ordinal)
+            && resetDatei.Contains("unknownFiles = dateienUnbekannt,", StringComparison.Ordinal));
         Check(
             "F-M620: without confirm=true and a rooted path nothing is written",
             resetDatei.Contains("error = \"confirmation-missing\"", StringComparison.Ordinal)

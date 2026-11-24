@@ -336,6 +336,11 @@ public class ScribeReset : ControllerBase
         bool urteile = teile.Count == 0 || teile.Contains("both") || teile.Contains("verdicts");
         bool staffel = teile.Contains("pack");
 
+        // F-M723 (Betreiberanweisung 24.11.2026): „alle Eintraege des Files" — der einzige Weg, der
+        // AUCH erledigte Urteile und die Seitenwagen nimmt. `all` schliesst die uebrigen Achsen ein;
+        // danach sieht der naechste Scan die Datei als neu.
+        bool alles = teile.Contains("all") || teile.Contains("everything") || teile.Contains("file");
+
         try
         {
             var db = Plugin.Instance?.SharedDbContext;
@@ -365,8 +370,35 @@ public class ScribeReset : ControllerBase
             int urteileGesamt = 0;
             int packAbsagen = 0;
             int staffelUrteile = 0;
+            int spurZeilen = 0;
+            int wagenZeilen = 0;
+            int markenGesamt = 0;
+            // F-M727: die FUND-Zahlen. „0 geloescht" allein sagte nicht, ob nichts zu loeschen war oder
+            // ob der Schluessel nicht traf — die offene S01-Frage hing genau daran.
+            int spurGefunden = 0;
+            int wagenGefunden = 0;
+            int dateienUnbekannt = 0;
             foreach (string hash in hashes)
             {
+                if (alles)
+                {
+                    var (spurenWeg, wagenWeg, stempelWeg, markenWeg, gefundenSpuren, gefundenWagen, bekannt) =
+                        registry.ForgetMedia(hash);
+                    spurZeilen += spurenWeg;
+                    wagenZeilen += wagenWeg;
+                    spurGefunden += gefundenSpuren;
+                    wagenGefunden += gefundenWagen;
+                    if (!bekannt)
+                    {
+                        dateienUnbekannt++;
+                    }
+                    stempelGesamt += stempelWeg;
+                    markenGesamt += markenWeg;
+                    packAbsagen += registry.ReopenPackRefusals(hash);
+                    staffelUrteile += registry.ReopenSeasonVerdicts(hash);
+                    continue;
+                }
+
                 var (s, v) = registry.ReopenForRetry(hash, stempel, urteile);
                 stempelGesamt += s;
                 urteileGesamt += v;
@@ -396,13 +428,25 @@ public class ScribeReset : ControllerBase
                     packAbsagen);
             }
 
-            if (staffel)
+            if (staffel && !alles)
             {
                 LogUtil.Normal(
                     _logger,
                     "[Sub Scribe] reset path {File} — {Count} season verdict(s) of the pack phase cleared; the plan examines this season again (F-M660).",
                     System.IO.Path.GetFileName(path),
                     staffelUrteile);
+            }
+
+            if (alles)
+            {
+                LogUtil.Normal(
+                    _logger,
+                    "[Sub Scribe] reset path {File} — forgot EVERYTHING about it: {Tracks} track row(s), {Sidecars} sidecar row(s), {Stamps} stamp(s), {Marks} mark(s) (F-M723).",
+                    System.IO.Path.GetFileName(path),
+                    spurZeilen,
+                    wagenZeilen,
+                    stempelGesamt,
+                    markenGesamt);
             }
 
             ScheduledTasks.ScribeEventDispatcher.Instance?.ReloadQueues();
@@ -415,6 +459,12 @@ public class ScribeReset : ControllerBase
                 verdicts = urteileGesamt,
                 packRefusals = packAbsagen,
                 seasonVerdicts = staffelUrteile,
+                forgottenTracks = spurZeilen,
+                forgottenSidecars = wagenZeilen,
+                forgottenMarks = markenGesamt,
+                foundTracks = spurGefunden,
+                foundSidecars = wagenGefunden,
+                unknownFiles = dateienUnbekannt,
             });
         }
         catch (Exception ex)

@@ -119,8 +119,10 @@ internal static class Program
         Check(api.Contains("GetArchiveBodyAsync(fullUrl, ct)", StringComparison.Ordinal)
               && api.Split("GetArchiveBodyAsync(").Length - 1 >= 3,
             "both the entry download and the member retry read through the ONE cached path");
+        // F-M724: the entry is compared through the shared fold on BOTH sides — still by NAME only,
+        // but a styled entry no longer counts as "not in the archive".
         Check(api.Contains("string? memberName = null)", StringComparison.Ordinal)
-              && api.Contains("string.Equals(e.Name, memberName, StringComparison.OrdinalIgnoreCase)", StringComparison.Ordinal),
+              && api.Contains("string.Equals(TextFold.Fold(e.Name), wantedFolded, StringComparison.OrdinalIgnoreCase)", StringComparison.Ordinal),
             "the unpacker extracts the named entry, never a guessed one");
 
         var pipe = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Pipeline/DownloadPipeline.cs"));

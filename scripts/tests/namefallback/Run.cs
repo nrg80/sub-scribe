@@ -10,6 +10,7 @@ using System;
 using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using Jellyfin.Plugin.SubScribe.Pipeline;
 
 int failures = 0, checks = 0;
 void Check(string name, bool ok, string detail = null)
@@ -51,22 +52,15 @@ Check("two of them in a row too", Field("[Crunchyroll] [Sub] Some Show S01E02", 
 Check("a bracket inside the title survives", Field("Rambo (2008) [Extended] 1080p", "Title") == "Rambo", Field("Rambo (2008) [Extended] 1080p", "Title"));
 
 Console.WriteLine("\nF-M349 — dressed-up letters");
-// Whether normalization does anything depends on the runtime: it is a globalization feature, and a
-// runtime without ICU (System.Globalization.Invariant) returns the string unchanged. Jellyfin ships
-// with ICU, so the plugin folds; this harness may not be able to. It says so instead of failing.
-bool globalization = "\uFB01".Normalize(System.Text.NormalizationForm.FormKD) == "fi"; // U+FB01 is the ﬁ ligature — it only folds where ICU is present
+// F-M724 (24.11.2026): the fold is arithmetic now, so it does not depend on ICU any more — this
+// harness runs InvariantGlobalization and the dressed name still has to read. The checks below are
+// unconditional on purpose: a "SKIP" here would hide exactly the bug the change fixes.
 string dressed = "[\U0001D41C\U0001D405\U0001D429\U0001D42D] \U0001D403\U0001D400\U0001D405\U0001D413 \U0001D412\U0001D413\U0001D400\U0001D413\U0001D404 (\U0001D7DA\U0001D7D8\U0001D7DA\U0001D7DC) \U0001D40F\U0001D411\U0001D408\U0001D40C\U0001D404 - \U0001D413\U0001D41B\U0001D415";
-if (globalization)
-{
-    Check("bold letters fold to a readable title", Field(dressed, "Title") == "DAFT STATE", Field(dressed, "Title"));
-    Check("and the bold year becomes a year", Field(dressed, "Year") == "2024", Field(dressed, "Year"));
-}
-else
-{
-    Console.WriteLine("  SKIP fold checks — this runtime has no ICU, normalization is a no-op here");
-}
-Check("the gate stays on dressed-up input only", Regex.Replace(File.ReadAllText(Path.Combine(repo, "Jellyfin.Plugin.SubdlSync", "Pipeline", "MediaNameParser.cs")), @"\s+", " ").Contains("if (NeedsUnicodeFold(fileName))"));
-Check("an ordinary name is untouched", Field("Ein ganz normaler Name 2019", "Title") == "Ein ganz normaler Name");
+Check("bold letters fold to a readable title", Field(dressed, "Title") == "DAFT STATE", Field(dressed, "Title"));
+Check("and the bold year becomes a year", Field(dressed, "Year") == "2024", Field(dressed, "Year"));
+string plainName = "Ein ganz normaler Name 2019";
+Check("the gate stays on dressed-up input only", ReferenceEquals(TextFold.Fold(plainName), TextFold.Fold(plainName)) && TextFold.Fold(plainName) == plainName);
+Check("an ordinary name is untouched", Field(plainName, "Title") == "Ein ganz normaler Name");
 Check("its year too", Field("Ein ganz normaler Name 2019", "Year") == "2019");
 
 Console.WriteLine("\nWiring — the fallback confirms instead of guessing");
@@ -81,7 +75,7 @@ Check("a contradiction is refused and logged", flat.Contains("neither is trusted
 Check("the loose first-hit route is gone from the fallback", !flat.Contains("ResolveImdbByTitleAsync(fnTitle"));
 Check("an unusable title is refused", flat.Contains("fnTitleUsable"));
 Check("the episode method tests the episode itself", Regex.Replace(rs, @"\s+", " ").Contains("tv/{candidateShow}/season/{season}/episode/{episode}"));
-Check("the fold is gated on dressed-up characters", Regex.Replace(pl, @"\s+", " ").Contains("if (NeedsUnicodeFold(fileName))"));
+Check("an ordinary name is not rewritten by the parser", Regex.Replace(File.ReadAllText(Path.Combine(repo, "Jellyfin.Plugin.SubdlSync", "Pipeline", "MediaNameParser.cs")), @"\s+", " ").Contains("fileName = TextFold.Fold(fileName)"));
 
 Console.WriteLine($"\n{checks} checks, {failures} failed");
 Console.WriteLine(failures == 0 ? ">>> NAME-FALLBACK OK" : ">>> NAME-FALLBACK FAILED");

@@ -3129,6 +3129,117 @@ public sealed class ContentHashRegistry : IDisposable
     }
 
     /// <summary>
+    /// F-M723 (Betreiberanweisung 24.11.2026: „drop down für alle Einträge des files aus der plugin db
+    /// resetten"): ALLES vergessen, was der Store über EINE Mediendatei sagt — Spur-Urteile jedes
+    /// Status (nicht nur die abgelehnten), ihre Seitenwagen, die Zugeh-Stempel und die Marken der
+    /// Subjekte (Urteil, Beleg, schlechter Download). Der nächste Scan sieht die Datei als neu.
+    /// <para>
+    /// Warum das nicht <see cref="ReopenForRetry"/> ist: jenes oeffnet nur Absagen und Stempel und
+    /// laesst „echte" Urteile stehen (Reup-Schutz). Hier ist das Gegenteil gewollt und ausdruecklich
+    /// vom Bediener angestossen — deshalb ein eigener Weg und keine Erweiterung des Retry-Pfads.
+    /// </para>
+    /// </summary>
+    /// <param name="mediaHash">Der Medienhash der Datei.</param>
+    /// <returns>
+    /// Wie viele Spur-Zeilen, Seitenwagen, Stempel und Marken gefallen sind — und wie viele VORHER da
+    /// waren (<c>Found…</c>, F-M727). Ohne die Fund-Zahlen ist „0 geloescht" nicht von „nichts da" zu
+    /// unterscheiden; genau daran hing die offene S01-Frage.
+    /// </returns>
+    public (int Tracks, int Sidecars, int Stamps, int Marks, int FoundTracks, int FoundSidecars, bool Known) ForgetMedia(string? mediaHash)
+    {
+        if (string.IsNullOrEmpty(mediaHash) || GetMedia(mediaHash) is not { } media)
+        {
+            // F-M727: die Datei ist dem Store UNBEKANNT — das ist eine Auskunft, keine Null.
+            return (0, 0, 0, 0, 0, 0, false);
+        }
+
+        // F-M723a (Befund 24.11.2026 am Prod-Lauf): der verlaessliche Schluessel ist die DATEI-Kennung,
+        // nicht der Medienhash. `TrackId = TrackIdOf(FileId, segment)` — die Zeilen haengen an der Datei.
+        // Der Medienhash einer Zeile kann von dem der Datei abweichen (die Datei wurde neu gepackt und
+        // traegt seither einen anderen OsHash), dann lief die Suche nach `MediaHash` leer: 244 Marken
+        // fielen, 0 Spur- und 0 Seitenwagen-Zeilen. Beide Schluessel werden deshalb gefragt.
+        var spuren = _db.Tracks.FindAll()
+            .Where(t => string.Equals(t.MediaHash, mediaHash, StringComparison.Ordinal)
+                        || string.Equals(t.FileId, media.FileId, StringComparison.Ordinal))
+            .ToList();
+        // F-M727 (Betreiber-Anweisung 24.11.2026 „Alle 4"): der DRITTE Schluessel. Seitenwagen tragen
+        // ihren eigenen Pfad, und der beginnt mit Verzeichnis + Dateiname-Stamm der Mediendatei
+        // ("<Ordner>/<Stamm>.<sprache>.<nn>.srt"). Liegt eine Zeile unter einer Kennung, die keine
+        // Datei-Zeile mehr hat (Datei neu gepackt, neu eingelesen), faengt dieser Vergleich sie —
+        // ohne ihn blieb der Lauf bei 0 Zeilen stehen, obwohl die .srt neben der Datei lag.
+        string? stamm = null;
+        if (!string.IsNullOrWhiteSpace(media.Path))
+        {
+            string? ordner = Path.GetDirectoryName(media.Path);
+            string? name = Path.GetFileNameWithoutExtension(media.Path);
+            if (!string.IsNullOrWhiteSpace(ordner) && !string.IsNullOrWhiteSpace(name))
+            {
+                stamm = Path.Combine(ordner, name);
+            }
+        }
+
+        bool GehoertZurDatei(string? pfad) =>
+            stamm != null
+            && !string.IsNullOrWhiteSpace(pfad)
+            && pfad.StartsWith(stamm + ".", StringComparison.Ordinal);
+
+        var wagen = _db.Sidecars.FindAll()
+            .Where(w => string.Equals(w.MediaHash, mediaHash, StringComparison.Ordinal)
+                        || string.Equals(w.FileId, media.FileId, StringComparison.Ordinal)
+                        || GehoertZurDatei(w.Path))
+            .ToList();
+
+        // Die Subjekte zuerst: die Marken haengen an Spur-, Seitenwagen- und Datei-Kennung. Waeren die
+        // Zeilen schon weg, liesse sich keine Marke mehr zuordnen.
+        var subjekte = new List<string> { media.FileId };
+        subjekte.AddRange(spuren.Select(t => t.TrackId));
+        subjekte.AddRange(wagen.Select(w => w.TrackId));
+
+        int marken = 0;
+        foreach (string subjekt in subjekte.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.Ordinal))
+        {
+            marken += SourceStore.ForgetSubject(_db, subjekt);
+        }
+
+        int stempel = SourceStore.ClearFileMarks(_db, mediaHash);
+
+        // F-M727a (Befund 24.11.2026 am Prod-Lauf von 12.3.8.32): `Delete(id)` vergleicht gegen den
+        // SCHLUESSEL der Menge, nicht gegen die Kennung — Spuren sind ueber `MediaHash + "|" + SubPos`
+        // verschluesselt, Seitenwagen ueber ihren Inhalts-Hash. Mit `spur.TrackId` traf der Aufruf nie
+        // und gab still `false` zurueck: 24 Spuren und 123 Seitenwagen GEFUNDEN, 0 geloescht. `Remove`
+        // nimmt die Zeile selbst und trifft sie ueber diesen Schluessel.
+        int spurWeg = 0;
+        foreach (var spur in spuren)
+        {
+            if (_db.Tracks.Remove(spur))
+            {
+                spurWeg++;
+            }
+        }
+
+        int wagenWeg = 0;
+        foreach (var wagenZeile in wagen)
+        {
+            if (_db.Sidecars.Remove(wagenZeile))
+            {
+                wagenWeg++;
+            }
+        }
+
+        LogUtil.Normal(
+            _logger,
+            "[Sub Scribe-DB] forgot a whole file: {Tracks}/{FoundTracks} track row(s), {Sidecars}/{FoundSidecars} sidecar row(s), {Stamps} stamp(s), {Marks} mark(s).",
+            spurWeg,
+            spuren.Count,
+            wagenWeg,
+            wagen.Count,
+            stempel,
+            marken);
+
+        return (spurWeg, wagenWeg, stempel, marken, spuren.Count, wagen.Count, true);
+    }
+
+    /// <summary>
     /// F-M576: der jüngste Zugeh-Stempel dieser Datei, egal welcher Quelle — die Zeit, zu der die
     /// Datei zuletzt als erledigt vermerkt wurde. Der billige Kopf-Ausstieg braucht sie für EINE
     /// Frage: kann seitdem ein loser Seitenwagen dazugekommen sein? Ist das Verzeichnis älter als
