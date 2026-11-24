@@ -3550,7 +3550,7 @@ internal static class Program
             && !msubQuelle.Contains("ist Film {Id} — gespeichert.", StringComparison.Ordinal)
             // F-M517: der Grund nennt BEIDE Adressen, nicht mehr nur den fehlenden Hash
             && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/Endpoints/MediaNumberNote.cs"))
-                .Contains("kein Medien-Hash und keine eindeutige Pfad-Zeile im Store", StringComparison.Ordinal));
+                .Contains("no media hash and no unique path row in the store", StringComparison.Ordinal));
 
         Console.WriteLine();
 
@@ -3923,6 +3923,42 @@ internal static class Program
             && pipelineQuelle.Contains("&& NimmtSprache(quelle, language, isSeries)", StringComparison.Ordinal)
             && pipelineQuelle.IndexOf("if (!AnyUploadSourceStillWants(mediaHash, lang, streamHi, isSeries, subPos))", StringComparison.Ordinal) > 0,
             "Einzelpaare entscheiden vor dem Entpacken");
+
+        // -----------------------------------------------------------------------------------------
+        // F-M742 (Betreiber 24.11.2026: "Ampel bitte auf die alten Texte zurueck. English. Keine
+        // thematische Ueberschneidungen mit den Balken"): die Selbstauskunft der Quellen spricht
+        // wieder Englisch wie vor dem dritten Vertrag, und die SubDL-Ampel wiederholt NICHT die
+        // Kontingentzahlen — die stehen in den Balken darueber.
+        // -----------------------------------------------------------------------------------------
+#pragma warning disable CA1849 // Pruefpfad, kein Serverpfad.
+        var subdlStatusQuelle = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Sources/Subdl/SubdlStatus.cs"));
+        var reachQuelle = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Sources/ReachabilityStatus.cs"));
+#pragma warning restore CA1849
+        Check(
+            "F-M742: die SubDL-Ampel nennt keine Kontingentzahlen mehr — nur 'reachable'",
+            subdlStatusQuelle.Contains(": \"reachable\")", StringComparison.Ordinal)
+            && !subdlStatusQuelle.Contains("SearchUsed}/{zahlen.SearchLimit}", StringComparison.Ordinal)
+            && !subdlStatusQuelle.Contains("DownloadsUsed}/{zahlen.DownloadsLimit}", StringComparison.Ordinal),
+            "Zahlen gehoeren in die Balken");
+        Check(
+            "F-M742: die Erreichbarkeits-Ampel sagt 'reachable', nicht 'erreichbar (HTTP 200)'",
+            reachQuelle.Contains("? \"reachable\" :", StringComparison.Ordinal)
+            && reachQuelle.Contains("$\"HTTP {code}\"", StringComparison.Ordinal)
+            && !reachQuelle.Contains("\"erreichbar", StringComparison.Ordinal),
+            "Code nur, wenn er etwas zu sagen hat");
+        Check(
+            "F-M742: die Login-Ampel nennt die drei Faelle englisch, Erfolg ist 'OK'",
+            subdlStatusQuelle.Contains("meldung = \"OK\";", StringComparison.Ordinal)
+            && subdlStatusQuelle.Contains("\"wrong username/password\"", StringComparison.Ordinal)
+            && subdlStatusQuelle.Contains("\"not authorized — check API key\"", StringComparison.Ordinal)
+            && subdlStatusQuelle.Contains("\"rate-limited — try again later\"", StringComparison.Ordinal),
+            "falsches Passwort, falscher Schluessel, zu schnell");
+        Check(
+            "F-M742: im Statusweg steht kein deutscher Meldungstext mehr",
+            !new[] { subdlStatusQuelle, reachQuelle }.Any(q => q.Contains("Message: \"kein", StringComparison.Ordinal)
+                || q.Contains("Message: \"die API", StringComparison.Ordinal)
+                || q.Contains("meldung = \"angemeldet\"", StringComparison.Ordinal)),
+            "Englisch wie vor dem dritten Vertrag");
 
         if (_failures > 0)
         {

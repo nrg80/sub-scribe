@@ -38,7 +38,7 @@ public static class MediaNumberNote
     /// gilt dann nur für diesen Lauf.
     /// </summary>
     public const string NotStored =
-        "nicht gespeichert: kein Medien-Hash und keine eindeutige Pfad-Zeile im Store — die Nummer gilt nur für diesen Lauf.";
+        "not stored: no media hash and no unique path row in the store — the number applies to this run only.";
 
     /// <summary>
     /// Der Vermerk zu einem Schreibausgang.

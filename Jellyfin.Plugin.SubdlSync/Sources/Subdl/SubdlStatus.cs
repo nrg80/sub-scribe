@@ -99,7 +99,7 @@ public sealed class SubdlStatus : ISourceStatus
                 "SubDL API",
                 SourceHealth.Warn,
                 Configured: false,
-                Message: "kein API-Schlüssel hinterlegt"));
+                Message: "no API key configured"));
         }
         else
         {
@@ -123,11 +123,12 @@ public sealed class SubdlStatus : ISourceStatus
                 "SubDL API",
                 gelesen == QuotaRead.Unreadable ? SourceHealth.Bad : SourceHealth.Good,
                 Configured: true,
+                // F-M742: „reachable" — und KEINE Zahlen. Was das Kontingent verbraucht hat, steht in
+                // den Balken darüber; die Ampel sagt nur, ob die Adresse antwortet. Vorher stand hier
+                // „Suche 201/2000, Downloads 50/50" und damit dieselbe Aussage ein zweites Mal.
                 Message: gelesen == QuotaRead.Unreadable
-                    ? "die API hat nicht geantwortet"
-                    : zahlen is null
-                        ? "erreichbar"
-                        : $"Suche {zahlen.SearchUsed}/{zahlen.SearchLimit}, Downloads {zahlen.DownloadsUsed}/{zahlen.DownloadsLimit}"));
+                    ? "not reachable"
+                    : "reachable"));
         }
 
         bool hatKonto = _settings.Text(SubdlEngine.FieldAccount) is { Length: > 0 }
@@ -139,7 +140,7 @@ public sealed class SubdlStatus : ISourceStatus
                 "SubDL Login",
                 SourceHealth.Warn,
                 Configured: false,
-                Message: "kein Konto hinterlegt — Hochladen ist aus"));
+                Message: "no account configured — uploading is off"));
         }
         else
         {
@@ -149,7 +150,7 @@ public sealed class SubdlStatus : ISourceStatus
             {
                 await _client.LoginAsync(ct).ConfigureAwait(false);
                 licht = SourceHealth.Good;
-                meldung = "angemeldet";
+                meldung = "OK";
             }
             catch (OperationCanceledException)
             {
@@ -158,7 +159,17 @@ public sealed class SubdlStatus : ISourceStatus
             catch (Exception ex)
             {
                 licht = SourceHealth.Bad;
-                meldung = ex.Message;
+
+                // F-M742: die Meldung der Ampel ist die alte, englische und sagt, was zu tun ist —
+                // nicht die Ausnahmebotschaft der Engine. Drei Faelle, die der Betreiber
+                // unterscheiden muss: falsches Passwort, falscher Schluessel, zu schnell.
+                meldung = ex.Message.Contains("credentials wrong", StringComparison.OrdinalIgnoreCase)
+                    ? "wrong username/password"
+                    : ex.Message.Contains("not authorized", StringComparison.OrdinalIgnoreCase)
+                        ? "not authorized — check API key"
+                        : ex.Message.Contains("429", StringComparison.Ordinal)
+                            ? "rate-limited — try again later"
+                            : $"Login failed: {ex.Message}";
                 _logger.LogDebug("[Sub Scribe-Q] {Source} status: login failed: {Msg}", Key, ex.Message);
             }
 

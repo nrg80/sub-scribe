@@ -986,6 +986,10 @@
     "T401": {
       "suite": "endpoints",
       "checks": 4
+    },
+    "T402": {
+      "suite": "endpoints",
+      "checks": 4
     }
   }
 }

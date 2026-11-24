@@ -82,7 +82,9 @@ public sealed class ReachabilityStatus : ISourceStatus
                 _label,
                 gesundheit,
                 Configured: true,
-                Message: resp.IsSuccessStatusCode ? $"erreichbar (HTTP {code})" : $"HTTP {code}");
+                // F-M742: „reachable" heisst erreichbar — der Code gehoert nur dann dazu, wenn er
+                // etwas zu sagen hat.
+                Message: resp.IsSuccessStatusCode ? "reachable" : $"HTTP {code}");
         }
         catch (OperationCanceledException)
         {
