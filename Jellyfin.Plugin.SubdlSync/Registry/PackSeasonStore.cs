@@ -296,6 +296,42 @@ public static class PackSeasonStore
     /// <param name="imdbId">Series IMDb id.</param>
     /// <param name="season">Season number.</param>
     /// <returns>Number of verdicts removed.</returns>
+    /// <summary>
+    /// F-M739: vergisst ALLE gespeicherten Staffelurteile. Nötig, wenn eine Serie unter falscher
+    /// Kennung geurteilt wurde und der Betreiber neu urteilen lassen will — die alten Zeilen sind
+    /// über ihren Schlüssel nicht mehr erreichbar, kosten aber Platz und machen die Tabelle
+    /// unlesbar.
+    /// </summary>
+    /// <returns>Zahl der vergessenen Urteile.</returns>
+    public static int ClearAll()
+    {
+        ScribeSqliteContext? db = Store();
+        if (db == null)
+        {
+            return 0;
+        }
+
+        try
+        {
+            lock (Gate)
+            {
+                var rows = db.PackSeasonRows.ToList();
+                if (rows.Count == 0)
+                {
+                    return 0;
+                }
+
+                db.PackSeasonRows.RemoveRange(rows);
+                db.SaveChanges();
+                return rows.Count;
+            }
+        }
+        catch (Exception)
+        {
+            return 0;
+        }
+    }
+
     public static int ClearSeason(string imdbId, int season)
     {
         ScribeSqliteContext? db = Store();

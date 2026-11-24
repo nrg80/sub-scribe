@@ -1258,22 +1258,26 @@ internal static class Program
             && store610.Contains("\"created-id-not-readable\",", StringComparison.Ordinal)
             && store610.Contains("\"exists-id-not-readable\",", StringComparison.Ordinal)
             && store610.Contains("if (EvidenceReasons.Any(e => string.Equals(e, row.Reason, StringComparison.OrdinalIgnoreCase)))", StringComparison.Ordinal));
+        // F-M734: die Leiter steht in eigener Datei, weil der Behaelter-Versand dieselbe faehrt.
+        var leiter610 = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Pipeline/TitleLadder.cs"));
         Check("F-M610: eine Stoerung zaehlt nicht als Fehlschlag und schliesst nichts",
-            up605.Contains("Func<T, bool>? stoerung,", StringComparison.Ordinal)
-            && up605.Contains("if (!letzteStoerung)", StringComparison.Ordinal)
-            && up605.Contains("if (!_config.DryRun && !letzteStoerung)", StringComparison.Ordinal)
-            && up605.Contains("attempts without a verdict ({Reason}) — nothing closed, the next run asks again (F-M610)", StringComparison.Ordinal));
+            leiter610.Contains("Func<T, bool>? stoerung,", StringComparison.Ordinal)
+            && leiter610.Contains("if (!letzteStoerung)", StringComparison.Ordinal)
+            && leiter610.Contains("if (!trockenlauf && !letzteStoerung)", StringComparison.Ordinal)
+            && leiter610.Contains("attempts without a verdict ({Reason}) — nothing closed, the next run asks again (F-M610)", StringComparison.Ordinal));
         Check("F-M610: 'existiert, Kennung nicht lesbar' gilt als Beleg, nicht als Fehlschlag der Leiter",
-            up605.Contains("Func<T, bool>? schonBelegt,", StringComparison.Ordinal)
-            && up605.Contains("if (gelungen(ergebnis) || (schonBelegt?.Invoke(ergebnis) ?? false))", StringComparison.Ordinal)
-            && up605.Contains("Api.Endpoints.MsubMovieStatus.CreatedWithoutId", StringComparison.Ordinal)
-            && up605.Contains("Api.Endpoints.MsubMovieStatus.ExistsWithoutId", StringComparison.Ordinal)
-            && up605.Contains("Api.Endpoints.TvstShowStatus.CreatedIdUnknown", StringComparison.Ordinal));
+            leiter610.Contains("Func<T, bool>? schonBelegt,", StringComparison.Ordinal)
+            && leiter610.Contains("if (gelungen(ergebnis) || (schonBelegt?.Invoke(ergebnis) ?? false))", StringComparison.Ordinal)
+            // F-M734: beide Adressen melden den Beleg NEUTRAL aus dem Auftrag — Settled heisst
+            // "Titel belegt, Kennung fehlt".
+            && up605.Contains("a => a.Title.Settled", StringComparison.Ordinal)
+            && up605.Contains("if (answer.Title.Settled)", StringComparison.Ordinal)
+            && up605.Contains("return UploadResult.AcceptedWithoutId(\"second-source-show-created-id-unknown\");", StringComparison.Ordinal));
         Check("F-M610: ohne Urteil gibt es NoVerdict statt eines geschlossenen Titels",
             up605.Contains("return UploadResult.NoVerdict(\"film-source-title-no-verdict\");", StringComparison.Ordinal)
             && up605.Contains("return UploadResult.NoVerdict(\"second-source-title-no-verdict\");", StringComparison.Ordinal)
-            && up605.Contains("Api.Endpoints.MsubMovieStatus.Unclear", StringComparison.Ordinal)
-            && up605.Contains("Api.Endpoints.TvstShowStatus.Unclear", StringComparison.Ordinal));
+            && up605.Contains("a => a.Title.State == Sources.SourceTitleState.Unclear", StringComparison.Ordinal)
+            && up605.Contains("if (!answer.Title.Resolved && !answer.Title.Settled)", StringComparison.Ordinal));
 
         // --- F-M609: drei Urteile — angenommen, abgelehnt, kein Urteil ---------------------------------
         var ur609 = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Api/UploadResult.cs"));
@@ -1297,8 +1301,7 @@ internal static class Program
             // an EINER Stelle — der Ausgang der Grenze wird dort gedeutet.
             ur609.Contains("public static UploadResult FromAnswer(Sources.SourceSendAnswer answer)", StringComparison.Ordinal)
             && ur609.Contains("case Sources.SourceOutcome.Busy:", StringComparison.Ordinal)
-            && ur609.Contains("return NoVerdict(answer.Reason ?? ", StringComparison.Ordinal)
-            && ur609.Contains(", busy: true);", StringComparison.Ordinal)
+            && ur609.Contains("return MitTitel(NoVerdict(answer.Reason ?? \"busy\", busy: true), answer);", StringComparison.Ordinal)
             && !up605.Contains("IstStoerung(", StringComparison.Ordinal));
         Check("F-M609: bei SubDL sind Stundendeckel, rate-limited und API-Fehler Stoerungen, kein Nein",
             api609.Contains("return UploadResult.NoVerdict(\"rate-limited\", busy: true);", StringComparison.Ordinal)
@@ -1318,13 +1321,17 @@ internal static class Program
         // --- F-M608: Titel-Leiter fuer tvst und mst --------------------------------------------------
         var fail608 = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Registry/TitleFailureStore.cs"));
         Check("F-M608: die Pausen sind 2 s, 4 s, 8 s und der vierte Fehlschlag schliesst den Titel",
-            up605.Contains("private static readonly int[] TitelLeiterPausenMs = { 2000, 4000, 8000 };", StringComparison.Ordinal)
+            ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Pipeline/TitleLadder.cs"))
+                .Contains("PausenMs = { 2000, 4000, 8000 };", StringComparison.Ordinal)
             && fail608.Contains("public const int ClosingAttempt = 4;", StringComparison.Ordinal)
             && fail608.Contains("public static void Close(string source, string titleId, string reason)", StringComparison.Ordinal));
         Check("F-M608: die Leiter leert vor jedem Zug den Speicher des Laufs, sonst wiederholt sie nur das Urteil",
-            up605.Contains("() => _msubMovies.BeginRun(),", StringComparison.Ordinal)
-            && up605.Contains("() => _tvstShows.BeginRun(),", StringComparison.Ordinal)
-            && up605.Contains("int pause = TitelLeiterPausenMs[Math.Min(zug - 2, TitelLeiterPausenMs.Length - 1)];", StringComparison.Ordinal));
+            // F-M734: beide Adressen brauchen keinen Lauf-Speicher mehr — ihr Versuch ist der Auftrag,
+            // und die Engine haelt nichts je Lauf. Zwei Aufrufstellen, beide mit leerem Zwischenschritt.
+            up605.Split("() => { },").Length - 1 == 2
+            && !up605.Contains("_tvstShows.BeginRun(),", StringComparison.Ordinal)
+            && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Pipeline/TitleLadder.cs"))
+                .Contains("int pause = PausenMs[Math.Min(zug - 2, PausenMs.Length - 1)];", StringComparison.Ordinal));
         Check("F-M608: beide Adressen mit Anlage fahren die Leiter, subdl nicht",
             up605.Contains("Jellyfin.Plugin.SubScribe.Registry.TitleFailureStore.IsClosed(\"moviesubtitles\", msubTitelId", StringComparison.Ordinal)
             && up605.Contains("Jellyfin.Plugin.SubScribe.Registry.TitleFailureStore.IsClosed(\"tvsubtitles\", tvstTitelId", StringComparison.Ordinal)
@@ -1341,8 +1348,8 @@ internal static class Program
 
         // --- F-M607: anlegen, nachsuchen, bei Nichtfund das Paar schliessen --------------------------
         Check("F-M607: beide Belege der Seite (angelegt / fuehrt den Titel) schliessen das Paar, andere Neins nicht",
-            up605.Contains("|| string.Equals(aufloesung.Status, \"exists-id-not-readable\", StringComparison.Ordinal))", StringComparison.Ordinal)
-            && up605.Contains("return UploadResult.AcceptedWithoutId(\"film-source-movie-\" + aufloesung.Status);", StringComparison.Ordinal));
+            up605.Contains("if (answer.Title.Settled)", StringComparison.Ordinal)
+            && up605.Contains("return UploadResult.AcceptedWithoutId(\"film-source-movie-\" + answer.Title.State);", StringComparison.Ordinal));
 
         // --- F-M606: erst fragen, ob die Kennung bespielbar ist, dann senden --------------------------
         var msub606 = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Api/MovieSubtitlesClient.cs"));
@@ -1350,8 +1357,11 @@ internal static class Program
             msub606.Contains("public async Task<bool> FilmUsableForUploadAsync(int movieId, CancellationToken cancellationToken = default)", StringComparison.Ordinal)
             && msub606.Contains("{0}/add.php?let={1}", StringComparison.Ordinal));
         Check("F-M606: ohne bespielbare Kennung wird nichts gesendet — mit Grund",
-            up605.Contains("if (!_config.DryRun && !await _msubClient", StringComparison.Ordinal)
-            && up605.Contains("return UploadResult.Skipped(\"film-source-id-not-usable\");", StringComparison.Ordinal));
+            // F-M734: die Vorpruefung gehoert zur Seite und steht deshalb in der Engine; der Ablauf fragt
+            // den Client nicht mehr selbst.
+            ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Sources/Msub/MsubEngine.cs"))
+                .Contains("FilmUsableForUploadAsync(film, ct)", StringComparison.Ordinal)
+            && !up605.Contains("_msubClient.FilmUsableForUploadAsync", StringComparison.Ordinal));
 
         // --- F-M604: das Pack-Urteil liegt im Store, mit Signatur der Mitglieder ----------------------
         var store604 = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Registry/PackSeasonStore.cs"));
@@ -1398,10 +1408,11 @@ internal static class Program
             && result603.Contains("public static UploadResult AcceptedWithoutId(string reason)", StringComparison.Ordinal)
             && result603.Contains("SourceAccepted = true, Reason = reason, Verdict = UploadVerdict.AcceptedWithoutId", StringComparison.Ordinal));
         Check("F-M603: die Film-Adresse meldet 'angelegt, Id nicht lesbar' als angenommen",
-            upload603.Contains("string.Equals(aufloesung.Status, \"created-id-not-readable\", StringComparison.Ordinal)", StringComparison.Ordinal)
-            && upload603.Contains("return UploadResult.AcceptedWithoutId(\"film-source-movie-\" + aufloesung.Status);", StringComparison.Ordinal));
+            upload603.Contains("if (answer.Title.Settled)", StringComparison.Ordinal)
+            && upload603.Contains("return UploadResult.AcceptedWithoutId(\"film-source-movie-\" + answer.Title.State);", StringComparison.Ordinal));
         Check("F-M603: die Serien-Adresse (tvst) genauso — derselbe Uploader, dieselbe Luecke",
-            upload603.Contains("if (string.Equals(show.Status, Api.Endpoints.TvstShowStatus.CreatedIdUnknown, StringComparison.Ordinal))", StringComparison.Ordinal)
+            // F-M734: die Serie meldet ihren Beleg jetzt neutral aus dem Auftrag; die Marke heisst weiter so.
+            upload603.Contains("if (answer.Title.Settled)", StringComparison.Ordinal)
             && upload603.Contains("return UploadResult.AcceptedWithoutId(\"second-source-show-created-id-unknown\");", StringComparison.Ordinal));
         Check("F-M603: die Marke wird geschrieben, BEVOR das Urteil faellt, und MarkOf laesst sie durch",
             upload603.Contains("if (result.SourceAccepted && result.Source is { } angenommeneQuelle)", StringComparison.Ordinal)
@@ -1660,8 +1671,10 @@ internal static class Program
         Check("F-M588: EIN Listenabruf am Laufende traegt die Ids nach, jeden Eintrag genau einmal",
             uploadSource588.Contains("await ResolveDeferredUploadIdsAsync(runCt)", StringComparison.Ordinal)
             && uploadSource588.Contains("private async Task ResolveDeferredUploadIdsAsync(CancellationToken ct)", StringComparison.Ordinal)
-            && uploadSource588.Contains("benutzt.Add(treffer.HandleId);", StringComparison.Ordinal)
-            && uploadSource588.Contains(".OrderBy(e => e.CreatedAt)", StringComparison.Ordinal)
+            // F-M732: die Zeile kommt jetzt aus der Konto-Pflege — der Griff heisst `Handle` (neutral),
+            // die Zeit `CreatedAtUtc`. Die Aussage bleibt: jeder Eintrag wird genau einmal vergeben.
+            && uploadSource588.Contains("benutzt.Add(treffer.Handle);", StringComparison.Ordinal)
+            && uploadSource588.Contains(".OrderBy(e => e.CreatedAtUtc)", StringComparison.Ordinal)
             && uploadSource588.Contains("deferred upload ids: {Hit} of {Open} assigned with one list fetch (F-M588)", StringComparison.Ordinal));
         Check("F-M588: die Id landet ueber den Marken-Schluessel in der Zeile, und Freigegebenes kommt aus der veroeffentlichten Liste",
             // F-M670: nachgetragen wird sie an der MARKEN-Zeile (`SetDeferredUploadId`), nicht mehr an
@@ -1669,7 +1682,7 @@ internal static class Program
             registrySource588.Contains("public int SetDeferredSubdlId(", StringComparison.Ordinal)
             && registrySource588.Contains("SourceStore.SetDeferredUploadId(", StringComparison.Ordinal)
             && uploadSource588.Contains("Registry.SetDeferredSubdlId(", StringComparison.Ordinal)
-            && uploadSource588.Contains("ListMyPublishedSubtitlesAsync(ct, maxPages: 2)", StringComparison.Ordinal)
+            && uploadSource588.Contains("new Sources.SourceSubmissionQuery(Published: true, MaxPages: 2)", StringComparison.Ordinal)
             && uploadSource588.Contains("their singles stay beside a pack that replaces them", StringComparison.Ordinal));
 
         // --- F-M587: Quellen gleichzeitig, mySubtitles nur Seite 1 --------------------------------
@@ -1684,9 +1697,10 @@ internal static class Program
             && uploadSource587.Contains("await Task.Delay(Random.Shared.Next(1, versatzMs + 1), ct)", StringComparison.Ordinal)
             && uploadSource587.Contains("if (index > 0)", StringComparison.Ordinal));
         Check("F-M587: mySubtitles wird nur noch von Seite 1 gelesen, und ein Quellenfehler wird zurueckgegeben statt geworfen",
-            uploadSource587.Contains("ListMySubtitlesAsync(ct, maxPages: 1)", StringComparison.Ordinal)
-            && !uploadSource587.Contains("ListMySubtitlesAsync(ct, maxPages: 2)", StringComparison.Ordinal)
-            && packCoordSource587.Contains("ListMySubtitlesAsync(ct, maxPages: 1)", StringComparison.Ordinal)
+            // F-M732: gelesen wird ueber die Konto-Pflege; „nur Seite 1" heisst jetzt MaxPages: 1 in der Frage.
+            uploadSource587.Contains("new Sources.SourceSubmissionQuery(MaxPages: 1)", StringComparison.Ordinal)
+            && !uploadSource587.Contains("new Sources.SourceSubmissionQuery(MaxPages: 2)", StringComparison.Ordinal)
+            && packCoordSource587.Contains("new Sources.SourceSubmissionQuery(MaxPages: 1)", StringComparison.Ordinal)
             && uploadSource587.Contains("the other source is still tried.", StringComparison.Ordinal)
             // F-M609: die Ausnahme ist keine Antwort — NoVerdict.
             && uploadSource587.Contains("return UploadResult.NoVerdict(ex.Message);", StringComparison.Ordinal));
@@ -1697,8 +1711,12 @@ internal static class Program
         var entitiesSource586 = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/Entities.cs"));
         Check("F-M586: NimmtSprache ist die eine Stelle fuer Sprache x Quelle, und die Quelle ohne Sprache faellt aus der offenen Liste",
             uploadSource586.Contains("public static bool NimmtSprache(Configuration.SubtitleProvider quelle, string? language, bool? isSeries)", StringComparison.Ordinal)
-            && uploadSource586.Contains("Api.TvSubtitlesClient.SiteLanguage(language) is not null && isSeries != false", StringComparison.Ordinal)
-            && uploadSource586.Contains("Api.MovieSubtitlesClient.SiteLanguage(language) is not null && isSeries != true", StringComparison.Ordinal)
+            && uploadSource586.Contains(
+                "Api.Endpoints.SourceOrder.KeyOf(Configuration.SubtitleProvider.TvSubtitles), language)", StringComparison.Ordinal)
+            && uploadSource586.Contains(
+                "Api.Endpoints.SourceOrder.KeyOf(Configuration.SubtitleProvider.MovieSubtitles), language)", StringComparison.Ordinal)
+            && uploadSource586.Contains("&& isSeries != false,", StringComparison.Ordinal)
+            && uploadSource586.Contains("&& isSeries != true,", StringComparison.Ordinal)
             && uploadSource586.Contains("bool nurSpracheAusgeschlossen = quellen.Count < alleQuellen.Count", StringComparison.Ordinal)
             && uploadSource586.Contains("alsoTakes: key => Api.Endpoints.Provenance.Provider(key) is { } quelle", StringComparison.Ordinal)
             && uploadSource586.Contains("&& NimmtSprache(quelle, language, isSeries)", StringComparison.Ordinal));
@@ -2152,46 +2170,41 @@ internal static class Program
                 var tvstReg = new Jellyfin.Plugin.SubScribe.Registry.ContentHashRegistry(tvstDb, null, null);
                 var mitte = new TmdbSeriesInfo("The Middle", "The Middle", 2009, 9);
 
-                // (a) Die gespeicherte Nummer fuehrt: kein Netz, kein Vergleich, keine Anlage.
+                // (a) F-M734: die gespeicherte Nummer fuehrt — der ABLAUF liest sie und gibt sie im
+                // Auftrag mit; die Engine antwortet darauf „bereit", ohne die Seite zu fragen. Der
+                // Nachschlageweg, der früher selbst in den Store sah und schrieb, ist entfallen.
                 tvstReg.EnsureFile("aaaa000000000001", patch: m => m.TvstShowId = "512");
-                var handlerGespeichert = new TvstSiteHandler(512, "The Middle");
-                var aufloeserGespeichert = new TvstShowResolver(
-                    new TvSubtitlesClient(new HttpClient(handlerGespeichert)));
-                var gespeichert = await aufloeserGespeichert
-                    .ResolveForMediaAsync(tvstReg, "aaaa000000000001", mitte, dryRun: false, CancellationToken.None)
-                    .ConfigureAwait(false);
                 Check("eine gespeicherte TvstShowId verhindert Suche UND Anlage (F-M501)",
-                    gespeichert.Resolved && gespeichert.ShowId == 512
-                    && gespeichert.Status == TvstShowStatus.Stored
-                    && handlerGespeichert.Gets == 0 && handlerGespeichert.Posts == 0,
-                    "id=" + gespeichert.ShowId + " status=" + gespeichert.Status
-                    + " gets=" + handlerGespeichert.Gets + " posts=" + handlerGespeichert.Posts);
+                    uploadSource.Contains("Registry.GetMedia(mediaHash!)?.TvstShowId", StringComparison.Ordinal)
+                    && uploadSource.Contains("Registry.TvstShowIdAtPath(first.Item?.Path)", StringComparison.Ordinal)
+                    && uploadSource.Contains("MediaId = bekannteSerienId,", StringComparison.Ordinal)
+                    && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Sources/Tvst/TvstEngine.cs"))
+                        .Contains("SourceTitleState.Ready, showId.Value.ToString(CultureInfo.InvariantCulture)", StringComparison.Ordinal),
+                    "Ablauf oder Engine kennt die gespeicherte Nummer nicht mehr");
 
-                // (b) Ein Treffer in der Liste: die Nummer wird geschrieben und benutzt, ohne Anlage.
+                // (b) Ein Treffer in der Liste: die Nummer ist die Antwort, angelegt wird nichts. Den
+                // Bestand schreibt der Ablauf (F-M734) — die Seite der Titel-Frage kennt ihn nicht.
                 var handlerVorhanden = new TvstSiteHandler(512, "The Middle");
-                var aufloeserVorhanden = new TvstShowResolver(
-                    new TvSubtitlesClient(new HttpClient(handlerVorhanden)));
-                var vorhanden = await aufloeserVorhanden
-                    .ResolveForMediaAsync(tvstReg, "aaaa000000000002", mitte, dryRun: false, CancellationToken.None)
+                var seiteVorhanden = new TvstShowLookup(new TvSubtitlesClient(new HttpClient(handlerVorhanden)));
+                var vorhanden = await seiteVorhanden
+                    .FindOrCreateAsync(mitte.Name, mitte.FirstAirYear, mitte.Seasons, "aaaa000000000002", dryRun: false, CancellationToken.None)
                     .ConfigureAwait(false);
-                Check("der TMDb-Titel findet die Serie eng verglichen und schreibt die Nummer ins Medium (F-M501)",
-                    vorhanden.Resolved && vorhanden.ShowId == 512 && vorhanden.Status == TvstShowStatus.Found
-                    && tvstReg.GetMedia("aaaa000000000002")?.TvstShowId == "512"
+                Check("der TMDb-Titel findet die Serie eng verglichen, ohne Anlage (F-M501)",
+                    vorhanden.State == Jellyfin.Plugin.SubScribe.Sources.SourceTitleState.Ready && vorhanden.TitleId == "512"
                     && handlerVorhanden.Posts == 0 && handlerVorhanden.Gets == 1,
-                    "status=" + vorhanden.Status + " store=" + (tvstReg.GetMedia("aaaa000000000002")?.TvstShowId ?? "-"));
+                    "state=" + vorhanden.State + " posts=" + handlerVorhanden.Posts);
 
-                // (c) Kein Treffer: genau EINE Anlage, danach wird erneut gesucht und erst dann geschrieben.
+                // (c) Kein Treffer: genau EINE Anlage, danach wird erneut gesucht.
                 var neu = new TmdbSeriesInfo("Beispielserie Test", "Beispielserie Test", 2026, 3);
                 var handlerNeu = new TvstSiteHandler(512, "The Middle") { AddAfterPost = (9001, "Beispielserie Test") };
-                var aufloeserNeu = new TvstShowResolver(new TvSubtitlesClient(new HttpClient(handlerNeu)));
-                var angelegt = await aufloeserNeu
-                    .ResolveForMediaAsync(tvstReg, "aaaa000000000003", neu, dryRun: false, CancellationToken.None)
+                var seiteNeu = new TvstShowLookup(new TvSubtitlesClient(new HttpClient(handlerNeu)));
+                var angelegt = await seiteNeu
+                    .FindOrCreateAsync(neu.Name, neu.FirstAirYear, neu.Seasons, "aaaa000000000003", dryRun: false, CancellationToken.None)
                     .ConfigureAwait(false);
                 Check("ohne Treffer wird genau einmal angelegt und danach erneut gesucht (F-M501)",
-                    angelegt.Resolved && angelegt.ShowId == 9001 && angelegt.Status == TvstShowStatus.Created
-                    && handlerNeu.Posts == 1 && handlerNeu.Gets == 2
-                    && tvstReg.GetMedia("aaaa000000000003")?.TvstShowId == "9001",
-                    "status=" + angelegt.Status + " posts=" + handlerNeu.Posts + " gets=" + handlerNeu.Gets);
+                    angelegt.State == Jellyfin.Plugin.SubScribe.Sources.SourceTitleState.Created && angelegt.TitleId == "9001"
+                    && handlerNeu.Posts == 1 && handlerNeu.Gets == 2,
+                    "state=" + angelegt.State + " posts=" + handlerNeu.Posts + " gets=" + handlerNeu.Gets);
 
                 Check("die Anlage traegt Name, Jahr und Staffelzahl aus TMDb (F-M501)",
                     handlerNeu.LastBody is string rumpf
@@ -2202,16 +2215,12 @@ internal static class Program
 
                 // Staffelzahl: die Seite kennt nur 1..22 — 30 wird auf 22 gezogen, "keine Angabe" auf 1.
                 var handlerViele = new TvstSiteHandler(512, "The Middle") { AddAfterPost = (9002, "Viele Staffeln") };
-                var aufloeserViele = new TvstShowResolver(new TvSubtitlesClient(new HttpClient(handlerViele)));
-                await aufloeserViele.ResolveForMediaAsync(
-                        tvstReg, "aaaa000000000004", new TmdbSeriesInfo("Viele Staffeln", null, 2001, 30),
-                        dryRun: false, CancellationToken.None)
+                var seiteViele = new TvstShowLookup(new TvSubtitlesClient(new HttpClient(handlerViele)));
+                await seiteViele.FindOrCreateAsync("Viele Staffeln", 2001, 30, "aaaa000000000004", dryRun: false, CancellationToken.None)
                     .ConfigureAwait(false);
                 var handlerOhne = new TvstSiteHandler(512, "The Middle") { AddAfterPost = (9003, "Ohne Angabe") };
-                var aufloeserOhne = new TvstShowResolver(new TvSubtitlesClient(new HttpClient(handlerOhne)));
-                await aufloeserOhne.ResolveForMediaAsync(
-                        tvstReg, "aaaa000000000005", new TmdbSeriesInfo("Ohne Angabe", null, 2001, null),
-                        dryRun: false, CancellationToken.None)
+                var seiteOhne = new TvstShowLookup(new TvSubtitlesClient(new HttpClient(handlerOhne)));
+                await seiteOhne.FindOrCreateAsync("Ohne Angabe", 2001, null, "aaaa000000000005", dryRun: false, CancellationToken.None)
                     .ConfigureAwait(false);
                 Check("die Staffelzahl wird auf 1..22 begrenzt, und BuildAddShow weist 23 ab (F-M501)",
                     handlerViele.LastBody!.Contains("name=\"seasons\"\r\n\r\n22", StringComparison.Ordinal)
@@ -2221,29 +2230,35 @@ internal static class Program
                     && !Throws(() => TvSubtitlesClient.BuildAddShow("XY", 2026, 22)),
                     "30->" + (handlerViele.LastBody!.Contains("seasons\"\r\n\r\n22", StringComparison.Ordinal) ? "22" : "?"));
 
-                // (d) Die Anlage scheitert: nichts wird geschrieben, die Kette laeuft weiter (Skipped, kein Wurf).
+                // (d) Die Anlage scheitert: es gibt keine Kennung, und die Kette laeuft weiter (Skipped, kein
+                // Wurf). Geschrieben wird hier ohnehin nichts — die Seite der Titel-Frage kennt den Bestand nicht.
                 var handlerKaputt = new TvstSiteHandler(512, "The Middle") { PostStatus = 500 };
-                var aufloeserKaputt = new TvstShowResolver(new TvSubtitlesClient(new HttpClient(handlerKaputt)));
-                var kaputt = await aufloeserKaputt
-                    .ResolveForMediaAsync(
-                        tvstReg, "aaaa000000000006", new TmdbSeriesInfo("Beispielserie Test", null, 2026, 3),
-                        dryRun: false, CancellationToken.None)
+                var seiteKaputt = new TvstShowLookup(new TvSubtitlesClient(new HttpClient(handlerKaputt)));
+                var kaputt = await seiteKaputt
+                    .FindOrCreateAsync("Beispielserie Test", 2026, 3, "aaaa000000000006", dryRun: false, CancellationToken.None)
                     .ConfigureAwait(false);
                 Check("eine gescheiterte Anlage blockiert die Kette nicht und schreibt nichts (F-M501/F-M516)",
-                    !kaputt.Resolved && kaputt.Status == TvstShowStatus.Refused
-                    && tvstReg.GetMedia("aaaa000000000006")?.TvstShowId is null
+                    kaputt.State == Jellyfin.Plugin.SubScribe.Sources.SourceTitleState.NotFound && kaputt.TitleId is null
                     && handlerKaputt.Posts == 1
                     // die Kette antwortet mit Skipped (die andere Quelle bekommt ihren Versuch), nicht mit Failed
-                    && uploadSource.Contains("return UploadResult.Skipped(\"second-source-show-\" + show.Status)", StringComparison.Ordinal),
-                    "status=" + kaputt.Status + " posts=" + handlerKaputt.Posts);
+                    // F-M734: die Kette antwortet mit Skipped (die andere Quelle bekommt ihren Versuch),
+                    // nicht mit Failed — der Grund heisst jetzt "Titel zu".
+                    && uploadSource.Contains("return UploadResult.Skipped(\"second-source-title-closed\");", StringComparison.Ordinal),
+                    "state=" + kaputt.State + " posts=" + handlerKaputt.Posts);
 
                 // ---- F-M538: jede Seite fuehrt ihr eigenes Sprachset --------------------------
                 // Operator-Anweisung 16.11.2026: „Sprachen die tvst nicht unterstuetzt, nicht mehr in
                 // die Kette fuer tvst. Fuer subdl gilt ein anderes sprachset."
                 // F-M581: die Sprachtafel wird in der KETTE geprueft, nicht mehr in der Paar-Frage.
+                // F-M735: die Kette fragt nicht mehr den HTTP-Client beim Namen, sondern die QUELLE über
+                // ihre Sprachauskunft — je Adresse ihre eigene, weil der Schlüssel aus dem Anbieter kommt.
                 Check("F-M538: both site families gate the chain by their OWN language table",
-                    uploadSource.Contains("if (Api.TvSubtitlesClient.SiteLanguage(lang) is null)", StringComparison.Ordinal)
-                    && uploadSource.Contains("if (Api.MovieSubtitlesClient.SiteLanguage(lang) is null)", StringComparison.Ordinal));
+                    uploadSource.Contains("Sources.SourceLanguages.NimmtSprache(", StringComparison.Ordinal)
+                    && uploadSource.Contains("SourceOrder.KeyOf(Configuration.SubtitleProvider.TvSubtitles), plan.Lang", StringComparison.Ordinal)
+                    && uploadSource.Contains("SourceOrder.KeyOf(Configuration.SubtitleProvider.TvSubtitles), lang", StringComparison.Ordinal)
+                    && uploadSource.Contains("SourceOrder.KeyOf(Configuration.SubtitleProvider.MovieSubtitles), lang", StringComparison.Ordinal)
+                    && !uploadSource.Contains("Api.TvSubtitlesClient.SiteLanguage(", StringComparison.Ordinal)
+                    && !uploadSource.Contains("Api.MovieSubtitlesClient.SiteLanguage(", StringComparison.Ordinal));
                 Check("F-M538: a language the site does not carry is a skip with its own reason, not a failure",
                     uploadSource.Contains("return UploadResult.Skipped(\"second-source-no-language\")", StringComparison.Ordinal)
                     && uploadSource.Contains("the site has no such language (F-M538)", StringComparison.Ordinal));
@@ -2427,52 +2442,47 @@ internal static class Program
                     && seederSource.Contains("registry.CountKnownPairsFor(mediaHash, quelle)", StringComparison.Ordinal)
                     && seederSource.Contains("UploadTodoFor(item, mediaPath, config, quelle,", StringComparison.Ordinal));
                 Check("F-M540: the queue asks whether the site carries the language at all",
-                    seederSource.Contains("Api.TvSubtitlesClient.SiteLanguage(mapped) is not null", StringComparison.Ordinal)
-                    && seederSource.Contains("Api.MovieSubtitlesClient.SiteLanguage(mapped) is not null", StringComparison.Ordinal)
+                    seederSource.Contains("Sources.SourceLanguages.NimmtSprache(", StringComparison.Ordinal)
+                    && seederSource.Contains("SourceOrder.KeyOf(quelle), mapped", StringComparison.Ordinal)
+                    && !seederSource.Contains("Api.TvSubtitlesClient.SiteLanguage(", StringComparison.Ordinal)
+                    && !seederSource.Contains("Api.MovieSubtitlesClient.SiteLanguage(", StringComparison.Ordinal)
                     && seederSource.Contains("return false; // diese Seite führt keine dieser Sprachen", StringComparison.Ordinal));
                 Check("F-M540: an untagged stream keeps the item queued",
                     seederSource.Contains("bool anyUntagged = textStreams.Any(s => string.IsNullOrWhiteSpace(s.Language));", StringComparison.Ordinal)
                     && seederSource.Contains("if (!anyUntagged && !anyCarried)", StringComparison.Ordinal));
 
                 // Anlegen hoechstens einmal je Medium und Lauf: derselbe Fehlschlag wird NICHT wiederholt.
-                var zweiterVersuch = await aufloeserKaputt
-                    .ResolveForMediaAsync(
-                        tvstReg, "aaaa000000000006", new TmdbSeriesInfo("Beispielserie Test", null, 2026, 3),
-                        dryRun: false, CancellationToken.None)
+                var zweiterVersuch = await seiteKaputt
+                    .FindOrCreateAsync("Beispielserie Test", 2026, 3, "aaaa000000000006", dryRun: false, CancellationToken.None)
                     .ConfigureAwait(false);
                 Check("ein Fehlschlag legt nicht bei jeder Folge erneut an (F-M501)",
-                    !zweiterVersuch.Resolved
-                    && zweiterVersuch.Status == TvstShowStatus.CreateAlreadyTried
+                    zweiterVersuch.State == Jellyfin.Plugin.SubScribe.Sources.SourceTitleState.Unclear
+                    && zweiterVersuch.TitleId is null
                     && handlerKaputt.Posts == 1,
-                    "status=" + zweiterVersuch.Status + " posts=" + handlerKaputt.Posts);
+                    "state=" + zweiterVersuch.State + " posts=" + handlerKaputt.Posts);
 
                 // (e) Trockenlauf: nichts anlegen, nichts schreiben.
                 var handlerTrocken = new TvstSiteHandler(512, "The Middle");
-                var aufloeserTrocken = new TvstShowResolver(new TvSubtitlesClient(new HttpClient(handlerTrocken)));
-                var trocken = await aufloeserTrocken
-                    .ResolveForMediaAsync(
-                        tvstReg, "aaaa000000000007", new TmdbSeriesInfo("Beispielserie Test", null, 2026, 3),
-                        dryRun: true, CancellationToken.None)
+                var seiteTrocken = new TvstShowLookup(new TvSubtitlesClient(new HttpClient(handlerTrocken)));
+                var trocken = await seiteTrocken
+                    .FindOrCreateAsync("Beispielserie Test", 2026, 3, "aaaa000000000007", dryRun: true, CancellationToken.None)
                     .ConfigureAwait(false);
-                Check("der Trockenlauf legt nichts an und schreibt nichts (F-M501)",
-                    !trocken.Resolved && trocken.Status == TvstShowStatus.WouldCreate
-                    && handlerTrocken.Posts == 0
-                    && tvstReg.GetMedia("aaaa000000000007")?.TvstShowId is null,
-                    "status=" + trocken.Status + " posts=" + handlerTrocken.Posts);
+                Check("der Trockenlauf legt nichts an und entscheidet nichts (F-M501)",
+                    trocken.State == Jellyfin.Plugin.SubScribe.Sources.SourceTitleState.NotAskable
+                    && trocken.TitleId is null
+                    && handlerTrocken.Posts == 0,
+                    "state=" + trocken.State + " posts=" + handlerTrocken.Posts);
 
                 // (f) Unklare Seite: einmal nachfragen, dann NICHT schreiben und tvst ueberspringen.
                 var handlerLeer = new TvstSiteHandler(512, "The Middle") { EmptyList = true };
-                var aufloeserLeer = new TvstShowResolver(new TvSubtitlesClient(new HttpClient(handlerLeer)));
-                var leer = await aufloeserLeer
-                    .ResolveForMediaAsync(
-                        tvstReg, "aaaa000000000008", new TmdbSeriesInfo("Beispielserie Test", null, 2026, 3),
-                        dryRun: false, CancellationToken.None)
+                var seiteLeer = new TvstShowLookup(new TvSubtitlesClient(new HttpClient(handlerLeer)));
+                var leer = await seiteLeer
+                    .FindOrCreateAsync("Beispielserie Test", 2026, 3, "aaaa000000000008", dryRun: false, CancellationToken.None)
                     .ConfigureAwait(false);
-                Check("eine unklare Serienliste wird einmal nachgefragt, dann wird nicht geschrieben (F-M501)",
-                    !leer.Resolved && leer.Status == TvstShowStatus.Unclear
-                    && handlerLeer.Gets == 2 && handlerLeer.Posts == 0
-                    && tvstReg.GetMedia("aaaa000000000008")?.TvstShowId is null,
-                    "status=" + leer.Status + " gets=" + handlerLeer.Gets);
+                Check("eine unklare Serienliste wird nicht als Abwesenheit gelesen (F-M501)",
+                    leer.State == Jellyfin.Plugin.SubScribe.Sources.SourceTitleState.Unclear && leer.TitleId is null
+                    && handlerLeer.Posts == 0,
+                    "state=" + leer.State + " gets=" + handlerLeer.Gets);
 
                 // (g) Der Endpunkt mit Nummer im Ticket: die Serienliste wird gar nicht erst geholt.
                 var handlerEndpunkt = new TvstSiteHandler(512, "The Middle");
@@ -2498,10 +2508,14 @@ internal static class Program
                 // Die Kette selbst: kein Dateiname mehr als Serienname, die Nummer geht ins Ticket.
                 Check("die Upload-Kette loest ueber TMDb und den Store auf, nicht ueber den Dateinamen (F-M501)",
                     uploadSource.Contains("var series = await _tmdb.SeriesInfoAsync(tmdbId!, ct)", StringComparison.Ordinal)
-                    && uploadSource.Contains(
-                        ".ResolveForMediaAsync(Registry, mediaHash, series, _config.DryRun, ct, mediaPath)", StringComparison.Ordinal)
-                    && uploadSource.Contains("MediaId = show.ShowId", StringComparison.Ordinal)
-                    && uploadSource.Contains("_tvstShows.BeginRun()", StringComparison.Ordinal)
+                    // F-M734: die Nummer kommt aus dem Bestand, das Anlegen ist ein Feld des Auftrags.
+                    && uploadSource.Contains("Registry.GetMedia(mediaHash!)?.TvstShowId", StringComparison.Ordinal)
+                    && uploadSource.Contains("MediaId = bekannteSerienId,", StringComparison.Ordinal)
+                    && uploadSource.Contains("Registry.SetTvstShowId(mediaHash, mediaPath, serienNummer)", StringComparison.Ordinal)
+                    // F-M734: auch der Behaelter-Weg fragt den Nachschlageweg nicht mehr — die Nummer
+                    // steht im Auftrag, die Titel-Frage faehrt im Versand (SeasonPackCoordinator).
+                    && !uploadSource.Contains("ResolveForMediaAsync(", StringComparison.Ordinal)
+                    && uploadSource.Contains("Registry.TvstShowIdAtPath(first.Item?.Path)", StringComparison.Ordinal)
                     // der alte Weg (Serienname aus dem Dateinamen) steht im tvst-Zweig nicht mehr
                     && !uploadSource.Contains(
                         "var parsed = Pipeline.MediaNameParser.Parse(Path.GetFileNameWithoutExtension(releaseName))",
@@ -3047,16 +3061,20 @@ internal static class Program
         // Kette, Tor, Marke) und dass er ohne ausdrueckliche Entscheidung nicht angetreten wird.
         Check("die Film-Adresse steht mit eigenem Auftrag, eigener Vorpruefung und eigener Marke in der Kette (F-M508/F-M687)",
             uploadSource.Contains("Configuration.SubtitleProvider.MovieSubtitles => SendToMovieSubtitlesAsync(", StringComparison.Ordinal)
-            && uploadSource.Contains("MediaId = aufloesung.MovieId?.ToString(System.Globalization.CultureInfo.InvariantCulture),", StringComparison.Ordinal)
+            && uploadSource.Contains("MediaId = bekannteFilmId,", StringComparison.Ordinal)
             && uploadSource.Contains("IsSeries: false,", StringComparison.Ordinal)
             && uploadSource.Contains("Year: movie.ReleaseYear ?? 0,", StringComparison.Ordinal)
             && uploadSource.Contains("if (isSeries)", StringComparison.Ordinal)
             && uploadSource.Contains("UploadResult.Skipped(\"film-source-films-only\")", StringComparison.Ordinal));
 
         Check("die Filmnummer kommt aus dem Store, gesucht wird nur ohne sie — und ohne Jahr gar nicht (F-M508/F-M513)",
-            uploadSource.Contains(".ResolveOrCreateForMediaAsync(Registry, mediaHash, movie, _config.DryRun, ct, mediaPath)", StringComparison.Ordinal)
+            // F-M734: die Nummer kommt aus dem Bestand, das Anlegen ist ein Feld des Auftrags.
+            uploadSource.Contains("Registry.GetMedia(mediaHash!)?.MsubMovieId", StringComparison.Ordinal)
+            && uploadSource.Contains("EnsureTitle = true,", StringComparison.Ordinal)
+            && uploadSource.Contains("Registry.SetMsubMovieId(mediaHash, mediaPath, filmNummer)", StringComparison.Ordinal)
+            && !uploadSource.Contains(".ResolveOrCreateForMediaAsync(", StringComparison.Ordinal)
             && uploadSource.Contains("var movie = await _tmdb.MovieInfoAsync(tmdbId!, ct)", StringComparison.Ordinal)
-            && uploadSource.Contains("no film id ({Status}) (F-M508)", StringComparison.Ordinal)
+            && uploadSource.Contains("no TMDb id, so there is no leading title (F-M508)", StringComparison.Ordinal)
             // ohne Titel/Nummer nennt der Endpunkt den Grund, statt zu raten
             && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/Endpoints/MovieSubtitlesEndpoints.cs"))
                 .Contains("a film title AND its year are needed", StringComparison.Ordinal));
@@ -3532,7 +3550,7 @@ internal static class Program
             && !msubQuelle.Contains("ist Film {Id} — gespeichert.", StringComparison.Ordinal)
             // F-M517: der Grund nennt BEIDE Adressen, nicht mehr nur den fehlenden Hash
             && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/Endpoints/MediaNumberNote.cs"))
-                .Contains("kein Medien-Hash und keine eindeutige Pfad-Zeile im Store", StringComparison.Ordinal));
+                .Contains("no media hash and no unique path row in the store", StringComparison.Ordinal));
 
         Console.WriteLine();
 
@@ -3756,6 +3774,191 @@ internal static class Program
             && guiDatei.Contains("id=\"CycleDueLine\"", StringComparison.Ordinal)
             && guiDatei.Contains("'Next cycle '", StringComparison.Ordinal)
             && guiDatei.Contains("d.CycleAttemptLimit", StringComparison.Ordinal));
+
+        // -----------------------------------------------------------------------------------------
+        // F-M738 (Befund 24.11.2026): "TMDb-Kennung weicht ab" wurde als "es wurde korrigiert"
+        // gemeldet, und bei fehlender IMDb im Treffer blieb die ALTE IMDb neben der NEUEN
+        // TMDb-Kennung stehen — ein Paar aus zwei Serien (Too Good to Be True: IMDb der 2024er
+        // Serie, TMDb-Kennung des 2003er Zweiteilers).
+        // -----------------------------------------------------------------------------------------
+        var ohneTrefferImdb = Jellyfin.Plugin.SubScribe.Api.TmdbImdbResolver.MergeVerifiedIds(
+            "tt30291270", "331627", null, "245996", true, true);
+        Check(
+            "F-M738: ohne IMDb im Treffer wird die alte IMDb VERWORFEN, nicht mit der neuen TMDb-Kennung gemischt",
+            ohneTrefferImdb.Imdb == null && string.Equals(ohneTrefferImdb.Tmdb, "245996", StringComparison.Ordinal),
+            $"imdb={ohneTrefferImdb.Imdb ?? "null"} tmdb={ohneTrefferImdb.Tmdb}");
+
+        var gleich = Jellyfin.Plugin.SubScribe.Api.TmdbImdbResolver.MergeVerifiedIds(
+            "tt6773088", "250203", "tt6773088", "250203", true, true);
+        Check(
+            "F-M738: stimmt das Paar ueberein, meldet die Pruefung KEINE Korrektur",
+            !gleich.Corrected,
+            "Corrected=" + gleich.Corrected);
+
+        var echtAnders = Jellyfin.Plugin.SubScribe.Api.TmdbImdbResolver.MergeVerifiedIds(
+            "tt6155146", "66515", "tt6773088", "250203", true, true);
+        Check(
+            "F-M738: eine wirklich andere Serie liefert beide Kennungen des Treffers und meldet die Korrektur",
+            echtAnders.Corrected
+            && string.Equals(echtAnders.Imdb, "tt6773088", StringComparison.Ordinal)
+            && string.Equals(echtAnders.Tmdb, "250203", StringComparison.Ordinal),
+            $"{echtAnders.Imdb}/{echtAnders.Tmdb} corrected={echtAnders.Corrected}");
+
+        var typWechsel = Jellyfin.Plugin.SubScribe.Api.TmdbImdbResolver.MergeVerifiedIds(
+            "tt30291270", "245996", "tt30291270", "245996", false, true);
+        Check(
+            "F-M738: auch ein Typwechsel (Serie zu Film und zurueck) gilt als Korrektur",
+            typWechsel.Corrected && !typWechsel.IsSeries,
+            "Corrected=" + typWechsel.Corrected + " IsSeries=" + typWechsel.IsSeries);
+
+#pragma warning disable CA1849 // Pruefpfad, kein Serverpfad: die Dateien werden je einmal gelesen.
+        var resolverQuelle = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/TmdbImdbResolver.cs"));
+        var resetQuelle = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/ScribeReset.cs"));
+#pragma warning restore CA1849
+        Check(
+            "F-M738: die alte Mischzeile ist weg — der Resolver entscheidet ueber MergeVerifiedIds",
+            resolverQuelle.Contains("var entschieden = MergeVerifiedIds(", StringComparison.Ordinal)
+            && !resolverQuelle.Contains("return (strict.Imdb ?? jfImdb, strict.Tmdb, strict.IsSeries, true);", StringComparison.Ordinal),
+            "Rueckgabe kommt aus der reinen Rechnung");
+
+        // -----------------------------------------------------------------------------------------
+        // F-M739: die Staffelurteile vergessen. Sie haengen am Schluessel imdb|staffel|sprachtag;
+        // nach einer Identitaetskorrektur sind die alten Zeilen unerreichbar, blockieren aber den
+        // Blick in die Tabelle und wachsen weiter.
+        // -----------------------------------------------------------------------------------------
+        Check(
+            "F-M739: der Reset kennt den Bereich \"pack\" und vergisst die Staffelurteile",
+            resetQuelle.Contains("scope.Equals(\"pack\", StringComparison.OrdinalIgnoreCase)", StringComparison.Ordinal)
+            && resetQuelle.Contains("PackSeasonStore.ClearAll()", StringComparison.Ordinal)
+            && resetQuelle.Contains("PackSeasonStore.ClearSeason(imdb, season)", StringComparison.Ordinal),
+            "scope=pack, wahlweise auf eine Serie/Staffel begrenzt");
+        Check(
+            "F-M739: ohne Kennung fallen alle Urteile, mit Kennung nur die einer Serie",
+            resetQuelle.Contains("string.IsNullOrWhiteSpace(imdb)" + Environment.NewLine + "                    ? Registry.PackSeasonStore.ClearAll()", StringComparison.Ordinal),
+            "ClearAll oder ClearSeason(imdb, season)");
+        Check(
+            "F-M739: der Reset nennt die Zahl der vergessenen Urteile",
+            resetQuelle.Contains("{Count} stored season verdict(s) forgotten", StringComparison.Ordinal)
+            && resetQuelle.Contains("forgotten = vergessen", StringComparison.Ordinal),
+            "Antwort und Logzeile tragen die Zahl");
+        Check(
+            "F-M739: der andere Bereich (upload) bleibt unberuehrt — ein Pack-Reset laedt nichts neu hoch",
+            resetQuelle.Contains("else if (scope.Equals(\"upload\", StringComparison.OrdinalIgnoreCase))", StringComparison.Ordinal)
+            && resetQuelle.IndexOf("scope.Equals(\"pack\"", StringComparison.Ordinal)
+               != resetQuelle.IndexOf("scope.Equals(\"upload\"", StringComparison.Ordinal),
+            "getrennte Zweige");
+
+        // -----------------------------------------------------------------------------------------
+        // F-M740: eine Staffel vollstaendig aus dem Store nehmen. Der Store fuehrt zu einer Staffel
+        // ein Geflecht (Dateien, Spuren, Beiwerk, Marken-Matrix, Behaelter, Urteile, ausgestrahlte
+        // Folgen, Absagen am Medienhash, Titel-Erschoepfung am quelle|titel-Schluessel) — eine
+        // Tabelle zu leeren laesst den Rest stehen, und der naechste Lauf haelt die Staffel weiter
+        // fuer erledigt.
+        // -----------------------------------------------------------------------------------------
+#pragma warning disable CA1849 // Pruefpfad, kein Serverpfad.
+        var purgeQuelle = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Registry/SeasonPurge.cs"));
+#pragma warning restore CA1849
+        Check(
+            "F-M740: der Purge zaehlt zehn Tabellen — Dateien, Spuren, Beiwerk, Marken, Verweise, Behaelter, Urteile, ausgestrahlte Folgen, Absagen, Titelfehler",
+            new[] { "\"files\"", "\"tracks\"", "\"sidecars\"", "\"uploads\"", "\"references\"", "\"packs\"", "\"season verdicts\"", "\"aired counts\"", "\"source refusals\"", "\"title failures\"" }
+                .All(k => purgeQuelle.Contains("zahlen[" + k + "]", StringComparison.Ordinal)),
+            "zehn Schluessel in der Zaehlung");
+        Check(
+            "F-M740: die Kinder fallen vor den Eltern — Marken zuerst, Dateien zuletzt",
+            purgeQuelle.IndexOf("db.UploadRows.RemoveRange(hochgeladen)", StringComparison.Ordinal) < purgeQuelle.IndexOf("db.FileRows.RemoveRange(dateien)", StringComparison.Ordinal)
+            && purgeQuelle.IndexOf("db.TrackRows.RemoveRange(spuren)", StringComparison.Ordinal) < purgeQuelle.IndexOf("db.FileRows.RemoveRange(dateien)", StringComparison.Ordinal),
+            "Uploads und Spuren vor den Dateien");
+        Check(
+            "F-M740: dryRun zaehlt nur und loescht nichts",
+            purgeQuelle.Contains("if (dryRun)" + Environment.NewLine + "            {" + Environment.NewLine + "                return (zahlen, false);", StringComparison.Ordinal),
+            "Rueckkehr vor jedem RemoveRange");
+        Check(
+            "F-M740: Absagen werden ueber den Medienhash gefunden, Urteile ueber den Staffelprafix",
+            purgeQuelle.Contains("SourceRefusalRows.Where(r => r.Id.StartsWith(praefix))", StringComparison.Ordinal)
+            && purgeQuelle.Contains("PackSeasonRows.Where(r => r.Id.StartsWith(urteilPraeferenz))", StringComparison.Ordinal),
+            "Hash und Schluessel statt Spaltenraten");
+        Check(
+            "F-M740: keine Abfrage auf das ungemappte FileId — Spuren und Beiwerk werden ueber ihre eigene Kennung gefunden",
+            !purgeQuelle.Contains(".FileId ==", StringComparison.Ordinal)
+            && !purgeQuelle.Contains("x.FileId", StringComparison.Ordinal)
+            && purgeQuelle.Contains("db.TrackRows.Where(t => t.TrackId.StartsWith(praefix))", StringComparison.Ordinal),
+            "TrackId traegt die Dateikennung (#yyyyy#zzz, F-M676)");
+        Check(
+            "F-M740: der Reset bietet den Bereich \"season\" mit dry an, und der Store wird angehaengt",
+            resetQuelle.Contains("scope.Equals(\"season\", StringComparison.OrdinalIgnoreCase)", StringComparison.Ordinal)
+            && resetQuelle.Contains("Registry.SeasonPurge.Purge(imdb, season, dry)", StringComparison.Ordinal)
+#pragma warning disable CA1849 // Pruefpfad.
+            && File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Plugin.cs")).Contains("SeasonPurge.Attach(db)", StringComparison.Ordinal),
+#pragma warning restore CA1849
+            "scope=season, dry-Parameter, Attach in Plugin.cs");
+
+        // -----------------------------------------------------------------------------------------
+        // F-M741: die Sprachauskunft der Quelle gehoert VOR das Sammeln. Stand sie nur im
+        // Sende-Schritt, entpackte der Sammler die ganze Staffel fuer eine Quelle, die den Behaelter
+        // nie annehmen kann — und das Paar blieb offen, weil nie etwas abgelehnt wurde.
+        // -----------------------------------------------------------------------------------------
+#pragma warning disable CA1849 // Pruefpfad, kein Serverpfad.
+        var koordinatorQuelle = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Pipeline/SeasonPackCoordinator.cs"));
+        var pipelineQuelle = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Pipeline/UploadPipeline.cs"));
+#pragma warning restore CA1849
+        Check(
+            "F-M741: der Sammler nimmt Quellen ohne die Sprache VOR dem Sammeln aus dem Slot",
+            koordinatorQuelle.Contains("var sprachLos = ohnePack.Where(s => !Sources.SourceLanguages.NimmtSprache(s, lang)).ToList();", StringComparison.Ordinal)
+            && koordinatorQuelle.Contains("var fehlt = ohnePack.Where(s => Sources.SourceLanguages.NimmtSprache(s, lang)).ToList();", StringComparison.Ordinal),
+            "sprachLos und fehlt getrennt aus ohnePack");
+        Check(
+            "F-M741: bleibt keine Quelle, wird nichts gesammelt und der Grund genannt",
+            koordinatorQuelle.Contains("no source carries this language ({Sources}), nothing is extracted (F-M741)", StringComparison.Ordinal)
+            && koordinatorQuelle.Contains("if (fehlt.Count == 0)", StringComparison.Ordinal),
+            "eine Zeile je Paar, kein Entpacken");
+        Check(
+            "F-M741: das HasPack-Tor darueber meldet weiter 'already up as a pack' — erst ohnePack.Count == 0",
+            koordinatorQuelle.Contains("if (ohnePack.Count == 0)", StringComparison.Ordinal)
+            && koordinatorQuelle.IndexOf("if (ohnePack.Count == 0)", StringComparison.Ordinal)
+               < koordinatorQuelle.IndexOf("no source carries this language", StringComparison.Ordinal),
+            "Reihenfolge: Behaelter vorhanden, dann Sprache");
+        Check(
+            "F-M741: der Einzelweg fragt dieselbe Auskunft schon vor der Extraktion (AnyUploadSourceStillWants)",
+            pipelineQuelle.Contains("alsoTakes: key => Api.Endpoints.Provenance.Provider(key) is { } quelle", StringComparison.Ordinal)
+            && pipelineQuelle.Contains("&& NimmtSprache(quelle, language, isSeries)", StringComparison.Ordinal)
+            && pipelineQuelle.IndexOf("if (!AnyUploadSourceStillWants(mediaHash, lang, streamHi, isSeries, subPos))", StringComparison.Ordinal) > 0,
+            "Einzelpaare entscheiden vor dem Entpacken");
+
+        // -----------------------------------------------------------------------------------------
+        // F-M742 (Betreiber 24.11.2026: "Ampel bitte auf die alten Texte zurueck. English. Keine
+        // thematische Ueberschneidungen mit den Balken"): die Selbstauskunft der Quellen spricht
+        // wieder Englisch wie vor dem dritten Vertrag, und die SubDL-Ampel wiederholt NICHT die
+        // Kontingentzahlen — die stehen in den Balken darueber.
+        // -----------------------------------------------------------------------------------------
+#pragma warning disable CA1849 // Pruefpfad, kein Serverpfad.
+        var subdlStatusQuelle = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Sources/Subdl/SubdlStatus.cs"));
+        var reachQuelle = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Sources/ReachabilityStatus.cs"));
+#pragma warning restore CA1849
+        Check(
+            "F-M742: die SubDL-Ampel nennt keine Kontingentzahlen mehr — nur 'reachable'",
+            subdlStatusQuelle.Contains(": \"reachable\")", StringComparison.Ordinal)
+            && !subdlStatusQuelle.Contains("SearchUsed}/{zahlen.SearchLimit}", StringComparison.Ordinal)
+            && !subdlStatusQuelle.Contains("DownloadsUsed}/{zahlen.DownloadsLimit}", StringComparison.Ordinal),
+            "Zahlen gehoeren in die Balken");
+        Check(
+            "F-M742: die Erreichbarkeits-Ampel sagt 'reachable', nicht 'erreichbar (HTTP 200)'",
+            reachQuelle.Contains("? \"reachable\" :", StringComparison.Ordinal)
+            && reachQuelle.Contains("$\"HTTP {code}\"", StringComparison.Ordinal)
+            && !reachQuelle.Contains("\"erreichbar", StringComparison.Ordinal),
+            "Code nur, wenn er etwas zu sagen hat");
+        Check(
+            "F-M742: die Login-Ampel nennt die drei Faelle englisch, Erfolg ist 'OK'",
+            subdlStatusQuelle.Contains("meldung = \"OK\";", StringComparison.Ordinal)
+            && subdlStatusQuelle.Contains("\"wrong username/password\"", StringComparison.Ordinal)
+            && subdlStatusQuelle.Contains("\"not authorized — check API key\"", StringComparison.Ordinal)
+            && subdlStatusQuelle.Contains("\"rate-limited — try again later\"", StringComparison.Ordinal),
+            "falsches Passwort, falscher Schluessel, zu schnell");
+        Check(
+            "F-M742: im Statusweg steht kein deutscher Meldungstext mehr",
+            !new[] { subdlStatusQuelle, reachQuelle }.Any(q => q.Contains("Message: \"kein", StringComparison.Ordinal)
+                || q.Contains("Message: \"die API", StringComparison.Ordinal)
+                || q.Contains("meldung = \"angemeldet\"", StringComparison.Ordinal)),
+            "Englisch wie vor dem dritten Vertrag");
 
         if (_failures > 0)
         {

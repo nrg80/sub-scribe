@@ -40,6 +40,13 @@ public class UploadResult
     public string? SourceId { get; init; }
 
     /// <summary>
+    /// Gets F-M734: was mit dem TITEL geschah, als der Auftrag ihn mitbringen sollte (EnsureTitle). Die
+    /// Titel-Leiter des Ablaufs entscheidet daran, ob sie wiederholen darf (nur wenn nichts gesendet
+    /// wurde), ob das Paar entschieden ist (Titel belegt, Kennung fehlt) oder ob der Titel zubleibt.
+    /// </summary>
+    public Sources.SourceTitleAnswer Title { get; set; } = Sources.SourceTitleAnswer.NotAsked;
+
+    /// <summary>
     /// F-M603 (Operator-Entscheidung 18.11.2026, Weg „A"): die Quelle hat den Versuch ANGENOMMEN, aber
     /// keine verwertbare Kennung zurückgegeben. Gemessen an moviesubtitles.org: <c>add-movie.php</c>
     /// antwortet <c>200</c>, die angelegte Filmnummer ist danach nicht auslesbar — und ohne Marke blieb
@@ -165,6 +172,19 @@ public class UploadResult
     /// </summary>
     /// <param name="answer">Die Antwort des Auftrags.</param>
     /// <returns>Das Ergebnis, das die Kette liest.</returns>
+    /// <summary>
+    /// F-M734: traegt die Titel-Antwort des Auftrags an das Ergebnis. Sie ist das Einzige, was der Ablauf
+    /// aus der Antwort ausserhalb des Ausgangs noch braucht (Leiter, Kennung in den Bestand).
+    /// </summary>
+    /// <param name="ergebnis">Das Ergebnis des Versands.</param>
+    /// <param name="answer">Die Antwort der Engine.</param>
+    /// <returns>Dasselbe Ergebnis, mit der Titel-Antwort.</returns>
+    private static UploadResult MitTitel(UploadResult ergebnis, Sources.SourceSendAnswer answer)
+    {
+        ergebnis.Title = answer.Title;
+        return ergebnis;
+    }
+
     public static UploadResult FromAnswer(Sources.SourceSendAnswer answer)
     {
         ArgumentNullException.ThrowIfNull(answer);
@@ -172,21 +192,21 @@ public class UploadResult
         switch (answer.Outcome)
         {
             case Sources.SourceOutcome.Accepted:
-                return Success(answer.SubmissionId);
+                return MitTitel(Success(answer.SubmissionId), answer);
 
             case Sources.SourceOutcome.Busy:
-                return NoVerdict(answer.Reason ?? "busy", busy: true);
+                return MitTitel(NoVerdict(answer.Reason ?? "busy", busy: true), answer);
 
             case Sources.SourceOutcome.Rejected:
                 string text = answer.Reason ?? "refused";
-                return IsDuplicate(text)
-                    ? Skipped("duplicate-content", text)
-                    : Refused(text, text);
+                return MitTitel(
+                    IsDuplicate(text) ? Skipped("duplicate-content", text) : Refused(text, text),
+                    answer);
 
             default:
                 // Failed: niemand hat entschieden. Protokolliert wird das beim Aufrufer — hier steht
                 // nur, dass es KEIN Urteil ist.
-                return NoVerdict(answer.Reason ?? "no answer");
+                return MitTitel(NoVerdict(answer.Reason ?? "no answer"), answer);
         }
     }
 

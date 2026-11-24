@@ -10,6 +10,7 @@ using System;
 using System.IO;
 using System.Reflection;
 using System.Text.RegularExpressions;
+using Jellyfin.Plugin.SubScribe.Text;
 using Jellyfin.Plugin.SubScribe.Pipeline;
 
 int failures = 0, checks = 0;

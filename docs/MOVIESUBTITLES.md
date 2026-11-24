@@ -129,7 +129,7 @@ Disambiguierungsseite. `filter=dune` gibt fünf Filme: drei „Dune"-Verfilmunge
 den Dokumentarfilm `Jodorowsky's Dune` (2013) und `Suna no onna (Woman of the Dunes)` (1964). Die
 Entscheidung fällt also im Client: Kandidaten sammeln, Jahr aus der Zeile neben dem Link
 vergleichen, und wenn zwei Kandidaten dasselbe Jahr tragen, den Titel eng vergleichen (nicht
-ähnlich) und sonst **nicht** raten. Genau die Regel, die `TvstShowResolver` für Serien schon
+ähnlich) und sonst **nicht** raten. Genau die Regel, die der Serienweg schon
 anwendet.
 
 ## Der Weg (Upload)
@@ -530,7 +530,7 @@ dasselbe Loch.
 | Schreibweg | `ContentHashRegistry.SetMsubMovieId` / `SetTvstShowId` (ein gemeinsamer `SetMediaNumber`) | Hash zuerst (Zeile per `Id`); sonst die Zeile über ihren **Pfad** (`MediaEntity.Path`) — dieselbe Spalte, nur eine andere Adresse |
 | Eindeutigkeit | dieselbe Methode | kein Hash **und** keine Pfad-Zeile → `None` (nichts geschrieben); **mehrere** Zeilen mit dem Pfad → ebenfalls `None` (kein Raten, keine Wahl) |
 | Leseweg | `MsubMovieIdAtPath` / `TvstShowIdAtPath` | ohne Hash wird die gespeicherte Nummer über den Pfad **gelesen** — sonst wäre sie für jeden Folgelauf unsichtbar |
-| Auflöser | `MsubMovieResolver` / `TvstShowResolver` (neuer Parameter `mediaPath`) | reicht den Pfad durch; `Persist` gibt zurück, **wie** geschrieben wurde |
+| Auflöser | `MsubMovieResolver` / `TvstShowLookup` (neuer Parameter `mediaPath`) | reicht den Pfad durch; `Persist` gibt zurück, **wie** geschrieben wurde |
 | Logzeile | `Api/Endpoints/MediaNumberNote` | `gespeichert (über den Medien-Hash).` / `gespeichert über den Pfad (kein Medien-Hash bekannt).` / `nicht gespeichert: kein Medien-Hash und keine eindeutige Pfad-Zeile im Store — die Nummer gilt nur für diesen Lauf.` |
 | Kette | `UploadPipeline` (Film- und Serien-Adresse), `DownloadPipeline` | geben den Pfad der Mediendatei mit |
 

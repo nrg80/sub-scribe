@@ -23,6 +23,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.SubScribe.Pipeline;
 
+using Jellyfin.Plugin.SubScribe.Text;
+
 namespace Jellyfin.Plugin.SubScribe.Api;
 
 /// <summary>
@@ -89,147 +91,20 @@ public sealed class TvSubtitlesClient
     public const int MaxEpisode = 100;
 
     /// <summary>
-    /// F-M480: the language codes are the SITE's abbreviations, not ISO 639-1 — Portuguese is <c>pt</c>,
-    /// Brazilian Portuguese is <c>br</c>, Chinese is <c>cn</c>, Japanese is <c>jp</c>, Greek is <c>gr</c>,
-    /// Czech is <c>cz</c>. Sending an ISO code the select does not offer makes the form fall back to its
-    /// first entry (the upload lands as English), so the codes are kept verbatim from the page.
-    /// The value is (name as written on the page, three-letter code used in file names).
+    /// F-M735: die Sprachtafel der Seite wohnt bei der Quelle (<c>Sources.Tvst.TvstLanguages</c>). Hier
+    /// steht nur noch die Brücke für die Aufrufer, die den Abruf ohnehin in der Hand halten; gerechnet
+    /// und entschieden wird dort.
     /// </summary>
-    public static readonly IReadOnlyDictionary<string, (string Name, string Iso3)> Languages =
-        new Dictionary<string, (string, string)>(StringComparer.Ordinal)
-        {
-            ["en"] = ("english", "eng"),
-            ["es"] = ("spanish", "spa"),
-            ["fr"] = ("french", "fre"),
-            ["de"] = ("german", "ger"),
-            ["br"] = ("portuguese(br)", "pob"),
-            ["ru"] = ("russian", "rus"),
-            ["ua"] = ("ukrainian", "ukr"),
-            ["it"] = ("italian", "ita"),
-            ["gr"] = ("greek", "gre"),
-            ["ar"] = ("arabic", "ara"),
-            ["hu"] = ("hungarian", "hun"),
-            ["pl"] = ("polish", "pol"),
-            ["tr"] = ("turkish", "tur"),
-            ["nl"] = ("dutch", "dut"),
-            ["pt"] = ("portuguese", "por"),
-            ["sv"] = ("swedish", "swe"),
-            ["da"] = ("danish", "dan"),
-            ["fi"] = ("finnish", "fin"),
-            ["ko"] = ("korean", "kor"),
-            ["cn"] = ("chinese", "chi"),
-            ["jp"] = ("japanese", "jpn"),
-            ["bg"] = ("bulgarian", "bul"),
-            ["cz"] = ("czech", "cze"),
-            ["ro"] = ("romanian", "rum"),
-        };
+    public static IReadOnlyDictionary<string, (string Name, string Iso3)> Languages =>
+        Sources.Tvst.TvstLanguages.Site;
 
     /// <summary>
-    /// F-M502 (Operator-Anweisung 15.11.2026: „Aber halt tvst spezifisch. Das andere mapping ist subdl
-    /// spezifisch."): die Bruecke von ISO- auf die Kuerzel der Seite, und zwar AUSSCHLIESSLICH hier.
-    /// <para>
-    /// Gemessen am 15.11.2026: die Tabelle oben ist vollstaendig — die Seite kennt genau diese 24
-    /// Kuerzel —, aber vier davon sind NICHT ISO: <c>gr</c> statt <c>el</c>/<c>ell</c>/<c>gre</c>
-    /// (Griechisch), <c>cz</c> statt <c>cs</c>/<c>ces</c>/<c>cze</c> (Tschechisch), <c>cn</c> statt
-    /// <c>zh</c>/<c>zho</c>/<c>chi</c> (Chinesisch), <c>jp</c> statt <c>ja</c>/<c>jpn</c> (Japanisch).
-    /// Jellyfin liefert Sprachen als DREI-Buchstaben-Codes (<c>gre</c>, <c>cze</c>, <c>chi</c>,
-    /// <c>jpn</c>), die Konfiguration und die Zielsprachen teils als ZWEI-Buchstaben-Codes
-    /// (<c>el</c>, <c>cs</c>, <c>zh</c>, <c>ja</c>) — beide Formen landeten vorher in der Pruefung von
-    /// <see cref="BuildUpload"/> und der Upload wurde mit „language must be one of the site's codes"
-    /// abgelehnt. Deshalb die vier Abweichungen in beiden Formen, dazu die gaengigen
-    /// ISO-639-2-Formen (/B und /T) der uebrigen Seiten-Sprachen.
-    /// </para>
-    /// <para>
-    /// Was hier ABSICHTLICH NICHT passiert: keine gemeinsame Tabelle mit SubDL (Operator-Anweisung
-    /// oben — SubDL bildet in <see cref="ScribeApiClient"/> ab), kein Raten ausserhalb der Liste
-    /// (unbekannt heisst null), und die Seiten-Kuerzel selbst bleiben unveraendert gueltig.
-    /// </para>
+    /// F-M735: die Umrechnung selbst steht bei der Quelle — der Abruf kennt die Kürzel der Seite nicht
+    /// mehr, er reicht weiter.
     /// </summary>
-    private static readonly IReadOnlyDictionary<string, string> LanguageAliases =
-        new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            // Die vier Abweichungen der Seite, in jeder gaengigen ISO-Schreibweise.
-            ["el"] = "gr",
-            ["ell"] = "gr",
-            ["gre"] = "gr",
-            ["cs"] = "cz",
-            ["ces"] = "cz",
-            ["cze"] = "cz",
-            ["zh"] = "cn",
-            ["zho"] = "cn",
-            ["chi"] = "cn",
-            ["ja"] = "jp",
-            ["jpn"] = "jp",
-
-            // Die uebrigen Seiten-Sprachen in ISO-639-2/B und /T.
-            ["uk"] = "ua",
-            ["eng"] = "en",
-            ["spa"] = "es",
-            ["fra"] = "fr",
-            ["fre"] = "fr",
-            ["deu"] = "de",
-            ["ger"] = "de",
-            ["pob"] = "br",
-            ["rus"] = "ru",
-            ["ukr"] = "ua",
-            ["ita"] = "it",
-            ["ara"] = "ar",
-            ["hun"] = "hu",
-            ["pol"] = "pl",
-            ["tur"] = "tr",
-            ["nld"] = "nl",
-            ["dut"] = "nl",
-            ["por"] = "pt",
-            ["swe"] = "sv",
-            ["dan"] = "da",
-            ["fin"] = "fi",
-            ["kor"] = "ko",
-            ["bul"] = "bg",
-            ["ron"] = "ro",
-            ["rum"] = "ro",
-        };
-
-    /// <summary>
-    /// F-M502: der Sprachcode, den die Seite versteht — aus einem ISO-Code, einem Seiten-Kuerzel oder
-    /// einer Angabe mit Region/Skript (<c>pt-BR</c>, <c>zh-Hans</c>).
-    /// <para>
-    /// Gross-/Kleinschreibung zaehlt nicht. Die Region entscheidet nur dort, wo die Seite die Sprache
-    /// danach trennt: <c>pt-BR</c> ist brasilianisches Portugiesisch (<c>br</c>), waehrend <c>pt-PT</c>
-    /// und <c>pt</c> europaesisches Portugiesisch (<c>pt</c>) bleiben. Bei allen anderen Sprachen
-    /// faellt die Region weg (<c>zh-Hans</c>/<c>zh-CN</c> → <c>cn</c>).
-    /// </para>
-    /// </summary>
-    /// <param name="code">Der ankommende Code, in beliebiger Schreibweise.</param>
-    /// <returns>Ein Kuerzel aus <see cref="Languages"/>, oder null — dann ist die Sprache der Seite
-    /// unbekannt und wird nicht geraten.</returns>
-    public static string? SiteLanguage(string? code)
-    {
-        if (string.IsNullOrWhiteSpace(code))
-        {
-            return null;
-        }
-
-        // Ein Schraegstrich kommt in Tags vor ("pt_BR"); die Seite kennt nur den Bindestrich.
-        var text = code.Trim().ToLowerInvariant().Replace('_', '-');
-
-        // Die eine Stelle, an der die REGION die Sprache ist: brasilianisches Portugiesisch.
-        // Muss vor der Grundcode-Reduktion stehen, sonst faellt "pt-br" auf europaesisches "pt".
-        if (string.Equals(text, "pt-br", StringComparison.Ordinal))
-        {
-            return "br";
-        }
-
-        var dash = text.IndexOf('-', StringComparison.Ordinal);
-        var baseCode = dash > 0 ? text[..dash] : text;
-
-        if (LanguageAliases.TryGetValue(baseCode, out var mapped))
-        {
-            return mapped;
-        }
-
-        // Das Kuerzel der Seite selbst (en, de, br, gr, cz, cn, jp, ua …) ist bereits das Ziel.
-        return Languages.ContainsKey(baseCode) ? baseCode : null;
-    }
+    /// <param name="code">Ein Sprachkennzeichen, in beliebiger Schreibweise.</param>
+    /// <returns>Ein Kürzel der Seite, oder null.</returns>
+    public static string? SiteLanguage(string? code) => Sources.Tvst.TvstLanguages.ToSite(code);
 
     /// <summary>
     /// F-M480: the rip select of the upload form, plus the empty value. Anything else is refused
@@ -443,7 +318,7 @@ public sealed class TvSubtitlesClient
     /// und zwar auch beim Download): die Nummer, die die letzte Suche in der Serienliste gefunden hat.
     /// <para>
     /// Warum sie hier steht: der Endpunkt löst die Nummer beim Suchen auf und brauchte sie bisher nur
-    /// für den einen Abruf. Schreiben konnte sie nur der Upload-Weg (<c>TvstShowResolver</c>) — deshalb
+    /// für den einen Abruf. Schreiben konnte sie nur der Upload-Weg (<c>die Seite der Titel-Frage</c>) — deshalb
     /// hatte The Middle 512 aus dem Staffel-Upload im Store, MobLand und Stranger Things aus dem
     /// Download aber nicht, und jeder Lauf holte die Serienliste erneut. Der Endpunkt legt die Nummer
     /// hier ab, die Download-Pipeline schreibt sie über denselben Weg wie die Filmnummer
@@ -1293,7 +1168,7 @@ public sealed class TvSubtitlesClient
             // ("ꜱ01ᴇ05", "Ｓ０１Ｅ０３") would otherwise look like an entry without a number and be
             // dropped from the pack, and a styled extension ("．ｓｒｔ") hid the file altogether.
             // Nothing is stored folded: the name in the record stays the one in the archive.
-            var memberName = TextFold.Fold(entry.Name);
+            var memberName = TextFold.Normalize(entry.Name);
             if (!memberName.EndsWith(".srt", StringComparison.OrdinalIgnoreCase))
             {
                 continue;

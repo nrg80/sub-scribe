@@ -36,6 +36,35 @@ public sealed class SubdlEngine : ISourceEngine
     /// <summary>Der Schlüssel dieser Quelle — derselbe Wert, den der Bestand führt.</summary>
     public const string SourceKey = "subdl";
 
+    /// <summary>
+    /// F-M729/F-M730: setzt den Zugang aus der EIGENEN Datei dieser Quelle (<c>sources/subdl.json</c>) auf
+    /// den Client — an genau EINER Stelle, damit die vier Aufträge, die Konto-Pflege und die
+    /// Selbstauskunft nicht drei Wahrheiten über denselben Zugang bekommen. Steht in der Datei nichts,
+    /// bleibt stehen, was der Client schon trägt.
+    /// </summary>
+    /// <param name="client">Der gereichte Client.</param>
+    /// <param name="settings">Die Einstellungen dieser Quelle.</param>
+    public static void ApplyCredentials(Api.ScribeApiClient client, SourceSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+        ArgumentNullException.ThrowIfNull(settings);
+
+        if (settings.Secret(FieldApiKey) is { Length: > 0 } key)
+        {
+            client.ApiKey = key;
+        }
+
+        if (settings.Text(FieldAccount) is { Length: > 0 } account)
+        {
+            client.Username = account;
+        }
+
+        if (settings.Secret(FieldPassword) is { Length: > 0 } password)
+        {
+            client.Password = password;
+        }
+    }
+
     /// <summary>Der Griff trägt seine Herkunft: <c>n:</c> + Eintrags-Kennung.</summary>
     private const string HandlePrefix = "n:";
 
@@ -221,7 +250,7 @@ public sealed class SubdlEngine : ISourceEngine
             Pace = new SourcePace(UploadsPerHour: 500, MinCallPauseSeconds: 0),
 
             // F-M10/F-M557: die Sprachbrücke dieser Quelle steht in LanguageMapper, nicht hier.
-            LanguageCode = LanguageMapper.MapToSubdl,
+            Language = SourceLanguages.Voice(SourceKey),
         };
     }
 
@@ -443,21 +472,32 @@ public sealed class SubdlEngine : ISourceEngine
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        // F-M734: diese Quelle findet ihren Titel über IMDb/TMDb (F-M501/F-M508) — es gibt nichts
+        // anzulegen. Die Titel-Frage wird beantwortet, ohne den Versand aufzuhalten: `CanCreateTitle`
+        // steht bei ihr auf false, wer sie also mit EnsureTitle fragt, bekommt ein ehrliches Nein.
+        SourceTitleAnswer titel = request.EnsureTitle
+            ? new SourceTitleAnswer(
+                SourceTitleState.NotAskable,
+                Reason: "SubDL finds titles by their ids — there is nothing to create")
+            : SourceTitleAnswer.NotAsked;
+
         string sprache = LanguageMapper.MapToSubdl(request.Language) ?? string.Empty;
         if (sprache.Length == 0)
         {
-            return SourceSendAnswer.Rejected("language unknown to SubDL: " + request.Language);
+            return SourceSendAnswer.Rejected("language unknown to SubDL: " + request.Language) with { Title = titel };
         }
 
         if (!request.AsPack && request.Bytes.Length == 0)
         {
-            return SourceSendAnswer.Rejected("no bytes to send");
+            return SourceSendAnswer.Rejected("no bytes to send") with { Title = titel };
         }
 
         if (request.AsPack && request.Members.Count == 0)
         {
-            return SourceSendAnswer.Rejected("no files to send");
+            return SourceSendAnswer.Rejected("no files to send") with { Title = titel };
         }
+
+
 
         try
         {
@@ -482,7 +522,7 @@ public sealed class SubdlEngine : ISourceEngine
                     request.HearingImpaired,
                     Framerate(request)).ConfigureAwait(false);
 
-            return Verdict(ergebnis);
+            return Verdict(ergebnis) with { Title = titel };
         }
         catch (OperationCanceledException)
         {

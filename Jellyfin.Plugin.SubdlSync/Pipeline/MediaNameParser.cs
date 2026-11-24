@@ -14,6 +14,8 @@ using System.Globalization;
 using System.IO;
 using System.Text.RegularExpressions;
 
+using Jellyfin.Plugin.SubScribe.Text;
+
 namespace Jellyfin.Plugin.SubScribe.Pipeline;
 
 /// <summary>
@@ -132,10 +134,10 @@ internal static class MediaNameParser
         // to any of the patterns below, so such a name yielded the whole string as title and no year
         // (measured: 0 of 12 resolved). Folding is applied only when such a character is present, so
         // ordinary names pass through byte-identical and nothing else can shift.
-        // F-M724 (24.11.2026): the same fold the archive side reads with (Pipeline.TextFold) replaces the
+        // F-M724 (24.11.2026): the same fold the archive side reads with (Text.TextFold) replaces the
         // old Unicode normalization — that one needs ICU, so on a host without it this branch did
         // nothing at all and the parser saw the dressed name anyway.
-        fileName = TextFold.Fold(fileName);
+        fileName = TextFold.Normalize(fileName);
         if (string.IsNullOrWhiteSpace(fileName))
         {
             return new ParsedMediaName(null, null, false, null, null);

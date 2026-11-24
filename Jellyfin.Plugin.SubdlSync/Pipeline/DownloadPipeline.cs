@@ -1076,7 +1076,14 @@ public sealed class DownloadPipeline : IDisposable
         // shows). A trip that left quota free is a rate-limit respacing, not a
         // day-long stop: it gets one fire after JobSpacingMinutes. A spent OR
         // unreadable allowance keeps the day-long path below.
-        var read = await _api.ReadQuotaAsync(forDownload: true, ct).ConfigureAwait(false);
+        // F-M733: Kontingent über den Status-Vertrag.
+        var kontingent = await _sources.QuotaAsync(forDownload: true, ct).ConfigureAwait(false);
+        var read = kontingent.State switch
+        {
+            Sources.SourceQuotaState.Available => QuotaRead.Available,
+            Sources.SourceQuotaState.Spent => QuotaRead.Spent,
+            _ => QuotaRead.Unreadable,
+        };
         if (read == QuotaRead.Available)
         {
             _api.ResetRateLimitFlag();
@@ -1773,7 +1780,14 @@ public sealed class DownloadPipeline : IDisposable
                     // shape. A spent OR unreadable allowance earns the day-long fire; only a
                     // free allowance is respaced. Both day-long cases MUST schedule, or the
                     // item waits for the next regular anchor instead of the reset.
-                    var read = await _api.ReadQuotaAsync(forDownload: false, ct).ConfigureAwait(false);
+                    // F-M733: Kontingent über den Status-Vertrag.
+                    var kontingent = await _sources.QuotaAsync(forDownload: false, ct).ConfigureAwait(false);
+                    var read = kontingent.State switch
+                    {
+                        Sources.SourceQuotaState.Available => QuotaRead.Available,
+                        Sources.SourceQuotaState.Spent => QuotaRead.Spent,
+                        _ => QuotaRead.Unreadable,
+                    };
                     bool searchExhausted = read == QuotaRead.Spent;
                     bool searchUnreadable = read == QuotaRead.Unreadable;
                     var stop = QuotaStopDecision.Decide(

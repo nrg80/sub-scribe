@@ -126,7 +126,7 @@ public sealed class MsubEngine : ISourceEngine
             SearchesByName = true,
             SearchesByHash = false,
             Pace = new SourcePace(),
-            LanguageCode = MovieSubtitlesClient.SiteLanguage,
+            Language = SourceLanguages.Voice(SourceKey),
         };
     }
 
@@ -336,7 +336,37 @@ public sealed class MsubEngine : ISourceEngine
                 ? vorhandene
                 : 0;
 
-            if (film <= 0)
+            // F-M734: steht „leg den Titel an" im Auftrag, ist das die Titel-Frage der Seite — suchen,
+            // Doppeleintrag vermeiden, anlegen, nachsehen. Der Ablauf schreibt die Kennung in den Bestand;
+            // hier wird sie nur benutzt und zurückgemeldet.
+            SourceTitleAnswer titel = SourceTitleAnswer.NotAsked;
+            if (request.EnsureTitle)
+            {
+                if (film > 0)
+                {
+                    titel = new SourceTitleAnswer(
+                        SourceTitleState.Ready, film.ToString(CultureInfo.InvariantCulture));
+                }
+                else
+                {
+                    titel = await new Api.Endpoints.MsubMovieLookup(_client, _context.Logger)
+                        .FindOrCreateAsync(request.Target.Title, request.Target.Year, request.DryRun, ct)
+                        .ConfigureAwait(false);
+
+                    film = int.TryParse(titel.TitleId, NumberStyles.Integer, CultureInfo.InvariantCulture, out int neu)
+                           && neu > 0
+                        ? neu
+                        : 0;
+
+                    if (!titel.Resolved)
+                    {
+                        return SourceSendAnswer
+                            .Rejected(titel.Reason ?? "no film entry for '" + request.Target.Title + "'")
+                            with { Title = titel };
+                    }
+                }
+            }
+            else if (film <= 0)
             {
                 film = await _client
                     .FindMovieAsync(request.Target.Title, request.Target.Year, ct)
@@ -346,7 +376,22 @@ public sealed class MsubEngine : ISourceEngine
 
             if (film <= 0)
             {
-                return SourceSendAnswer.Rejected("no film entry for '" + request.Target.Title + "'");
+                return SourceSendAnswer
+                    .Rejected("no film entry for '" + request.Target.Title + "'")
+                    with { Title = titel };
+            }
+
+            // F-M606: erst fragen, ob die Kennung bespielbar ist, dann senden. Die Vorpruefung gehoert zur
+            // Seite, also hierher — der Ablauf fragt den Client nicht mehr selbst. Gefragt wird auf dem
+            // Weg, der den Titel selbst beschafft (EnsureTitle, F-M734): dort hat der Lauf die Nummer
+            // nicht vorher geprueft. Ein Trockenlauf fragt nicht, er sendet ohnehin nichts.
+            if (request.EnsureTitle
+                && !request.DryRun
+                && !await _client.FilmUsableForUploadAsync(film, ct).ConfigureAwait(false))
+            {
+                return SourceSendAnswer
+                    .Rejected("the film id is not usable for an upload (no form on add.php?let=…)")
+                    with { Title = titel };
             }
 
             long? tmdb = long.TryParse(request.Target.TmdbId, NumberStyles.Integer, CultureInfo.InvariantCulture, out long zahl)
@@ -377,7 +422,7 @@ public sealed class MsubEngine : ISourceEngine
                 .UploadAsync(payload, dryRun: false, ct)
                 .ConfigureAwait(false);
 
-            return Verdict(ergebnis);
+            return Verdict(ergebnis) with { Title = titel };
         }
         catch (OperationCanceledException)
         {

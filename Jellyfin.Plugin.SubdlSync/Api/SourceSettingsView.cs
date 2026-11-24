@@ -195,7 +195,7 @@ public static class SourceSettingsView
 
         if (string.IsNullOrWhiteSpace(dataDir))
         {
-            return Fail("kein Datenordner — es kann nichts gespeichert werden", key, logger);
+            return Fail("no data folder — nothing can be stored", key, logger);
         }
 
         IReadOnlyList<SourceField> schema = engine.Fields;
@@ -295,7 +295,7 @@ public static class SourceSettingsView
         var sprachen = new Dictionary<string, string?>(StringComparer.Ordinal);
         foreach (string iso in BridgeLanguages)
         {
-            sprachen[iso] = capabilities.LanguageCode(iso);
+            sprachen[iso] = capabilities.Language?.ToSite(iso);
         }
 
         return new SourceCapabilityView(

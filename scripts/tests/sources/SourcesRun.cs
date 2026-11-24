@@ -152,15 +152,19 @@ internal static class Program
         // -----------------------------------------------------------------------------------------
         Console.WriteLine("(c) jede Engine ist in der Registry erreichbar und nennt Key + Capabilities");
         string registryQuelle = File.ReadAllText(Path.Combine(sourcesDir, "SourceRegistry.cs"));
+        // Nur die ENGINES: seit F-M735 liegen auch Datenwerte der Quelle unter Sources/<Quelle>/
+        // (Sprachtafeln). Die sind keine Engines und gehören nicht in die Registry — die Regel „jede
+        // Engine wird ausdrücklich gebaut" bleibt davon unberührt.
         var engineKlassen = engineDateien
             .Select(f => Path.GetFileNameWithoutExtension(f))
+            .Where(n => n.EndsWith("Engine", StringComparison.Ordinal))
             .OrderBy(n => n, StringComparer.Ordinal)
             .ToList();
 
         var nichtEingetragen = engineKlassen
             .Where(k => !registryQuelle.Contains(k, StringComparison.Ordinal))
             .ToList();
-        Check(nichtEingetragen.Count == 0,
+        Check(nichtEingetragen.Count == 0 && engineKlassen.Count >= 3,
             "F-M682 (c): jede Engine-Datei wird in der Registry ausdrücklich gebaut (kein Reflection-Scan)",
             nichtEingetragen.Count == 0 ? string.Join(", ", engineKlassen) : "fehlt: " + string.Join(", ", nichtEingetragen));
 
@@ -204,12 +208,12 @@ internal static class Program
             nichtNachschlagbar.Count == 0 ? "3 von 3, unbekannt → null" : "fehlt: " + string.Join(", ", nichtNachschlagbar));
 
         var sprachlos = mitTvst.Engines
-            .Where(e => e.Capabilities.LanguageCode("DEU") is not { Length: > 0 })
+            .Where(e => e.Capabilities.Language?.ToSite("DEU") is not { Length: > 0 })
             .Select(e => e.Capabilities.Key)
             .ToList();
         Check(sprachlos.Count == 0,
             "F-M682: jede Engine bildet unsere ISO-Sprachen auf ihre Codes ab (DEU → Code der Quelle)",
-            string.Join(", ", mitTvst.Engines.Select(e => e.Capabilities.Key + "→" + e.Capabilities.LanguageCode("DEU"))));
+            string.Join(", ", mitTvst.Engines.Select(e => e.Capabilities.Key + "→" + (e.Capabilities.Language?.ToSite("DEU") ?? "<null>"))));
 
         var subdlCap = mitTvst.ByKey("subdl")!.Capabilities;
         var tvstCap = mitTvst.ByKey("tvsubtitles")!.Capabilities;
@@ -1339,10 +1343,46 @@ internal static class Program
         Richtungen(root);
 
         // -----------------------------------------------------------------------------------------
+        // (i) F-M729: der ZWEITE, schmale Vertrag — die Konto-Pflege der Quelle.
+        //
+        //     Betreiber-Entscheidung 24.11.2026: "Zweiter schmaler Vertrag als maintenance engine. Mit
+        //     Zugangsdaten aus dem source konfi file". Gemessen wird: der Vertrag steht NEBEN den vier
+        //     Auftraegen (ISourceEngine bleibt bei vier Methoden), nur SubDL bietet ihn an, der Zugang
+        //     kommt aus der Datei der Quelle, und der Nachlauf spricht nicht mehr selbst mit der Quelle.
+        // -----------------------------------------------------------------------------------------
+        Console.WriteLine();
+        Console.WriteLine("(i) F-M729: Konto-Pflege als zweiter, schmaler Vertrag");
+        Pflege(root, plugin);
+
+        Console.WriteLine();
+        Console.WriteLine("(j) F-M730: Selbstauskunft als dritter, schmaler Vertrag");
+        Selbstauskunft(root, plugin);
+
+        Console.WriteLine();
+        Console.WriteLine("(k) F-M731/F-M732/F-M733: der Koordinator nennt keine Quelle mehr");
+        Koordinator(root, plugin);
+
+        Console.WriteLine();
+        Console.WriteLine("(l) F-M734: die Titel-Anlage steht im Sende-Auftrag");
+        TitelAnlage(root, plugin);
+
+        // -----------------------------------------------------------------------------------------
+        // (m) F-M735: die Sprachauskunft der Quelle.
+        //
+        //     Die Tafeln lagen als statische Daten in den HTTP-Clients — dort, wo sich nichts aendert,
+        //     wenn die SEITE sich aendert. Jetzt gibt jede Quelle ihre Auskunft selbst her: wie ein
+        //     ISO-Kennzeichen auf ihrer Seite heisst, was ein Kuerzel ihrer Seite im Bestand bedeutet
+        //     (F-M557), und ob sie ueberhaupt eine geschlossene Liste fuehrt.
+        // -----------------------------------------------------------------------------------------
+        Console.WriteLine();
+        Console.WriteLine("(m) F-M735: die Sprachauskunft der Quelle");
+        Sprachauskunft(root, plugin);
+
+        // -----------------------------------------------------------------------------------------
         // Bericht.
         // -----------------------------------------------------------------------------------------
         Console.WriteLine();
-        Console.WriteLine("sources: " + _checks + " Prüfungen (T339-T348, F-M682-F-M691)");
+        Console.WriteLine("sources: " + _checks + " Prüfungen (T339-T348, T392-T396, F-M682-F-M735)");
         if (Failures.Count == 0)
         {
             Console.WriteLine(">>> SOURCES OK: " + _checks + " Prüfungen bestanden");
@@ -2627,6 +2667,525 @@ internal static class Program
             }
         }
     }
+    /// <summary>
+    /// F-M729 / T392: die Konto-Pflege hinter dem zweiten Vertrag — Form, Anbieter, Zugang und der Weg
+    /// des Nachlaufs. Sechs Pruefungen, kein Netz: der Login geht gegen einen eigenen Handler, der die
+    /// Anfrage festhaelt und eine Antwort gibt, die niemandem etwas verspricht.
+    /// </summary>
+    /// <param name="root">Repo-Wurzel.</param>
+    /// <param name="plugin">Pfad des Plugin-Projekts.</param>
+    private static void Pflege(string root, string plugin)
+    {
+        // (1) Der Vertrag ist ein EIGENER, und er hat genau drei oeffentliche Mitglieder.
+        var vertrag = typeof(ISourceMaintenance);
+        var mitglieder = vertrag.GetMembers()
+            .Where(m => m.DeclaringType == vertrag)
+            .Where(m => m is not System.Reflection.MethodInfo mi || !mi.IsSpecialName)   // get_Key ist der Zugriff, kein Mitglied
+            .Select(m => m.Name)
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToArray();
+        Check(mitglieder.SequenceEqual(new[] { "Key", "ListAsync", "WithdrawAsync" }),
+            "F-M729 (1): ISourceMaintenance traegt Key, ListAsync und WithdrawAsync — mehr nicht",
+            string.Join(", ", mitglieder));
+
+        // (2) Und die vier Auftraege bleiben vier: der zweite Vertrag ist NICHT in ISourceEngine.
+        string engineDatei = Path.Combine(plugin, "Sources", "SourceContract.cs");
+        string vertragsDatei = Path.Combine(plugin, "Sources", "MaintenanceContract.cs");
+        Check(File.Exists(vertragsDatei)
+              && TrefferZeilen(engineDatei, "ISourceMaintenance").Count() == 0,
+            "F-M729 (2): die Konto-Pflege steht in eigener Datei — SourceContract.cs nennt sie nicht");
+
+        // (3) Nur die Quelle, die ein Konto fuehrt, bietet sie an.
+        var config = new PluginConfiguration();
+        var context = new SourceEngineContext(
+            new HttpClient(),
+            NullLogger.Instance,
+            TimeProvider.System);
+        var registry = SourceRegistry.Build(context, config);
+        var anbieter = registry.Maintenance.Select(m => m.Key).ToArray();
+        Check(anbieter.SequenceEqual(new[] { "subdl" }),
+            "F-M729 (3): genau die Quelle mit Konto-Pflege bietet sie an (subdl) — die anderen nicht",
+            anbieter.Length == 0 ? "keine" : string.Join(", ", anbieter));
+
+        // (4) Der Zugang kommt aus der Datei der Quelle, nicht aus der Plugin-Konfiguration.
+        const string PruefKey = "pruef-key-729";
+        const string PruefKonto = "pflege-konto@example.invalid";
+        const string PruefPass = "pflege-passwort-729";
+
+        string dataDir = Path.Combine(Path.GetTempPath(), "sources-pflege-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dataDir);
+        try
+        {
+            SourceSettingsFile.Save(dataDir, SubdlEngine.SourceKey, SubdlEngine.Declared, new Dictionary<string, string>
+            {
+                [SourceSwitches.UploadField] = "true",
+                [SubdlEngine.FieldApiKey] = PruefKey,
+                [SubdlEngine.FieldAccount] = PruefKonto,
+                [SubdlEngine.FieldPassword] = PruefPass,
+            });
+
+            var fänger = new LoginFänger();
+            var pflegeContext = new SourceEngineContext(
+                new HttpClient(fänger),
+                NullLogger.Instance,
+                TimeProvider.System,
+                DataFolder: dataDir);
+            var pflegeRegistry = SourceRegistry.BuildMaintenance(pflegeContext, config);
+            var pflegeEngine = pflegeRegistry.Maintenance.FirstOrDefault();
+
+            // Der Login ist der erste Netzweg dieser Engine: er muss die Werte der DATEI tragen. Der
+            // Handler antwortet mit Absicht unbrauchbar — gemessen wird die Anfrage, nicht die Antwort.
+            _ = pflegeEngine?.ListAsync(new SourceSubmissionQuery(MaxPages: 1), CancellationToken.None)
+                .GetAwaiter().GetResult();
+
+            string login = fänger.LoginBody;
+            Check(login.Contains("email=" + Uri.EscapeDataString(PruefKonto), StringComparison.Ordinal)
+                  && login.Contains("password=" + Uri.EscapeDataString(PruefPass), StringComparison.Ordinal),
+                "F-M729 (4): die Anmeldung traegt Konto und Passwort aus sources/subdl.json",
+                login.Length == 0 ? "keine Login-Anfrage gesehen" : "aus der Datei");
+
+            // (5) Die Engine liest die Datei wirklich — und die Konfiguration nicht.
+            string pflegeQuelle = File.ReadAllText(Path.Combine(plugin, "Sources", "Subdl", "SubdlMaintenance.cs"));
+            string engineQuelle = File.ReadAllText(Path.Combine(plugin, "Sources", "Subdl", "SubdlEngine.cs"));
+            Check(pflegeQuelle.Contains("SourceSettings", StringComparison.Ordinal)
+                  && pflegeQuelle.Contains("SubdlEngine.ApplyCredentials", StringComparison.Ordinal)
+                  && !pflegeQuelle.Contains("PluginConfiguration", StringComparison.Ordinal)
+                  && engineQuelle.Contains("ApplyCredentials", StringComparison.Ordinal)
+                  && engineQuelle.Contains("FieldApiKey", StringComparison.Ordinal),
+                "F-M729 (5): der Adapter liest SourceSettings, der Zugang wird an EINER Stelle gesetzt, die Plugin-Konfiguration kommt nicht vor");
+
+            // (6) Der Nachlauf geht ueber den Vertrag: die alten Direktaufrufe sind weg.
+            string pipeline = File.ReadAllText(Path.Combine(plugin, "Pipeline", "UploadPipeline.cs"));
+            int start = pipeline.IndexOf("private static async Task RunUploadPostprocessingInternalAsync", StringComparison.Ordinal);
+            int ende = start < 0 ? -1 : pipeline.IndexOf("private static async Task", start + 10, StringComparison.Ordinal);
+            string nachlauf = start >= 0 ? pipeline.Substring(start, (ende > start ? ende : pipeline.Length) - start) : string.Empty;
+            Check(nachlauf.Contains("SourceRegistry.BuildMaintenance(", StringComparison.Ordinal)
+                  && !nachlauf.Contains("ListMySubtitlesAsync(", StringComparison.Ordinal)
+                  && !nachlauf.Contains("ListMyPublishedSubtitlesAsync(", StringComparison.Ordinal)
+                  && !nachlauf.Contains("DeleteMySubtitleAsync(", StringComparison.Ordinal),
+                "F-M729 (6): der Upload-Nachlauf ruft den Vertrag und keinen Client mehr",
+                nachlauf.Length == 0 ? "Nachlauf nicht gefunden" : "0 Direktaufrufe");
+
+            // (7) Auch die Diagnose (`CountMySubtitles`) geht ueber den Vertrag — sie war der letzte Weg
+            //     mit eigenem Client und Zugang aus der Plugin-Konfiguration.
+            string diagnose = File.ReadAllText(Path.Combine(plugin, "Api", "ScribePostprocessController.cs"));
+            Check(diagnose.Contains("SourceRegistry.BuildMaintenance(", StringComparison.Ordinal)
+                  && !diagnose.Contains("ListMySubtitlesPageAsync(", StringComparison.Ordinal)
+                  && !diagnose.Contains("new ScribeApiClient(", StringComparison.Ordinal)
+                  && !diagnose.Contains("cfg.ApiKey", StringComparison.Ordinal)
+                  && !diagnose.Contains("cfg.Username", StringComparison.Ordinal),
+                "F-M729 (7): CountMySubtitles fragt den Vertrag, nicht mehr den Client",
+                diagnose.Contains("new ScribeApiClient(", StringComparison.Ordinal) ? "eigener Client gefunden" : "0 Direktaufrufe");
+        }
+        finally
+        {
+            try { Directory.Delete(dataDir, true); } catch (IOException) { }
+        }
+    }
+
+    /// <summary>
+    /// F-M730 / T393: die Selbstauskunft der Quellen — Form, Anbieter, Inhalt und der Weg der
+    /// Statusseite. Sieben Pruefungen, kein Netz: der Handler haelt die Anfragen fest und antwortet mit
+    /// 200 und einem Rumpf, der niemandem etwas verspricht.
+    /// </summary>
+    /// <param name="root">Repo-Wurzel.</param>
+    /// <param name="plugin">Pfad des Plugin-Projekts.</param>
+    private static void Selbstauskunft(string root, string plugin)
+    {
+        // (1) Eigener Vertrag, genau zwei Mitglieder, in der Datei der schmalen Vertraege.
+        var vertrag = typeof(ISourceStatus);
+        var mitglieder = vertrag.GetMembers()
+            .Where(m => m.DeclaringType == vertrag)
+            .Where(m => m is not System.Reflection.MethodInfo mi || !mi.IsSpecialName)
+            .Select(m => m.Name)
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToArray();
+        // F-M733 hat das LIVE-Kontingent dazugetan: die Laufsteuerung braucht es frisch, die Kachel darf
+        // eine zwischengespeicherte Zahl zeigen.
+        Check(mitglieder.SequenceEqual(new[] { "Key", "QuotaAsync", "StatusAsync" })
+              && File.ReadAllText(Path.Combine(plugin, "Sources", "MaintenanceContract.cs")).Contains("interface ISourceStatus", StringComparison.Ordinal),
+            "F-M730/F-M733 (1): ISourceStatus traegt Key, StatusAsync und QuotaAsync — neben der Konto-Pflege, nicht darin",
+            string.Join(", ", mitglieder));
+
+        // (2) JEDE Quelle kann sie beantworten — auch die ohne Konto.
+        var context = new SourceEngineContext(new HttpClient(), NullLogger.Instance, TimeProvider.System);
+        var registry = SourceRegistry.BuildStatus(context, new PluginConfiguration());
+        var anbieter = registry.Status.Select(s => s.Key).OrderBy(k => k, StringComparer.Ordinal).ToArray();
+        Check(anbieter.SequenceEqual(new[] { "moviesubtitles", "subdl", "tvsubtitles" }),
+            "F-M730 (2): alle drei Quellen melden sich selbst (subdl, tvsubtitles, moviesubtitles)",
+            anbieter.Length == 0 ? "keine" : string.Join(", ", anbieter));
+
+        // (3) Eine Quelle ohne Konto antwortet mit einem gruenen Licht — echt gemessen, mit eigenem Handler.
+        var fänger = new StatusFänger();
+        var statusContext = new SourceEngineContext(new HttpClient(fänger), NullLogger.Instance, TimeProvider.System);
+        var tvst = SourceRegistry.BuildStatus(statusContext, new PluginConfiguration())
+            .Status.FirstOrDefault(s => s.Key == TvstEngine.SourceKey);
+        var tvstAntwort = tvst?.StatusAsync(CancellationToken.None).GetAwaiter().GetResult();
+        var tvstLicht = tvstAntwort?.Lights.FirstOrDefault();
+        Check(tvstLicht is not null
+              && tvstLicht.Health == SourceHealth.Good
+              && tvstLicht.Configured
+              && tvstLicht.Key == "tvst"
+              // F-M742: die Zeile nennt den ZUSTAND — „erreichbar (HTTP 200)" sagte den Code
+              // mit, obwohl er nichts zu sagen hat.
+              && tvstLicht.Message.Contains("reachable", StringComparison.Ordinal),
+            "F-M730 (3): eine Quelle ohne Konto sagt 'reachable' — ohne Zugangsdaten, Kachel heisst tvst",
+            tvstLicht is null ? "kein Licht" : tvstLicht.Key + ": " + tvstLicht.Message);
+
+        // (4) Und die Quelle MIT Konto nimmt ihren Schluessel aus der eigenen Datei.
+        const string PruefKey = "pruef-key-730";
+        string dataDir = Path.Combine(Path.GetTempPath(), "sources-status-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dataDir);
+        try
+        {
+            SourceSettingsFile.Save(dataDir, SubdlEngine.SourceKey, SubdlEngine.Declared, new Dictionary<string, string>
+            {
+                [SourceSwitches.UploadField] = "true",
+                [SubdlEngine.FieldApiKey] = PruefKey,
+            });
+
+            var kontoFänger = new StatusFänger();
+            var kontoContext = new SourceEngineContext(
+                new HttpClient(kontoFänger), NullLogger.Instance, TimeProvider.System, DataFolder: dataDir);
+            var subdl = SourceRegistry.BuildStatus(kontoContext, new PluginConfiguration())
+                .Status.FirstOrDefault(s => s.Key == SubdlEngine.SourceKey);
+            _ = subdl?.StatusAsync(CancellationToken.None).GetAwaiter().GetResult();
+
+            Check(kontoFänger.Urls.Any(u => u.Contains("api_key=" + PruefKey, StringComparison.Ordinal)),
+                "F-M730 (4): die Selbstauskunft fragt mit dem Schluessel aus sources/subdl.json",
+                kontoFänger.Urls.Count == 0 ? "keine Anfrage gesehen" : "aus der Datei");
+
+            // (5) Die Antwort traegt nur neutrale Daten — kein Zugang, keine URL.
+            var antwort = subdl?.StatusAsync(CancellationToken.None).GetAwaiter().GetResult();
+            string alles = string.Join(
+                " | ",
+                (antwort?.Lights ?? Array.Empty<SourceStatusLight>()).Select(l => l.Key + ":" + l.Label + ":" + l.Message));
+            Check(!alles.Contains(PruefKey, StringComparison.Ordinal)
+                  && !alles.Contains("http", StringComparison.OrdinalIgnoreCase)
+                  && antwort is not null
+                  && antwort.Lights.Count == 2,
+                "F-M730 (5): die Antwort nennt weder Schluessel noch Adresse — nur Lichter und Klartext",
+                antwort is null ? "keine Antwort" : antwort.Lights.Count + " Lichter");
+
+            // (6) Die Statusseite baut keinen Client und liest keinen Zugang aus der Konfiguration.
+            string seite = File.ReadAllText(Path.Combine(plugin, "Api", "ScribeStatusController.cs"));
+            Check(seite.Contains("SourceRegistry.BuildStatus(", StringComparison.Ordinal)
+                  && !seite.Contains("new ScribeApiClient(", StringComparison.Ordinal)
+                  && !seite.Contains("cfg.ApiKey", StringComparison.Ordinal)
+                  && !seite.Contains("cfg.Username", StringComparison.Ordinal)
+                  && !seite.Contains("cfg.Password", StringComparison.Ordinal),
+                "F-M730 (6): die Statusseite fragt die Quellen und baut keinen Client mehr");
+
+            // (7) Und im GANZEN Plugin liest ausserhalb von Sources/ niemand mehr ein Quellen-Zugangsdatum
+            //     aus der Konfiguration; das Kontingent kommt aus der Quelldatei, der Registrator setzt nichts.
+            var treffer = new List<string>();
+            foreach (string datei in Directory.GetFiles(plugin, "*.cs", SearchOption.AllDirectories))
+            {
+                if (!datei.Contains(Path.Combine("Jellyfin.Plugin.SubdlSync", "Sources"), StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                if (datei.Contains("/Sources/", StringComparison.Ordinal) || datei.Contains(@"\Sources\", StringComparison.Ordinal))
+                {
+                    continue;
+                }
+
+                string inhalt = File.ReadAllText(datei);
+                foreach (string muster in new[] { "cfg.ApiKey", "cfg.Username", "cfg.Password", "config.ApiKey", "config.Username", "config.Password", "Configuration.ApiKey" })
+                {
+                    if (inhalt.Contains(muster, StringComparison.Ordinal))
+                    {
+                        treffer.Add(Path.GetFileName(datei) + ":" + muster);
+                    }
+                }
+            }
+
+            string quota = File.ReadAllText(Path.Combine(plugin, "Api", "ScribeQuotaService.cs"));
+            Check(treffer.Count == 0
+                  && quota.Contains("SourceSettingsFile", StringComparison.Ordinal)
+                  && !quota.Contains("Configuration.ApiKey", StringComparison.Ordinal),
+                "F-M730 (7): ausserhalb von Sources/ liest keine Datei mehr ein Quellen-Zugangsdatum aus der Konfiguration",
+                treffer.Count == 0 ? "0 Treffer" : string.Join(", ", treffer.Take(3)));
+        }
+        finally
+        {
+            try { Directory.Delete(dataDir, true); } catch (IOException) { }
+        }
+    }
+
+    /// <summary>
+    /// F-M731/F-M732/F-M733 / T394: der Koordinator arbeitet ohne Quellenwissen — Kurzname aus den
+    /// Faehigkeiten, Kontobuchhaltung und Kontingent ueber die schmalen Vertraege. Sechs Pruefungen.
+    /// </summary>
+    /// <param name="root">Repo-Wurzel.</param>
+    /// <param name="plugin">Pfad des Plugin-Projekts.</param>
+    private static void Koordinator(string root, string plugin)
+    {
+        var context = new SourceEngineContext(new HttpClient(), NullLogger.Instance, TimeProvider.System);
+        var registry = SourceRegistry.Build(context, new PluginConfiguration());
+        var kurz = registry.Engines.ToDictionary(
+            e => e.Capabilities.Key,
+            e => e.Capabilities.Short,
+            StringComparer.Ordinal);
+
+        // (1) Der Kurzname kommt aus den Faehigkeiten; leer heisst: der volle Schluessel.
+        Check(kurz.TryGetValue("tvsubtitles", out string? tvst) && tvst == "tvst"
+              && kurz.TryGetValue("subdl", out string? subdl) && subdl == "subdl"
+              && kurz.TryGetValue("moviesubtitles", out string? mst) && mst == "moviesubtitles",
+            "F-M731 (1): die Quelle sagt ihren Kurznamen selbst — subdl und moviesubtitles fallen auf den Schluessel zurueck",
+            string.Join(", ", kurz.Select(k => k.Key + "=" + k.Value)));
+
+        // (2) Und die Weiche im Koordinator ist weg.
+        string upload = File.ReadAllText(Path.Combine(plugin, "Pipeline", "UploadPipeline.cs"));
+        string pack = File.ReadAllText(Path.Combine(plugin, "Pipeline", "SeasonPackCoordinator.cs"));
+        Check(!upload.Contains("== PackEntity.TvSubtitlesSource ?", StringComparison.Ordinal)
+              && !pack.Contains("== PackEntity.TvSubtitlesSource ?", StringComparison.Ordinal)
+              && upload.Contains("Capabilities.Short", StringComparison.Ordinal)
+              && pack.Contains("Capabilities.Short", StringComparison.Ordinal),
+            "F-M731 (2): kein Quellenvergleich fuer den Kurznamen mehr — beide Dateien fragen die Faehigkeiten");
+
+        // (3) Kontobuchhaltung im Koordinator laeuft ueber den zweiten Vertrag.
+        Check(upload.Contains(".Maintenance", StringComparison.Ordinal)
+              && pack.Contains(".Maintenance", StringComparison.Ordinal)
+              && !upload.Contains("_api.ListMySubtitlesAsync", StringComparison.Ordinal)
+              && !upload.Contains("_api.ListMyPublishedSubtitlesAsync", StringComparison.Ordinal)
+              && !pack.Contains("_api.ListMySubtitlesAsync", StringComparison.Ordinal)
+              && !pack.Contains("_api.ListMyPublishedSubtitlesAsync", StringComparison.Ordinal),
+            "F-M732 (3): die Listen kommen aus der Konto-Pflege — 0 Direktaufrufe in beiden Koordinatoren");
+
+        // (4) Kontingent ueber den Status-Vertrag, und nirgends mehr direkt.
+        string dl = File.ReadAllText(Path.Combine(plugin, "Pipeline", "DownloadPipeline.cs"));
+        Check(upload.Contains(".QuotaAsync(", StringComparison.Ordinal)
+              && dl.Contains(".QuotaAsync(", StringComparison.Ordinal)
+              && !upload.Contains("_api.ReadQuotaAsync", StringComparison.Ordinal)
+              && !dl.Contains("_api.ReadQuotaAsync", StringComparison.Ordinal),
+            "F-M733 (4): das LIVE-Kontingent kommt aus dem Status-Vertrag — 0 Direktaufrufe");
+
+        // (5) Und der Weg dorthin fragt nur, wer ein Kontingent fuehrt: mit Handler gemessen.
+        const string PruefKey = "pruef-key-733";
+        string dataDir = Path.Combine(Path.GetTempPath(), "sources-quota-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dataDir);
+        try
+        {
+            SourceSettingsFile.Save(dataDir, SubdlEngine.SourceKey, SubdlEngine.Declared, new Dictionary<string, string>
+            {
+                [SourceSwitches.UploadField] = "true",
+                [SubdlEngine.FieldApiKey] = PruefKey,
+            });
+
+            var fänger = new StatusFänger();
+            var quotaContext = new SourceEngineContext(
+                new HttpClient(fänger), NullLogger.Instance, TimeProvider.System, DataFolder: dataDir);
+            var quotaRegistry = SourceRegistry.Build(quotaContext, new PluginConfiguration());
+            var antwort = quotaRegistry.QuotaAsync(forDownload: false, CancellationToken.None).GetAwaiter().GetResult();
+            Check(antwort.State == SourceQuotaState.Unreadable
+                  && fänger.Urls.Count > 0
+                  && fänger.Urls.All(u => u.Contains("/api/v2/me", StringComparison.Ordinal))
+                  && fänger.Urls.All(u => u.Contains("api_key=" + PruefKey, StringComparison.Ordinal)),
+                "F-M733 (5): allein die Quelle mit CanQuota wird gefragt (SubDLs /me), mit dem Schluessel aus der Quelldatei",
+                antwort.State + ", " + fänger.Urls.Count + " Anfrage(n)");
+
+            // (6) Eine Quelle ohne Konto fuehrt kein Kontingent — sie sagt das, statt zu antworten.
+            var tvstQuota = SourceRegistry.BuildStatus(quotaContext, new PluginConfiguration())
+                .Status.First(s => s.Key == TvstEngine.SourceKey)
+                .QuotaAsync(forDownload: false, CancellationToken.None).GetAwaiter().GetResult();
+            Check(tvstQuota.State == SourceQuotaState.Unreadable
+                  && tvstQuota.Reason == "this source keeps no quota",
+                "F-M733 (6): tvst fuehrt kein Kontingent und sagt genau das",
+                tvstQuota.Reason ?? "?");
+        }
+        finally
+        {
+            try { Directory.Delete(dataDir, true); } catch (IOException) { }
+        }
+    }
+
+    /// <summary>
+    /// F-M734 / T395: die Titel-Anlage als Teil des Sende-Auftrags — Vertragsform, die beiden
+    /// store-freien Nachschlagewege, und die Quelle, die das gar nicht kann. Fuenf Pruefungen.
+    /// </summary>
+    /// <param name="root">Repo-Wurzel.</param>
+    /// <param name="plugin">Pfad des Plugin-Projekts.</param>
+    private static void TitelAnlage(string root, string plugin)
+    {
+        // (1) Der Vertrag: die Frage steht im Auftrag, die Antwort daneben — und die beiden Abkuerzungen
+        //     (Resolved/Settled) sagen genau, was der Ablauf damit entscheiden darf.
+        var request = new SourceSendRequest();
+        var answer = SourceSendAnswer.Accepted("x");
+        Check(!request.EnsureTitle
+              && !request.DryRun
+              && answer.Title.State == SourceTitleState.NotAsked
+              && new SourceTitleAnswer(SourceTitleState.Created).Resolved
+              && new SourceTitleAnswer(SourceTitleState.Ready).Resolved
+              && new SourceTitleAnswer(SourceTitleState.CreatedWithoutId).Settled
+              && new SourceTitleAnswer(SourceTitleState.ExistsWithoutId).Settled
+              && !new SourceTitleAnswer(SourceTitleState.NotFound).Settled
+              && !new SourceTitleAnswer(SourceTitleState.NotFound).Resolved,
+            "F-M734 (1): EnsureTitle + DryRun im Auftrag, Title in der Antwort; nur Angelegt/Bereit ist 'bereit', nur 'ohne Kennung' ist 'entschieden'");
+
+        // (2) Die Quelle, die keine Titel anlegt, sagt das — und haelt den Versand nicht auf.
+        var subdl = new SubdlEngine(new ScribeApiClient(new HttpClient()), SourceEngineContextOnly(), seasonPacks: true);
+        var subdlAntwort = subdl.SendAsync(
+                new SourceSendRequest { EnsureTitle = true, Language = "xx-unknown" },
+                CancellationToken.None)
+            .GetAwaiter().GetResult();
+        Check(subdlAntwort.Title.State == SourceTitleState.NotAskable
+              && subdlAntwort.Title.Reason is { Length: > 0 },
+            "F-M734 (2): SubDL antwortet NotAskable statt Titel zu erfinden",
+            subdlAntwort.Title.State + ": " + (subdlAntwort.Title.Reason ?? "?"));
+
+        // (3) Die beiden Nachschlagewege kennen unseren Bestand nicht — Grenzregel (a).
+        var mstLookup = File.ReadAllText(Path.Combine(plugin, "Api", "Endpoints", "MsubMovieLookup.cs"));
+        var tvstLookup = File.ReadAllText(Path.Combine(plugin, "Api", "Endpoints", "TvstShowLookup.cs"));
+        Check(new[] { mstLookup, tvstLookup }.All(t =>
+                  !t.Contains("Registry", StringComparison.Ordinal)
+                  && !t.Contains("Pipeline.", StringComparison.Ordinal)
+                  && t.Contains("SourceTitleState", StringComparison.Ordinal)),
+            "F-M734 (3): beide Nachschlagewege sind store-frei und antworten in den neutralen Zustaenden");
+
+        // (4) Beide Engines fragen sie, und ein Trockenlauf legt nichts an.
+        var mstEngine = File.ReadAllText(Path.Combine(plugin, "Sources", "Msub", "MsubEngine.cs"));
+        var tvstEngine = File.ReadAllText(Path.Combine(plugin, "Sources", "Tvst", "TvstEngine.cs"));
+        Check(mstEngine.Contains("MsubMovieLookup(", StringComparison.Ordinal)
+              && tvstEngine.Contains("TvstShowLookup(", StringComparison.Ordinal)
+              && mstEngine.Contains("request.DryRun", StringComparison.Ordinal)
+              && tvstEngine.Contains("request.DryRun", StringComparison.Ordinal),
+            "F-M734 (4): mst und tvst legen im Auftrag an — und reichen den Trockenlauf durch");
+
+        // (5) Im Trockenlauf gibt es kein Urteil: beide Wege antworten NotAskable, also entscheidet
+        //     der Ablauf nichts (kein Paar wird geschlossen).
+        Check(mstLookup.Contains("if (dryRun)", StringComparison.Ordinal)
+              && tvstLookup.Contains("if (dryRun)", StringComparison.Ordinal)
+              && mstLookup.Split("SourceTitleState.NotAskable").Length - 1 >= 2
+              && tvstLookup.Split("SourceTitleState.NotAskable").Length - 1 >= 2,
+            "F-M734 (5): der Trockenlauf legt nichts an und entscheidet nichts");
+    }
+
+    /// <summary>F-M734: ein Kontext fuer Pruefungen, die nur den Vertrag brauchen.</summary>
+    /// <returns>Der Kontext.</returns>
+    private static SourceEngineContext SourceEngineContextOnly()
+        => new(new HttpClient(), NullLogger.Instance, TimeProvider.System);
+
+    /// <summary>
+    /// Ein Handler, der die angefragten Adressen festhaelt und ueberall 200 mit einem harmlosen Rumpf
+    /// antwortet. Gemessen wird die ANFRAGE, nicht die Antwort.
+    /// </summary>
+    private sealed class StatusFänger : HttpMessageHandler
+    {
+        /// <summary>Gets die angefragten Adressen in der Reihenfolge des Aufrufs.</summary>
+        public List<string> Urls { get; } = new();
+
+        /// <inheritdoc />
+        protected override Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            Urls.Add(request.RequestUri?.ToString() ?? string.Empty);
+            return Task.FromResult(new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"status\":false}", System.Text.Encoding.UTF8, "application/json"),
+            });
+        }
+    }
+
+    /// <summary>
+    /// Ein Handler, der die Login-Anfrage festhaelt. Antwortet mit 200 und einem Rumpf, der keine
+    /// Auskunft gibt — die Pruefung misst die ANFRAGE, nicht die Antwort.
+    /// </summary>
+    private sealed class LoginFänger : HttpMessageHandler
+    {
+        /// <summary>Gets der formkodierte Rumpf der ersten Anfrage an <c>/login</c>.</summary>
+        public string LoginBody { get; private set; } = string.Empty;
+
+        /// <inheritdoc />
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.RequestUri is not null
+                && request.RequestUri.AbsolutePath.EndsWith("/login", StringComparison.Ordinal)
+                && LoginBody.Length == 0)
+            {
+                LoginBody = request.Content is null
+                    ? string.Empty
+                    : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"status\":false,\"error\":\"probe\"}", System.Text.Encoding.UTF8, "application/json"),
+            };
+        }
+    }
+
+    /// <summary>
+    /// F-M735: die Sprachauskunft der Quelle — beide Richtungen, geschlossene Liste oder offen, und der
+    /// Ablauf fragt die Quelle statt den Client beim Namen.
+    /// </summary>
+    /// <param name="root">Wurzel des Baums.</param>
+    /// <param name="plugin">Das Plugin-Verzeichnis.</param>
+    private static void Sprachauskunft(string root, string plugin)
+    {
+        string[] keys = { "subdl", "tvsubtitles", "moviesubtitles" };
+        var ohneAuskunft = keys.Where(k => SourceLanguages.Voice(k) is null).ToList();
+        Check(ohneAuskunft.Count == 0,
+            "F-M735: jede Quelle gibt eine Sprachauskunft her (zwei Richtungen und die Liste)",
+            ohneAuskunft.Count == 0
+                ? string.Join(", ", keys.Select(k =>
+                    k + ":"
+                    + SourceLanguages.Voice(k)!.ToSite("DEU")
+                    + "/"
+                    + (SourceLanguages.Voice(k)!.Supported is null ? "offen" : SourceLanguages.Voice(k)!.Supported!.Count.ToString(System.Globalization.CultureInfo.InvariantCulture))))
+                : "fehlt: " + string.Join(", ", ohneAuskunft));
+
+        // Die beiden Seiten fuehren eine geschlossene Liste, SubDL keine — und „keine Liste" ist NICHT
+        // dasselbe wie „leere Liste": die leere wuerde jede Sendung schliessen.
+        var tvst = SourceLanguages.Voice("tvsubtitles")!;
+        var mst = SourceLanguages.Voice("moviesubtitles")!;
+        var subdl = SourceLanguages.Voice("subdl")!;
+        Check(tvst.Supported is { Count: > 0 } && mst.Supported is { Count: > 0 } && subdl.Supported is null,
+            "F-M735: die beiden Seiten fuehren eine geschlossene Liste, SubDL keine (null, nicht leer)",
+            "tvst=" + (tvst.Supported?.Count.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "null")
+            + " mst=" + (mst.Supported?.Count.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "null")
+            + " subdl=" + (subdl.Supported?.Count.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "offen"));
+
+        // Eine Sprache, die die Seite nicht fuehrt, wird verneint; die offene Quelle verneint nie.
+        Check(!SourceLanguages.NimmtSprache("tvsubtitles", "HIN")
+              && !SourceLanguages.NimmtSprache("moviesubtitles", "HIN")
+              && SourceLanguages.NimmtSprache("tvsubtitles", "DEU")
+              && SourceLanguages.NimmtSprache("subdl", "HIN")
+              && SourceLanguages.NimmtSprache("gibtesnicht", "HIN"),
+            "F-M735: nimmt diese Quelle diese Sprache an? Die Seiten sagen bei Unbekanntem nein, die offene Quelle und ein unbekannter Schluessel nie",
+            "tvst(HIN)=" + SourceLanguages.NimmtSprache("tvsubtitles", "HIN")
+            + " tvst(DEU)=" + SourceLanguages.NimmtSprache("tvsubtitles", "DEU")
+            + " subdl(HIN)=" + SourceLanguages.NimmtSprache("subdl", "HIN"));
+
+        // Die Gegenrichtung liefert die Schreibweise des Bestandes (F-M557) — und raet nicht.
+        Check(tvst.FromSite("gr") == "GRE"
+              && tvst.FromSite("cz") == "CZE"
+              && tvst.FromSite("jp") == "JPN"
+              && tvst.FromSite("gibtsnicht") is null
+              && tvst.ToSite("GRE") == "gr",
+            "F-M735: der Rueckweg liefert das ISO-Kennzeichen des Bestandes, Unbekanntes ergibt null",
+            "gr→" + (tvst.FromSite("gr") ?? "<null>")
+            + " cz→" + (tvst.FromSite("cz") ?? "<null>")
+            + " GRE→" + (tvst.ToSite("GRE") ?? "<null>")
+            + " unbekannt→" + (tvst.FromSite("gibtsnicht") ?? "<null>"));
+
+        // Der Ablauf nennt keinen Client mehr, wenn er eine Sprache pruefen will.
+        var ablauf = Directory.GetFiles(Path.Combine(plugin, "Pipeline"), "*.cs", SearchOption.AllDirectories)
+            .Concat(Directory.GetFiles(Path.Combine(plugin, "ScheduledTasks"), "*.cs", SearchOption.AllDirectories))
+            .ToList();
+        var clientTreffer = ablauf
+            .Where(f => File.ReadAllText(f).Contains("Client.SiteLanguage(", StringComparison.Ordinal))
+            .Select(Path.GetFileName)
+            .ToList();
+        Check(clientTreffer.Count == 0,
+            "F-M735: der Ablauf fragt die Sprachauskunft der Quelle, nicht die Tafel eines Clients",
+            clientTreffer.Count == 0
+                ? "0 Treffer in " + ablauf.Count + " Datei(en)"
+                : string.Join(", ", clientTreffer));
+    }
+
     /// <summary>F-M693: eine Quelldatei mit genau diesen Feldern schreiben (Pruefstand).</summary>
     private static void QuelleSchreiben(
         string dataDir, string key, IReadOnlyList<SourceField> schema, Dictionary<string, string> werte)

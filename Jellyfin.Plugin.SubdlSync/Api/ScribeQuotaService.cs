@@ -63,7 +63,17 @@ public class ScribeQuota : ControllerBase
     [HttpGet]
     public async Task<IActionResult> Get(CancellationToken cancellationToken)
     {
-        string? key = Plugin.Instance?.Configuration.ApiKey;
+        // F-M730: der Schlüssel kommt aus der Datei der Quelle (`sources/subdl.json`), nicht mehr aus der
+        // Plugin-Konfiguration — dieselbe eine Ablage wie für die vier Aufträge und die Konto-Pflege.
+        var plugin = Plugin.Instance;
+        string? key = Jellyfin.Plugin.SubScribe.Sources.SourceSettingsFile
+            .Load(
+                plugin?.DataFolderPath,
+                Jellyfin.Plugin.SubScribe.Sources.Subdl.SubdlEngine.SourceKey,
+                Jellyfin.Plugin.SubScribe.Sources.Subdl.SubdlEngine.Declared,
+                _logger)
+            .Secret(Jellyfin.Plugin.SubScribe.Sources.Subdl.SubdlEngine.FieldApiKey);
+
         if (string.IsNullOrWhiteSpace(key))
         {
             return Ok(new { error = "no-api-key" });

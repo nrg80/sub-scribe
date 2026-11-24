@@ -20,7 +20,7 @@ namespace Jellyfin.Plugin.SubScribe.Api.Endpoints;
 
 /// <summary>
 /// F-M507 (Etappe 2a): die Nummer des Films bei moviesubtitles.org — ermittelt, gespeichert,
-/// wiederverwendet. Das Muster ist das von <see cref="TvstShowResolver"/>, weil die Frage dieselbe ist:
+/// wiederverwendet. Das Muster ist das von <see cref="TvstShowLookup"/>, weil die Frage dieselbe ist:
 /// welche Nummer hat DIESES Medium bei der Gegenseite.
 /// <para>
 /// DIE REIHENFOLGE IST FEST UND KURZ:
@@ -36,18 +36,18 @@ namespace Jellyfin.Plugin.SubScribe.Api.Endpoints;
 /// </description></item>
 /// <item><description>
 /// Kein Jahr, kein Titel oder kein eindeutiger Treffer: EINE Logzeile, kein Wurf — die Quelle fällt für
-/// dieses Medium aus, die anderen laufen weiter. Im DOWNLOAD-Pfad wird nie angelegt; im UPLOAD-Pfad
-/// darf angelegt werden (<see cref="ResolveOrCreateForMediaAsync"/>, F-M513), und auch dort nur nach
-/// dem Doppeleintrag-Schutz.
+/// dieses Medium aus, die anderen laufen weiter. Angelegt wird hier NIE: das Anlegen ist ein Feld des
+/// Sende-Auftrags (F-M734, <see cref="MsubMovieLookup"/>), und der Ablauf liest und schreibt den
+/// Bestand weiterhin selbst.
 /// </description></item>
 /// </list>
 /// </para>
 /// <para>
-/// F-M513 — DIE ANLAGE GEHT NUR UEBER DIE ERWEITERTE FASSUNG, und nur der Upload-Pfad ruft sie: sie
-/// sucht EINMAL (<see cref="MovieSubtitlesClient.CheckForAddAsync"/> beantwortet Auflösung UND
-/// Doppeleintrag-Schutz in einer Runde) und legt nur an, wenn der Titel wirklich nicht da ist. Sie ist
-/// die eine Stelle, an der die neue Nummer in den Store geht (<see cref="Data.FileEntity.MsubMovieId"/>)
-/// — dieselbe Spalte, dieselbe Methode wie bei der Auflösung.
+/// F-M513 — DIE ANLAGE-REGEL BLEIBT, IHR ORT IST EIN ANDERER: eine Suchrunde beantwortet Auflösung UND
+/// Doppeleintrag-Schutz (<see cref="MovieSubtitlesClient.CheckForAddAsync"/>), und nur ein leerer,
+/// lesbarer Befund erlaubt das Anlegen. Sie steht seit F-M734 im Sende-Auftrag
+/// (<see cref="MsubMovieLookup.FindOrCreateAsync"/>); jede neue Nummer geht in dieselbe Spalte wie die
+/// Auflösung (<see cref="Data.FileEntity.MsubMovieId"/>).
 /// </para>
 /// </summary>
 public sealed class MsubMovieResolver
@@ -100,37 +100,7 @@ public sealed class MsubMovieResolver
         bool dryRun,
         CancellationToken ct,
         string? mediaPath = null)
-        => ResolveCoreAsync(registry, mediaHash, movie, dryRun, allowCreate: false, ct, mediaPath);
-
-    /// <summary>
-    /// F-M513: dieselbe Auflösung — und, wenn der Titel auf der Seite <b>wirklich</b> fehlt, das Anlegen.
-    /// <para>
-    /// NUR DER UPLOAD-PFAD DARF SIE RUFFEN. Sie ist die einzige Stelle, an der ein Film entsteht: eine
-    /// Suchrunde (Auflösung + Doppeleintrag-Schutz, <see cref="MovieSubtitlesClient.CheckForAddAsync"/>),
-    /// dann — und nur bei leerem, lesbarem Ergebnis — <c>POST add-movie.php</c>, dann die Nachsuche nach
-    /// der neuen Nummer. Jede neue Nummer geht sofort in <c>MsubMovieId</c>.
-    /// </para>
-    /// <para>
-    /// Ein Trockenlauf baut dieselbe Nutzlast und meldet ihre Groesse
-    /// (<see cref="MsubMovieResolution.AddMovieBytes"/>), sendet aber nichts und schreibt nichts.
-    /// </para>
-    /// </summary>
-    /// <param name="registry">Der Store.</param>
-    /// <param name="mediaHash">Medium (OSHash); null heißt „kein Medium bekannt" — dann führt der Pfad.</param>
-    /// <param name="movie">Der TMDb-Datensatz; Titel und Jahr führen, das Jahr ist Pflicht.</param>
-    /// <param name="dryRun">True: nichts anlegen, nichts schreiben — aber dieselbe Nutzlast bauen.</param>
-    /// <param name="ct">Cancellation token.</param>
-    /// <param name="mediaPath">F-M517: der Pfad der Mediendatei — die zweite Adresse der Medienzeile.</param>
-    /// <returns>Das Ergebnis; <see cref="MsubMovieStatus.Created"/> heißt „neu angelegt und gespeichert".</returns>
-    public Task<MsubMovieResolution> ResolveOrCreateForMediaAsync(
-        ContentHashRegistry registry,
-        string? mediaHash,
-        TmdbMovieInfo movie,
-        bool dryRun,
-        CancellationToken ct,
-        string? mediaPath = null)
-        => ResolveCoreAsync(registry, mediaHash, movie, dryRun, allowCreate: true, ct, mediaPath);
-
+        => ResolveCoreAsync(registry, mediaHash, movie, dryRun, ct, mediaPath);
     /// <summary>
     /// F-M507/F-M513: die Leiter in einer Fassung — gespeichert, gemerkt, gesucht, und (nur mit
     /// <paramref name="allowCreate"/>) angelegt.
@@ -139,7 +109,6 @@ public sealed class MsubMovieResolver
     /// <param name="mediaHash">Medium (OSHash).</param>
     /// <param name="movie">Der TMDb-Datensatz.</param>
     /// <param name="dryRun">True: nichts schreiben, nichts anlegen.</param>
-    /// <param name="allowCreate">True nur im Upload-Pfad: ein fehlender Film darf angelegt werden.</param>
     /// <param name="ct">Cancellation token.</param>
     /// <param name="mediaPath">F-M517: der Pfad der Mediendatei — die zweite Adresse der Medienzeile.</param>
     /// <returns>Das Ergebnis der Leiter.</returns>
@@ -148,7 +117,6 @@ public sealed class MsubMovieResolver
         string? mediaHash,
         TmdbMovieInfo movie,
         bool dryRun,
-        bool allowCreate,
         CancellationToken ct,
         string? mediaPath = null)
     {
@@ -200,175 +168,28 @@ public sealed class MsubMovieResolver
             return new MsubMovieResolution(null, MsubMovieStatus.NoYear);
         }
 
-        if (!allowCreate)
+        var movieId = await _client.FindMovieAsync(title, movie.ReleaseYear, ct).ConfigureAwait(false);
+        if (movieId is not > 0)
         {
-            var movieId = await _client.FindMovieAsync(title, movie.ReleaseYear, ct).ConfigureAwait(false);
-            if (movieId is not > 0)
-            {
-                Log("[moviesubtitles] {Media}: '{Title}' ({Year}) steht nicht (oder nicht eindeutig) in der Suche der Seite — die Quelle wird übersprungen.",
-                    mediaHash ?? "?", title, movie.ReleaseYear.Value);
-                return Remember(cachedKey, new MsubMovieResolution(null, MsubMovieStatus.NotFound));
-            }
-
-            if (dryRun)
-            {
-                // F-M22: der Trockenlauf hinterlässt keine Spur — er benutzt die Nummer, schreibt sie aber nicht.
-                return Remember(cachedKey, new MsubMovieResolution(movieId.Value, MsubMovieStatus.WouldStore));
-            }
-
-            var wie = Persist(registry, mediaHash, mediaPath, movieId.Value);
-            Log("[moviesubtitles] {Media}: '{Title}' ({Year}) ist Film {Id} — {Note}",
-                mediaHash ?? "?", title, movie.ReleaseYear.Value, movieId.Value,
-                Note(wie));
-            return Remember(cachedKey, new MsubMovieResolution(movieId.Value, MsubMovieStatus.Found));
-        }
-
-        // F-M513: EINE Suchrunde, die Auflösung UND Doppeleintrag-Schutz beantwortet. Gefragt werden die
-        // Schreibweisen der Seite (Titel, Titel ohne Artikel, invertierte Form), verglichen wird eng über
-        // Titel UND Jahr — dieselbe Runde entscheidet, ob es den Film gibt und ob er angelegt werden darf.
-        var check = await _client.CheckForAddAsync(title, movie.ReleaseYear.Value, ct).ConfigureAwait(false);
-        if (check.Status == MovieSubtitlesAddStatus.Take)
-        {
-            // Der Titel steht mit DIESEM Jahr da: diese Nummer nehmen, nichts anlegen.
-            if (dryRun)
-            {
-                return Remember(cachedKey, new MsubMovieResolution(check.MovieId, MsubMovieStatus.WouldStore));
-            }
-
-            var wie = Persist(registry, mediaHash, mediaPath, check.MovieId!.Value);
-            Log("[moviesubtitles] {Media}: '{Title}' ({Year}) ist Film {Id} — {Note}",
-                mediaHash ?? "?", title, movie.ReleaseYear.Value, check.MovieId!.Value,
-                Note(wie));
-            return Remember(cachedKey, new MsubMovieResolution(check.MovieId, MsubMovieStatus.Found));
-        }
-
-        if (check.Status == MovieSubtitlesAddStatus.Refuse)
-        {
-            // Der Titel steht da, nur nicht mit diesem Jahr (oder mit unbekanntem Jahr, oder mehrfach).
-            // Dann wird NICHTS angelegt: genau das wäre das Doppel, das der Nutzer nicht will.
-            Log("[moviesubtitles] '{Title}' ({Year}): die Seite führt den Titel schon — gefundenes Jahr {FoundYear}, {Hits} Treffer; nichts angelegt, kein Upload (F-M513)",
-                title, movie.ReleaseYear.Value, check.FoundYear, check.Hits);
-            return Remember(
-                cachedKey,
-                new MsubMovieResolution(null, MsubMovieStatus.ExistsOtherYear, FoundYear: check.FoundYear));
-        }
-
-        if (check.Status == MovieSubtitlesAddStatus.Unclear)
-        {
-            // Keine lesbare Antwort: „gibt es nicht" ist damit NICHT belegt — also nicht anlegen.
-            Log("[moviesubtitles] {Media}: die Suche der Seite antwortete für '{Title}' ({Year}) nicht lesbar — nichts angelegt, die Quelle wird übersprungen (F-M513).",
+            Log("[moviesubtitles] {Media}: '{Title}' ({Year}) steht nicht (oder nicht eindeutig) in der Suche der Seite — die Quelle wird übersprungen.",
                 mediaHash ?? "?", title, movie.ReleaseYear.Value);
-            return Remember(cachedKey, new MsubMovieResolution(null, MsubMovieStatus.Unclear));
+            return Remember(cachedKey, new MsubMovieResolution(null, MsubMovieStatus.NotFound));
         }
 
-        // ---- kein Treffer, und die Suche war lesbar: anlegen -------------------------------------
-        MovieSubtitlesAddMovie nutzlast;
-        try
+        if (dryRun)
         {
-            nutzlast = MovieSubtitlesClient.BuildAddMovie(title, movie.ReleaseYear.Value);
-        }
-        catch (ArgumentException ex)
-        {
-            // Das Formular nimmt diese Angaben nicht (leerer Name, unplausibles Jahr) — dann entsteht
-            // keine Anfrage, und hier wird auch nichts behauptet.
-            Log("[moviesubtitles] '{Title}' ({Year}): das Anlege-Formular nimmt diese Angaben nicht ({Reason}) — nichts angelegt (F-M513).",
-                title, movie.ReleaseYear.Value, ex.Message);
-            return Remember(cachedKey, new MsubMovieResolution(null, MsubMovieStatus.CreateFailed, Answer: ex.Message));
+            // F-M22: der Trockenlauf hinterlässt keine Spur — er benutzt die Nummer, schreibt sie aber nicht.
+            return Remember(cachedKey, new MsubMovieResolution(movieId.Value, MsubMovieStatus.WouldStore));
         }
 
-        MovieSubtitlesAddMovieResult angelegt;
-        try
-        {
-            angelegt = await _client.AddMovieAsync(nutzlast, dryRun, ct).ConfigureAwait(false);
-        }
-        catch (OperationCanceledException)
-        {
-            throw;
-        }
-        catch (Exception ex)
-        {
-            Log("[moviesubtitles] '{Title}' ({Year}): das Anlegen scheiterte ({Error}) — nichts gespeichert, die Quelle wird übersprungen (F-M513).",
-                title, movie.ReleaseYear.Value, ex.Message);
-            return Remember(cachedKey, new MsubMovieResolution(null, MsubMovieStatus.CreateFailed, Answer: ex.Message));
-        }
+        var wie = Persist(registry, mediaHash, mediaPath, movieId.Value);
+        Log("[moviesubtitles] {Media}: '{Title}' ({Year}) ist Film {Id} — {Note}",
+            mediaHash ?? "?", title, movie.ReleaseYear.Value, movieId.Value,
+            Note(wie));
+        return Remember(cachedKey, new MsubMovieResolution(movieId.Value, MsubMovieStatus.Found));
 
-        if (angelegt.Outcome == MovieSubtitlesAddOutcome.DryRun)
-        {
-            // Trockenlauf: derselbe Rumpf, kein POST. Die Groesse ist die des Ernstfalls, weil die
-            // Nutzlast VOR der Weiche gebaut wird.
-            Log("[moviesubtitles] DRY-RUN: '{Title}' ({Year}) würde angelegt — {Bytes} Bytes Formular-Rumpf, nichts gesendet (F-M513).",
-                title, movie.ReleaseYear.Value, angelegt.BodyBytes);
-            return Remember(
-                cachedKey,
-                new MsubMovieResolution(
-                    null, MsubMovieStatus.WouldCreate, AddMovieBytes: angelegt.BodyBytes));
-        }
-
-        if (angelegt.Outcome == MovieSubtitlesAddOutcome.Exists)
-        {
-            // F-M515: die Seite hat die Anlage verweigert („This Movie already exist“) — und die Nachsuche
-            // nennt den Film. Dann ist die Nummer die Antwort: sie wird benutzt und gespeichert, aber es
-            // wird KEIN zweiter Anlage-Versuch unternommen.
-            var wie = Persist(registry, mediaHash, mediaPath, angelegt.MovieId!.Value);
-            Log("[moviesubtitles] '{Title}' ({Year}): die Seite meldet „{Answer}“ — Id {Id} aus der Nachsuche übernommen, nichts angelegt (F-M515) — {Note}",
-                title, movie.ReleaseYear.Value, MovieSubtitlesClient.AddMovieExistsMarker,
-                angelegt.MovieId!.Value, Note(wie));
-            return Remember(cachedKey, new MsubMovieResolution(angelegt.MovieId, MsubMovieStatus.ExistsFound));
-        }
-
-        if (angelegt.Outcome == MovieSubtitlesAddOutcome.ExistsUnknownId)
-        {
-            // Live gemessen 16.11.2026: die Seite sagt „existiert schon“ und führt den Film trotzdem
-            // nirgends — Suche, Buchstabenliste und add.php?filter= bleiben leer. Ohne tvid kein Upload,
-            // und keine Nummer wird erfunden. Ein zweiter POST fällt nicht.
-            Log("[moviesubtitles] '{Title}' ({Year}): die Seite meldet „{Answer}“, die Suche nennt aber keine Id — nichts gespeichert, kein Upload (F-M515)",
-                title, movie.ReleaseYear.Value, MovieSubtitlesClient.AddMovieExistsMarker);
-            return Remember(
-                cachedKey,
-                new MsubMovieResolution(null, MsubMovieStatus.ExistsWithoutId, Answer: angelegt.Response));
-        }
-
-        if (angelegt.Outcome == MovieSubtitlesAddOutcome.Rejected)
-        {
-            // F-M515: 2xx ohne den belegten Marker (live: das unveränderte Formular). Das ist KEINE
-            // Anlage — der Textauszug ist der Grund, gesucht wird nicht, gespeichert wird nichts.
-            Log("[moviesubtitles] '{Title}' ({Year}): die Seite hat nicht angelegt ({Reason}) — nichts gespeichert, kein Upload (F-M515).",
-                title, movie.ReleaseYear.Value, angelegt.Reason ?? "?");
-            return Remember(
-                cachedKey,
-                new MsubMovieResolution(
-                    null, MsubMovieStatus.CreateFailed, Answer: angelegt.Response ?? angelegt.Reason));
-        }
-
-        if (!angelegt.Ok)
-        {
-            // Kein 2xx: der Status ist der Grund, der Text der Seite geht mit. Nichts gespeichert.
-            Log("[moviesubtitles] '{Title}' ({Year}): die Seite hat das Anlegen abgelehnt ({Reason}) — nichts gespeichert, kein Upload (F-M513).",
-                title, movie.ReleaseYear.Value, angelegt.Reason ?? "?");
-            return Remember(
-                cachedKey,
-                new MsubMovieResolution(
-                    null, MsubMovieStatus.CreateFailed, Answer: angelegt.Response ?? angelegt.Reason));
-        }
-
-        if (angelegt.MovieId is not > 0)
-        {
-            // ANGELEGT, ID NICHT LESBAR: der POST wurde angenommen, aber die Nachsuche nennt den Film
-            // nicht. Ohne tvid gibt es keinen Upload — und eine Nummer wird nicht erfunden.
-            Log("[moviesubtitles] '{Title}' ({Year}) wurde angelegt, aber die Nachsuche nannte keine Id — nichts gespeichert, kein Upload (F-M513).",
-                title, movie.ReleaseYear.Value);
-            return Remember(
-                cachedKey,
-                new MsubMovieResolution(null, MsubMovieStatus.CreatedWithoutId, Answer: angelegt.Response));
-        }
-
-        // Die Nummer steht fest: SOFORT in den Store, an derselben Spalte wie die Auflösung —
-        // und seit F-M517 auch dann, wenn nur der PFAD die Zeile adressiert.
-        var geschrieben = Persist(registry, mediaHash, mediaPath, angelegt.MovieId.Value);
-        Log("[moviesubtitles] '{Title}' ({Year}) neu angelegt — Id {Id} — {Note}",
-            title, movie.ReleaseYear.Value, angelegt.MovieId.Value, Note(geschrieben));
-        return Remember(cachedKey, new MsubMovieResolution(angelegt.MovieId, MsubMovieStatus.Created));
     }
+
 
     /// <summary>
     /// F-M507: merkt sich das Ergebnis dieses Laufs — auch ein Fehlschlag. Sonst fragte jede weitere
@@ -460,31 +281,11 @@ public static class MsubMovieStatus
     /// </summary>
     public const string ExistsOtherYear = "exists-other-year";
 
-    /// <summary>F-M513: der Trockenlauf hätte angelegt — gebaut wurde die Nutzlast, gesendet nichts.</summary>
-    public const string WouldCreate = "would-create";
 
-    /// <summary>F-M513: neu angelegt und die Nummer steht im Store.</summary>
-    public const string Created = "created";
 
-    /// <summary>F-M513: angelegt (HTTP 2xx), aber die Nachsuche nannte keine Nummer — kein tvid, kein Upload.</summary>
-    public const string CreatedWithoutId = "created-id-not-readable";
 
-    /// <summary>
-    /// F-M513: das Anlegen wurde abgelehnt oder scheiterte — nichts gespeichert, kein Upload.
-    /// </summary>
-    public const string CreateFailed = "create-failed";
 
-    /// <summary>
-    /// F-M515: die Seite meldete „This Movie already exist“ (nichts angelegt), und die Nachsuche nannte
-    /// die Nummer — sie wird benutzt und gespeichert.
-    /// </summary>
-    public const string ExistsFound = "exists-took-id";
 
-    /// <summary>
-    /// F-M515: die Seite meldete „This Movie already exist“, die Suche nennt aber keine Nummer — live
-    /// gemessen der Regelfall bei einem eben angelegten Film. Kein tvid, kein Upload.
-    /// </summary>
-    public const string ExistsWithoutId = "exists-id-not-readable";
 
     /// <summary>F-M513: die Suche antwortete nicht lesbar — „gibt es nicht" ist nicht belegt, also nichts angelegt.</summary>
     public const string Unclear = "unclear";
@@ -508,7 +309,7 @@ public static class MsubMovieStatus
 /// <param name="Answer">F-M513: der Text der Seite, wenn einer vorliegt (Ablehnung beim Anlegen,
 /// unlesbare Antwort) — durchgereicht, nicht gedeutet.</param>
 public sealed record MsubMovieResolution(
-    int? MovieId, string Status, int FoundYear = 0, int AddMovieBytes = 0, string? Answer = null)
+    int? MovieId, string Status, int FoundYear = 0, string? Answer = null)
 {
     /// <summary>Gets a value indicating whether eine Nummer vorliegt, mit der der Abruf arbeiten kann.</summary>
     public bool Resolved => MovieId is > 0;

@@ -23,6 +23,8 @@ using System.Threading.Tasks;
 using Jellyfin.Plugin.SubScribe.Configuration;
 using Jellyfin.Plugin.SubScribe.Pipeline;
 
+using Jellyfin.Plugin.SubScribe.Text;
+
 namespace Jellyfin.Plugin.SubScribe.Api;
 
 /// <summary>
@@ -2510,11 +2512,11 @@ public sealed class ScribeApiClient
                 // candidate list, while the archive entry may carry the same letters styled. The fold
                 // runs on both, so a clean name stays an exact match and a dressed one is no longer
                 // reported as "no bytes".
-                string wantedFolded = TextFold.Fold(memberName);
+                // F-M736: der Vergleich laeuft ueber die eine Eingangsnormierung, nicht ueber zwei
+                // selbstgefaltete Seiten.
                 foreach (var e in zip.Entries)
                 {
-                    if (string.Equals(TextFold.Fold(e.Name), wantedFolded, StringComparison.OrdinalIgnoreCase)
-                        || string.Equals(TextFold.Fold(e.FullName), wantedFolded, StringComparison.OrdinalIgnoreCase))
+                    if (TextFold.Same(e.Name, memberName) || TextFold.Same(e.FullName, memberName))
                     {
                         wanted = e.FullName;
                         break;

@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.34",
-        "changelog": "v12.3.8.34: a source's remembered no closes that source's track — the refusal used to stop the second call only,\n    so the track stayed open and every run extracted the file again.",
+        "version": "12.3.8.44",
+        "changelog": "v12.3.8.44: the sources' status lights speak English again and no longer repeat the quota bars.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.34/Jellyfin.Plugin.SubdlSync_12.3.8.34.zip",
-        "checksum": "7838f907a4895fccd8e086ad24073af2",
-        "timestamp": "2026-11-24T09:16:08Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.44-dev/Jellyfin.Plugin.SubdlSync_12.3.8.44.zip",
+        "checksum": "0beb0071178df869debcf31eece3f362",
+        "timestamp": "2026-11-24T18:34:06Z"
       }
     ]
   }

@@ -929,7 +929,7 @@
     },
     "T387": {
       "suite": "textfold",
-      "checks": 25
+      "checks": 31
     },
     "T388": {
       "suite": "endpoints",
@@ -946,6 +946,50 @@
     "T391": {
       "suite": "dupskip",
       "checks": 7
+    },
+    "T392": {
+      "suite": "sources",
+      "checks": 7
+    },
+    "T393": {
+      "suite": "sources",
+      "checks": 7
+    },
+    "T394": {
+      "suite": "sources",
+      "checks": 6
+    },
+    "T395": {
+      "suite": "sources",
+      "checks": 5
+    },
+    "T396": {
+      "suite": "sources",
+      "checks": 5
+    },
+    "T397": {
+      "suite": "seasonpack",
+      "checks": 6
+    },
+    "T398": {
+      "suite": "endpoints",
+      "checks": 5
+    },
+    "T399": {
+      "suite": "endpoints",
+      "checks": 4
+    },
+    "T400": {
+      "suite": "endpoints",
+      "checks": 6
+    },
+    "T401": {
+      "suite": "endpoints",
+      "checks": 4
+    },
+    "T402": {
+      "suite": "endpoints",
+      "checks": 4
     }
   }
 }

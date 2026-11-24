@@ -9,6 +9,8 @@
 // warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 // See the GNU General Public License for more details.
 
+using System.Threading;
+using System.Threading.Tasks;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -39,14 +41,34 @@ namespace Jellyfin.Plugin.SubScribe.Sources;
 public sealed class SourceRegistry
 {
     private readonly IReadOnlyList<ISourceEngine> _engines;
+    private readonly IReadOnlyList<ISourceMaintenance> _maintenance;
+    private readonly IReadOnlyList<ISourceStatus> _status;
 
-    private SourceRegistry(IReadOnlyList<ISourceEngine> engines)
+    private SourceRegistry(
+        IReadOnlyList<ISourceEngine> engines,
+        IReadOnlyList<ISourceMaintenance> maintenance,
+        IReadOnlyList<ISourceStatus> status)
     {
         _engines = engines;
+        _maintenance = maintenance;
+        _status = status;
     }
 
     /// <summary>Gets die Engines in der Reihenfolge, in der gefragt wird.</summary>
     public IReadOnlyList<ISourceEngine> Engines => _engines;
+
+    /// <summary>
+    /// F-M729: die Quellen, die ihre Konto-Pflege anbieten (Einsendungen auflisten, zurückziehen) — ein
+    /// ZWEITER, optionaler Vertrag neben den vier Aufträgen. Wer ihn nicht implementiert, fehlt hier
+    /// einfach; der Ablauf fragt keine Quelle nach ihrem Namen.
+    /// </summary>
+    public IReadOnlyList<ISourceMaintenance> Maintenance => _maintenance;
+
+    /// <summary>
+    /// F-M730: die Selbstauskunft jeder Quelle — der DRITTE, schmale Vertrag. Jede Quelle kann ihn
+    /// erfüllen (auch eine ohne Konto), und die Statusseite malt nur noch, was hier zurückkommt.
+    /// </summary>
+    public IReadOnlyList<ISourceStatus> Status => _status;
 
     /// <summary>Gets die Schlüssel der Engines, in derselben Reihenfolge.</summary>
     public IReadOnlyList<string> Keys
@@ -112,11 +134,12 @@ public sealed class SourceRegistry
         // F-M654: SubDL steht immer im Pack-Slot — der Schalter dieser Quelle entscheidet eine Etage
         // höher, ob der Lauf überhaupt packt, nicht diese Liste. Das ist der Stand vor F-M682 und bleibt
         // er: die Umstellung ändert die Antwort, nicht den Umfang.
-        var subdl = new SubdlEngine(
-            context.Subdl ?? new Api.ScribeApiClient(context.Http),
-            context,
-            seasonPacks: true,
-            Settings(context, SubdlEngine.SourceKey, SubdlEngine.Declared));
+        // F-M683/F-M729: die Datei dieser Quelle wird EINMAL gelesen und von beiden Vertraegen benutzt —
+        // die vier Auftraege und die Konto-Pflege sehen damit dieselben Zugangsdaten.
+        var subdlSettings = Settings(context, SubdlEngine.SourceKey, SubdlEngine.Declared);
+        var subdlClient = context.Subdl ?? new Api.ScribeApiClient(context.Http);
+
+        var subdl = new SubdlEngine(subdlClient, context, seasonPacks: true, subdlSettings);
 
         // F-M495: die zweite Quelle hängt an IHREM Upload-Schalter — die Frage wird hier aus der
         // Konfiguration beantwortet, nicht im Ablauf am Namen.
@@ -139,8 +162,101 @@ public sealed class SourceRegistry
             new AuditedSourceEngine(msub, context.Logger, config.LogMode),
         };
 
-        return new SourceRegistry(gehoert);
+        // F-M729: die Konto-Pflege steht neben den vier Auftraegen. Heute kann sie nur SubDL —
+        // tvsubtitles fuehrt keine Einsendungsliste, moviesubtitles hat keinen Upload.
+        var pflege = new ISourceMaintenance[]
+        {
+            new Subdl.SubdlMaintenance(context, subdlSettings),
+        };
+
+        return new SourceRegistry(gehoert, pflege, StatusEngines(context, subdlSettings));
     }
+
+    /// <summary>
+    /// F-M729: baut NUR die Konto-Pflege — für Aufrufer, die keinen Lauf fahren und deshalb weder die
+    /// Suchclients der Quellen noch die vier Aufträge brauchen (der Upload-Nachlauf). Die Grenzregeln
+    /// gelten unverändert: der HttpClient wird gereicht, nicht angelegt.
+    /// </summary>
+    /// <param name="context">Was das Plugin reicht (HttpClient, Logger, Zeitgeber).</param>
+    /// <param name="config">Die Einstellungen (wird heute nicht gelesen, bleibt in der Signatur für den Ruf).</param>
+    /// <returns>Die Registrierung mit leerer Auftragsliste.</returns>
+    public static SourceRegistry BuildMaintenance(SourceEngineContext context, PluginConfiguration config)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var subdlSettings = Settings(context, SubdlEngine.SourceKey, SubdlEngine.Declared);
+        var pflege = new ISourceMaintenance[]
+        {
+            new Subdl.SubdlMaintenance(context, subdlSettings),
+        };
+
+        _ = config;
+        return new SourceRegistry(Array.Empty<ISourceEngine>(), pflege, StatusEngines(context, subdlSettings));
+    }
+
+    /// <summary>
+    /// F-M733: das Kontingent, LIVE — gefragt wird die Quelle, deren Fähigkeiten <c>CanQuota</c> sagen.
+    /// Der Koordinator nennt dabei keine Quelle beim Namen; er fragt „wer führt ein Kontingent".
+    /// </summary>
+    /// <param name="forDownload">True für den Download-Zähler, false für Suche/Upload.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Der Ausgang samt Zahlen, wenn die Quelle welche nennt.</returns>
+    public async Task<SourceQuotaAnswer> QuotaAsync(bool forDownload, CancellationToken ct)
+    {
+        foreach (var engine in _engines)
+        {
+            if (!engine.Capabilities.CanQuota)
+            {
+                continue;
+            }
+
+            foreach (var status in _status)
+            {
+                if (string.Equals(status.Key, engine.Capabilities.Key, StringComparison.Ordinal))
+                {
+                    return await status.QuotaAsync(forDownload, ct).ConfigureAwait(false);
+                }
+            }
+        }
+
+        return new SourceQuotaAnswer(SourceQuotaState.Unreadable, Reason: "no source offers a quota");
+    }
+
+    /// <summary>
+    /// F-M730: baut NUR die Selbstauskunft — für die Statusseite, die keinen Lauf fährt.
+    /// </summary>
+    /// <param name="context">Was das Plugin reicht (HttpClient, Logger, Zeitgeber).</param>
+    /// <param name="config">Die Plugin-Einstellungen (heute nicht gelesen: der Zugang steht in den Quelldateien).</param>
+    /// <returns>Die Registrierung mit leerer Auftragsliste.</returns>
+    public static SourceRegistry BuildStatus(SourceEngineContext context, PluginConfiguration config)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var subdlSettings = Settings(context, SubdlEngine.SourceKey, SubdlEngine.Declared);
+        _ = config;
+        return new SourceRegistry(
+            Array.Empty<ISourceEngine>(),
+            Array.Empty<ISourceMaintenance>(),
+            StatusEngines(context, subdlSettings));
+    }
+
+    /// <summary>
+    /// F-M730: die Selbstauskunft aller drei Quellen. SubDL weiß am meisten (Konto und Kontingent), die
+    /// beiden anderen beantworten nur die Frage nach der Erreichbarkeit — die einzige, die sie selbst
+    /// beantworten können.
+    /// </summary>
+    /// <param name="context">Was das Plugin reicht.</param>
+    /// <param name="subdlSettings">Die gelesenen Einstellungen von SubDL.</param>
+    /// <returns>Die Liste in Anzeigereihenfolge.</returns>
+    private static ISourceStatus[] StatusEngines(SourceEngineContext context, SourceSettings subdlSettings) =>
+        new ISourceStatus[]
+        {
+            new Subdl.SubdlStatus(context, subdlSettings),
+            new ReachabilityStatus(
+                Tvst.TvstEngine.SourceKey, "tvst", "tvst (tvsubtitles.net)", Api.TvSubtitlesClient.BaseUrl, context),
+            new ReachabilityStatus(
+                Msub.MsubEngine.SourceKey, "mst", "mst (moviesubtitles.org)", Api.MovieSubtitlesClient.BaseUrl, context),
+        };
 
     /// <summary>
     /// F-M683: die Einstellungen EINER Quelle aus ihrer eigenen Datei. Kein Zwischenspeicher: die Datei

@@ -379,12 +379,12 @@ internal static class Program
             && TvSubtitlesClient.ResolveShow(softHits, "Pagan Peak") is null,
             "found: " + string.Join(" | ", softHits.Select(h => h.Value)));
         Check("the answer alone decides nothing: the show does (F-M516)",
-            TvstShowResolver.SettleStatus(TvstAddShowOutcome.Created, 4242) == TvstShowStatus.Created
-            && TvstShowResolver.SettleStatus(TvstAddShowOutcome.Unclear, 4242) == TvstShowStatus.Existed
-            && TvstShowResolver.SettleStatus(TvstAddShowOutcome.Refused, 4242) == TvstShowStatus.Existed
-            && TvstShowResolver.SettleStatus(TvstAddShowOutcome.Created, null) == TvstShowStatus.CreatedIdUnknown
-            && TvstShowResolver.SettleStatus(TvstAddShowOutcome.Refused, null) == TvstShowStatus.Refused
-            && TvstShowResolver.SettleStatus(TvstAddShowOutcome.Unclear, null) == TvstShowStatus.Unclear,
+            TvstShowLookup.SettleStatus(TvstAddShowOutcome.Created, 4242) == TvstShowStatus.Created
+            && TvstShowLookup.SettleStatus(TvstAddShowOutcome.Unclear, 4242) == TvstShowStatus.Existed
+            && TvstShowLookup.SettleStatus(TvstAddShowOutcome.Refused, 4242) == TvstShowStatus.Existed
+            && TvstShowLookup.SettleStatus(TvstAddShowOutcome.Created, null) == TvstShowStatus.CreatedIdUnknown
+            && TvstShowLookup.SettleStatus(TvstAddShowOutcome.Refused, null) == TvstShowStatus.Refused
+            && TvstShowLookup.SettleStatus(TvstAddShowOutcome.Unclear, null) == TvstShowStatus.Unclear,
             "created+id, unclear+id, created without id, refused without id are four different answers");
 
         // ---- 6. the parsers against the pages the site served -----------------------------------
@@ -437,8 +437,10 @@ internal static class Program
             && !TvSubtitlesClient.IsZip(Array.Empty<byte>()));
 
         // ---- 6b. F-M517: die Seriennummer geht AUCH OHNE Medien-Hash in die Pfad-Zeile ----------
-        // Der Serienfall hat DASSELBE Loch wie die Filmnummer: `TvstShowResolver.Persist` kehrte bei
-        // fehlendem Medien-Hash stumm zurück, obwohl die Medienzeile existiert und ihren Pfad trägt.
+        // Der Serienfall hat DASSELBE Loch wie die Filmnummer: der Schreibweg kehrte bei fehlendem
+        // Medien-Hash stumm zurück, obwohl die Medienzeile existiert und ihren Pfad trägt. Seit F-M734
+        // schreibt der ABLAUF (F-M734: Registry.SetTvstShowId); geprüft wird deshalb der Schreibweg
+        // selbst, nicht mehr der Nachschlageweg.
         // Der gemessene Anlass (16.11.2026, jf-test) war eine Datei, deren Pfad ein Symlink ohne Ziel
         // ist — `GetMediaHash` liefert dann null.
         const string fm517Pfad =
@@ -463,38 +465,20 @@ internal static class Program
                 reg.EnsureFile(fm517Hash, jellyfinItemId: null, path: fm517Pfad);
                 int vorher = db.Files.Count();
 
-                var aufloeser = new TvstShowResolver(new TvSubtitlesClient(new HttpClient(listenSeite)), null);
-                var ohneHash = await aufloeser
-                    .ResolveForMediaAsync(
-                        reg,
-                        mediaHash: null,
-                        new TmdbSeriesInfo("The Middle", "The Middle", 2009, null),
-                        dryRun: false,
-                        CancellationToken.None,
-                        mediaPath: fm517Pfad)
-                    .ConfigureAwait(false);
+                var geschrieben = reg.SetTvstShowId(null, fm517Pfad, 512);
 
                 int nachher = db.Files.Count();
-                Check("ohne Medien-Hash, aber mit Pfad-Zeile: die gefundene Seriennummer steht danach in der Zeile (F-M517)",
-                    ohneHash.Resolved && ohneHash.ShowId == 512 && ohneHash.Status == TvstShowStatus.Found
+                Check("ohne Medien-Hash, aber mit Pfad-Zeile: die Seriennummer steht danach in der Zeile (F-M517)",
+                    geschrieben != Jellyfin.Plugin.SubScribe.Registry.MediaNumberWrite.None
                     && db.Files.FindById(fm517Hash)?.TvstShowId == "512"
                     && reg.TvstShowIdAtPath(fm517Pfad) == "512"
                     && nachher == vorher && vorher == 1,
                     "id=" + (db.Files.FindById(fm517Hash)?.TvstShowId ?? "<null>")
                     + " zeilen=" + vorher + "->" + nachher);
 
-                var zweite = await aufloeser
-                    .ResolveForMediaAsync(
-                        reg,
-                        mediaHash: null,
-                        new TmdbSeriesInfo("The Middle", "The Middle", 2009, null),
-                        dryRun: false,
-                        CancellationToken.None,
-                        mediaPath: fm517Pfad)
-                    .ConfigureAwait(false);
-                Check("die über den Pfad gespeicherte Seriennummer wird beim naechsten Mal gelesen, nicht neu gesucht (F-M517)",
-                    zweite.Status == TvstShowStatus.Stored && zweite.ShowId == 512 && listenSeite.Requests == 1,
-                    "status=" + zweite.Status + " requests=" + listenSeite.Requests);
+                Check("die über den Pfad gespeicherte Seriennummer wird beim naechsten Mal gelesen, ohne die Seite zu fragen (F-M517)",
+                    reg.TvstShowIdAtPath(fm517Pfad) == "512" && listenSeite.Requests == 0,
+                    "requests=" + listenSeite.Requests);
             }
 
             // (b) Keine Zeile, kein Hash: nichts wird geschrieben, und der Text sagt warum.
@@ -503,17 +487,9 @@ internal static class Program
                 Path.Combine(fm517Root, "ohne-zeile"), null))
             {
                 var regLeer = new Jellyfin.Plugin.SubScribe.Registry.ContentHashRegistry(dbLeer, null, null);
-                var ohneZeile = await new TvstShowResolver(new TvSubtitlesClient(new HttpClient(zweiteListe)), null)
-                    .ResolveForMediaAsync(
-                        regLeer,
-                        mediaHash: null,
-                        new TmdbSeriesInfo("The Middle", "The Middle", 2009, null),
-                        dryRun: false,
-                        CancellationToken.None,
-                        mediaPath: "/opt/data/jf-test/media/middle381/Ohne Zeile/S01E01.mkv")
-                    .ConfigureAwait(false);
+                var ohneZeileWrite = regLeer.SetTvstShowId(null, "/opt/data/jf-test/media/middle381/Ohne Zeile/S01E01.mkv", 512);
                 Check("ohne Hash UND ohne Pfad-Zeile: nichts geschrieben, die Nummer gilt nur fuer diesen Lauf (F-M517)",
-                    ohneZeile.Resolved && ohneZeile.ShowId == 512
+                    ohneZeileWrite == Jellyfin.Plugin.SubScribe.Registry.MediaNumberWrite.None
                     && dbLeer.Files.Count() == 0
                     && MediaNumberNote.Of(Jellyfin.Plugin.SubScribe.Registry.MediaNumberWrite.None) == MediaNumberNote.NotStored,
                     "zeilen=" + dbLeer.Files.Count());

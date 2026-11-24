@@ -760,7 +760,10 @@ internal static class Program
                 "F-M435: without a published entry the upload id stays the handle");
         }
 
-        Check(uploadSrc.Contains("publishedEntry.EntryId") && uploadSrc.Contains("registry.RemapSubdlId("),
+        // F-M729 hat den Nachlauf auf den zweiten Vertrag gestellt: die Zeile der veroeffentlichten Liste
+        // traegt ihren Eintrags-Griff jetzt als `EntryHandle` (neutral) statt als `EntryId` (SubDL-Feld).
+        // Die Aussage bleibt dieselbe — der gespeicherte Griff wandert auf die Eintrags-Kennung.
+        Check(uploadSrc.Contains("publishedEntry.EntryHandle") && uploadSrc.Contains("registry.RemapSubdlId("),
             "F-M435: postprocessing moves stored handles to the published entry id");
         var registrySrc = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Registry/ContentHashRegistry.cs"));
         Check(registrySrc.Contains("public int RemapSubdlId(string uploadId, string entryId)"),
@@ -1164,7 +1167,9 @@ internal static class Program
             int packEnde = packVersand < 0 ? -1 : tvstPipe.IndexOf("private async Task<UploadResult> SendToTvSubtitlesAsync(", packVersand, StringComparison.Ordinal);
             string sender = packVersand < 0 || packEnde < 0 ? string.Empty : tvstPipe[packVersand..packEnde];
             Check(sender.Contains("AsPack = true", StringComparison.Ordinal)
-                  && sender.Contains("MediaId = show.ShowId", StringComparison.Ordinal)
+                  // F-M734: die Nummer kommt aus dem Bestand; fehlt sie, legt die Engine sie im Auftrag an.
+                  && sender.Contains("MediaId = bekannteSerienId", StringComparison.Ordinal)
+                  && sender.Contains("EnsureTitle = true", StringComparison.Ordinal)
                   && sender.Contains("Bytes = plan.TvstZip ?? Array.Empty<byte>()", StringComparison.Ordinal)
                   && sender.Contains("Quality = Api.TvSubtitlesClient.RipFromQuality(plan.Ordered[0].Quality)", StringComparison.Ordinal),
                 "F-M687: the container is ONE order with AsPack=true — the finished archive, the source's own rip value and the number the run resolved");
@@ -1481,6 +1486,40 @@ internal static class Program
               && dbQuelle.Contains("dropped as done, retry {Round} (F-M716/F-M717)", StringComparison.Ordinal),
             "F-M717: die Wiederholung läuft in Schleife, bis keine „schon weg“-Zeile mehr im Stapel steht",
             "Schleife über die gemeldeten Einträge");
+
+        // -----------------------------------------------------------------------------------------
+        // F-M737 (Befund 24.11.2026): Brothers S1 lag mit acht Folgen vollständig im Bestand — und
+        // bekam keinen Behälter, weil die Pack-Phase die Staffel unter Jellyfins Kennung urteilte
+        // (Brothers 2015, 262 ausgestrahlte Folgen), während die Identitätsprüfung erst danach im
+        // Einzelweg lief. Die Prüfung gehört VOR den Schlüssel.
+        // -----------------------------------------------------------------------------------------
+        Check(uploadSrc.Contains(
+                  "private async Task<(string Imdb, string? Tmdb)> VerifiedSeriesIdentityAsync(",
+                  StringComparison.Ordinal),
+            "F-M737: es gibt eine Stelle, die die Identität einer Serie vor dem Staffelurteil prüft",
+            "VerifiedSeriesIdentityAsync");
+        Check(uploadSrc.Contains(
+                  "var geprueft = await VerifiedSeriesIdentityAsync(imdb!, tmdb, episode, ct).ConfigureAwait(false);"
+                  + Environment.NewLine + "            imdb = geprueft.Imdb;",
+                  StringComparison.Ordinal),
+            "F-M737: die Gruppierung prüft die Identität, BEVOR sie den Staffelschlüssel bildet",
+            "Aufruf steht vor var key = (imdb!, season)");
+        int pruefStelle = uploadSrc.IndexOf("var geprueft = await VerifiedSeriesIdentityAsync(", StringComparison.Ordinal);
+        int schluesselStelle = uploadSrc.IndexOf("var present = new Dictionary<(string ImdbId, int Season), List<int>>();", StringComparison.Ordinal);
+        Check(pruefStelle > 0 && schluesselStelle > 0 && pruefStelle > schluesselStelle,
+            "F-M737: die Prüfung liegt hinter dem Aufbau der Staffelkarte — also im Einlesen, nicht danach",
+            $"Prüfung bei {pruefStelle}, Karte bei {schluesselStelle}");
+        Check(uploadSrc.Contains(
+                  "int? jahr = parsed.Year ?? (item as Episode)?.Series?.ProductionYear;",
+                  StringComparison.Ordinal),
+            "F-M737: die Prüfung fragt mit dem Jahr aus dem DATEINAMEN (F-M231), nicht mit Jellyfins Jahr",
+            "parsed.Year zuerst");
+        Check(uploadSrc.Contains("identity checked before the judgement", StringComparison.Ordinal),
+            "F-M737: eine Korrektur wird genannt, damit sie nicht wie ein stiller Wechsel aussieht",
+            "Logzeile nennt Titel, Jahr und beide Kennungen");
+        Check(uploadSrc.Contains("_packIdentity.Clear();", StringComparison.Ordinal),
+            "F-M737: der Merker gilt je Lauf, nicht über Läufe hinweg",
+            "_packIdentity.Clear() beim Laufstart");
 
         Console.WriteLine(Failures.Count == 0
             ? $"seasonpack: {_checks} checks, all green."

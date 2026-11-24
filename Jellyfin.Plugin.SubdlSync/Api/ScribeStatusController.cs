@@ -56,13 +56,86 @@ public class ScribeStatusController : ControllerBase
     public async Task<IActionResult> GetStatus(CancellationToken ct)
     {
         var cfg = Plugin.Instance?.Configuration ?? new PluginConfiguration();
+        var plugin = Plugin.Instance;
+
+        // F-M730 (Betreiber-Entscheidung 24.11.2026: „Auch das könnte man in die maintenance/status
+        // engine einbringen."): Die Seite baut keine Quellen-Clients mehr und liest keine Zugangsdaten
+        // aus der Plugin-Konfiguration. Sie fragt jede Quelle nach ihrer Selbstauskunft und malt nur
+        // noch Kacheln — welche Lichter eine Quelle setzt, entscheidet die Quelle.
+        var lichter = new Dictionary<string, ApiStatusDto>(StringComparer.OrdinalIgnoreCase);
+        using (var statusHttp = ScribeApiClient.NewHttpClient(TimeSpan.FromSeconds(15)))
+        {
+            var registry = Jellyfin.Plugin.SubScribe.Sources.SourceRegistry.BuildStatus(
+                new Jellyfin.Plugin.SubScribe.Sources.SourceEngineContext(
+                    statusHttp,
+                    _logger,
+                    TimeProvider.System,
+                    DataFolder: plugin?.DataFolderPath),
+                cfg);
+
+            foreach (var quelle in registry.Status)
+            {
+                Jellyfin.Plugin.SubScribe.Sources.SourceStatusAnswer antwort;
+                try
+                {
+                    antwort = await quelle.StatusAsync(ct).ConfigureAwait(false);
+                }
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    antwort = new Jellyfin.Plugin.SubScribe.Sources.SourceStatusAnswer(
+                        quelle.Key,
+                        new[]
+                        {
+                            new Jellyfin.Plugin.SubScribe.Sources.SourceStatusLight(
+                                quelle.Key,
+                                quelle.Key,
+                                Jellyfin.Plugin.SubScribe.Sources.SourceHealth.Bad,
+                                Configured: true,
+                                Message: ex.Message),
+                        });
+                }
+
+                foreach (var licht in antwort.Lights)
+                {
+                    lichter[licht.Key] = new ApiStatusDto
+                    {
+                        Label = licht.Label,
+                        Configured = licht.Configured,
+                        Light = licht.Health switch
+                        {
+                            Jellyfin.Plugin.SubScribe.Sources.SourceHealth.Good => "green",
+                            Jellyfin.Plugin.SubScribe.Sources.SourceHealth.Warn => "yellow",
+                            _ => "red",
+                        },
+                        RateLimited = licht.Health == Jellyfin.Plugin.SubScribe.Sources.SourceHealth.Warn,
+                        Message = licht.Message,
+                    };
+                }
+            }
+        }
+
+        ApiStatusDto Kachel(string key, string ersatz) =>
+            lichter.TryGetValue(key, out var dto)
+                ? dto
+                : new ApiStatusDto
+                {
+                    Label = ersatz,
+                    Light = "red",
+                    Configured = false,
+                    Message = "die Quelle hat sich nicht gemeldet",
+                };
+
         var result = new StatusDto
         {
-            Subdl = await CheckSubdlAsync(cfg, ct).ConfigureAwait(false),
-            SubdlLogin = await CheckSubdlLoginAsync(cfg, ct).ConfigureAwait(false),
+            Subdl = Kachel("subdl", "SubDL API"),
+            SubdlLogin = Kachel("subdlLogin", "SubDL Login"),
             Tmdb = await CheckTmdbAsync(cfg, ct).ConfigureAwait(false),
-            Tvst = await CheckReachAsync("tvst (tvsubtitles.net)", "https://www.tvsubtitles.net/", ct).ConfigureAwait(false),
-            Mst = await CheckReachAsync("mst (moviesubtitles.org)", "https://www.moviesubtitles.org/", ct).ConfigureAwait(false),
+            Tvst = Kachel("tvst", "tvst (tvsubtitles.net)"),
+            Mst = Kachel("mst", "mst (moviesubtitles.org)"),
             Directories = CheckDirectories(cfg),
             Timestamp = DateTime.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture)
         };
@@ -302,151 +375,6 @@ public class ScribeStatusController : ControllerBase
             SinceUtc = row.SinceUtc?.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
             Updated = row.Updated.ToString("O", System.Globalization.CultureInfo.InvariantCulture)
         });
-    }
-
-    private async Task<ApiStatusDto> CheckSubdlLoginAsync(PluginConfiguration cfg, CancellationToken ct)
-    {
-        var dto = new ApiStatusDto { Label = "SubDL Login", Configured = !string.IsNullOrWhiteSpace(cfg.Username) && !string.IsNullOrWhiteSpace(cfg.Password) };
-        if (!dto.Configured)
-        {
-            dto.Light = "yellow";
-            dto.Message = "Username/password not configured";
-            return dto;
-        }
-
-        try
-        {
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cts.CancelAfter(TimeSpan.FromSeconds(15));
-            using var http = new HttpClient();
-            // F-M343: the same identity as every other SubDL call. This said
-            // "SubDL-Sync-Status/1.0" — the pre-rename product name and a frozen version.
-            http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", ScribeApiClient.DefaultUserAgent);
-            var client = new ScribeApiClient(http)
-            {
-                ApiKey = cfg.ApiKey,
-                Username = cfg.Username,
-                Password = cfg.Password
-            };
-            var token = await client.LoginAsync(cts.Token).ConfigureAwait(false);
-            if (string.IsNullOrWhiteSpace(token))
-            {
-                dto.Light = "red";
-                dto.Message = "no token returned";
-            }
-            else
-            {
-                dto.Light = "green";
-                dto.Message = "OK";
-            }
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("credentials wrong", StringComparison.OrdinalIgnoreCase))
-        {
-            dto.Light = "red";
-            dto.Message = "wrong username/password";
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("not authorized", StringComparison.OrdinalIgnoreCase))
-        {
-            dto.Light = "red";
-            dto.Message = "not authorized — check API key";
-        }
-        catch (InvalidOperationException ex) when (ex.Message.Contains("429", StringComparison.OrdinalIgnoreCase))
-        {
-            dto.Light = "yellow";
-            dto.Message = "rate-limited — try again later";
-        }
-        catch (Exception ex)
-        {
-            dto.Light = "red";
-            dto.Message = $"Login failed: {ex.Message}";
-        }
-
-        return dto;
-    }
-
-    private async Task<ApiStatusDto> CheckSubdlAsync(PluginConfiguration cfg, CancellationToken ct)
-    {
-        var dto = new ApiStatusDto { Label = "SubDL API", Configured = !string.IsNullOrWhiteSpace(cfg.ApiKey) };
-        if (!dto.Configured)
-        {
-            dto.Light = "yellow";
-            dto.Message = "API key not configured — required for subtitle search";
-            return dto;
-        }
-
-        try
-        {
-            using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
-            cts.CancelAfter(TimeSpan.FromSeconds(15));
-            // Lightweight search probe: query for a well-known imdb id with no real expectation of hits.
-            // F-M343: this hits the same documented endpoint as the real search, so it carries the
-            // same integration name rather than arriving as an anonymous caller.
-            var url = $"https://api.subdl.com/api/v1/subtitles?api_key={WebUtility.UrlEncode(cfg.ApiKey)}&imdb_id=tt0137523&languages=en&subs_per_page=1&client={ScribeApiClient.IntegrationClientName}";
-            using var resp = await _httpClient.GetAsync(url, cts.Token).ConfigureAwait(false);
-            if (resp.StatusCode == HttpStatusCode.Unauthorized || resp.StatusCode == HttpStatusCode.Forbidden)
-            {
-                dto.Light = "red";
-                dto.Message = "API key invalid / not authorized";
-            }
-            else if ((int)resp.StatusCode == 429)
-            {
-                dto.Light = "yellow";
-                dto.Message = "Rate limited (HTTP 429)";
-                dto.RateLimited = true;
-            }
-            else if (resp.IsSuccessStatusCode)
-            {
-                dto.Light = "green";
-                dto.Message = "reachable";
-            }
-            else
-            {
-                dto.Light = "red";
-                dto.Message = $"API returned HTTP {(int)resp.StatusCode}";
-            }
-        }
-        catch (Exception ex)
-        {
-            dto.Light = "red";
-            dto.Message = $"Probe error: {ex.Message}";
-        }
-
-        return dto;
-    }
-
-    /// <summary>
-    /// Reachability probe for a source that needs no credentials: one GET on its front page.
-    /// <para>
-    /// No key, so nothing to configure. Deliberately the front page and not a search URL — the
-    /// film site answers every search with HTTP 500 while carrying a valid hit list, so a search
-    /// probe would paint it red for a property it always has.
-    /// </para>
-    /// </summary>
-    private async Task<ApiStatusDto> CheckReachAsync(string label, string url, CancellationToken ct)
-    {
-        var dto = new ApiStatusDto { Label = label, Configured = true };
-        try
-        {
-            using var resp = await _httpClient.GetAsync(url, ct).ConfigureAwait(false);
-            if (resp.IsSuccessStatusCode)
-            {
-                dto.Light = "green";
-                dto.Message = "reachable";
-            }
-            else
-            {
-                var code = (int)resp.StatusCode;
-                dto.Light = code == 429 || code == 403 ? "yellow" : "red";
-                dto.Message = $"HTTP {code}";
-            }
-        }
-        catch (Exception ex)
-        {
-            dto.Light = "red";
-            dto.Message = ex.GetType().Name;
-        }
-
-        return dto;
     }
 
     private async Task<ApiStatusDto> CheckTmdbAsync(PluginConfiguration cfg, CancellationToken ct)
