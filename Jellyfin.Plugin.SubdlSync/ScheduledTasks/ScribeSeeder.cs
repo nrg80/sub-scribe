@@ -332,13 +332,21 @@ public sealed class ScribeSeeder
                     Name = item.Name ?? System.IO.Path.GetFileName(mediaPath)
                 };
 
+                // F-M725 (gemessen 24.11.2026): EIN Stream-Blick und EIN Verzeichnis-Blick je Item.
+                // Vorher fragte der Scan Jellyfins Stream-Liste bis zu sechsmal pro Item (zweimal hier,
+                // einmal je Quelle in UploadTodoSources, einmal im Download-Gate) und las die losen
+                // .srt-Verzeichnisse bis zu neunmal. Upload-Scan: 209,8 s / 2 500 Items (84 ms), reiner
+                // Download-Scan: 75,1 s (30 ms) — die Differenz war genau diese Mehrfacharbeit.
+                // Die Liste ist innerhalb eines Scans dieselbe: Jellyfin cacht sie, deshalb aendert das
+                // Weiterreichen nichts am Ergebnis (siehe den Hinweis in AllocateMissingLanguageCodes).
+                var itemStreams = new StreamProbe(_mediaSourceManager, item.Id);
                 // F-M257: record what the container CARRIES before deciding anything about it.
                 // The embedded area's only writer was the upload pipeline, so with the shipped
                 // default (UploadEnabled=false) no row existed and the HI reader (F-M254) answered
                 // "absent" forever for tracks that were right there. The scan already walks every
                 // item and the streams are cheap here; the write is idempotent after the first pass.
                 // F-M259: the same for the loose .srt files beside the media.
-                ObserveEmbeddedFacts(item, mediaPath);
+                ObserveEmbeddedFacts(item, mediaPath, itemStreams);
                 // F-M313: the pass reports two numbers; the rename count is what the statistics line
                 // shows. `Rows` is not counted there — registry rows are bookkeeping, not work the
                 // operator asked about.
@@ -355,7 +363,7 @@ public sealed class ScribeSeeder
                 // F-M311: the return value is the number of codes WRITTEN (0 in a dry run or with
                 // the switch off), and it goes on the snapshot because only the dispatcher may
                 // write the statistics row.
-                snapshot.LanguageCodesAllocated += AllocateMissingLanguageCodes(mediaPath, item);
+                snapshot.LanguageCodesAllocated += AllocateMissingLanguageCodes(mediaPath, item, itemStreams);
 
                 // Event path: only the changed libraries (user decision 12.09.2026,
                 // extended 12.09.2026: targeted growth — each changed library JOINS
@@ -389,16 +397,23 @@ public sealed class ScribeSeeder
                     && (downloadAllowed || config.IsDownloadEnabled(SubtitleProvider.TvSubtitles));
                 if (dir != ScribeEventDispatcher.CycleDirection.UploadOnly
                     && downloadQueueable
-                    && IsDownloadTodo(item, mediaPath, config))
+                    && IsDownloadTodo(item, mediaPath, config, itemStreams))
                 {
                     snapshot.Download.Add(Clone(qi));
                 }
 
                 if (dir != ScribeEventDispatcher.CycleDirection.DownloadOnly && config.AnyUploadEnabled)
                 {
+                    // F-M725: die lose Dateiliste EINMAL je Item — und nur hier, weil nur der
+                    // Upload-Zweig sie braucht (ein reiner Download-Scan soll die Verzeichnisse nicht
+                    // anfassen). Der Zeitpunkt ist Teil der Zusage: NACH dem Umbenennen oben, sonst
+                    // wuerden alte Namen befragt. Vorher fragte jede Quelle (bis zu drei) und jede
+                    // Verzweigung in UploadTodoFor dieselben Verzeichnisse erneut — bis zu neun
+                    // Durchläufe je Item, gemessen 209,8 s gegen 75,1 s bei 2 500 Items.
+                    var itemLoose = Pipeline.UploadPipeline.FindLooseSrts(mediaPath);
                     // F-M546: die Queue wird je Quelle gefuellt. Ein Item, das nur tvst noch braucht,
                     // steht danach nur in der tvst-Queue — SubDL und mst halten es nicht mehr offen.
-                    var todoQuellen = UploadTodoSources(item, mediaPath, config);
+                    var todoQuellen = UploadTodoSources(item, mediaPath, config, itemStreams, itemLoose);
                     if (todoQuellen.Count > 0)
                     {
                         var eintrag = Clone(qi);
@@ -636,7 +651,11 @@ public sealed class ScribeSeeder
     /// resolvable (including TMDb fallback), refetch gap elapsed, at least one
     /// target language missing that is not QA-exhausted.
     /// </summary>
-    private bool IsDownloadTodo(BaseItem item, string mediaPath, Configuration.PluginConfiguration config)
+    private bool IsDownloadTodo(
+        BaseItem item,
+        string mediaPath,
+        Configuration.PluginConfiguration config,
+        StreamProbe? probe = null)
     {
         try
         {
@@ -663,7 +682,7 @@ public sealed class ScribeSeeder
             // longer drops a pair out of the open list. A pair whose candidates were all gate-rejected
             // stays open and is searched again — the burned-release memory (F-M200) keeps the run from
             // re-fetching the same discards, and the download budget (F-M50) bounds each run.
-            var open = OpenPairsOf(item, mediaPath, TargetLanguagesOf(config), config.DownloadOnlyMissing);
+            var open = OpenPairsOf(item, mediaPath, TargetLanguagesOf(config), config.DownloadOnlyMissing, probe);
             return open.Count > 0;
         }
         catch
@@ -701,7 +720,11 @@ public sealed class ScribeSeeder
     /// <param name="config">Plugin configuration.</param>
     /// <returns>The sources that still have something to do for this item.</returns>
     private List<Configuration.SubtitleProvider> UploadTodoSources(
-        BaseItem item, string mediaPath, Configuration.PluginConfiguration config)
+        BaseItem item,
+        string mediaPath,
+        Configuration.PluginConfiguration config,
+        StreamProbe? probe = null,
+        List<(string Path, string Lang, bool HearingImpaired, bool Forced)>? loose = null)
     {
         var offen = new List<Configuration.SubtitleProvider>();
         try
@@ -713,7 +736,7 @@ public sealed class ScribeSeeder
             bool? isSeries = MediaKindFor(item, mediaPath);
             foreach (var quelle in UploadSources(config, isSeries))
             {
-                if (UploadTodoFor(item, mediaPath, config, quelle))
+                if (UploadTodoFor(item, mediaPath, config, quelle, probe, loose))
                 {
                     offen.Add(quelle);
                 }
@@ -858,14 +881,16 @@ public sealed class ScribeSeeder
         BaseItem item,
         string mediaPath,
         Configuration.PluginConfiguration config,
-        Configuration.SubtitleProvider quelle)
+        Configuration.SubtitleProvider quelle,
+        StreamProbe? probe = null,
+        List<(string Path, string Lang, bool HearingImpaired, bool Forced)>? loose = null)
     {
         try
         {
             var db = Plugin.Instance!.SharedDbContext;
             var registry = new Registry.ContentHashRegistry(db);
 
-            var allSubs = _mediaSourceManager.GetMediaStreams(item.Id)?
+            var allSubs = (probe?.Get() ?? _mediaSourceManager.GetMediaStreams(item.Id))?
                 .Where(s => s.Type == MediaStreamType.Subtitle && !s.IsExternal)
                 .ToList() ?? new List<MediaStream>();
             // F-M246/F-M284: a forced track is not upload work — asked through the ONE predicate
@@ -877,7 +902,7 @@ public sealed class ScribeSeeder
 
             if (textStreams.Count == 0)
             {
-                var looseOnly = Pipeline.UploadPipeline.FindLooseSrts(mediaPath);
+                var looseOnly = loose ?? Pipeline.UploadPipeline.FindLooseSrts(mediaPath);
                 if (looseOnly.Count == 0)
                 {
                     return false;
@@ -967,8 +992,8 @@ public sealed class ScribeSeeder
             // eigene Marke der Quelle (F-M488/F-M490) und laesst eine verworfene Spur fuer alle gelten.
             if (registry.ArePositionsTerminalFor(mediaHash, textStreams.Select(s => allSubs.FindIndex(x => x == s)), quelle))
             {
-                var loose = Pipeline.UploadPipeline.FindLooseSrts(mediaPath);
-                if (!SidecarsNeedWork(loose, mediaHash, quelle))
+                var looseHere = loose ?? Pipeline.UploadPipeline.FindLooseSrts(mediaPath);
+                if (!SidecarsNeedWork(looseHere, mediaHash, quelle))
                 {
                     return false; // embedded settled for this source + every sidecar uploaded/rejected/hash-known
                 }
@@ -980,7 +1005,7 @@ public sealed class ScribeSeeder
             // sidecars → nothing to do. The mapping below is SubDL's own and stays untouched (user
             // order 15.11.2026: tvst maps in its client, SubDL in its client, no shared table); the
             // net is a cheap "everything known" answer, never a language decision.
-            if (Pipeline.UploadPipeline.FindLooseSrts(mediaPath).Count == 0)
+            if ((loose ?? Pipeline.UploadPipeline.FindLooseSrts(mediaPath)).Count == 0)
             {
                 var needed = new HashSet<string>(StringComparer.Ordinal);
                 int untagged = 0;
@@ -1075,7 +1100,11 @@ public sealed class ScribeSeeder
     /// <param name="onlyMissing">True when embedded streams count as evidence.</param>
     /// <returns>The pairs without evidence.</returns>
     private List<Jellyfin.Plugin.SubScribe.Registry.SubtitleRef> OpenPairsOf(
-        BaseItem item, string mediaPath, List<string> targets, bool onlyMissing)
+        BaseItem item,
+        string mediaPath,
+        List<string> targets,
+        bool onlyMissing,
+        StreamProbe? probe = null)
     {
         // F-M246: one rule with the pipeline — a forced track does not make its language present.
         // The language-level stream evidence only counts when the configuration says embedded
@@ -1086,7 +1115,7 @@ public sealed class ScribeSeeder
         // so the list is left null rather than being collected and then discarded.
         IEnumerable<string>? streamLangs = onlyMissing
             ? Jellyfin.Plugin.SubScribe.Registry.SidecarNaming
-                .EmbeddedPresentLanguages(_mediaSourceManager.GetMediaStreams(item.Id))
+                .EmbeddedPresentLanguages(probe?.Get() ?? _mediaSourceManager.GetMediaStreams(item.Id))
             : null;
 
         var required = Jellyfin.Plugin.SubScribe.Registry.SubtitleRef.Required(
@@ -1146,7 +1175,8 @@ public sealed class ScribeSeeder
     /// <param name="item">The Jellyfin item owning it.</param>
     /// <returns>1 when this file was written, 0 when nothing was written. One per FILE, not per
     /// code: the statistics line answers "how many media files did the run edit".</returns>
-    private int AllocateMissingLanguageCodes(string mediaPath, BaseItem item)
+    private int AllocateMissingLanguageCodes(
+        string mediaPath, BaseItem item, StreamProbe? probe = null)
     {
         try
         {
@@ -1164,7 +1194,7 @@ public sealed class ScribeSeeder
 
             var registry = new Registry.ContentHashRegistry(db);
             var gate = new Pipeline.LanguageTagGate(_logger, config, registry);
-            var streams = _mediaSourceManager.GetMediaStreams(item.Id);
+            var streams = probe?.Get() ?? _mediaSourceManager.GetMediaStreams(item.Id);
 
             // A file whose every track already carries a usable tag has no work here, and this
             // answers that for the price of the stream list — no ffmpeg call at all.
@@ -1218,8 +1248,9 @@ public sealed class ScribeSeeder
             }
 
             // The remaining tracks of the file (the ones whose tag was already readable) are still
-            // recorded by the normal pass.
-            ObserveEmbeddedFacts(item, mediaPath);
+            // recorded by the normal pass. Derselbe Stream-Blick wie oben (F-M725): Jellyfin liefert
+            // innerhalb eines Scans dieselbe gecachte Liste, ein zweiter Aufruf brachte nie etwas Neues.
+            ObserveEmbeddedFacts(item, mediaPath, probe);
 
             // F-M311 (user decision 07.10.2026): the statistics line counts FILES, not codes — so a
             // file that got three tags counts once, not three times. Which is the question the line
@@ -1236,6 +1267,66 @@ public sealed class ScribeSeeder
             LogUtil.Detail(_logger, "[Sub Scribe-Seed] language allocation skipped for {File}: {Msg}",
                 System.IO.Path.GetFileName(mediaPath), ex.Message);
             return 0;
+        }
+    }
+
+    /// <summary>
+    /// F-M725 (gemessen 24.11.2026): EIN Zugriff auf Jellyfins Stream-Liste je Item und Scan.
+    /// <para>
+    /// Vorher fragte ein einziger Scan dieselbe Liste bis zu sechsmal ab — zweimal im Rumpf
+    /// (<see cref="ObserveEmbeddedFacts"/>, <see cref="AllocateMissingLanguageCodes"/>), einmal je
+    /// Quelle in <see cref="UploadTodoFor"/> (bis zu drei) und einmal im Download-Gate. Jeder Aufruf
+    /// geht durch <c>IMediaSourceManager</c>; ist der Eintrag nicht mehr im Cache, kostet er einen
+    /// Probe der Datei. Der Upload-Scan lag deshalb bei 84 ms/Item gegen 30 ms/Item im reinen
+    /// Download-Scan (209,8 s gegen 75,1 s bei 2 500 Items).
+    /// </para>
+    /// <para>
+    /// WARUM NICHT EINE EINFACH GERECHNETE LISTE: 169 Items je Scan werfen hier
+    /// <c>Cannot access a disposed object</c>, und jeder Aufrufer hat einen EIGENEN Umgang damit —
+    /// <see cref="ObserveEmbeddedFacts"/> und <see cref="AllocateMissingLanguageCodes"/> ueberspringen
+    /// ihre Arbeit, <see cref="UploadTodoFor"/> reiht das Item ein („todo, die Kette entscheidet").
+    /// Ein verschluckter Fehler wuerde die 169 stillschweigend aus der Upload-Queue nehmen. Diese
+    /// Sonde merkt sich den Fehler und wirft ihn bei JEDEM Abruf erneut — ein echter Zugriff,
+    /// unveraendertes Verhalten an jeder Aufrufstelle.
+    /// </para>
+    /// </summary>
+    private sealed class StreamProbe
+    {
+        private readonly IMediaSourceManager _manager;
+        private readonly Guid _itemId;
+        private bool _done;
+        private IReadOnlyList<MediaStream>? _streams;
+        private Exception? _error;
+
+        public StreamProbe(IMediaSourceManager manager, Guid itemId)
+        {
+            _manager = manager;
+            _itemId = itemId;
+        }
+
+        /// <summary>Ein Zugriff, beliebig oft wiederholt; ein Fehler wird beim ersten Mal gemerkt und
+        /// danach erneut geworfen.</summary>
+        public IReadOnlyList<MediaStream>? Get()
+        {
+            if (!_done)
+            {
+                _done = true;
+                try
+                {
+                    _streams = _manager.GetMediaStreams(_itemId);
+                }
+                catch (Exception ex)
+                {
+                    _error = ex;
+                }
+            }
+
+            if (_error != null)
+            {
+                throw _error;
+            }
+
+            return _streams;
         }
     }
 
@@ -1263,7 +1354,8 @@ public sealed class ScribeSeeder
     /// <param name="item">Jellyfin item.</param>
     /// <param name="mediaPath">Media file path.</param>
     /// <returns>Number of rows created or changed.</returns>
-    private int ObserveEmbeddedFacts(BaseItem item, string mediaPath)
+    private int ObserveEmbeddedFacts(
+        BaseItem item, string mediaPath, StreamProbe? probe = null)
     {
         try
         {
@@ -1289,7 +1381,7 @@ public sealed class ScribeSeeder
             registry.EnsureFile(mediaHash, item.Id.ToString("D"), mediaPath);
 
             var tracks = Jellyfin.Plugin.SubScribe.Registry.SidecarNaming
-                .EmbeddedTracks(_mediaSourceManager.GetMediaStreams(item.Id));
+                .EmbeddedTracks(probe?.Get() ?? _mediaSourceManager.GetMediaStreams(item.Id));
 
             int written = 0;
             foreach (var (subPos, lang, hi, forced) in tracks)
@@ -1451,6 +1543,9 @@ public sealed class ScribeSeeder
             }
 
             int written = 0;
+            // F-M725 (gemessen 24.11.2026): die Zeilen der Seitenwagen EINMAL holen, damit die
+            // Stempel-Frage unten nicht je Datei eine Abfrage kostet.
+            var knownSidecars = registry.GetSidecars(mediaHash);
             // F-M313: loose files renamed in this call, separate from `written` (which counts registry
             // rows). Both are needed and they are NOT the same number: a file can be renamed while its
             // row already exists (nothing written), or be recorded with no rename at all (its name was
@@ -1463,14 +1558,36 @@ public sealed class ScribeSeeder
             foreach (var (loosePath, looseLang, looseHi, looseForced) in
                      Pipeline.UploadPipeline.FindLooseSrts(mediaPath))
             {
-                string content;
-                try
+                // F-M725: ein benannter, bereits erfasster und seit dem letzten Sehen unveraenderter
+                // Seitenwagen wird NICHT mehr gelesen. Gemessen: 1 287 Seitenwagen-Zeilen lagen bei jedem
+                // Scan als vollstaendiger File.ReadAllText an — auf einem Netzlager der teuerste Teil
+                // dieses Durchlaufs, obwohl der Hash schon im Store steht. Benannt heisst: es gibt nichts
+                // zu erkennen und nichts umzubenennen, der Inhalt wird also nirgends gebraucht. Die
+                // ObserveSidecar-Zeile unten bleibt und frischt `LastSeen` weiter auf.
+                string? knownHash = null;
+                if (looseLang != null)
                 {
-                    content = File.ReadAllText(loosePath);
+                    var fi = new FileInfo(loosePath);
+                    var known = knownSidecars.FirstOrDefault(r =>
+                        r.ContentHash != null
+                        && string.Equals(r.FileName, fi.Name, StringComparison.OrdinalIgnoreCase));
+                    if (known != null && fi.LastWriteTimeUtc <= known.LastSeen)
+                    {
+                        knownHash = known.ContentHash;
+                    }
                 }
-                catch
+
+                string content = string.Empty;
+                if (knownHash == null)
                 {
-                    continue; // unreadable — the pipeline's business, not an observation
+                    try
+                    {
+                        content = File.ReadAllText(loosePath);
+                    }
+                    catch
+                    {
+                        continue; // unreadable — the pipeline's business, not an observation
+                    }
                 }
 
                 bool wasUnlabeled = looseLang == null;
@@ -1522,7 +1639,8 @@ public sealed class ScribeSeeder
                 }
 
                 // A rename does not touch the content, so this hash is the same before and after it.
-                string contentHash = Registry.ContentHashRegistry.ComputeHash(content);
+                // F-M725: liegt er schon im Store und die Datei ist unveraendert, wird er nicht neu gerechnet.
+                string contentHash = knownHash ?? Registry.ContentHashRegistry.ComputeHash(content);
                 string factPath = loosePath;
 
                 // F-M278: now that the language is known, the file is moved to the name this plugin
