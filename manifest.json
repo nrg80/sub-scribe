@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.32",
-        "changelog": "v12.3.8.32: the file reset reports what it found, and sidecars are also reached by the file's path stem.",
+        "version": "12.3.8.33",
+        "changelog": "v12.3.8.33: the file reset deletes rows by the row itself — deleting by an id never reached the set key.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.32-dev/Jellyfin.Plugin.SubdlSync_12.3.8.32.zip",
-        "checksum": "acc1fd99d31f114c4264e1632412bae8",
-        "timestamp": "2026-11-24T07:36:22Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.33-dev/Jellyfin.Plugin.SubdlSync_12.3.8.33.zip",
+        "checksum": "8683f2d132e70f6f05cc22e0a82e3197",
+        "timestamp": "2026-11-24T07:45:09Z"
       }
     ]
   }
