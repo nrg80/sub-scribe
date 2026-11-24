@@ -3160,6 +3160,16 @@ public sealed class UploadPipeline : IPackFiller
                 continue;
             }
 
+            // F-M728: dasselbe Nein, dieselbe Wirkung fuer den Seitenwagen. Er traegt keine Videospur-
+            // Position, sein Schluessel ist -1 (so schreibt es der Versand), und ohne diese Zeile hielt
+            // eine Datei sich fuer offen, weil mst sie nie bekommt (gemessen 24.11.2026:
+            // „Sister.Act.2 … still open: moviesubtitles" in jedem Lauf).
+            if (Jellyfin.Plugin.SubScribe.Registry.SourceRefusalStore.RefusedAtPosition(
+                    mediaHash, -1, quelle, looseHash, out _))
+            {
+                continue;
+            }
+
             if (registry.GetOrigin(looseHash).Origin is not null)
             {
                 continue;
