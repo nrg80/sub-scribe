@@ -383,14 +383,18 @@ internal static class Program
 
         // ── 19. F-M413: die Id kommt aus mySubtitles ────────────────────────────
         Console.WriteLine("19. The upload id is taken from mySubtitles");
-        Check(upload.Contains("ResolveDeferredUploadIdsAsync") && upload.Contains("ListMySubtitlesAsync(ct, maxPages: 1)"),
+        // F-M732: die Liste kommt aus der Konto-Pflege (zweiter, schmaler Vertrag), nicht mehr vom Client.
+        Check(upload.Contains("ResolveDeferredUploadIdsAsync")
+              && upload.Contains("_sources.Maintenance[0]")
+              && upload.Contains("new Sources.SourceSubmissionQuery(MaxPages: 1)"),
             "F-M413/F-M588: a single upload resolves its id from mySubtitles — once at the end of the run");
         Check(upload.Contains("the SubDL id is read back once at the end of the run (F-M588)"),
             "F-M413/F-M588: the deferral is logged on the upload");
 
         // ── 20. F-M414: dieselbe Methode für Packs ──────────────────────────────
         Console.WriteLine("20. Packs resolve their id the same way");
-        Check(coordPackSrc.Contains("ResolveOwnPackIdAsync") && coordPackSrc.Contains("ListMySubtitlesAsync(ct, maxPages: 1)"),
+        Check(coordPackSrc.Contains("ResolveOwnPackIdAsync")
+              && coordPackSrc.Contains("new Sources.SourceSubmissionQuery(MaxPages: 1)"),
             "F-M414: a pack resolves its id from mySubtitles");
         Check(upload.Contains("MatchesRelease") && upload.Contains("MapToSubdlName"),
             "F-M414: the match runs over the release name and the written language");

@@ -1784,10 +1784,21 @@ def main():
           "'API reachable' next to the label 'SubDL API'")
     # 16.11.2026: both tvst addresses joined as reachability lights and share ONE probe, so the
     # same one-word line stands in three places: SubDL API, TMDb, and the tvst/mst probe.
-    check("F-M354: the same line feeds TMDb and the tvst/mst probe — one wording, not three",
-          status.count('dto.Message = "reachable";') == 3, "expected exactly 3 occurrences")
-    check("F-M354: the login success line says 'OK', not 'Login OK' (the label says SubDL Login)",
-          'dto.Message = "OK";' in status and 'dto.Message = "Login OK";' not in status,
+    # F-M730: die SubDL-Lichter und die Erreichbarkeit der anderen Quellen kommen nicht mehr aus dem
+    # Regler, sondern aus der Selbstauskunft der Quelle. Die Regel bleibt: die Zeile nennt den ZUSTAND,
+    # nicht die Beschriftung noch einmal.
+    subdl_lichter = open(os.path.normpath(os.path.join(
+        DEFAULT, "..", "..", "Sources", "Subdl", "SubdlStatus.cs")), encoding="utf-8").read()
+    erreichbar = open(os.path.normpath(os.path.join(
+        DEFAULT, "..", "..", "Sources", "ReachabilityStatus.cs")), encoding="utf-8").read()
+    check("F-M354: each light names the STATE, not its own label again (SubDL API, SubDL Login, TMDb, tvst/mst)",
+          'dto.Message = "reachable";' in status
+          and 'dto.Message = "API reachable";' not in status
+          and '"erreichbar"' in subdl_lichter and '"API erreichbar"' not in subdl_lichter
+          and 'erreichbar' in erreichbar,
+          "one of the four lights repeats its label in the message")
+    check("F-M354: the login success line says 'angemeldet', not 'Login OK' (the label says SubDL Login)",
+          '"angemeldet"' in subdl_lichter and "Login OK" not in subdl_lichter,
           "'Login OK' next to the label 'SubDL Login'")
     for gone in ("Login failed: wrong username/password", "Login failed: not authorized — check API key",
                  "Login rate-limited — try again later", "Login succeeded but returned no token"):
