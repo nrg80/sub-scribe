@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.29",
-        "changelog": "v12.3.8.29: dropping a file asks by file id as well — a repacked file keeps its rows reachable.",
+        "version": "12.3.8.30",
+        "changelog": "v12.3.8.30: one fold for every name comparison — styled Unicode (\"Ｓ０２Ｅ０７\", \"ꜱ01ᴇ05\", \"𝐒𝟎𝐄𝟏𝟎\") is read instead of being thrown away, and it no longer depends on ICU.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.29-dev/Jellyfin.Plugin.SubdlSync_12.3.8.29.zip",
-        "checksum": "782cea95c39ca8f6208dc9a4656b6d14",
-        "timestamp": "2026-11-24T04:41:45Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.30-dev/Jellyfin.Plugin.SubdlSync_12.3.8.30.zip",
+        "checksum": "47945cdb50cb131441eb6795e9ac0b1d",
+        "timestamp": "2026-11-24T06:43:37Z"
       }
     ]
   }
