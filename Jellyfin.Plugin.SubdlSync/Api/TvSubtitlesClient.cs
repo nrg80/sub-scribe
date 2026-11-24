@@ -23,6 +23,8 @@ using System.Threading;
 using System.Threading.Tasks;
 using Jellyfin.Plugin.SubScribe.Pipeline;
 
+using Jellyfin.Plugin.SubScribe.Text;
+
 namespace Jellyfin.Plugin.SubScribe.Api;
 
 /// <summary>

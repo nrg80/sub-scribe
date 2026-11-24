@@ -12,7 +12,7 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
-namespace Jellyfin.Plugin.SubScribe.Pipeline;
+namespace Jellyfin.Plugin.SubScribe.Text;
 
 /// <summary>
 /// F-M724 (24.11.2026): ONE fold for every name comparison — styled Unicode letters and digits
@@ -20,6 +20,10 @@ namespace Jellyfin.Plugin.SubScribe.Pipeline;
 /// "𝐒𝟎𝐄𝟏𝟎") is read the same as the plain one.
 /// </summary>
 /// <remarks>
+/// Er steht ÜBER den Paketen (<c>Text</c> neben <c>Api</c>, <c>Pipeline</c>, <c>Sources</c>): ein
+/// Namensvergleich ist keine Angelegenheit des Ablaufs, und die Quellen dürfen den Ablauf nicht
+/// nennen — ein Fold unter <c>Pipeline</c> wäre für sie unerreichbar.
+/// <para>
 /// Deliberately arithmetic instead of a Unicode normalisation call:
 /// <see cref="string.Normalize(System.Text.NormalizationForm)"/> needs ICU and throws under
 /// invariant globalization, which a Jellyfin host may well run. Measured 24.11.2026: the media

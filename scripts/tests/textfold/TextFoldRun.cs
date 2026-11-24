@@ -18,7 +18,7 @@
 // byte for byte with a name from the candidate list, so a styled entry was reported as "no bytes".
 //
 // THE RULES asserted here:
-//   1. one fold, one place (Pipeline.TextFold) — arithmetic, so it answers the same on every host;
+//   1. one fold, one place (Text.TextFold, ueber den Paketen) — arithmetic, so it answers the same on every host;
 //   2. every comparison folds BOTH sides, and nothing is stored folded;
 //   3. an ordinary name passes through byte-identical (same instance, no copy);
 //   4. what the fold cannot read, it must not pretend to read (modifier letters stay, and letters
@@ -38,6 +38,7 @@ using System.Text.RegularExpressions;
 using System.Threading;
 using Jellyfin.Plugin.SubScribe.Api;
 using Jellyfin.Plugin.SubScribe.Pipeline;
+using Jellyfin.Plugin.SubScribe.Text;
 
 namespace TextFoldRun;
 
