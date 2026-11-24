@@ -43,14 +43,16 @@ public class ScribeReset : ControllerBase
     /// </summary>
     /// <param name="confirm">Must be exactly "true".</param>
     /// <param name="scope">all | upload | download | pack — which state to wipe.</param>
-    /// <param name="imdb">Nur bei <c>pack</c>: eine Serie (IMDb-Kennung); leer = alle Urteile.</param>
-    /// <param name="season">Nur bei <c>pack</c>: die Staffel zu <paramref name="imdb"/>.</param>
+    /// <param name="imdb">Nur bei <c>pack</c> und <c>season</c>: eine Serie (IMDb-Kennung); leer = alle Urteile.</param>
+    /// <param name="season">Nur bei <c>pack</c> und <c>season</c>: die Staffel zu <paramref name="imdb"/>.</param>
+    /// <param name="dry">Nur bei <c>season</c>: nur zählen, nichts löschen.</param>
     [HttpPost]
     public IActionResult Reset(
         [FromQuery] string confirm = "",
         [FromQuery] string scope = "all",
         [FromQuery] string imdb = "",
-        [FromQuery] int season = 0)
+        [FromQuery] int season = 0,
+        [FromQuery] bool dry = false)
     {
         if (!string.Equals(confirm, "true", StringComparison.OrdinalIgnoreCase))
         {
@@ -179,6 +181,32 @@ public class ScribeReset : ControllerBase
                     forgotten = vergessen,
                     imdb = string.IsNullOrWhiteSpace(imdb) ? null : imdb,
                     season = season > 0 ? season : (int?)null,
+                    backup = System.IO.Path.GetFileName(backupPath),
+                });
+            }
+            else if (scope.Equals("season", StringComparison.OrdinalIgnoreCase))
+            {
+                // F-M740: eine Staffel vollständig aus dem Store nehmen — Dateien, Spuren, Beiwerk,
+                // Marken, Verweise, Behälter, Urteile, ausgestrahlte Folgen, Absagen und
+                // Titel-Erschöpfung. Einzelne Tabellen zu leeren hinterlässt den Rest, und der nächste
+                // Lauf verhält sich weiter, als wäre die Staffel erledigt. `dry=true` zählt nur.
+                var (zahlen, geloescht) = Registry.SeasonPurge.Purge(imdb, season, dry);
+                LogUtil.Normal(
+                    _logger,
+                    "[Sub Scribe] Reset \"season\" {Mode}: {Imdb} S{Season} — {Zahlen}.",
+                    dry ? "counted" : (geloescht ? "deleted" : "failed"),
+                    imdb,
+                    season,
+                    string.Join(", ", zahlen.OrderBy(k => k.Key, StringComparer.Ordinal).Select(k => k.Key + "=" + k.Value)));
+                return Ok(new
+                {
+                    ok = geloescht || dry,
+                    scope = "season",
+                    imdb,
+                    season,
+                    dry,
+                    deleted = geloescht,
+                    rows = zahlen,
                     backup = System.IO.Path.GetFileName(backupPath),
                 });
             }

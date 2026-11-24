@@ -3848,6 +3848,44 @@ internal static class Program
                != resetQuelle.IndexOf("scope.Equals(\"upload\"", StringComparison.Ordinal),
             "getrennte Zweige");
 
+        // -----------------------------------------------------------------------------------------
+        // F-M740: eine Staffel vollstaendig aus dem Store nehmen. Der Store fuehrt zu einer Staffel
+        // ein Geflecht (Dateien, Spuren, Beiwerk, Marken-Matrix, Behaelter, Urteile, ausgestrahlte
+        // Folgen, Absagen am Medienhash, Titel-Erschoepfung am quelle|titel-Schluessel) — eine
+        // Tabelle zu leeren laesst den Rest stehen, und der naechste Lauf haelt die Staffel weiter
+        // fuer erledigt.
+        // -----------------------------------------------------------------------------------------
+#pragma warning disable CA1849 // Pruefpfad, kein Serverpfad.
+        var purgeQuelle = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Registry/SeasonPurge.cs"));
+#pragma warning restore CA1849
+        Check(
+            "F-M740: der Purge zaehlt zehn Tabellen — Dateien, Spuren, Beiwerk, Marken, Verweise, Behaelter, Urteile, ausgestrahlte Folgen, Absagen, Titelfehler",
+            new[] { "\"files\"", "\"tracks\"", "\"sidecars\"", "\"uploads\"", "\"references\"", "\"packs\"", "\"season verdicts\"", "\"aired counts\"", "\"source refusals\"", "\"title failures\"" }
+                .All(k => purgeQuelle.Contains("zahlen[" + k + "]", StringComparison.Ordinal)),
+            "zehn Schluessel in der Zaehlung");
+        Check(
+            "F-M740: die Kinder fallen vor den Eltern — Marken zuerst, Dateien zuletzt",
+            purgeQuelle.IndexOf("db.UploadRows.RemoveRange(hochgeladen)", StringComparison.Ordinal) < purgeQuelle.IndexOf("db.FileRows.RemoveRange(dateien)", StringComparison.Ordinal)
+            && purgeQuelle.IndexOf("db.TrackRows.RemoveRange(spuren)", StringComparison.Ordinal) < purgeQuelle.IndexOf("db.FileRows.RemoveRange(dateien)", StringComparison.Ordinal),
+            "Uploads und Spuren vor den Dateien");
+        Check(
+            "F-M740: dryRun zaehlt nur und loescht nichts",
+            purgeQuelle.Contains("if (dryRun)" + Environment.NewLine + "            {" + Environment.NewLine + "                return (zahlen, false);", StringComparison.Ordinal),
+            "Rueckkehr vor jedem RemoveRange");
+        Check(
+            "F-M740: Absagen werden ueber den Medienhash gefunden, Urteile ueber den Staffelprafix",
+            purgeQuelle.Contains("SourceRefusalRows.Where(r => r.Id.StartsWith(praefix))", StringComparison.Ordinal)
+            && purgeQuelle.Contains("PackSeasonRows.Where(r => r.Id.StartsWith(urteilPraeferenz))", StringComparison.Ordinal),
+            "Hash und Schluessel statt Spaltenraten");
+        Check(
+            "F-M740: der Reset bietet den Bereich \"season\" mit dry an, und der Store wird angehaengt",
+            resetQuelle.Contains("scope.Equals(\"season\", StringComparison.OrdinalIgnoreCase)", StringComparison.Ordinal)
+            && resetQuelle.Contains("Registry.SeasonPurge.Purge(imdb, season, dry)", StringComparison.Ordinal)
+#pragma warning disable CA1849 // Pruefpfad.
+            && File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Plugin.cs")).Contains("SeasonPurge.Attach(db)", StringComparison.Ordinal),
+#pragma warning restore CA1849
+            "scope=season, dry-Parameter, Attach in Plugin.cs");
+
         if (_failures > 0)
         {
             Console.WriteLine($">>> ENDPUNKTE: {_failures} von {_checks} Pruefungen fehlgeschlagen");
