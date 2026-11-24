@@ -10,7 +10,7 @@
 # See the GNU General Public License for more details.
 name: "Sub Scribe"
 guid: "7d1c5a2e-3f4b-4d6e-9a8b-5c2f8e1d4a9b"
-version: "12.3.8.34"
+version: "12.3.8.35"
 targetAbi: "12.1.0.0"
 framework: "net10.0"
 owner: "nrg80"
@@ -26,6 +26,7 @@ artifacts:
 - "Jellyfin.Plugin.SubdlSync.dll"
 - "LanguageDetection.dll"
 changelog: >
+  v12.3.8.35: a film or series the source does not know yet is created there during the upload, so the subtitle is no longer dropped.
   v12.3.8.34: a source's remembered no closes that source's track — the refusal used to stop the second call only,
     so the track stayed open and every run extracted the file again.
   v12.3.8.33: the file reset deletes rows by the row itself — deleting by an id never reached the set key.
