@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.36",
-        "changelog": "v12.3.8.36: a film or series is created only while a subtitle is uploaded — the separate lookup paths that could create one while merely searching are gone.",
+        "version": "12.3.8.37",
+        "changelog": "v12.3.8.37: which languages a source accepts is now answered by the source itself — the tables moved out of the HTTP clients, so the run never has to name a client to ask.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.36-dev/Jellyfin.Plugin.SubdlSync_12.3.8.36.zip",
-        "checksum": "c4c94fc24397c386a41af7549d3e5c92",
-        "timestamp": "2026-11-24T13:25:35Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.37-dev/Jellyfin.Plugin.SubdlSync_12.3.8.37.zip",
+        "checksum": "fb82ee0efc7e713b57581ac7770b8536",
+        "timestamp": "2026-11-24T15:07:06Z"
       }
     ]
   }
