@@ -1168,7 +1168,7 @@ public sealed class TvSubtitlesClient
             // ("ꜱ01ᴇ05", "Ｓ０１Ｅ０３") would otherwise look like an entry without a number and be
             // dropped from the pack, and a styled extension ("．ｓｒｔ") hid the file altogether.
             // Nothing is stored folded: the name in the record stays the one in the archive.
-            var memberName = TextFold.Fold(entry.Name);
+            var memberName = TextFold.Normalize(entry.Name);
             if (!memberName.EndsWith(".srt", StringComparison.OrdinalIgnoreCase))
             {
                 continue;

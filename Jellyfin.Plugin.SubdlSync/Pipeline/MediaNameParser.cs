@@ -137,7 +137,7 @@ internal static class MediaNameParser
         // F-M724 (24.11.2026): the same fold the archive side reads with (Text.TextFold) replaces the
         // old Unicode normalization — that one needs ICU, so on a host without it this branch did
         // nothing at all and the parser saw the dressed name anyway.
-        fileName = TextFold.Fold(fileName);
+        fileName = TextFold.Normalize(fileName);
         if (string.IsNullOrWhiteSpace(fileName))
         {
             return new ParsedMediaName(null, null, false, null, null);

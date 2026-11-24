@@ -12,6 +12,8 @@ using System;
 using System.Collections.Generic;
 using System.Text;
 
+using System.Text;
+
 namespace Jellyfin.Plugin.SubScribe.Text;
 
 /// <summary>
@@ -69,6 +71,98 @@ public static class TextFold
         [0x1D18] = 'P', [0xA7AF] = 'Q', [0x0280] = 'R', [0xA731] = 'S', [0x1D1B] = 'T',
         [0x1D1C] = 'U', [0x1D20] = 'V', [0x1D21] = 'W', [0x028F] = 'Y', [0x1D22] = 'Z',
     };
+
+    /// <summary>
+    /// F-M736: die EINE Eingangsnormierung für Namen — was eine Routine als Rohtext bekommt, wird hier
+    /// vergleichbar gemacht: gefaltet (F-M724), an den Enden getrimmt und innerer Weißraum auf EIN
+    /// Leerzeichen zusammengefasst.
+    /// <para>
+    /// Der Grund für eine einzige Funktion: Dateiname, Archiveintrag, Eintrag einer Quellenliste und
+    /// Zeilenname im Bestand kommen aus vier Richtungen und wurden bisher an jeder Stelle ein wenig
+    /// anders vorbereitet (einmal getrimmt, einmal nicht; einmal mit doppelten Leerzeichen). Verglichen
+    /// wird dann zweimal <see cref="Normalize"/> — nie eine gespeicherte Fassung: die Normierung ist
+    /// eine Lesehilfe, keine Korrektur von jedermanns Dateinamen.
+    /// </para>
+    /// <para>
+    /// Ist nichts zu tun, kommt DIESELBE Instanz zurück; gewöhnliche Namen laufen also byte-gleich durch.
+    /// </para>
+    /// </summary>
+    /// <param name="input">Rohtext, wie er ankommt.</param>
+    /// <returns>Die vergleichbare Fassung, nie null.</returns>
+    public static string Normalize(string? input)
+    {
+        if (string.IsNullOrEmpty(input))
+        {
+            return string.Empty;
+        }
+
+        string folded = Fold(input);
+
+        // Führenden und hinteren Weißraum verwerfen, dann prüfen, ob innen etwas zusammenzufassen ist.
+        int start = 0;
+        int ende = folded.Length - 1;
+        while (start <= ende && char.IsWhiteSpace(folded[start]))
+        {
+            start++;
+        }
+
+        while (ende >= start && char.IsWhiteSpace(folded[ende]))
+        {
+            ende--;
+        }
+
+        if (start > ende)
+        {
+            return string.Empty;
+        }
+
+        bool innen = false;
+        for (int i = start; i <= ende; i++)
+        {
+            if (char.IsWhiteSpace(folded[i]))
+            {
+                innen = true;
+                break;
+            }
+        }
+
+        if (start == 0 && ende == folded.Length - 1 && !innen)
+        {
+            return folded;
+        }
+
+        var sb = new StringBuilder(ende - start + 1);
+        bool leerzeichen = false;
+        for (int i = start; i <= ende; i++)
+        {
+            char c = folded[i];
+            if (char.IsWhiteSpace(c))
+            {
+                leerzeichen = true;
+                continue;
+            }
+
+            if (leerzeichen)
+            {
+                sb.Append(' ');
+                leerzeichen = false;
+            }
+
+            sb.Append(c);
+        }
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// F-M736: derselbe Vergleich für beide Seiten — die eine Stelle, die Routinen aufrufen, statt
+    /// selbst zu falten, zu trimmen und die Schreibweise zu wählen.
+    /// </summary>
+    /// <param name="a">Die eine Seite.</param>
+    /// <param name="b">Die andere Seite.</param>
+    /// <returns>True, wenn beide nach <see cref="Normalize"/> gleich sind (Schreibweise egal).</returns>
+    public static bool Same(string? a, string? b) =>
+        string.Equals(Normalize(a), Normalize(b), StringComparison.OrdinalIgnoreCase);
 
     /// <summary>
     /// F-M724: true when the text carries at least one character this fold would change.

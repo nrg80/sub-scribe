@@ -259,8 +259,42 @@ internal static class Program
         // The ONE source assertion kept on purpose: two fold implementations existed, and the one
         // that needed ICU must not come back.
         string mediaParser = Path.Combine(repo, "Jellyfin.Plugin.SubdlSync", "Pipeline", "MediaNameParser.cs");
-        Check(File.Exists(mediaParser) && !File.ReadAllText(mediaParser).Contains("Normalize(", StringComparison.Ordinal),
+        Check(File.Exists(mediaParser) && !File.ReadAllText(mediaParser).Contains("NormalizationForm", StringComparison.Ordinal),
             "F-M724: the media parser no longer calls Normalize( — there is one fold, not two");
+
+        // ---- F-M736: die eine Eingangsnormierung ------------------------------------------------
+        Check(TextFold.Normalize("  Ｍｙ   Ｓｈｏｗ  ") == "My Show",
+            "F-M736: die Normierung faltet, trimmt und fasst inneren Weissraum zusammen",
+            "[" + TextFold.Normalize("  Ｍｙ   Ｓｈｏｗ  ") + "]");
+
+        Check(TextFold.Normalize(null) == string.Empty && TextFold.Normalize("   ") == string.Empty,
+            "F-M736: leerer Eingang bleibt leer und wird nie null",
+            "[" + TextFold.Normalize(null) + "]");
+
+        string sauber = "Show.S01E05.1080p.WEB-DL";
+        Check(ReferenceEquals(TextFold.Normalize(sauber), sauber),
+            "F-M736: ist nichts zu tun, kommt DIESELBE Instanz zurueck",
+            "instanzgleich=" + ReferenceEquals(TextFold.Normalize(sauber), sauber));
+
+        Check(TextFold.Same("Show ꜱ01ᴇ05", "show s01e05")
+              && TextFold.Same("Ｍｙ  Ｓｈｏｗ", "my show")
+              && !TextFold.Same("Show S01E05", "Show S01E06")
+              && !TextFold.Same(null, "Show"),
+            "F-M736: Same normiert BEIDE Seiten — Schreibweise und Stil zaehlen nicht, der Inhalt schon",
+            "styled=" + TextFold.Same("Show ꜱ01ᴇ05", "show s01e05")
+            + " fullwidth=" + TextFold.Same("Ｍｙ  Ｓｈｏｗ", "my show"));
+
+        Check(TextFold.Normalize(TextFold.Normalize("  Ｓ01Ｅ05  ")) == TextFold.Normalize("  Ｓ01Ｅ05  "),
+            "F-M736: die Normierung ist idempotent (zweimal anwenden aendert nichts)",
+            "[" + TextFold.Normalize(TextFold.Normalize("  Ｓ01Ｅ05  ")) + "]");
+
+        Check(File.ReadAllText(mediaParser).Contains("TextFold.Normalize(", StringComparison.Ordinal)
+              && File.ReadAllText(Path.Combine(repo, "Jellyfin.Plugin.SubdlSync", "Api", "TvSubtitlesClient.cs"))
+                  .Contains("TextFold.Normalize(entry.Name)", StringComparison.Ordinal)
+              && File.ReadAllText(Path.Combine(repo, "Jellyfin.Plugin.SubdlSync", "Api", "ScribeApiClient.cs"))
+                  .Contains("TextFold.Same(", StringComparison.Ordinal),
+            "F-M736: die Routinen rufen die eine Normierung — Parser, Archivleser und Mitgliedersuche",
+            "Parser, tvst-Archiv und SubDL-Archiv nachgezogen");
 
         // The summary line carries the suite NAME: docs/counts binds the number from the requirements
         // document to exactly this line, so it must stay in the shape "<name>: <n> checks".
