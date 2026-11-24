@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.42",
-        "changelog": "v12.3.8.42: the season purge finds tracks and sidecars through their own id, not through an unmapped column.",
+        "version": "12.3.8.43",
+        "changelog": "v12.3.8.43: a source that does not carry the language is no longer a missing source — nothing is extracted for it.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.42-dev/Jellyfin.Plugin.SubdlSync_12.3.8.42.zip",
-        "checksum": "9d97c0efde993e9fbbbc10aded79cabc",
-        "timestamp": "2026-11-24T17:25:32Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.43-dev/Jellyfin.Plugin.SubdlSync_12.3.8.43.zip",
+        "checksum": "6ddc8fa254dbc1111d004413c372eae1",
+        "timestamp": "2026-11-24T17:56:08Z"
       }
     ]
   }
