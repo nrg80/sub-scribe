@@ -69,80 +69,97 @@ public class ScribePostprocessController : ControllerBase
         }
 
         var cfg = plugin.Configuration;
-        // F-M343: this client also logs in, and the login call adds no per-request agent of its own.
-        using var http = ScribeApiClient.NewHttpClient(TimeSpan.FromSeconds(60));
-        var api = new ScribeApiClient(http)
-        {
-            Username = cfg.Username,
-            Password = cfg.Password,
-            ApiKey = cfg.ApiKey
-        };
 
-        try
-        {
-            await api.LoginAsync(CancellationToken.None).ConfigureAwait(false);
-        }
-        catch (Exception ex)
-        {
-            return StatusCode(502, new { error = "SubDL login failed", message = ex.Message });
-        }
+        // F-M729: auch die Diagnose geht ueber den zweiten Vertrag — kein eigener Client, kein Zugang aus
+        // der Plugin-Konfiguration. Gefragt wird seitenweise (StartPage/MaxPages=1), weil genau das die
+        // Frage dieses Endpunkts ist: liefert die Seite ueberhaupt eine neue Seite?
+        using var http = ScribeApiClient.NewHttpClient(TimeSpan.FromSeconds(60));
+        var pflege = Jellyfin.Plugin.SubScribe.Sources.SourceRegistry.BuildMaintenance(
+            new Jellyfin.Plugin.SubScribe.Sources.SourceEngineContext(
+                http,
+                plugin.LoggerFactory?.CreateLogger("SubDL-CountMySubtitles")
+                    ?? Microsoft.Extensions.Logging.Abstractions.NullLogger.Instance,
+                TimeProvider.System,
+                DataFolder: plugin.DataFolderPath),
+            cfg);
 
         var perPageCounts = new List<int>();
-        var allEntries = new List<OwnSubtitleEntry>();
-        var seenIds = new HashSet<int>();
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        var statusBreakdown = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         int total = 0;
-        int page = 1;
         bool more = true;
         bool paginationUnsupported = false;
-        // SubDL ignores page/per_page (see ScribeApiClient.ListMySubtitlesAsync), so every "page"
-        // returns the same list. Count distinct upload ids and stop at the first page without new ones.
-        while (more && page <= Math.Max(1, pages))
+        string? quelle = null;
+
+        var maintenance = System.Linq.Enumerable.FirstOrDefault(pflege.Maintenance);
+        if (maintenance == null)
         {
-            var entries = await api.ListMySubtitlesPageAsync(page, 100, CancellationToken.None).ConfigureAwait(false);
-            if (entries == null)
+            return StatusCode(503, new { error = "no source offers its submissions" });
+        }
+
+        quelle = maintenance.Key;
+        for (int page = 1; more && page <= Math.Max(1, pages); page++)
+        {
+            var answer = await maintenance
+                .ListAsync(
+                    new Jellyfin.Plugin.SubScribe.Sources.SourceSubmissionQuery(
+                        Published: false,
+                        MaxPages: 1,
+                        StartPage: page),
+                    CancellationToken.None)
+                .ConfigureAwait(false);
+
+            if (!answer.Ok)
             {
                 perPageCounts.Add(-1);
+                if (perPageCounts.Count == 1)
+                {
+                    return StatusCode(502, new
+                    {
+                        error = "could not read the submissions",
+                        source = quelle,
+                        fault = answer.Fault.ToString(),
+                        message = answer.Why,
+                    });
+                }
+
                 break;
             }
 
             int newOnPage = 0;
-            foreach (var e in entries)
+            foreach (var entry in answer.Submissions)
             {
-                if (e.UploadId > 0 && !seenIds.Add(e.UploadId))
+                if (!seen.Add(entry.Handle))
                 {
                     continue;
                 }
 
-                allEntries.Add(e);
+                string zustand = entry.State switch
+                {
+                    Jellyfin.Plugin.SubScribe.Sources.SubmissionState.Accepted => "accepted",
+                    Jellyfin.Plugin.SubScribe.Sources.SubmissionState.Rejected => "rejected",
+                    _ => "pending",
+                };
+                statusBreakdown[zustand] = statusBreakdown.TryGetValue(zustand, out int n) ? n + 1 : 1;
                 newOnPage++;
             }
 
-            perPageCounts.Add(entries.Count);
+            perPageCounts.Add(answer.Submissions.Count);
             total += newOnPage;
-            more = entries.Count == 100 && newOnPage > 0;
-            if (entries.Count == 100 && newOnPage == 0)
+            more = answer.Submissions.Count == 100 && newOnPage > 0;
+            if (answer.Submissions.Count == 100 && newOnPage == 0)
             {
                 paginationUnsupported = true;
             }
-
-            page++;
-        }
-
-        var statusBreakdown = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
-        foreach (var e in allEntries)
-        {
-            var status = e.Status ?? "unknown";
-            if (!statusBreakdown.ContainsKey(status))
-                statusBreakdown[status] = 0;
-            statusBreakdown[status]++;
         }
 
         return Ok(new
         {
+            source = quelle,
             pagesRequested = pages,
             perPageCounts,
             total,
-            distinctUploadIds = allEntries.Count,
+            distinctUploadIds = seen.Count,
             hasMore = more,
             paginationUnsupported,
             statusBreakdown

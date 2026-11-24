@@ -118,6 +118,16 @@ public sealed class SubdlMaintenance : ISourceMaintenance
                         pageRead: n => pages = n)
                     .ConfigureAwait(false);
             }
+            else if (query.MaxPages == 1)
+            {
+                // F-M729: EINE Seite — der Weg der Diagnose (`CountMySubtitles`). Die offene Liste
+                // ignoriert Blaettern serverseitig (sie liefert immer dieselbe Seite, F-M193), deshalb
+                // gibt es fuer genau eine Seite den eigenen Aufruf.
+                entries = await _client
+                    .ListMySubtitlesPageAsync(Math.Max(1, query.StartPage), 100, ct)
+                    .ConfigureAwait(false);
+                pages = entries == null ? 0 : 1;
+            }
             else
             {
                 entries = await _client.ListMySubtitlesAsync(ct, maxPages: query.MaxPages)

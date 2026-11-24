@@ -2734,6 +2734,17 @@ internal static class Program
                   && !nachlauf.Contains("DeleteMySubtitleAsync(", StringComparison.Ordinal),
                 "F-M729 (6): der Upload-Nachlauf ruft den Vertrag und keinen Client mehr",
                 nachlauf.Length == 0 ? "Nachlauf nicht gefunden" : "0 Direktaufrufe");
+
+            // (7) Auch die Diagnose (`CountMySubtitles`) geht ueber den Vertrag — sie war der letzte Weg
+            //     mit eigenem Client und Zugang aus der Plugin-Konfiguration.
+            string diagnose = File.ReadAllText(Path.Combine(plugin, "Api", "ScribePostprocessController.cs"));
+            Check(diagnose.Contains("SourceRegistry.BuildMaintenance(", StringComparison.Ordinal)
+                  && !diagnose.Contains("ListMySubtitlesPageAsync(", StringComparison.Ordinal)
+                  && !diagnose.Contains("new ScribeApiClient(", StringComparison.Ordinal)
+                  && !diagnose.Contains("cfg.ApiKey", StringComparison.Ordinal)
+                  && !diagnose.Contains("cfg.Username", StringComparison.Ordinal),
+                "F-M729 (7): CountMySubtitles fragt den Vertrag, nicht mehr den Client",
+                diagnose.Contains("new ScribeApiClient(", StringComparison.Ordinal) ? "eigener Client gefunden" : "0 Direktaufrufe");
         }
         finally
         {
