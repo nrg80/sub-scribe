@@ -7112,125 +7112,99 @@ public sealed class UploadPipeline : IPackFiller
             return UploadResult.Skipped("film-source-title-closed");
         }
 
-        var (aufloesung, msubGelungen, msubGeschlossen) = await MitTitelLeiterAsync(
+        // F-M734: Titel und Versand sind EIN Auftrag. Fehlt der Film, legt die Engine ihn auf der Seite an
+        // (EnsureTitle) und meldet, was geschah; die Kennung schreibt die PIPELINE in den Bestand, weil die
+        // Engine ihn nicht kennt. Die Leiter (F-M608) wiederholt nur, solange NICHTS gesendet wurde — die
+        // Engine bricht vor dem Senden ab, wenn der Titel nicht steht, also ist ein zweiter Zug kein
+        // zweiter Upload.
+        string? bekannteFilmId = !string.IsNullOrEmpty(mediaHash)
+            ? Registry.GetMedia(mediaHash!)?.MsubMovieId
+            : Registry.MsubMovieIdAtPath(mediaPath);
+
+        var (answer, msubGelungen, msubGeschlossen) = await MitTitelLeiterAsync(
                 "moviesubtitles",
                 msubTitelId,
-                () => _msubMovies.ResolveOrCreateForMediaAsync(Registry, mediaHash, movie, _config.DryRun, ct, mediaPath),
-                a => a.Resolved,
-                a => a.Status,
-                // F-M610: „existiert, Kennung nicht lesbar" ist ein Beleg — Paar zu, Titel offen.
-                a => string.Equals(a.Status, Api.Endpoints.MsubMovieStatus.CreatedWithoutId, StringComparison.Ordinal)
-                    || string.Equals(a.Status, Api.Endpoints.MsubMovieStatus.ExistsWithoutId, StringComparison.Ordinal),
-                // F-M610: „unclear" ist keine Auskunft — nichts zaehlen, nichts schliessen.
-                a => string.Equals(a.Status, Api.Endpoints.MsubMovieStatus.Unclear, StringComparison.Ordinal),
-                () => _msubMovies.BeginRun(),
+                () => SendAsync(
+                    Configuration.SubtitleProvider.MovieSubtitles,
+                    new Sources.SourceSendRequest
+                    {
+                        Bytes = System.Text.Encoding.UTF8.GetBytes(srtContent),
+                        FileName = neutralName,
+                        Language = lang,
+                        HearingImpaired = false,
+                        ReleaseName = releaseName,
+                        Quality = quality,
+                        Comment = Api.Endpoints.UploadComment.Movie(
+                            imdbId, tmdbId, movie.Name, movie.ReleaseYear ?? 0),
+                        Target = new Sources.SourceSendTarget(
+                            IsSeries: false,
+                            Title: movie.Name,
+                            Year: movie.ReleaseYear ?? 0,
+                            ImdbId: imdbId,
+                            TmdbId: tmdbId,
+                            Season: 0,
+                            Episode: 0)
+                        {
+                            // F-M508: die Nummer aus dem Bestand führt — der Versand sucht nicht ein
+                            // zweites Mal und legt nichts an, wenn sie schon da ist.
+                            MediaId = bekannteFilmId,
+                        },
+                        AsPack = false,
+
+                        // F-M734: die Titel-Frage steht im Auftrag.
+                        EnsureTitle = true,
+                        DryRun = _config.DryRun,
+                    },
+                    ct),
+                a => a.Title.Resolved,
+                a => a.Title.Reason ?? a.Reason,
+                a => a.Title.Settled,
+                a => a.Title.State == Sources.SourceTitleState.Unclear,
+                () => { },
                 ct)
             .ConfigureAwait(false);
-        if (!msubGelungen)
+
+        if (!answer.Title.Resolved && !answer.Title.Settled)
         {
             // F-M610: nur ein inhaltliches Nein schliesst den Titel. Ohne Urteil bleibt alles offen.
             if (!msubGeschlossen)
             {
                 LogUtil.PerItem(_config.LogMode, _logger,
-                    "[moviesubtitles] {Name} [{Lang}] — title {Title} got no verdict after the ladder ({Status}), nothing closed (F-M610)",
-                    neutralName, lang, msubTitelId, aufloesung?.Status ?? "?");
+                    "[moviesubtitles] {Name} [{Lang}] — title {Title} got no verdict after the ladder ({State}), nothing closed (F-M610)",
+                    neutralName, lang, msubTitelId, answer.Title.State);
                 return UploadResult.NoVerdict("film-source-title-no-verdict");
             }
 
             LogUtil.PerItem(_config.LogMode, _logger,
-                "[moviesubtitles] {Name} [{Lang}] — title {Title} could not be created and found after the ladder ({Status}), nothing sent (F-M608)",
-                neutralName, lang, msubTitelId, aufloesung?.Status ?? "?");
+                "[moviesubtitles] {Name} [{Lang}] — title {Title} could not be created and found after the ladder ({State}), nothing sent (F-M608)",
+                neutralName, lang, msubTitelId, answer.Title.State);
             _titelGeschlossen.Add("moviesubtitles|" + msubTitelId);
             return UploadResult.Skipped("film-source-title-closed");
         }
 
-        if (!aufloesung.Resolved)
+        if (answer.Title.Settled)
         {
-            // F-M508: KEIN Blocker. Die Zeile nennt den Grund (Status), damit im Lauf steht, warum die
-            // Film-Adresse fuer dieses Medium nichts bekommt, und die Kette laeuft weiter.
-            //
-            // F-M513: die Status nennen jetzt auch die Anlage — `exists-other-year` heisst „der Titel
-            // steht da, aber mit einem anderen Jahr, also NICHT anlegen", `created-id-not-readable`
-            // heisst „angelegt, aber ohne tvid gibt es keinen Upload". Der Text der Seite steht als
-            // Detail-Zeile daneben, nicht in der Kurzzeile.
+            // F-M603 (Operator-Entscheidung 18.11.2026, Weg „A"): „angelegt, aber die Id ist nicht lesbar"
+            // ist ein ANGENOMMENER Versuch — das Paar wird geschlossen, ohne einen Upload zu behaupten.
             LogUtil.PerItem(_config.LogMode, _logger,
-                "[moviesubtitles] {Name} [{Lang}] — skipped: no film id ({Status}) (F-M508)",
-                neutralName, lang, aufloesung.Status);
-            if (!string.IsNullOrEmpty(aufloesung.Answer))
-            {
-                LogUtil.Detail(_logger, "[moviesubtitles] the site answered: {Answer}", aufloesung.Answer);
-            }
-
-            // F-M603 (Operator-Entscheidung 18.11.2026, Weg „A"): „angelegt, aber die Id ist nicht
-            // lesbar" ist ein ANGENOMMENER Versuch. Ohne Marke blieb das Paar ewig offen und die Datei
-            // kam in jedem Lauf wieder (Oak Street, 18.11.2026).
-            // F-M607 (Operator-Anweisung 18.11.2026: „Erst müssen wir den titel neu angelegt haben, wenn wir
-            // ihn dann suchen und er taucht nicht auf -> skip, pair schließen."): die Reihenfolge ist
-            // Anlegen → Nachsuche. Taucht der Titel in der Nachsuche NICHT auf, ist das Paar entschieden und
-            // wird nicht erneut versucht — der Grund steht daneben.
-            //
-            // Zwei Faelle sind ein Beleg der Seite, dass der Titel dort steht (nur die Kennung fehlt):
-            //   created-id-not-readable  — angelegt, Id nicht lesbar
-            //   exists-id-not-readable   — die Seite meldet „fuehrt den Titel schon", Id nicht lesbar
-            // Beide schliessen das Paar (F-M603), ohne einen Upload zu behaupten. Alles andere
-            // (not-found, exists-other-year, create-failed, unclear, no-title, no-year) bleibt ein SKIP und
-            // wird von F-M605 als inhaltliches Nein gemerkt — damit ist es ebenfalls geschlossen.
-            if (string.Equals(aufloesung.Status, "created-id-not-readable", StringComparison.Ordinal)
-                || string.Equals(aufloesung.Status, "exists-id-not-readable", StringComparison.Ordinal))
-            {
-                LogUtil.PerItem(_config.LogMode, _logger,
-                    "[moviesubtitles] {Name} [{Lang}] — the title was created and the search names no id ({Status}); the pair is settled (F-M603/F-M607)",
-                    neutralName, lang, aufloesung.Status);
-                return UploadResult.AcceptedWithoutId("film-source-movie-" + aufloesung.Status);
-            }
-
-            return UploadResult.Skipped("film-source-movie-" + aufloesung.Status);
+                "[moviesubtitles] {Name} [{Lang}] — the title is on the page and the answer names no id ({State}); the pair is settled (F-M603/F-M607)",
+                neutralName, lang, answer.Title.State);
+            return UploadResult.AcceptedWithoutId("film-source-movie-" + answer.Title.State);
         }
 
-        // F-M606 (Operator-Frage 18.11.2026: „Erst fragen ob die id bespielbar ist, vor dem hochladen geht
-        // nicht?"): erst die Kennung pruefen, dann senden. Antwortet die Seite nicht mit dem Upload-
-        // Formular, wird nichts hochgeladen — der Grund wird gemerkt (F-M605) und die Spur nicht in jedem
-        // Lauf neu gefragt. Das ist eine VORPRUEFUNG des Laufs und bleibt, wo sie war.
-        if (!_config.DryRun && !await _msubClient
-            .FilmUsableForUploadAsync(aufloesung.MovieId ?? 0, ct)
-            .ConfigureAwait(false))
+        // Der Titel steht und die Kennung ist da: sie gehoert in den Bestand (dieselbe Spalte wie zuvor).
+        if (!_config.DryRun
+            && answer.Title.TitleId is { Length: > 0 } neueFilmId
+            && int.TryParse(neueFilmId, System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out int filmNummer)
+            && filmNummer > 0)
         {
-            LogUtil.PerItem(_config.LogMode, _logger,
-                "[moviesubtitles] {Name} [{Lang}] — the film id is not usable for an upload (no form on add.php?let=…), nothing sent (F-M606)",
-                neutralName, lang);
-            return UploadResult.Skipped("film-source-id-not-usable");
-        }
+            Registry.MarkAndFlush(() => Registry.SetMsubMovieId(mediaHash, mediaPath, filmNummer));
 
-        // F-M687: die Abgabe geht als Auftrag an die Engine — mit der Filmnummer, die die Auflösung oben
-        // schon geprüft und in den Bestand geschrieben hat (F-M508), der rohen Qualität (die Abbildung auf
-        // das Auswahlfeld der Seite macht ihr Client, F-M511) und dem Kommentar, den die Pipeline baut.
-        var answer = await SendAsync(
-            Configuration.SubtitleProvider.MovieSubtitles,
-            new Sources.SourceSendRequest
-            {
-                Bytes = System.Text.Encoding.UTF8.GetBytes(srtContent),
-                FileName = neutralName,
-                Language = lang,
-                HearingImpaired = false,
-                ReleaseName = releaseName,
-                Quality = quality,
-                Comment = Api.Endpoints.UploadComment.Movie(
-                    imdbId, tmdbId, movie.Name, movie.ReleaseYear ?? 0),
-                Target = new Sources.SourceSendTarget(
-                    IsSeries: false,
-                    Title: movie.Name,
-                    Year: movie.ReleaseYear ?? 0,
-                    ImdbId: imdbId,
-                    TmdbId: tmdbId,
-                    Season: 0,
-                    Episode: 0)
-                {
-                    // F-M508: die Nummer aus dem Bestand führt — der Versand sucht nicht ein zweites Mal.
-                    MediaId = aufloesung.MovieId?.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                },
-                AsPack = false,
-            },
-            ct).ConfigureAwait(false);
+            LogUtil.PerItem(_config.LogMode, _logger,
+                "[moviesubtitles] {Name} [{Lang}] — film {Id} written to the store (F-M508/F-M734)",
+                neutralName, lang, filmNummer);
+        }
 
         LogUtil.PerItem(_config.LogMode, _logger,
             "[moviesubtitles] {Name} [{Lang}] — {Result}{Reason}",

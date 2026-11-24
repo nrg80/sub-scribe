@@ -381,6 +381,19 @@ public sealed class MsubEngine : ISourceEngine
                     with { Title = titel };
             }
 
+            // F-M606: erst fragen, ob die Kennung bespielbar ist, dann senden. Die Vorpruefung gehoert zur
+            // Seite, also hierher — der Ablauf fragt den Client nicht mehr selbst. Gefragt wird auf dem
+            // Weg, der den Titel selbst beschafft (EnsureTitle, F-M734): dort hat der Lauf die Nummer
+            // nicht vorher geprueft. Ein Trockenlauf fragt nicht, er sendet ohnehin nichts.
+            if (request.EnsureTitle
+                && !request.DryRun
+                && !await _client.FilmUsableForUploadAsync(film, ct).ConfigureAwait(false))
+            {
+                return SourceSendAnswer
+                    .Rejected("the film id is not usable for an upload (no form on add.php?let=…)")
+                    with { Title = titel };
+            }
+
             long? tmdb = long.TryParse(request.Target.TmdbId, NumberStyles.Integer, CultureInfo.InvariantCulture, out long zahl)
                 ? zahl
                 : null;

@@ -1266,13 +1266,15 @@ internal static class Program
         Check("F-M610: 'existiert, Kennung nicht lesbar' gilt als Beleg, nicht als Fehlschlag der Leiter",
             up605.Contains("Func<T, bool>? schonBelegt,", StringComparison.Ordinal)
             && up605.Contains("if (gelungen(ergebnis) || (schonBelegt?.Invoke(ergebnis) ?? false))", StringComparison.Ordinal)
-            && up605.Contains("Api.Endpoints.MsubMovieStatus.CreatedWithoutId", StringComparison.Ordinal)
-            && up605.Contains("Api.Endpoints.MsubMovieStatus.ExistsWithoutId", StringComparison.Ordinal)
+            // F-M734: die Film-Adresse meldet den Beleg jetzt NEUTRAL aus dem Auftrag — Settled heisst
+            // "Titel belegt, Kennung fehlt"; die Serie fuehrt ihren eigenen Status noch selbst.
+            && up605.Contains("a => a.Title.Settled", StringComparison.Ordinal)
+            && up605.Contains("if (answer.Title.Settled)", StringComparison.Ordinal)
             && up605.Contains("Api.Endpoints.TvstShowStatus.CreatedIdUnknown", StringComparison.Ordinal));
         Check("F-M610: ohne Urteil gibt es NoVerdict statt eines geschlossenen Titels",
             up605.Contains("return UploadResult.NoVerdict(\"film-source-title-no-verdict\");", StringComparison.Ordinal)
             && up605.Contains("return UploadResult.NoVerdict(\"second-source-title-no-verdict\");", StringComparison.Ordinal)
-            && up605.Contains("Api.Endpoints.MsubMovieStatus.Unclear", StringComparison.Ordinal)
+            && up605.Contains("a => a.Title.State == Sources.SourceTitleState.Unclear", StringComparison.Ordinal)
             && up605.Contains("Api.Endpoints.TvstShowStatus.Unclear", StringComparison.Ordinal));
 
         // --- F-M609: drei Urteile — angenommen, abgelehnt, kein Urteil ---------------------------------
@@ -1297,8 +1299,7 @@ internal static class Program
             // an EINER Stelle — der Ausgang der Grenze wird dort gedeutet.
             ur609.Contains("public static UploadResult FromAnswer(Sources.SourceSendAnswer answer)", StringComparison.Ordinal)
             && ur609.Contains("case Sources.SourceOutcome.Busy:", StringComparison.Ordinal)
-            && ur609.Contains("return NoVerdict(answer.Reason ?? ", StringComparison.Ordinal)
-            && ur609.Contains(", busy: true);", StringComparison.Ordinal)
+            && ur609.Contains("return MitTitel(NoVerdict(answer.Reason ?? \"busy\", busy: true), answer);", StringComparison.Ordinal)
             && !up605.Contains("IstStoerung(", StringComparison.Ordinal));
         Check("F-M609: bei SubDL sind Stundendeckel, rate-limited und API-Fehler Stoerungen, kein Nein",
             api609.Contains("return UploadResult.NoVerdict(\"rate-limited\", busy: true);", StringComparison.Ordinal)
@@ -1322,7 +1323,9 @@ internal static class Program
             && fail608.Contains("public const int ClosingAttempt = 4;", StringComparison.Ordinal)
             && fail608.Contains("public static void Close(string source, string titleId, string reason)", StringComparison.Ordinal));
         Check("F-M608: die Leiter leert vor jedem Zug den Speicher des Laufs, sonst wiederholt sie nur das Urteil",
-            up605.Contains("() => _msubMovies.BeginRun(),", StringComparison.Ordinal)
+            // F-M734: die Film-Adresse braucht keinen Lauf-Speicher mehr — ihr Versuch ist der Auftrag,
+            // und die Engine haelt nichts je Lauf; die Serie raeumt ihren weiterhin.
+            up605.Contains("() => { },", StringComparison.Ordinal)
             && up605.Contains("() => _tvstShows.BeginRun(),", StringComparison.Ordinal)
             && up605.Contains("int pause = TitelLeiterPausenMs[Math.Min(zug - 2, TitelLeiterPausenMs.Length - 1)];", StringComparison.Ordinal));
         Check("F-M608: beide Adressen mit Anlage fahren die Leiter, subdl nicht",
@@ -1341,8 +1344,8 @@ internal static class Program
 
         // --- F-M607: anlegen, nachsuchen, bei Nichtfund das Paar schliessen --------------------------
         Check("F-M607: beide Belege der Seite (angelegt / fuehrt den Titel) schliessen das Paar, andere Neins nicht",
-            up605.Contains("|| string.Equals(aufloesung.Status, \"exists-id-not-readable\", StringComparison.Ordinal))", StringComparison.Ordinal)
-            && up605.Contains("return UploadResult.AcceptedWithoutId(\"film-source-movie-\" + aufloesung.Status);", StringComparison.Ordinal));
+            up605.Contains("if (answer.Title.Settled)", StringComparison.Ordinal)
+            && up605.Contains("return UploadResult.AcceptedWithoutId(\"film-source-movie-\" + answer.Title.State);", StringComparison.Ordinal));
 
         // --- F-M606: erst fragen, ob die Kennung bespielbar ist, dann senden --------------------------
         var msub606 = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Api/MovieSubtitlesClient.cs"));
@@ -1350,8 +1353,11 @@ internal static class Program
             msub606.Contains("public async Task<bool> FilmUsableForUploadAsync(int movieId, CancellationToken cancellationToken = default)", StringComparison.Ordinal)
             && msub606.Contains("{0}/add.php?let={1}", StringComparison.Ordinal));
         Check("F-M606: ohne bespielbare Kennung wird nichts gesendet — mit Grund",
-            up605.Contains("if (!_config.DryRun && !await _msubClient", StringComparison.Ordinal)
-            && up605.Contains("return UploadResult.Skipped(\"film-source-id-not-usable\");", StringComparison.Ordinal));
+            // F-M734: die Vorpruefung gehoert zur Seite und steht deshalb in der Engine; der Ablauf fragt
+            // den Client nicht mehr selbst.
+            ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Sources/Msub/MsubEngine.cs"))
+                .Contains("FilmUsableForUploadAsync(film, ct)", StringComparison.Ordinal)
+            && !up605.Contains("_msubClient.FilmUsableForUploadAsync", StringComparison.Ordinal));
 
         // --- F-M604: das Pack-Urteil liegt im Store, mit Signatur der Mitglieder ----------------------
         var store604 = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Registry/PackSeasonStore.cs"));
@@ -1398,8 +1404,8 @@ internal static class Program
             && result603.Contains("public static UploadResult AcceptedWithoutId(string reason)", StringComparison.Ordinal)
             && result603.Contains("SourceAccepted = true, Reason = reason, Verdict = UploadVerdict.AcceptedWithoutId", StringComparison.Ordinal));
         Check("F-M603: die Film-Adresse meldet 'angelegt, Id nicht lesbar' als angenommen",
-            upload603.Contains("string.Equals(aufloesung.Status, \"created-id-not-readable\", StringComparison.Ordinal)", StringComparison.Ordinal)
-            && upload603.Contains("return UploadResult.AcceptedWithoutId(\"film-source-movie-\" + aufloesung.Status);", StringComparison.Ordinal));
+            upload603.Contains("if (answer.Title.Settled)", StringComparison.Ordinal)
+            && upload603.Contains("return UploadResult.AcceptedWithoutId(\"film-source-movie-\" + answer.Title.State);", StringComparison.Ordinal));
         Check("F-M603: die Serien-Adresse (tvst) genauso — derselbe Uploader, dieselbe Luecke",
             upload603.Contains("if (string.Equals(show.Status, Api.Endpoints.TvstShowStatus.CreatedIdUnknown, StringComparison.Ordinal))", StringComparison.Ordinal)
             && upload603.Contains("return UploadResult.AcceptedWithoutId(\"second-source-show-created-id-unknown\");", StringComparison.Ordinal));
@@ -3050,16 +3056,20 @@ internal static class Program
         // Kette, Tor, Marke) und dass er ohne ausdrueckliche Entscheidung nicht angetreten wird.
         Check("die Film-Adresse steht mit eigenem Auftrag, eigener Vorpruefung und eigener Marke in der Kette (F-M508/F-M687)",
             uploadSource.Contains("Configuration.SubtitleProvider.MovieSubtitles => SendToMovieSubtitlesAsync(", StringComparison.Ordinal)
-            && uploadSource.Contains("MediaId = aufloesung.MovieId?.ToString(System.Globalization.CultureInfo.InvariantCulture),", StringComparison.Ordinal)
+            && uploadSource.Contains("MediaId = bekannteFilmId,", StringComparison.Ordinal)
             && uploadSource.Contains("IsSeries: false,", StringComparison.Ordinal)
             && uploadSource.Contains("Year: movie.ReleaseYear ?? 0,", StringComparison.Ordinal)
             && uploadSource.Contains("if (isSeries)", StringComparison.Ordinal)
             && uploadSource.Contains("UploadResult.Skipped(\"film-source-films-only\")", StringComparison.Ordinal));
 
         Check("die Filmnummer kommt aus dem Store, gesucht wird nur ohne sie — und ohne Jahr gar nicht (F-M508/F-M513)",
-            uploadSource.Contains(".ResolveOrCreateForMediaAsync(Registry, mediaHash, movie, _config.DryRun, ct, mediaPath)", StringComparison.Ordinal)
+            // F-M734: die Nummer kommt aus dem Bestand, das Anlegen ist ein Feld des Auftrags.
+            uploadSource.Contains("Registry.GetMedia(mediaHash!)?.MsubMovieId", StringComparison.Ordinal)
+            && uploadSource.Contains("EnsureTitle = true,", StringComparison.Ordinal)
+            && uploadSource.Contains("Registry.SetMsubMovieId(mediaHash, mediaPath, filmNummer)", StringComparison.Ordinal)
+            && !uploadSource.Contains(".ResolveOrCreateForMediaAsync(", StringComparison.Ordinal)
             && uploadSource.Contains("var movie = await _tmdb.MovieInfoAsync(tmdbId!, ct)", StringComparison.Ordinal)
-            && uploadSource.Contains("no film id ({Status}) (F-M508)", StringComparison.Ordinal)
+            && uploadSource.Contains("no TMDb id, so there is no leading title (F-M508)", StringComparison.Ordinal)
             // ohne Titel/Nummer nennt der Endpunkt den Grund, statt zu raten
             && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/Endpoints/MovieSubtitlesEndpoints.cs"))
                 .Contains("a film title AND its year are needed", StringComparison.Ordinal));
