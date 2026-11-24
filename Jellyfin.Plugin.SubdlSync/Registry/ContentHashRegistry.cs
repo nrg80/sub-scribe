@@ -3203,10 +3203,15 @@ public sealed class ContentHashRegistry : IDisposable
 
         int stempel = SourceStore.ClearFileMarks(_db, mediaHash);
 
+        // F-M727a (Befund 24.11.2026 am Prod-Lauf von 12.3.8.32): `Delete(id)` vergleicht gegen den
+        // SCHLUESSEL der Menge, nicht gegen die Kennung — Spuren sind ueber `MediaHash + "|" + SubPos`
+        // verschluesselt, Seitenwagen ueber ihren Inhalts-Hash. Mit `spur.TrackId` traf der Aufruf nie
+        // und gab still `false` zurueck: 24 Spuren und 123 Seitenwagen GEFUNDEN, 0 geloescht. `Remove`
+        // nimmt die Zeile selbst und trifft sie ueber diesen Schluessel.
         int spurWeg = 0;
         foreach (var spur in spuren)
         {
-            if (_db.Tracks.Delete(spur.TrackId))
+            if (_db.Tracks.Remove(spur))
             {
                 spurWeg++;
             }
@@ -3215,7 +3220,7 @@ public sealed class ContentHashRegistry : IDisposable
         int wagenWeg = 0;
         foreach (var wagenZeile in wagen)
         {
-            if (_db.Sidecars.Delete(wagenZeile.TrackId))
+            if (_db.Sidecars.Remove(wagenZeile))
             {
                 wagenWeg++;
             }

@@ -3631,6 +3631,9 @@ internal static class Program
             && leseRumpf.IndexOf("catch (OperationCanceledException)", StringComparison.Ordinal)
                 < leseRumpf.IndexOf("logger.LogError(\"[Sub Scribe] reading extracted stream", StringComparison.Ordinal)
             && leseRumpf.Contains("throw;", StringComparison.Ordinal));
+        string forgetRumpf = registryDatei[
+            registryDatei.IndexOf("public (int Tracks, int Sidecars, int Stamps, int Marks, int FoundTracks", StringComparison.Ordinal)..];
+        forgetRumpf = forgetRumpf[..Math.Max(0, forgetRumpf.IndexOf("\n    public ", StringComparison.Ordinal) is int e && e > 0 ? e : forgetRumpf.Length)];
         Check(
             "F-M723: 'everything of this file' drops all rows of the file, not just rejections",
             resetDatei.Contains("bool alles = teile.Contains(\"all\")", StringComparison.Ordinal)
@@ -3642,11 +3645,18 @@ internal static class Program
             // kann von dem der Datei abweichen (neu gepackt), dann lief die Suche leer.
             && registryDatei.Contains("|| string.Equals(t.FileId, media.FileId, StringComparison.Ordinal))", StringComparison.Ordinal)
             && registryDatei.Contains("|| string.Equals(w.FileId, media.FileId, StringComparison.Ordinal)", StringComparison.Ordinal)
-            && registryDatei.Contains("_db.Sidecars.Delete(wagenZeile.TrackId)", StringComparison.Ordinal)
+            // F-M727a: `Delete(kennung)` vergleicht gegen den Schluessel der Menge, nicht gegen die
+            // Kennung — damit fielen 0 Zeilen. `Remove` nimmt die Zeile selbst.
+            && registryDatei.Contains("if (_db.Sidecars.Remove(wagenZeile))", StringComparison.Ordinal)
+            && registryDatei.Contains("if (_db.Tracks.Remove(spur))", StringComparison.Ordinal)
+            && !registryDatei.Contains("_db.Sidecars.Delete(wagenZeile.TrackId)", StringComparison.Ordinal)
+            && !registryDatei.Contains("_db.Tracks.Delete(spur.TrackId)", StringComparison.Ordinal)
             && registryDatei.Contains("marken += SourceStore.ForgetSubject(_db, subjekt);", StringComparison.Ordinal)
             // die Marken zuerst, sonst findet sie ihr Subjekt nicht mehr
-            && registryDatei.IndexOf("ForgetSubject(_db, subjekt)", StringComparison.Ordinal)
-                < registryDatei.IndexOf("_db.Tracks.Delete(spur.TrackId)", StringComparison.Ordinal)
+            // die Marken zuerst — geprüft IM Rumpf von ForgetMedia, denn der Aufruf kommt in der Datei
+            // sonst auch an anderen Stellen vor
+            && forgetRumpf.IndexOf("ForgetSubject(_db, subjekt)", StringComparison.Ordinal)
+                < forgetRumpf.IndexOf("_db.Tracks.Remove(spur)", StringComparison.Ordinal)
             && guiDatei.Contains("<option value=\"all\">everything of this file</option>", StringComparison.Ordinal));
         // F-M727 (Betreiber-Anweisung 24.11.2026 „Alle 4"): „0 geloescht" war keine Auskunft. Der Reset
         // meldet jetzt, wie viele Zeilen er VORHER gefunden hat und ob ihm die Datei ueberhaupt bekannt

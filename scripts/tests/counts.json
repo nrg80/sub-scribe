@@ -932,6 +932,10 @@
     "T389": {
       "suite": "endpoints",
       "checks": 1
+    },
+    "T390": {
+      "suite": "endpoints",
+      "checks": 1
     }
   }
 }
