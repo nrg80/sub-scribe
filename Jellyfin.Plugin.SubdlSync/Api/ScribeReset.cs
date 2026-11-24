@@ -42,9 +42,15 @@ public class ScribeReset : ControllerBase
     /// Resets the requested state. Requires confirm=true.
     /// </summary>
     /// <param name="confirm">Must be exactly "true".</param>
-    /// <param name="scope">all | upload | download — which direction's state to wipe.</param>
+    /// <param name="scope">all | upload | download | pack — which state to wipe.</param>
+    /// <param name="imdb">Nur bei <c>pack</c>: eine Serie (IMDb-Kennung); leer = alle Urteile.</param>
+    /// <param name="season">Nur bei <c>pack</c>: die Staffel zu <paramref name="imdb"/>.</param>
     [HttpPost]
-    public IActionResult Reset([FromQuery] string confirm = "", [FromQuery] string scope = "all")
+    public IActionResult Reset(
+        [FromQuery] string confirm = "",
+        [FromQuery] string scope = "all",
+        [FromQuery] string imdb = "",
+        [FromQuery] int season = 0)
     {
         if (!string.Equals(confirm, "true", StringComparison.OrdinalIgnoreCase))
         {
@@ -150,6 +156,31 @@ public class ScribeReset : ControllerBase
                 }
 
                 LogUtil.Normal(_logger, "[Sub Scribe] Reset upload: {Count} file-complete marker(s) cleared.", touched.Count);
+            }
+            else if (scope.Equals("pack", StringComparison.OrdinalIgnoreCase))
+            {
+                // F-M739: die gespeicherten Staffelurteile (F-M604) vergessen. Sie hängen am
+                // Schlüssel `imdb|staffel|sprachtag`; wurde eine Serie vorher unter einer falschen
+                // Kennung geurteilt, sind die alten Zeilen unerreichbar, blockieren aber jeden Blick
+                // in die Tabelle. Ohne `imdb` fallen alle Urteile, mit `imdb` (und optional
+                // `season`) nur die einer Serie.
+                int vergessen = string.IsNullOrWhiteSpace(imdb)
+                    ? Registry.PackSeasonStore.ClearAll()
+                    : Registry.PackSeasonStore.ClearSeason(imdb, season);
+                LogUtil.Normal(
+                    _logger,
+                    "[Sub Scribe] Reset \"pack\": {Count} stored season verdict(s) forgotten{Scope}.",
+                    vergessen,
+                    string.IsNullOrWhiteSpace(imdb) ? string.Empty : $" for {imdb} S{season}");
+                return Ok(new
+                {
+                    ok = true,
+                    scope = "pack",
+                    forgotten = vergessen,
+                    imdb = string.IsNullOrWhiteSpace(imdb) ? null : imdb,
+                    season = season > 0 ? season : (int?)null,
+                    backup = System.IO.Path.GetFileName(backupPath),
+                });
             }
             else if (scope.Equals("download", StringComparison.OrdinalIgnoreCase))
             {

@@ -974,6 +974,10 @@
     "T398": {
       "suite": "endpoints",
       "checks": 5
+    },
+    "T399": {
+      "suite": "endpoints",
+      "checks": 4
     }
   }
 }

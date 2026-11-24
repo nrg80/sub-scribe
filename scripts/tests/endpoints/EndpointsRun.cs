@@ -3811,14 +3811,42 @@ internal static class Program
             typWechsel.Corrected && !typWechsel.IsSeries,
             "Corrected=" + typWechsel.Corrected + " IsSeries=" + typWechsel.IsSeries);
 
-#pragma warning disable CA1849 // Pruefpfad, kein Serverpfad: die Datei wird einmal gelesen.
+#pragma warning disable CA1849 // Pruefpfad, kein Serverpfad: die Dateien werden je einmal gelesen.
         var resolverQuelle = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/TmdbImdbResolver.cs"));
+        var resetQuelle = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/ScribeReset.cs"));
 #pragma warning restore CA1849
         Check(
             "F-M738: die alte Mischzeile ist weg — der Resolver entscheidet ueber MergeVerifiedIds",
             resolverQuelle.Contains("var entschieden = MergeVerifiedIds(", StringComparison.Ordinal)
             && !resolverQuelle.Contains("return (strict.Imdb ?? jfImdb, strict.Tmdb, strict.IsSeries, true);", StringComparison.Ordinal),
             "Rueckgabe kommt aus der reinen Rechnung");
+
+        // -----------------------------------------------------------------------------------------
+        // F-M739: die Staffelurteile vergessen. Sie haengen am Schluessel imdb|staffel|sprachtag;
+        // nach einer Identitaetskorrektur sind die alten Zeilen unerreichbar, blockieren aber den
+        // Blick in die Tabelle und wachsen weiter.
+        // -----------------------------------------------------------------------------------------
+        Check(
+            "F-M739: der Reset kennt den Bereich \"pack\" und vergisst die Staffelurteile",
+            resetQuelle.Contains("scope.Equals(\"pack\", StringComparison.OrdinalIgnoreCase)", StringComparison.Ordinal)
+            && resetQuelle.Contains("PackSeasonStore.ClearAll()", StringComparison.Ordinal)
+            && resetQuelle.Contains("PackSeasonStore.ClearSeason(imdb, season)", StringComparison.Ordinal),
+            "scope=pack, wahlweise auf eine Serie/Staffel begrenzt");
+        Check(
+            "F-M739: ohne Kennung fallen alle Urteile, mit Kennung nur die einer Serie",
+            resetQuelle.Contains("string.IsNullOrWhiteSpace(imdb)" + Environment.NewLine + "                    ? Registry.PackSeasonStore.ClearAll()", StringComparison.Ordinal),
+            "ClearAll oder ClearSeason(imdb, season)");
+        Check(
+            "F-M739: der Reset nennt die Zahl der vergessenen Urteile",
+            resetQuelle.Contains("{Count} stored season verdict(s) forgotten", StringComparison.Ordinal)
+            && resetQuelle.Contains("forgotten = vergessen", StringComparison.Ordinal),
+            "Antwort und Logzeile tragen die Zahl");
+        Check(
+            "F-M739: der andere Bereich (upload) bleibt unberuehrt — ein Pack-Reset laedt nichts neu hoch",
+            resetQuelle.Contains("else if (scope.Equals(\"upload\", StringComparison.OrdinalIgnoreCase))", StringComparison.Ordinal)
+            && resetQuelle.IndexOf("scope.Equals(\"pack\"", StringComparison.Ordinal)
+               != resetQuelle.IndexOf("scope.Equals(\"upload\"", StringComparison.Ordinal),
+            "getrennte Zweige");
 
         if (_failures > 0)
         {
