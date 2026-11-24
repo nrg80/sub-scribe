@@ -455,12 +455,23 @@ public sealed class SeasonPackCoordinator
         // wird nicht entpackt; hat ihn nur eine, sammelt der Slot für die andere.
         // F-M650: die Liste der Quellen OHNE Behälter wird einmal gebaut — das HasPack-Tor und das
         // Ablehnungs-Tor darunter arbeiten auf derselben Liste.
-        var fehlt = _registry != null
+        var ohnePack = _registry != null
             ? quellen.Where(s => !_registry.HasPack(imdbId, season, lang, hi, s)).ToList()
             : quellen.ToList();
+
+        // F-M741 (Befund 24.11.2026): eine Quelle, die diese Sprache NICHT fuehrt, ist keine FEHLENDE
+        // Quelle. Bisher stand die Sprachauskunft nur im Sende-Schritt (F-M538): der Sammler entpackte
+        // die ganze Staffel fuer eine Quelle, die den Behaelter nie annehmen kann, und warf ihn danach
+        // weg. Gemessen an einem Tag: 633 Zeilen „the collector builds it for tvst", davon 42 Paare in
+        // Sprachen, die tvsubtitles nicht fuehrt (ID, BN, HR …), und tt32020831 neunmal je Sprache.
+        // Kein Urteil schloss das Paar, weil nie etwas abgelehnt wurde — es blieb fuer immer offen.
+        // Die Tafel der Quelle ist ein fester Wert; sie VOR dem Sammeln zu fragen kostet nichts.
+        var sprachLos = ohnePack.Where(s => !Sources.SourceLanguages.NimmtSprache(s, lang)).ToList();
+        var fehlt = ohnePack.Where(s => Sources.SourceLanguages.NimmtSprache(s, lang)).ToList();
+
         if (_registry != null)
         {
-            if (fehlt.Count == 0)
+            if (ohnePack.Count == 0)
             {
                 LogUtil.Normal(
                     _logger,
@@ -470,13 +481,35 @@ public sealed class SeasonPackCoordinator
                 return null;
             }
 
-            if (fehlt.Count < quellen.Count)
+            if (fehlt.Count == 0)
+            {
+                // Alle Quellen ohne Behaelter fuehren diese Sprache nicht — es gibt nichts zu bauen und
+                // nichts zu entpacken. Bisher lief dieser Fall in das HasPack-Tor darueber und meldete
+                // „already up as a pack", obwohl die andere Quelle den Behaelter nie hatte.
+                LogUtil.Normal(
+                    _logger,
+                    "[Sub Scribe] season pack skipped — {Imdb} S{Season} [{Lang}]: no source carries this language ({Sources}), nothing is extracted (F-M741).",
+                    imdbId, season, SeasonPack.LangTag(lang, hi), JoinSources(sprachLos));
+                LastSkipReason = null;
+                return null;
+            }
+
+            if (sprachLos.Count > 0)
             {
                 LogUtil.Detail(
                     _logger,
-                    "[Sub Scribe] season pack — {Imdb} S{Season} [{Lang}]: {Have} of {All} source(s) already hold the container ({HaveList}); the collector builds it for {Missing} (F-M647).",
-                    imdbId, season, SeasonPack.LangTag(lang, hi), quellen.Count - fehlt.Count, quellen.Count,
-                    JoinSources(quellen.Where(s => !fehlt.Contains(s)).ToList()), JoinSources(fehlt));
+                    "[Sub Scribe] season pack — {Imdb} S{Season} [{Lang}]: {Count} source(s) do not carry this language ({SprachLos}); the collector builds it for {Missing} (F-M741).",
+                    imdbId, season, SeasonPack.LangTag(lang, hi), sprachLos.Count,
+                    JoinSources(sprachLos), JoinSources(fehlt));
+            }
+
+            if (fehlt.Count < quellen.Count - sprachLos.Count)
+            {
+                LogUtil.Detail(
+                    _logger,
+                    "[Sub Scribe] season pack — {Imdb} S{Season} [{Lang}]: {Have} of {Rest} source(s) already hold the container ({HaveList}); the collector builds it for {Missing} (F-M647).",
+                    imdbId, season, SeasonPack.LangTag(lang, hi), quellen.Count - sprachLos.Count - fehlt.Count, quellen.Count - sprachLos.Count,
+                    JoinSources(quellen.Where(x => !fehlt.Contains(x) && !sprachLos.Contains(x)).ToList()), JoinSources(fehlt));
             }
         }
 

@@ -982,6 +982,10 @@
     "T400": {
       "suite": "endpoints",
       "checks": 6
+    },
+    "T401": {
+      "suite": "endpoints",
+      "checks": 4
     }
   }
 }

@@ -3892,6 +3892,38 @@ internal static class Program
 #pragma warning restore CA1849
             "scope=season, dry-Parameter, Attach in Plugin.cs");
 
+        // -----------------------------------------------------------------------------------------
+        // F-M741: die Sprachauskunft der Quelle gehoert VOR das Sammeln. Stand sie nur im
+        // Sende-Schritt, entpackte der Sammler die ganze Staffel fuer eine Quelle, die den Behaelter
+        // nie annehmen kann — und das Paar blieb offen, weil nie etwas abgelehnt wurde.
+        // -----------------------------------------------------------------------------------------
+#pragma warning disable CA1849 // Pruefpfad, kein Serverpfad.
+        var koordinatorQuelle = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Pipeline/SeasonPackCoordinator.cs"));
+        var pipelineQuelle = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Pipeline/UploadPipeline.cs"));
+#pragma warning restore CA1849
+        Check(
+            "F-M741: der Sammler nimmt Quellen ohne die Sprache VOR dem Sammeln aus dem Slot",
+            koordinatorQuelle.Contains("var sprachLos = ohnePack.Where(s => !Sources.SourceLanguages.NimmtSprache(s, lang)).ToList();", StringComparison.Ordinal)
+            && koordinatorQuelle.Contains("var fehlt = ohnePack.Where(s => Sources.SourceLanguages.NimmtSprache(s, lang)).ToList();", StringComparison.Ordinal),
+            "sprachLos und fehlt getrennt aus ohnePack");
+        Check(
+            "F-M741: bleibt keine Quelle, wird nichts gesammelt und der Grund genannt",
+            koordinatorQuelle.Contains("no source carries this language ({Sources}), nothing is extracted (F-M741)", StringComparison.Ordinal)
+            && koordinatorQuelle.Contains("if (fehlt.Count == 0)", StringComparison.Ordinal),
+            "eine Zeile je Paar, kein Entpacken");
+        Check(
+            "F-M741: das HasPack-Tor darueber meldet weiter 'already up as a pack' — erst ohnePack.Count == 0",
+            koordinatorQuelle.Contains("if (ohnePack.Count == 0)", StringComparison.Ordinal)
+            && koordinatorQuelle.IndexOf("if (ohnePack.Count == 0)", StringComparison.Ordinal)
+               < koordinatorQuelle.IndexOf("no source carries this language", StringComparison.Ordinal),
+            "Reihenfolge: Behaelter vorhanden, dann Sprache");
+        Check(
+            "F-M741: der Einzelweg fragt dieselbe Auskunft schon vor der Extraktion (AnyUploadSourceStillWants)",
+            pipelineQuelle.Contains("alsoTakes: key => Api.Endpoints.Provenance.Provider(key) is { } quelle", StringComparison.Ordinal)
+            && pipelineQuelle.Contains("&& NimmtSprache(quelle, language, isSeries)", StringComparison.Ordinal)
+            && pipelineQuelle.IndexOf("if (!AnyUploadSourceStillWants(mediaHash, lang, streamHi, isSeries, subPos))", StringComparison.Ordinal) > 0,
+            "Einzelpaare entscheiden vor dem Entpacken");
+
         if (_failures > 0)
         {
             Console.WriteLine($">>> ENDPUNKTE: {_failures} von {_checks} Pruefungen fehlgeschlagen");
