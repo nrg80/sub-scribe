@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.31",
-        "changelog": "v12.3.8.31: a cancelled read-back is no longer one error per stream, and it can no longer pass as \"no text\".",
+        "version": "12.3.8.32",
+        "changelog": "v12.3.8.32: the file reset reports what it found, and sidecars are also reached by the file's path stem.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.31-dev/Jellyfin.Plugin.SubdlSync_12.3.8.31.zip",
-        "checksum": "413fc32f6987a6b0ba5708e7bab38cf3",
-        "timestamp": "2026-11-24T07:04:37Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.32-dev/Jellyfin.Plugin.SubdlSync_12.3.8.32.zip",
+        "checksum": "acc1fd99d31f114c4264e1632412bae8",
+        "timestamp": "2026-11-24T07:36:22Z"
       }
     ]
   }
