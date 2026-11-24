@@ -966,6 +966,10 @@
     "T396": {
       "suite": "sources",
       "checks": 5
+    },
+    "T397": {
+      "suite": "seasonpack",
+      "checks": 6
     }
   }
 }

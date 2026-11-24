@@ -285,6 +285,15 @@ public sealed class UploadPipeline : IPackFiller
     private readonly Dictionary<(string ImdbId, int Season), List<BaseItem>> _completeSeasonItems = new();
 
     /// <summary>
+    /// F-M737: die geprüfte Identität einer Serie, einmal je Lauf und Serie. Jellyfin führt
+    /// Namensvettern (Brothers 2015 und Brothers 2026) und hängt eine Serie an den, den seine
+    /// Suche zuerst findet; die Pack-Phase urteilte dann über die falsche Staffel — 262
+    /// ausgestrahlte Folgen gegen 8 Dateien, also „Staffel nicht vollständig", und das Urteil
+    /// blieb gespeichert. Der Schlüssel ist die Kennung, die die Bibliothek führt.
+    /// </summary>
+    private readonly Dictionary<string, (string Imdb, string? Tmdb)> _packIdentity = new(StringComparer.Ordinal);
+
+    /// <summary>
     /// F-M588 (Operator-Anweisung 17.11.2026: „Ok für mysubtitels"): ein zurueckgestellter Upload,
     /// dessen SubDL-Id noch fehlt. Statt nach JEDEM Upload die vollstaendige eigene Liste zu ziehen
     /// (gemessen: 340 kB / 798 Eintraege je Upload, 2.790-mal am Tag), wird die Id am Laufende
@@ -664,6 +673,7 @@ public sealed class UploadPipeline : IPackFiller
         _seasonAnchors.Clear();
         _seasonEpisodes.Clear();
         _completeSeasonItems.Clear();
+        _packIdentity.Clear(); // F-M737: je Lauf neu fragen, nicht aus dem vorigen antworten
         _packsInSeason.Clear();
         _packsInSeasonSource.Clear(); // F-M643: dieselbe Frische je Quelle
         _allePacksSource.Clear();
@@ -4485,6 +4495,61 @@ public sealed class UploadPipeline : IPackFiller
             : new HashSet<(string Language, bool HearingImpaired)>();
     }
 
+    /// <summary>
+    /// F-M737: die Identität einer Serie wird VOR dem Staffelurteil gegen TMDb geprüft — mit dem
+    /// <b>Jahr aus dem Dateinamen</b> (F-M231: Jellyfins Jahr stammt aus derselben Metadatenquelle,
+    /// die falsch liegen kann, und würde den Fehler nur bestätigen). Trifft TMDb unter Titel und
+    /// Jahr eine andere Serie, wird unter DEREN Kennung geurteilt: die Folgenzahl, die Signatur und
+    /// das gespeicherte Urteil hängen damit an der Serie, die die Dateien wirklich sind.
+    /// </summary>
+    /// <param name="imdb">Kennung, die die Bibliothek führt.</param>
+    /// <param name="tmdb">TMDb-Kennung, die die Bibliothek führt (darf fehlen).</param>
+    /// <param name="item">Eine Folge der Staffel — sie trägt Name und Pfad.</param>
+    /// <param name="ct">Abbruch.</param>
+    /// <returns>Die geprüfte Kennung; ohne Treffer bleibt die der Bibliothek.</returns>
+    private async Task<(string Imdb, string? Tmdb)> VerifiedSeriesIdentityAsync(
+        string imdb, string? tmdb, BaseItem item, CancellationToken ct)
+    {
+        if (_packIdentity.TryGetValue(imdb, out var gemerkt))
+        {
+            return gemerkt;
+        }
+
+        var ergebnis = (Imdb: imdb, Tmdb: tmdb);
+        try
+        {
+            var parsed = MediaNameParser.Parse(item.Path ?? item.Name);
+            string? titel = (item as Episode)?.Series?.Name ?? parsed.Title ?? item.Name;
+            int? jahr = parsed.Year ?? (item as Episode)?.Series?.ProductionYear;
+            if (!string.IsNullOrWhiteSpace(titel) && jahr is int bekanntesJahr)
+            {
+                var geprueft = await _tmdb
+                    .VerifyIdsAgainstTmdbAsync(imdb, tmdb, titel, bekanntesJahr, true, ct)
+                    .ConfigureAwait(false);
+                if (geprueft.Corrected && geprueft.IsSeries && !string.IsNullOrWhiteSpace(geprueft.Imdb))
+                {
+                    ergebnis = (geprueft.Imdb!, geprueft.Tmdb);
+                    LogUtil.Normal(
+                        _logger,
+                        "[Sub Scribe] season pack: identity checked before the judgement — \"{Title}\" ({Year}) is {Imdb} on TMDb, the library carries {Library}; the season is judged under the TMDb id (F-M737).",
+                        titel, bekanntesJahr, ergebnis.Imdb, imdb);
+                }
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            // Kein Urteil über die Identität ist besser als ein falsches: die Bibliothek behält recht.
+            LogUtil.Detail(_logger, "[Sub Scribe] season pack: identity check failed for {Imdb} ({Msg}) (F-M737)", imdb, ex.Message);
+        }
+
+        _packIdentity[imdb] = ergebnis;
+        return ergebnis;
+    }
+
     private async Task<Dictionary<(string ImdbId, int Season), IReadOnlyList<int>>> CompleteSeasonsAsync(CancellationToken ct)
     {
         var result = new Dictionary<(string ImdbId, int Season), IReadOnlyList<int>>();
@@ -4524,6 +4589,13 @@ public sealed class UploadPipeline : IPackFiller
             {
                 continue;
             }
+
+            // F-M737: erst die Identität, dann der Schluessel. Sonst zaehlt die Staffel unter der
+            // Kennung, die Jellyfins Suche vergeben hat, und eine Staffel mit acht Folgen sieht aus
+            // wie eine mit 262 — „nicht vollstaendig", kein Pack, und das Urteil bleibt gespeichert.
+            var geprueft = await VerifiedSeriesIdentityAsync(imdb!, tmdb, episode, ct).ConfigureAwait(false);
+            imdb = geprueft.Imdb;
+            tmdb = geprueft.Tmdb;
 
             var key = (imdb!, season);
             if (!present.TryGetValue(key, out var numbers))
