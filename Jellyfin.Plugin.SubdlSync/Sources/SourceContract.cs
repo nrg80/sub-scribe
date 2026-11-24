@@ -552,6 +552,30 @@ public sealed record SourceSendRequest
     public bool AsPack { get; init; }
 
     /// <summary>
+    /// Gets F-M734: „leg den Titel an, wenn er fehlt" — Betreiber-Entscheidung 24.11.2026 („2 kann in den
+    /// Upload vertrag").
+    /// <para>
+    /// Bis hierher löste der Koordinator den Titel selbst auf und legte ihn über einen Resolver an, der
+    /// dabei UNSEREN Bestand las und schrieb. Damit hing der Titel-Weg an zwei Welten zugleich. Jetzt
+    /// steht die Frage im Auftrag: die Engine sucht und legt auf IHRER Seite an (Doppeleintrag-Schutz
+    /// inklusive) und meldet in <see cref="SourceSendAnswer.Title"/>, was geschah; die Kennung schreibt
+    /// weiterhin der Ablauf in den Bestand, weil die Engine ihn nicht kennt.
+    /// </para>
+    /// <para>
+    /// Eine Quelle, deren Titel über eine Kennung gefunden wird (SubDL), erklärt
+    /// <c>CanCreateTitle = false</c> und antwortet <see cref="SourceTitleState.NotAskable"/>.
+    /// </para>
+    /// </summary>
+    public bool EnsureTitle { get; init; }
+
+    /// <summary>
+    /// Gets F-M734: Trockenlauf — die Engine baut, was sie senden würde, und sendet nichts. Nötig, seit
+    /// die Titel-Anlage im Auftrag steht: ein Trockenlauf darf auf der Seite keinen Film und keine Serie
+    /// anlegen, und er darf ein Paar auch nicht als „entschieden" melden.
+    /// </summary>
+    public bool DryRun { get; init; }
+
+    /// <summary>
     /// Gets die Mitglieder des Behälters — für die Quellen, die je Folge einen Teil erwarten.
     /// </summary>
     public IReadOnlyList<SourcePackMember> Members { get; init; } = Array.Empty<SourcePackMember>();
@@ -646,9 +670,69 @@ public enum SourceOutcome
 /// <c>{"success": true}</c>, tvsubtitles.net mit einer Seite, auf der „thank" steht — beide nennen
 /// keine. Das Feld ist deshalb optional und es gibt KEINE Spalte dafür im Bestand.
 /// </param>
+/// <summary>
+/// F-M734: was mit dem Titel geschah, in NEUTRALEN Worten — die Zustände, die der Ablauf für seine Leiter
+/// braucht (F-M603/F-M607/F-M608/F-M610), ohne die Wörter einer Seite.
+/// </summary>
+public enum SourceTitleState
+{
+    /// <summary>Es stand nicht an (<see cref="SourceSendRequest.EnsureTitle"/> war falsch).</summary>
+    NotAsked,
+
+    /// <summary>Der Titel steht und die Kennung ist da — gesendet werden darf.</summary>
+    Ready,
+
+    /// <summary>Der Titel wurde angelegt und die Kennung gelesen.</summary>
+    Created,
+
+    /// <summary>Der Titel wurde angelegt, die Seite nennt aber keine Kennung (Beleg, kein Upload).</summary>
+    CreatedWithoutId,
+
+    /// <summary>Die Seite führt den Titel schon, nennt aber keine Kennung (Beleg, kein Upload).</summary>
+    ExistsWithoutId,
+
+    /// <summary>Nicht auffindbar — ein inhaltliches Nein der Quelle.</summary>
+    NotFound,
+
+    /// <summary>Es fehlt, was zum Fragen nötig wäre (Titel, Jahr) — oder die Quelle sucht über eine Kennung.</summary>
+    NotAskable,
+
+    /// <summary>Keine lesbare Antwort — kein Urteil, also nichts entscheiden.</summary>
+    Unclear,
+}
+
+/// <summary>
+/// F-M734: das Ergebnis der Titel-Frage. <paramref name="TitleId"/> ist die Kennung, die die Seite dem
+/// Titel gibt (als Zeichenkette, weil die Grenze keine fremde Kennungsform führt); sie geht in den
+/// Bestand, sobald der Ablauf sie sieht.
+/// </summary>
+/// <param name="State">Was geschah.</param>
+/// <param name="TitleId">Die Kennung des Titels, wenn die Seite eine nennt.</param>
+/// <param name="Reason">Der Klartext der Quelle, wenn sie einen mitgibt.</param>
+public sealed record SourceTitleAnswer(SourceTitleState State, string? TitleId = null, string? Reason = null)
+{
+    /// <summary>F-M734: die Frage stand nicht an.</summary>
+    public static SourceTitleAnswer NotAsked => new(SourceTitleState.NotAsked);
+
+    /// <summary>Gets F-M734: der Titel steht und die Sende-Strecke darf weiterlaufen.</summary>
+    public bool Resolved => State is SourceTitleState.Ready or SourceTitleState.Created;
+
+    /// <summary>
+    /// Gets F-M734: die Seite hat den Titel belegt, aber keine Kennung genannt — das Paar ist entschieden,
+    /// ohne dass ein Upload behauptet wird (F-M603/F-M610).
+    /// </summary>
+    public bool Settled => State is SourceTitleState.CreatedWithoutId or SourceTitleState.ExistsWithoutId;
+}
+
 public sealed record SourceSendAnswer(
     SourceOutcome Outcome, string? Reason = null, int? RetryAfterSeconds = null, string? SubmissionId = null)
 {
+    /// <summary>
+    /// Gets F-M734: was mit dem Titel geschah. <see cref="SourceTitleAnswer.NotAsked"/> heißt: die Frage
+    /// stand nicht an.
+    /// </summary>
+    public SourceTitleAnswer Title { get; init; } = SourceTitleAnswer.NotAsked;
+
     /// <summary>F-M685: die Quelle hat angenommen.</summary>
     /// <param name="submissionId">Ihre Einsendungs-Kennung, wenn sie eine nennt.</param>
     /// <param name="reason">Ihr Text, wenn sie einen mitgibt.</param>

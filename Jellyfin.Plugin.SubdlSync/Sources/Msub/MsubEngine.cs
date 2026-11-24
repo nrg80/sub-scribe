@@ -336,7 +336,37 @@ public sealed class MsubEngine : ISourceEngine
                 ? vorhandene
                 : 0;
 
-            if (film <= 0)
+            // F-M734: steht „leg den Titel an" im Auftrag, ist das die Titel-Frage der Seite — suchen,
+            // Doppeleintrag vermeiden, anlegen, nachsehen. Der Ablauf schreibt die Kennung in den Bestand;
+            // hier wird sie nur benutzt und zurückgemeldet.
+            SourceTitleAnswer titel = SourceTitleAnswer.NotAsked;
+            if (request.EnsureTitle)
+            {
+                if (film > 0)
+                {
+                    titel = new SourceTitleAnswer(
+                        SourceTitleState.Ready, film.ToString(CultureInfo.InvariantCulture));
+                }
+                else
+                {
+                    titel = await new Api.Endpoints.MsubMovieLookup(_client, _context.Logger)
+                        .FindOrCreateAsync(request.Target.Title, request.Target.Year, request.DryRun, ct)
+                        .ConfigureAwait(false);
+
+                    film = int.TryParse(titel.TitleId, NumberStyles.Integer, CultureInfo.InvariantCulture, out int neu)
+                           && neu > 0
+                        ? neu
+                        : 0;
+
+                    if (!titel.Resolved)
+                    {
+                        return SourceSendAnswer
+                            .Rejected(titel.Reason ?? "no film entry for '" + request.Target.Title + "'")
+                            with { Title = titel };
+                    }
+                }
+            }
+            else if (film <= 0)
             {
                 film = await _client
                     .FindMovieAsync(request.Target.Title, request.Target.Year, ct)
@@ -346,7 +376,9 @@ public sealed class MsubEngine : ISourceEngine
 
             if (film <= 0)
             {
-                return SourceSendAnswer.Rejected("no film entry for '" + request.Target.Title + "'");
+                return SourceSendAnswer
+                    .Rejected("no film entry for '" + request.Target.Title + "'")
+                    with { Title = titel };
             }
 
             long? tmdb = long.TryParse(request.Target.TmdbId, NumberStyles.Integer, CultureInfo.InvariantCulture, out long zahl)
@@ -377,7 +409,7 @@ public sealed class MsubEngine : ISourceEngine
                 .UploadAsync(payload, dryRun: false, ct)
                 .ConfigureAwait(false);
 
-            return Verdict(ergebnis);
+            return Verdict(ergebnis) with { Title = titel };
         }
         catch (OperationCanceledException)
         {

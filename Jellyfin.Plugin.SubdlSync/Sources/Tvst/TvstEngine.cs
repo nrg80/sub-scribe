@@ -356,12 +356,50 @@ public sealed class TvstEngine : ISourceEngine
                 ? vorhandene
                 : null;
 
-            if (showId is null)
+            // F-M734: steht „leg den Titel an" im Auftrag, ist das die Serien-Frage der Seite — Liste,
+            // anlegen, nachsehen. Der Ablauf schreibt die Kennung in den Bestand; hier wird sie benutzt
+            // und zurückgemeldet.
+            SourceTitleAnswer titel = SourceTitleAnswer.NotAsked;
+            if (request.EnsureTitle)
+            {
+                if (showId is not null)
+                {
+                    titel = new SourceTitleAnswer(
+                        SourceTitleState.Ready, showId.Value.ToString(CultureInfo.InvariantCulture));
+                }
+                else
+                {
+                    titel = await new Api.Endpoints.TvstShowLookup(_client, _context.Logger)
+                        .FindOrCreateAsync(
+                            request.Target.Title,
+                            request.Target.Year,
+                            request.Target.Season,
+                            request.Target.MediaId ?? request.ReleaseName,
+                            request.DryRun,
+                            ct)
+                        .ConfigureAwait(false);
+
+                    showId = int.TryParse(titel.TitleId, NumberStyles.Integer, CultureInfo.InvariantCulture, out int neu)
+                             && neu > 0
+                        ? neu
+                        : null;
+
+                    if (!titel.Resolved)
+                    {
+                        return SourceSendAnswer
+                            .Rejected(titel.Reason ?? "the show is not on the page: " + request.Target.Title)
+                            with { Title = titel };
+                    }
+                }
+            }
+            else if (showId is null)
             {
                 showId = await ResolveShowAsync(request.Target.Title, ct).ConfigureAwait(false);
                 if (showId is null)
                 {
-                    return SourceSendAnswer.Rejected("the show is not on the page: " + request.Target.Title);
+                    return SourceSendAnswer
+                        .Rejected("the show is not on the page: " + request.Target.Title)
+                        with { Title = titel };
                 }
             }
 
@@ -410,7 +448,7 @@ public sealed class TvstEngine : ISourceEngine
                 .UploadAsync(payload, dryRun: false, ct)
                 .ConfigureAwait(false);
 
-            return Verdict(ergebnis);
+            return Verdict(ergebnis) with { Title = titel };
         }
         catch (OperationCanceledException)
         {

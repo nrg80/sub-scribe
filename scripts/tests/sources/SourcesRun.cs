@@ -1358,11 +1358,15 @@ internal static class Program
         Console.WriteLine("(k) F-M731/F-M732/F-M733: der Koordinator nennt keine Quelle mehr");
         Koordinator(root, plugin);
 
+        Console.WriteLine();
+        Console.WriteLine("(l) F-M734: die Titel-Anlage steht im Sende-Auftrag");
+        TitelAnlage(root, plugin);
+
         // -----------------------------------------------------------------------------------------
         // Bericht.
         // -----------------------------------------------------------------------------------------
         Console.WriteLine();
-        Console.WriteLine("sources: " + _checks + " Prüfungen (T339-T348, T392-T394, F-M682-F-M733)");
+        Console.WriteLine("sources: " + _checks + " Prüfungen (T339-T348, T392-T395, F-M682-F-M734)");
         if (Failures.Count == 0)
         {
             Console.WriteLine(">>> SOURCES OK: " + _checks + " Prüfungen bestanden");
@@ -2978,6 +2982,72 @@ internal static class Program
             try { Directory.Delete(dataDir, true); } catch (IOException) { }
         }
     }
+
+    /// <summary>
+    /// F-M734 / T395: die Titel-Anlage als Teil des Sende-Auftrags — Vertragsform, die beiden
+    /// store-freien Nachschlagewege, und die Quelle, die das gar nicht kann. Fuenf Pruefungen.
+    /// </summary>
+    /// <param name="root">Repo-Wurzel.</param>
+    /// <param name="plugin">Pfad des Plugin-Projekts.</param>
+    private static void TitelAnlage(string root, string plugin)
+    {
+        // (1) Der Vertrag: die Frage steht im Auftrag, die Antwort daneben — und die beiden Abkuerzungen
+        //     (Resolved/Settled) sagen genau, was der Ablauf damit entscheiden darf.
+        var request = new SourceSendRequest();
+        var answer = SourceSendAnswer.Accepted("x");
+        Check(!request.EnsureTitle
+              && !request.DryRun
+              && answer.Title.State == SourceTitleState.NotAsked
+              && new SourceTitleAnswer(SourceTitleState.Created).Resolved
+              && new SourceTitleAnswer(SourceTitleState.Ready).Resolved
+              && new SourceTitleAnswer(SourceTitleState.CreatedWithoutId).Settled
+              && new SourceTitleAnswer(SourceTitleState.ExistsWithoutId).Settled
+              && !new SourceTitleAnswer(SourceTitleState.NotFound).Settled
+              && !new SourceTitleAnswer(SourceTitleState.NotFound).Resolved,
+            "F-M734 (1): EnsureTitle + DryRun im Auftrag, Title in der Antwort; nur Angelegt/Bereit ist 'bereit', nur 'ohne Kennung' ist 'entschieden'");
+
+        // (2) Die Quelle, die keine Titel anlegt, sagt das — und haelt den Versand nicht auf.
+        var subdl = new SubdlEngine(new ScribeApiClient(new HttpClient()), SourceEngineContextOnly(), seasonPacks: true);
+        var subdlAntwort = subdl.SendAsync(
+                new SourceSendRequest { EnsureTitle = true, Language = "xx-unknown" },
+                CancellationToken.None)
+            .GetAwaiter().GetResult();
+        Check(subdlAntwort.Title.State == SourceTitleState.NotAskable
+              && subdlAntwort.Title.Reason is { Length: > 0 },
+            "F-M734 (2): SubDL antwortet NotAskable statt Titel zu erfinden",
+            subdlAntwort.Title.State + ": " + (subdlAntwort.Title.Reason ?? "?"));
+
+        // (3) Die beiden Nachschlagewege kennen unseren Bestand nicht — Grenzregel (a).
+        var mstLookup = File.ReadAllText(Path.Combine(plugin, "Api", "Endpoints", "MsubMovieLookup.cs"));
+        var tvstLookup = File.ReadAllText(Path.Combine(plugin, "Api", "Endpoints", "TvstShowLookup.cs"));
+        Check(new[] { mstLookup, tvstLookup }.All(t =>
+                  !t.Contains("Registry", StringComparison.Ordinal)
+                  && !t.Contains("Pipeline.", StringComparison.Ordinal)
+                  && t.Contains("SourceTitleState", StringComparison.Ordinal)),
+            "F-M734 (3): beide Nachschlagewege sind store-frei und antworten in den neutralen Zustaenden");
+
+        // (4) Beide Engines fragen sie, und ein Trockenlauf legt nichts an.
+        var mstEngine = File.ReadAllText(Path.Combine(plugin, "Sources", "Msub", "MsubEngine.cs"));
+        var tvstEngine = File.ReadAllText(Path.Combine(plugin, "Sources", "Tvst", "TvstEngine.cs"));
+        Check(mstEngine.Contains("MsubMovieLookup(", StringComparison.Ordinal)
+              && tvstEngine.Contains("TvstShowLookup(", StringComparison.Ordinal)
+              && mstEngine.Contains("request.DryRun", StringComparison.Ordinal)
+              && tvstEngine.Contains("request.DryRun", StringComparison.Ordinal),
+            "F-M734 (4): mst und tvst legen im Auftrag an — und reichen den Trockenlauf durch");
+
+        // (5) Im Trockenlauf gibt es kein Urteil: beide Wege antworten NotAskable, also entscheidet
+        //     der Ablauf nichts (kein Paar wird geschlossen).
+        Check(mstLookup.Contains("if (dryRun)", StringComparison.Ordinal)
+              && tvstLookup.Contains("if (dryRun)", StringComparison.Ordinal)
+              && mstLookup.Split("SourceTitleState.NotAskable").Length - 1 >= 2
+              && tvstLookup.Split("SourceTitleState.NotAskable").Length - 1 >= 2,
+            "F-M734 (5): der Trockenlauf legt nichts an und entscheidet nichts");
+    }
+
+    /// <summary>F-M734: ein Kontext fuer Pruefungen, die nur den Vertrag brauchen.</summary>
+    /// <returns>Der Kontext.</returns>
+    private static SourceEngineContext SourceEngineContextOnly()
+        => new(new HttpClient(), NullLogger.Instance, TimeProvider.System);
 
     /// <summary>
     /// Ein Handler, der die angefragten Adressen festhaelt und ueberall 200 mit einem harmlosen Rumpf

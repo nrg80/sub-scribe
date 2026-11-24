@@ -472,21 +472,32 @@ public sealed class SubdlEngine : ISourceEngine
     {
         ArgumentNullException.ThrowIfNull(request);
 
+        // F-M734: diese Quelle findet ihren Titel über IMDb/TMDb (F-M501/F-M508) — es gibt nichts
+        // anzulegen. Die Titel-Frage wird beantwortet, ohne den Versand aufzuhalten: `CanCreateTitle`
+        // steht bei ihr auf false, wer sie also mit EnsureTitle fragt, bekommt ein ehrliches Nein.
+        SourceTitleAnswer titel = request.EnsureTitle
+            ? new SourceTitleAnswer(
+                SourceTitleState.NotAskable,
+                Reason: "SubDL finds titles by their ids — there is nothing to create")
+            : SourceTitleAnswer.NotAsked;
+
         string sprache = LanguageMapper.MapToSubdl(request.Language) ?? string.Empty;
         if (sprache.Length == 0)
         {
-            return SourceSendAnswer.Rejected("language unknown to SubDL: " + request.Language);
+            return SourceSendAnswer.Rejected("language unknown to SubDL: " + request.Language) with { Title = titel };
         }
 
         if (!request.AsPack && request.Bytes.Length == 0)
         {
-            return SourceSendAnswer.Rejected("no bytes to send");
+            return SourceSendAnswer.Rejected("no bytes to send") with { Title = titel };
         }
 
         if (request.AsPack && request.Members.Count == 0)
         {
-            return SourceSendAnswer.Rejected("no files to send");
+            return SourceSendAnswer.Rejected("no files to send") with { Title = titel };
         }
+
+
 
         try
         {
@@ -511,7 +522,7 @@ public sealed class SubdlEngine : ISourceEngine
                     request.HearingImpaired,
                     Framerate(request)).ConfigureAwait(false);
 
-            return Verdict(ergebnis);
+            return Verdict(ergebnis) with { Title = titel };
         }
         catch (OperationCanceledException)
         {
