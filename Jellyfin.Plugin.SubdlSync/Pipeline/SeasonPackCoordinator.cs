@@ -1012,7 +1012,82 @@ public sealed class SeasonPackCoordinator
             }
         }
 
-        Sources.SourceSendAnswer antwort = await engine.SendAsync(vorbereitet.Request, ct).ConfigureAwait(false);
+        // F-M734: trägt der Auftrag die Titel-Frage, fährt hier die Leiter (F-M608) — der Behälter ist
+        // gebaut, aber er geht erst raus, wenn der Titel steht. Derselbe Behälter wird dabei mehrfach
+        // angeboten, nicht neu gebaut; scheitert der Titel endgültig, hält die Sperre den nächsten Lauf
+        // VOR dem Bau an (F-M643). Eine Stoerung schliesst nichts (F-M610), ein Beleg ohne lesbare
+        // Kennung schliesst das Paar statt den Titel (F-M603).
+        Sources.SourceSendAnswer antwort;
+        if (vorbereitet.Request.EnsureTitle)
+        {
+            string titelId = !string.IsNullOrWhiteSpace(key.ImdbId)
+                ? key.ImdbId
+                : (first.TmdbId ?? string.Empty);
+
+            var (mitTitel, gelungen, _) = await TitleLadder.FahreAsync(
+                    source,
+                    titelId,
+                    () => engine.SendAsync(vorbereitet.Request, ct),
+                    a => a.Title.Resolved,
+                    a => a.Title.Reason ?? a.Reason,
+                    a => a.Title.Settled,
+                    a => a.Title.State == Sources.SourceTitleState.Unclear,
+                    () => { },
+                    _config.DryRun,
+                    _config.LogMode,
+                    _logger,
+                    ct)
+                .ConfigureAwait(false);
+
+            antwort = mitTitel;
+
+            if (!gelungen)
+            {
+                LogUtil.Normal(
+                    _logger,
+                    "[Sub Scribe] season pack {Imdb} S{Season} [{Lang}]: the title does not stand ({State}) — the built container is not sent (F-M643/F-M734)",
+                    key.ImdbId, key.Season, SeasonPack.LangTag(key.Lang, key.Hi), antwort.Title.State);
+                return new PackSend(source, PackSendOutcome.Skipped,
+                    "title " + antwort.Title.State + " — the built container is not sent (F-M643)");
+            }
+
+            if (antwort.Title.Settled)
+            {
+                // F-M643: ein Staffel-Slot wird über die Nummer adressiert — ohne sie gibt es keinen Slot,
+                // also auch keine Marke. Das Paar bleibt offen, die andere Quelle versucht es unberührt.
+                LogUtil.Normal(
+                    _logger,
+                    "[Sub Scribe] season pack {Imdb} S{Season} [{Lang}]: created, the id is not readable ({State}) — a season slot needs the id, nothing sent (F-M643/F-M603)",
+                    key.ImdbId, key.Season, SeasonPack.LangTag(key.Lang, key.Hi), antwort.Title.State);
+                return new PackSend(source, PackSendOutcome.Skipped,
+                    "created, the id is not readable — a season slot needs the id (F-M643)");
+            }
+
+            if (antwort.Title.State == Sources.SourceTitleState.Created
+                && antwort.Title.TitleId is { Length: > 0 } neueKennung
+                && int.TryParse(neueKennung, System.Globalization.NumberStyles.Integer,
+                    System.Globalization.CultureInfo.InvariantCulture, out int serienNummer)
+                && serienNummer > 0)
+            {
+                // Der Titel war neu: die Nummer gehört in den Bestand, damit der nächste Lauf sie hat.
+                _registry.MarkAndFlush(() =>
+                {
+                    foreach (Candidate m in ordered)
+                    {
+                        _registry.SetTvstShowId(m.MediaHash, m.Item?.Path, serienNummer);
+                    }
+                });
+                LogUtil.Normal(
+                    _logger,
+                    "[Sub Scribe] season pack {Imdb} S{Season} [{Lang}]: show {Id} written to the store for {Count} member(s) (F-M501/F-M734)",
+                    key.ImdbId, key.Season, SeasonPack.LangTag(key.Lang, key.Hi), serienNummer, ordered.Count);
+            }
+        }
+        else
+        {
+            antwort = await engine.SendAsync(vorbereitet.Request, ct).ConfigureAwait(false);
+        }
+
         UploadResult result = UploadResult.FromAnswer(antwort);
 
         if (result.Verdict == UploadVerdict.NoVerdict)

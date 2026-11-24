@@ -245,7 +245,6 @@ public sealed class UploadPipeline : IPackFiller
     private readonly Api.TvSubtitlesClient _tvstClient;
 
     /// <summary>F-M501: die Seriennummer-Auflösung der zweiten Quelle (gespeichert → eng gesucht → angelegt).</summary>
-    private readonly Api.Endpoints.TvstShowResolver _tvstShows;
 
     /// <summary>
     /// F-M508: der Client der Film-Adresse derselben Familie und ihre Filmmummer-Auflösung. Dieselbe
@@ -256,7 +255,6 @@ public sealed class UploadPipeline : IPackFiller
     private readonly Api.MovieSubtitlesClient _msubClient;
 
     /// <summary>F-M508: die Filmmummer-Auflösung der Film-Adresse (gespeichert → eng gesucht).</summary>
-    private readonly Api.Endpoints.MsubMovieResolver _msubMovies;
 
     /// <summary>
     /// F-M682: die Quellen-Engines dieses Laufs. Sie werden EINMAL gebaut — aus der Konfiguration und
@@ -509,12 +507,10 @@ public sealed class UploadPipeline : IPackFiller
         // the tvst family is traced too — the same two Debug lines per request as SubDL, so an upload
         // run proves which address it posted to and what came back.
         _tvstClient.DebugTrace += OnApiTrace;
-        _tvstShows = new Api.Endpoints.TvstShowResolver(_tvstClient, logger);
 
         // F-M508: dasselbe für die Film-Adresse der Familie — ein Client, ein Auflöser, ein Lauf.
         _msubClient = new Api.MovieSubtitlesClient(ScribeApiClient.NewHttpClient(TimeSpan.FromSeconds(90)));
         _msubClient.DebugTrace += OnApiTrace;
-        _msubMovies = new Api.Endpoints.MsubMovieResolver(_msubClient, logger);
 
         // F-M682: die Grenze zur Quellen-Engine. Gebaut EINMAL je Lauf, aus der Konfiguration und mit
         // dem, was der Lauf schon hat: der HttpClient dieses Laufs, der gemeinsame Archiv-Cache, der
@@ -562,10 +558,8 @@ public sealed class UploadPipeline : IPackFiller
 
         // F-M501: die Anlege-Sperre der tvst-Serienauflösung gilt je Lauf, nicht je Prozess — hier ist
         // der Anfang des Laufs, also hier wird sie geleert.
-        _tvstShows.BeginRun();
 
         // F-M508: die Merkliste der Film-Adresse ebenso — sie gilt je Lauf, nicht je Prozess.
-        _msubMovies.BeginRun();
 
         // F-M247: record that this run was a dry run. It does the searching and the QA, so its
         // summary fills up with numbers, but it writes nothing to SubDL — the statistics must
@@ -6831,7 +6825,6 @@ public sealed class UploadPipeline : IPackFiller
     /// </summary>
 
     /// <summary>F-M608: die Pausen der Titel-Leiter — nach Fehlschlag 1 zwei, nach 2 vier, nach 3 acht Sekunden.</summary>
-    private static readonly int[] TitelLeiterPausenMs = { 2000, 4000, 8000 };
 
     /// <summary>
     /// F-M608 (Operator-Anweisung 18.11.2026: „Anlegen, nachsuchen, fail 1: 2 Sekunden pause, fail 2: 4
@@ -6865,7 +6858,7 @@ public sealed class UploadPipeline : IPackFiller
     /// </param>
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Die letzte Antwort, ob sie gelungen ist, und ob der Titel geschlossen wurde.</returns>
-    private async Task<(T Ergebnis, bool Gelungen, bool Geschlossen)> MitTitelLeiterAsync<T>(
+    private Task<(T Ergebnis, bool Gelungen, bool Geschlossen)> MitTitelLeiterAsync<T>(
         string quelle,
         string titelId,
         Func<Task<T>> versuch,
@@ -6874,62 +6867,10 @@ public sealed class UploadPipeline : IPackFiller
         Func<T, bool>? schonBelegt,
         Func<T, bool>? stoerung,
         Action zwischenZug,
-        CancellationToken ct)
-    {
-        T ergebnis = default!;
-        string? letzterGrund = null;
-        bool letzteStoerung = false;
-        int zuege = _config.DryRun ? 1 : Jellyfin.Plugin.SubScribe.Registry.TitleFailureStore.ClosingAttempt;
-
-        for (int zug = 1; zug <= zuege; zug++)
-        {
-            if (zug > 1)
-            {
-                int pause = TitelLeiterPausenMs[Math.Min(zug - 2, TitelLeiterPausenMs.Length - 1)];
-                LogUtil.PerItem(_config.LogMode, _logger,
-                    "[Sub Scribe] {Source} title {Title}: attempt {Zug}/{Zuege} failed ({Reason}) — waiting {Pause} ms (F-M608)",
-                    quelle, titelId, zug - 1, zuege, letzterGrund ?? "?", pause);
-                await Task.Delay(pause, ct).ConfigureAwait(false);
-                zwischenZug();
-            }
-
-            ergebnis = await versuch().ConfigureAwait(false);
-
-            // F-M610: ein Beleg ohne Aufloesung („existiert, Kennung nicht lesbar") ist KEIN Fehlschlag
-            // der Leiter — das Paar wird ueber F-M603 geschlossen, der Titel bleibt offen.
-            if (gelungen(ergebnis) || (schonBelegt?.Invoke(ergebnis) ?? false))
-            {
-                Jellyfin.Plugin.SubScribe.Registry.TitleFailureStore.Clear(quelle, titelId);
-                return (ergebnis, true, false);
-            }
-
-            letzterGrund = grund(ergebnis) ?? "?";
-            letzteStoerung = stoerung?.Invoke(ergebnis) ?? false;
-            if (!letzteStoerung)
-            {
-                // F-M610: eine Stoerung zaehlt nicht als Fehlschlag — sie ist kein Urteil.
-                Jellyfin.Plugin.SubScribe.Registry.TitleFailureStore.Note(quelle, titelId, letzterGrund);
-            }
-        }
-
-        if (!_config.DryRun && !letzteStoerung)
-        {
-            Jellyfin.Plugin.SubScribe.Registry.TitleFailureStore.Close(quelle, titelId, letzterGrund ?? "?");
-            LogUtil.Normal(_logger,
-                "[Sub Scribe] {Source} title {Title}: {Zuege} attempts failed ({Reason}) — every pair of this title is closed for good (F-M608)",
-                quelle, titelId, zuege, letzterGrund ?? "?");
-            return (ergebnis, false, true);
-        }
-
-        if (letzteStoerung)
-        {
-            LogUtil.PerItem(_config.LogMode, _logger,
-                "[Sub Scribe] {Source} title {Title}: {Zuege} attempts without a verdict ({Reason}) — nothing closed, the next run asks again (F-M610)",
-                quelle, titelId, zuege, letzterGrund ?? "?");
-        }
-
-        return (ergebnis, false, false);
-    }
+        CancellationToken ct) =>
+        // F-M608: die Leiter selbst steht in TitleLadder — der Behälter-Weg braucht dieselbe.
+        TitleLadder.FahreAsync(quelle, titelId, versuch, gelungen, grund, schonBelegt, stoerung,
+            zwischenZug, _config.DryRun, _config.LogMode, _logger, ct);
 
     /// <summary>
     /// F-M687: die Abgabe geht als AUFTRAG an die Engine DIESER Quelle — ein <see cref="Sources.SourceSendRequest"/>
@@ -7449,36 +7390,13 @@ public sealed class UploadPipeline : IPackFiller
             return new Sources.SourcePackRequest(null, "second-source-title-closed");
         }
 
-        var (show, tvstGelungen, tvstGeschlossen) = await MitTitelLeiterAsync(
-                "tvsubtitles",
-                tvstTitelId,
-                () => _tvstShows.ResolveForMediaAsync(Registry, first.MediaHash, series, _config.DryRun, ct, first.Item?.Path),
-                s => s.Resolved,
-                s => s.Status,
-                s => string.Equals(s.Status, Api.Endpoints.TvstShowStatus.CreatedIdUnknown, StringComparison.Ordinal),
-                s => string.Equals(s.Status, Api.Endpoints.TvstShowStatus.Unclear, StringComparison.Ordinal),
-                () => _tvstShows.BeginRun(),
-                ct)
-            .ConfigureAwait(false);
-
-        if (!show.Resolved)
-        {
-            // Eine angelegte Serie ohne lesbare Nummer ist fuer einen Behälter kein Beleg: der
-            // Staffel-Slot wird ueber die Nummer adressiert, und ohne sie gibt es keinen Slot. Also
-            // keine Marke, kein Senden — nur der Grund.
-            if (tvstGeschlossen)
-            {
-                _titelGeschlossen.Add("tvsubtitles|" + tvstTitelId);
-            }
-
-            LogUtil.Normal(
-                _logger,
-                "[Sub Scribe] season pack [{Lang}] {Imdb} S{Season}: no show id at tvsubtitles.net ({Status}), nothing sent (F-M643)",
-                plan.Lang, plan.ImdbId, plan.Season, show.Status);
-            return new Sources.SourcePackRequest(
-                null,
-                tvstGelungen ? "second-source-show-" + show.Status : "second-source-title-no-verdict");
-        }
+        // F-M734: der Behälter entsteht aus den Folgen — die Seriennummer steckt nicht in ihm, sie
+        // adressiert nur den Staffel-Slot beim SENDEN. Der Bau fragt sie deshalb nur noch im Bestand ab;
+        // fehlt sie, trägt der Auftrag die Titel-Frage (EnsureTitle) und die Leiter fährt im Versand
+        // (SeasonPackCoordinator, F-M608). Für die Tonne gebaut wird damit EINMAL: ist der Titel danach zu,
+        // hält die Sperrprüfung oben den nächsten Lauf VOR dem Bau an.
+        string? bekannteSerienId = Registry.GetMedia(first.MediaHash)?.TvstShowId
+            ?? Registry.TvstShowIdAtPath(first.Item?.Path);
 
         // F-M641: der Staffel-Slot ist episode=0 — das ist keine Folge ohne Nummer, sondern die Staffel.
         // Der Behälter ist EIN Zip; der Pack-Name steht im release-Feld (es ist der einzige Name, den die
@@ -7504,9 +7422,14 @@ public sealed class UploadPipeline : IPackFiller
                 Season: plan.Season,
                 Episode: 0)
             {
-                MediaId = show.ShowId?.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                // F-M501: die Nummer aus dem Bestand führt; fehlt sie, sucht und legt die Engine sie an.
+                MediaId = bekannteSerienId,
             },
             AsPack = true,
+
+            // F-M734: die Titel-Frage steht im Auftrag — der Behälter geht erst raus, wenn der Titel steht.
+            EnsureTitle = true,
+            DryRun = _config.DryRun,
         });
     }
 

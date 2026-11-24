@@ -1167,7 +1167,9 @@ internal static class Program
             int packEnde = packVersand < 0 ? -1 : tvstPipe.IndexOf("private async Task<UploadResult> SendToTvSubtitlesAsync(", packVersand, StringComparison.Ordinal);
             string sender = packVersand < 0 || packEnde < 0 ? string.Empty : tvstPipe[packVersand..packEnde];
             Check(sender.Contains("AsPack = true", StringComparison.Ordinal)
-                  && sender.Contains("MediaId = show.ShowId", StringComparison.Ordinal)
+                  // F-M734: die Nummer kommt aus dem Bestand; fehlt sie, legt die Engine sie im Auftrag an.
+                  && sender.Contains("MediaId = bekannteSerienId", StringComparison.Ordinal)
+                  && sender.Contains("EnsureTitle = true", StringComparison.Ordinal)
                   && sender.Contains("Bytes = plan.TvstZip ?? Array.Empty<byte>()", StringComparison.Ordinal)
                   && sender.Contains("Quality = Api.TvSubtitlesClient.RipFromQuality(plan.Ordered[0].Quality)", StringComparison.Ordinal),
                 "F-M687: the container is ONE order with AsPack=true — the finished archive, the source's own rip value and the number the run resolved");

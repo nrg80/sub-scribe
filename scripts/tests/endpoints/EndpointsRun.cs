@@ -1258,24 +1258,26 @@ internal static class Program
             && store610.Contains("\"created-id-not-readable\",", StringComparison.Ordinal)
             && store610.Contains("\"exists-id-not-readable\",", StringComparison.Ordinal)
             && store610.Contains("if (EvidenceReasons.Any(e => string.Equals(e, row.Reason, StringComparison.OrdinalIgnoreCase)))", StringComparison.Ordinal));
+        // F-M734: die Leiter steht in eigener Datei, weil der Behaelter-Versand dieselbe faehrt.
+        var leiter610 = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Pipeline/TitleLadder.cs"));
         Check("F-M610: eine Stoerung zaehlt nicht als Fehlschlag und schliesst nichts",
-            up605.Contains("Func<T, bool>? stoerung,", StringComparison.Ordinal)
-            && up605.Contains("if (!letzteStoerung)", StringComparison.Ordinal)
-            && up605.Contains("if (!_config.DryRun && !letzteStoerung)", StringComparison.Ordinal)
-            && up605.Contains("attempts without a verdict ({Reason}) — nothing closed, the next run asks again (F-M610)", StringComparison.Ordinal));
+            leiter610.Contains("Func<T, bool>? stoerung,", StringComparison.Ordinal)
+            && leiter610.Contains("if (!letzteStoerung)", StringComparison.Ordinal)
+            && leiter610.Contains("if (!trockenlauf && !letzteStoerung)", StringComparison.Ordinal)
+            && leiter610.Contains("attempts without a verdict ({Reason}) — nothing closed, the next run asks again (F-M610)", StringComparison.Ordinal));
         Check("F-M610: 'existiert, Kennung nicht lesbar' gilt als Beleg, nicht als Fehlschlag der Leiter",
-            up605.Contains("Func<T, bool>? schonBelegt,", StringComparison.Ordinal)
-            && up605.Contains("if (gelungen(ergebnis) || (schonBelegt?.Invoke(ergebnis) ?? false))", StringComparison.Ordinal)
-            // F-M734: die Film-Adresse meldet den Beleg jetzt NEUTRAL aus dem Auftrag — Settled heisst
-            // "Titel belegt, Kennung fehlt"; die Serie fuehrt ihren eigenen Status noch selbst.
+            leiter610.Contains("Func<T, bool>? schonBelegt,", StringComparison.Ordinal)
+            && leiter610.Contains("if (gelungen(ergebnis) || (schonBelegt?.Invoke(ergebnis) ?? false))", StringComparison.Ordinal)
+            // F-M734: beide Adressen melden den Beleg NEUTRAL aus dem Auftrag — Settled heisst
+            // "Titel belegt, Kennung fehlt".
             && up605.Contains("a => a.Title.Settled", StringComparison.Ordinal)
             && up605.Contains("if (answer.Title.Settled)", StringComparison.Ordinal)
-            && up605.Contains("Api.Endpoints.TvstShowStatus.CreatedIdUnknown", StringComparison.Ordinal));
+            && up605.Contains("return UploadResult.AcceptedWithoutId(\"second-source-show-created-id-unknown\");", StringComparison.Ordinal));
         Check("F-M610: ohne Urteil gibt es NoVerdict statt eines geschlossenen Titels",
             up605.Contains("return UploadResult.NoVerdict(\"film-source-title-no-verdict\");", StringComparison.Ordinal)
             && up605.Contains("return UploadResult.NoVerdict(\"second-source-title-no-verdict\");", StringComparison.Ordinal)
             && up605.Contains("a => a.Title.State == Sources.SourceTitleState.Unclear", StringComparison.Ordinal)
-            && up605.Contains("Api.Endpoints.TvstShowStatus.Unclear", StringComparison.Ordinal));
+            && up605.Contains("if (!answer.Title.Resolved && !answer.Title.Settled)", StringComparison.Ordinal));
 
         // --- F-M609: drei Urteile — angenommen, abgelehnt, kein Urteil ---------------------------------
         var ur609 = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Api/UploadResult.cs"));
@@ -1319,15 +1321,17 @@ internal static class Program
         // --- F-M608: Titel-Leiter fuer tvst und mst --------------------------------------------------
         var fail608 = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Registry/TitleFailureStore.cs"));
         Check("F-M608: die Pausen sind 2 s, 4 s, 8 s und der vierte Fehlschlag schliesst den Titel",
-            up605.Contains("private static readonly int[] TitelLeiterPausenMs = { 2000, 4000, 8000 };", StringComparison.Ordinal)
+            ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Pipeline/TitleLadder.cs"))
+                .Contains("PausenMs = { 2000, 4000, 8000 };", StringComparison.Ordinal)
             && fail608.Contains("public const int ClosingAttempt = 4;", StringComparison.Ordinal)
             && fail608.Contains("public static void Close(string source, string titleId, string reason)", StringComparison.Ordinal));
         Check("F-M608: die Leiter leert vor jedem Zug den Speicher des Laufs, sonst wiederholt sie nur das Urteil",
-            // F-M734: die Film-Adresse braucht keinen Lauf-Speicher mehr — ihr Versuch ist der Auftrag,
-            // und die Engine haelt nichts je Lauf; die Serie raeumt ihren weiterhin.
-            up605.Contains("() => { },", StringComparison.Ordinal)
-            && up605.Contains("() => _tvstShows.BeginRun(),", StringComparison.Ordinal)
-            && up605.Contains("int pause = TitelLeiterPausenMs[Math.Min(zug - 2, TitelLeiterPausenMs.Length - 1)];", StringComparison.Ordinal));
+            // F-M734: beide Adressen brauchen keinen Lauf-Speicher mehr — ihr Versuch ist der Auftrag,
+            // und die Engine haelt nichts je Lauf. Zwei Aufrufstellen, beide mit leerem Zwischenschritt.
+            up605.Split("() => { },").Length - 1 == 2
+            && !up605.Contains("_tvstShows.BeginRun(),", StringComparison.Ordinal)
+            && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Pipeline/TitleLadder.cs"))
+                .Contains("int pause = PausenMs[Math.Min(zug - 2, PausenMs.Length - 1)];", StringComparison.Ordinal));
         Check("F-M608: beide Adressen mit Anlage fahren die Leiter, subdl nicht",
             up605.Contains("Jellyfin.Plugin.SubScribe.Registry.TitleFailureStore.IsClosed(\"moviesubtitles\", msubTitelId", StringComparison.Ordinal)
             && up605.Contains("Jellyfin.Plugin.SubScribe.Registry.TitleFailureStore.IsClosed(\"tvsubtitles\", tvstTitelId", StringComparison.Ordinal)
@@ -2514,10 +2518,10 @@ internal static class Program
                     && uploadSource.Contains("Registry.GetMedia(mediaHash!)?.TvstShowId", StringComparison.Ordinal)
                     && uploadSource.Contains("MediaId = bekannteSerienId,", StringComparison.Ordinal)
                     && uploadSource.Contains("Registry.SetTvstShowId(mediaHash, mediaPath, serienNummer)", StringComparison.Ordinal)
-                    // Der Behaelter-Weg (Staffel-Zip) loest seinen Titel noch ueber den Nachschlageweg auf
-                    // — er baut den Behaelter VOR dem Senden, seine Leiter kann den Auftrag deshalb noch
-                    // nicht umschliessen. Die Einzelfolge fragt den Weg nicht mehr.
-                    && uploadSource.Split(".ResolveForMediaAsync(").Length - 1 == 1
+                    // F-M734: auch der Behaelter-Weg fragt den Nachschlageweg nicht mehr — die Nummer
+                    // steht im Auftrag, die Titel-Frage faehrt im Versand (SeasonPackCoordinator).
+                    && !uploadSource.Contains("ResolveForMediaAsync(", StringComparison.Ordinal)
+                    && uploadSource.Contains("Registry.TvstShowIdAtPath(first.Item?.Path)", StringComparison.Ordinal)
                     // der alte Weg (Serienname aus dem Dateinamen) steht im tvst-Zweig nicht mehr
                     && !uploadSource.Contains(
                         "var parsed = Pipeline.MediaNameParser.Parse(Path.GetFileNameWithoutExtension(releaseName))",
