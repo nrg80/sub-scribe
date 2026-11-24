@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.39",
-        "changelog": "v12.3.8.39: a season is judged under the series it really is — a name-alike in the library no longer costs a whole season its pack.",
+        "version": "12.3.8.40",
+        "changelog": "v12.3.8.40: the identity test now decides over the PAIR of ids, and stored season verdicts can be forgotten without triggering a re-upload.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.39-dev/Jellyfin.Plugin.SubdlSync_12.3.8.39.zip",
-        "checksum": "9e1024b306d31fba9eb6f5dd7a081dae",
-        "timestamp": "2026-11-24T16:16:18Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.40-dev/Jellyfin.Plugin.SubdlSync_12.3.8.40.zip",
+        "checksum": "a918af384c01b56ea192d9178d7cf29e",
+        "timestamp": "2026-11-24T16:51:06Z"
       }
     ]
   }
