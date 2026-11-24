@@ -111,27 +111,6 @@ internal static class MediaNameParser
 
     private static readonly Regex WhitespacePattern = new(@"\s+", RegexOptions.Compiled);
 
-    /// <summary>F-M349: true when a name carries characters that are letter-shapes rather than letters —
-    /// mathematical alphanumeric symbols (bold, italic, fraktur …) and fullwidth forms. Such a name gets
-    /// folded before parsing.</summary>
-    /// <remarks>
-    /// Deliberately NOT a regex: the astral block behind U+1D400 has no <c>\U</c> escape in .NET's regex
-    /// engine, and the first attempt threw "Unrecognized escape sequence" at type-initialisation time —
-    /// caught by the harness, not by the build. A surrogate check has no such trap.
-    /// </remarks>
-    private static bool NeedsUnicodeFold(string name)
-    {
-        foreach (char c in name)
-        {
-            if (char.IsSurrogate(c) || (c >= '\uFF00' && c <= '\uFFEF'))
-            {
-                return true;
-            }
-        }
-
-        return false;
-    }
-
     /// <summary>F-M348: a bracketed tag at the START of a name is the uploader's label, not the title
     /// ("[NETFLIX] Ranma ½", "[Crunchyroll] …", "[cFpR] …"). 73 of 1224 measured names carry one, and
     /// keeping it made the title search miss.</summary>
@@ -153,10 +132,10 @@ internal static class MediaNameParser
         // to any of the patterns below, so such a name yielded the whole string as title and no year
         // (measured: 0 of 12 resolved). Folding is applied only when such a character is present, so
         // ordinary names pass through byte-identical and nothing else can shift.
-        if (NeedsUnicodeFold(fileName))
-        {
-            fileName = fileName.Normalize(System.Text.NormalizationForm.FormKD);
-        }
+        // F-M724 (24.11.2026): the same fold the archive side reads with (Pipeline.TextFold) replaces the
+        // old Unicode normalization — that one needs ICU, so on a host without it this branch did
+        // nothing at all and the parser saw the dressed name anyway.
+        fileName = TextFold.Fold(fileName);
         if (string.IsNullOrWhiteSpace(fileName))
         {
             return new ParsedMediaName(null, null, false, null, null);

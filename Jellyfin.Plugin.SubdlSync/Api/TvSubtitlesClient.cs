@@ -21,6 +21,7 @@ using System.Text;
 using System.Text.RegularExpressions;
 using System.Threading;
 using System.Threading.Tasks;
+using Jellyfin.Plugin.SubScribe.Pipeline;
 
 namespace Jellyfin.Plugin.SubScribe.Api;
 
@@ -1288,18 +1289,23 @@ public sealed class TvSubtitlesClient
         using var archive = new ZipArchive(stream, ZipArchiveMode.Read);
         foreach (var entry in archive.Entries)
         {
-            if (!entry.Name.EndsWith(".srt", StringComparison.OrdinalIgnoreCase))
+            // F-M724 (24.11.2026): read the member through the shared fold — a styled episode marker
+            // ("ꜱ01ᴇ05", "Ｓ０１Ｅ０３") would otherwise look like an entry without a number and be
+            // dropped from the pack, and a styled extension ("．ｓｒｔ") hid the file altogether.
+            // Nothing is stored folded: the name in the record stays the one in the archive.
+            var memberName = TextFold.Fold(entry.Name);
+            if (!memberName.EndsWith(".srt", StringComparison.OrdinalIgnoreCase))
             {
                 continue;
             }
 
-            var number = PackMember.Match(entry.Name);
+            var number = PackMember.Match(memberName);
             if (!number.Success)
             {
                 continue;
             }
 
-            var language = PackLanguage.Match(entry.Name);
+            var language = PackLanguage.Match(memberName);
             using var member = entry.Open();
             using var buffer = new MemoryStream();
             member.CopyTo(buffer);
@@ -1308,7 +1314,7 @@ public sealed class TvSubtitlesClient
                 int.Parse(number.Groups[1].Value, CultureInfo.InvariantCulture),
                 int.Parse(number.Groups[2].Value, CultureInfo.InvariantCulture),
                 language.Success ? language.Groups[1].Value.ToLowerInvariant() : string.Empty,
-                PackHi.IsMatch(entry.Name),
+                PackHi.IsMatch(memberName),
                 buffer.ToArray()));
         }
 
@@ -1644,7 +1650,8 @@ public sealed class TvSubtitlesClient
             var numbers = new SortedSet<int>();
             foreach (var entry in archive.Entries)
             {
-                var treffer = EpisodeInName.Match(entry.FullName);
+                // F-M724 (24.11.2026): same fold as the download side — "Ｓ０１Ｅ０３.srt" is E3.
+                var treffer = EpisodeInName.Match(TextFold.Fold(entry.FullName));
                 if (treffer.Success
                     && int.TryParse(
                         treffer.Groups[1].Value, NumberStyles.Integer, CultureInfo.InvariantCulture,
