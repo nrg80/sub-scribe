@@ -760,7 +760,10 @@ internal static class Program
                 "F-M435: without a published entry the upload id stays the handle");
         }
 
-        Check(uploadSrc.Contains("publishedEntry.EntryId") && uploadSrc.Contains("registry.RemapSubdlId("),
+        // F-M729 hat den Nachlauf auf den zweiten Vertrag gestellt: die Zeile der veroeffentlichten Liste
+        // traegt ihren Eintrags-Griff jetzt als `EntryHandle` (neutral) statt als `EntryId` (SubDL-Feld).
+        // Die Aussage bleibt dieselbe — der gespeicherte Griff wandert auf die Eintrags-Kennung.
+        Check(uploadSrc.Contains("publishedEntry.EntryHandle") && uploadSrc.Contains("registry.RemapSubdlId("),
             "F-M435: postprocessing moves stored handles to the published entry id");
         var registrySrc = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Registry/ContentHashRegistry.cs"));
         Check(registrySrc.Contains("public int RemapSubdlId(string uploadId, string entryId)"),

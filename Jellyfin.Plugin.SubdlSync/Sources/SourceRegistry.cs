@@ -39,14 +39,23 @@ namespace Jellyfin.Plugin.SubScribe.Sources;
 public sealed class SourceRegistry
 {
     private readonly IReadOnlyList<ISourceEngine> _engines;
+    private readonly IReadOnlyList<ISourceMaintenance> _maintenance;
 
-    private SourceRegistry(IReadOnlyList<ISourceEngine> engines)
+    private SourceRegistry(IReadOnlyList<ISourceEngine> engines, IReadOnlyList<ISourceMaintenance> maintenance)
     {
         _engines = engines;
+        _maintenance = maintenance;
     }
 
     /// <summary>Gets die Engines in der Reihenfolge, in der gefragt wird.</summary>
     public IReadOnlyList<ISourceEngine> Engines => _engines;
+
+    /// <summary>
+    /// F-M729: die Quellen, die ihre Konto-Pflege anbieten (Einsendungen auflisten, zurückziehen) — ein
+    /// ZWEITER, optionaler Vertrag neben den vier Aufträgen. Wer ihn nicht implementiert, fehlt hier
+    /// einfach; der Ablauf fragt keine Quelle nach ihrem Namen.
+    /// </summary>
+    public IReadOnlyList<ISourceMaintenance> Maintenance => _maintenance;
 
     /// <summary>Gets die Schlüssel der Engines, in derselben Reihenfolge.</summary>
     public IReadOnlyList<string> Keys
@@ -112,11 +121,12 @@ public sealed class SourceRegistry
         // F-M654: SubDL steht immer im Pack-Slot — der Schalter dieser Quelle entscheidet eine Etage
         // höher, ob der Lauf überhaupt packt, nicht diese Liste. Das ist der Stand vor F-M682 und bleibt
         // er: die Umstellung ändert die Antwort, nicht den Umfang.
-        var subdl = new SubdlEngine(
-            context.Subdl ?? new Api.ScribeApiClient(context.Http),
-            context,
-            seasonPacks: true,
-            Settings(context, SubdlEngine.SourceKey, SubdlEngine.Declared));
+        // F-M683/F-M729: die Datei dieser Quelle wird EINMAL gelesen und von beiden Vertraegen benutzt —
+        // die vier Auftraege und die Konto-Pflege sehen damit dieselben Zugangsdaten.
+        var subdlSettings = Settings(context, SubdlEngine.SourceKey, SubdlEngine.Declared);
+        var subdlClient = context.Subdl ?? new Api.ScribeApiClient(context.Http);
+
+        var subdl = new SubdlEngine(subdlClient, context, seasonPacks: true, subdlSettings);
 
         // F-M495: die zweite Quelle hängt an IHREM Upload-Schalter — die Frage wird hier aus der
         // Konfiguration beantwortet, nicht im Ablauf am Namen.
@@ -139,7 +149,36 @@ public sealed class SourceRegistry
             new AuditedSourceEngine(msub, context.Logger, config.LogMode),
         };
 
-        return new SourceRegistry(gehoert);
+        // F-M729: die Konto-Pflege steht neben den vier Auftraegen. Heute kann sie nur SubDL —
+        // tvsubtitles fuehrt keine Einsendungsliste, moviesubtitles hat keinen Upload.
+        var pflege = new ISourceMaintenance[]
+        {
+            new Subdl.SubdlMaintenance(context, subdlSettings),
+        };
+
+        return new SourceRegistry(gehoert, pflege);
+    }
+
+    /// <summary>
+    /// F-M729: baut NUR die Konto-Pflege — für Aufrufer, die keinen Lauf fahren und deshalb weder die
+    /// Suchclients der Quellen noch die vier Aufträge brauchen (der Upload-Nachlauf). Die Grenzregeln
+    /// gelten unverändert: der HttpClient wird gereicht, nicht angelegt.
+    /// </summary>
+    /// <param name="context">Was das Plugin reicht (HttpClient, Logger, Zeitgeber).</param>
+    /// <param name="config">Die Einstellungen (wird heute nicht gelesen, bleibt in der Signatur für den Ruf).</param>
+    /// <returns>Die Registrierung mit leerer Auftragsliste.</returns>
+    public static SourceRegistry BuildMaintenance(SourceEngineContext context, PluginConfiguration config)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var subdlSettings = Settings(context, SubdlEngine.SourceKey, SubdlEngine.Declared);
+        var pflege = new ISourceMaintenance[]
+        {
+            new Subdl.SubdlMaintenance(context, subdlSettings),
+        };
+
+        _ = config;
+        return new SourceRegistry(Array.Empty<ISourceEngine>(), pflege);
     }
 
     /// <summary>

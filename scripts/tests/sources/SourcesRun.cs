@@ -1339,10 +1339,22 @@ internal static class Program
         Richtungen(root);
 
         // -----------------------------------------------------------------------------------------
+        // (i) F-M729: der ZWEITE, schmale Vertrag — die Konto-Pflege der Quelle.
+        //
+        //     Betreiber-Entscheidung 24.11.2026: "Zweiter schmaler Vertrag als maintenance engine. Mit
+        //     Zugangsdaten aus dem source konfi file". Gemessen wird: der Vertrag steht NEBEN den vier
+        //     Auftraegen (ISourceEngine bleibt bei vier Methoden), nur SubDL bietet ihn an, der Zugang
+        //     kommt aus der Datei der Quelle, und der Nachlauf spricht nicht mehr selbst mit der Quelle.
+        // -----------------------------------------------------------------------------------------
+        Console.WriteLine();
+        Console.WriteLine("(i) F-M729: Konto-Pflege als zweiter, schmaler Vertrag");
+        Pflege(root, plugin);
+
+        // -----------------------------------------------------------------------------------------
         // Bericht.
         // -----------------------------------------------------------------------------------------
         Console.WriteLine();
-        Console.WriteLine("sources: " + _checks + " Prüfungen (T339-T348, F-M682-F-M691)");
+        Console.WriteLine("sources: " + _checks + " Prüfungen (T339-T348, T392, F-M682-F-M729)");
         if (Failures.Count == 0)
         {
             Console.WriteLine(">>> SOURCES OK: " + _checks + " Prüfungen bestanden");
@@ -2627,6 +2639,137 @@ internal static class Program
             }
         }
     }
+    /// <summary>
+    /// F-M729 / T392: die Konto-Pflege hinter dem zweiten Vertrag — Form, Anbieter, Zugang und der Weg
+    /// des Nachlaufs. Sechs Pruefungen, kein Netz: der Login geht gegen einen eigenen Handler, der die
+    /// Anfrage festhaelt und eine Antwort gibt, die niemandem etwas verspricht.
+    /// </summary>
+    /// <param name="root">Repo-Wurzel.</param>
+    /// <param name="plugin">Pfad des Plugin-Projekts.</param>
+    private static void Pflege(string root, string plugin)
+    {
+        // (1) Der Vertrag ist ein EIGENER, und er hat genau drei oeffentliche Mitglieder.
+        var vertrag = typeof(ISourceMaintenance);
+        var mitglieder = vertrag.GetMembers()
+            .Where(m => m.DeclaringType == vertrag)
+            .Where(m => m is not System.Reflection.MethodInfo mi || !mi.IsSpecialName)   // get_Key ist der Zugriff, kein Mitglied
+            .Select(m => m.Name)
+            .OrderBy(n => n, StringComparer.Ordinal)
+            .ToArray();
+        Check(mitglieder.SequenceEqual(new[] { "Key", "ListAsync", "WithdrawAsync" }),
+            "F-M729 (1): ISourceMaintenance traegt Key, ListAsync und WithdrawAsync — mehr nicht",
+            string.Join(", ", mitglieder));
+
+        // (2) Und die vier Auftraege bleiben vier: der zweite Vertrag ist NICHT in ISourceEngine.
+        string engineDatei = Path.Combine(plugin, "Sources", "SourceContract.cs");
+        string vertragsDatei = Path.Combine(plugin, "Sources", "MaintenanceContract.cs");
+        Check(File.Exists(vertragsDatei)
+              && TrefferZeilen(engineDatei, "ISourceMaintenance").Count() == 0,
+            "F-M729 (2): die Konto-Pflege steht in eigener Datei — SourceContract.cs nennt sie nicht");
+
+        // (3) Nur die Quelle, die ein Konto fuehrt, bietet sie an.
+        var config = new PluginConfiguration();
+        var context = new SourceEngineContext(
+            new HttpClient(),
+            NullLogger.Instance,
+            TimeProvider.System);
+        var registry = SourceRegistry.Build(context, config);
+        var anbieter = registry.Maintenance.Select(m => m.Key).ToArray();
+        Check(anbieter.SequenceEqual(new[] { "subdl" }),
+            "F-M729 (3): genau die Quelle mit Konto-Pflege bietet sie an (subdl) — die anderen nicht",
+            anbieter.Length == 0 ? "keine" : string.Join(", ", anbieter));
+
+        // (4) Der Zugang kommt aus der Datei der Quelle, nicht aus der Plugin-Konfiguration.
+        const string PruefKey = "pruef-key-729";
+        const string PruefKonto = "pflege-konto@example.invalid";
+        const string PruefPass = "pflege-passwort-729";
+
+        string dataDir = Path.Combine(Path.GetTempPath(), "sources-pflege-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dataDir);
+        try
+        {
+            SourceSettingsFile.Save(dataDir, SubdlEngine.SourceKey, SubdlEngine.Declared, new Dictionary<string, string>
+            {
+                [SourceSwitches.UploadField] = "true",
+                [SubdlEngine.FieldApiKey] = PruefKey,
+                [SubdlEngine.FieldAccount] = PruefKonto,
+                [SubdlEngine.FieldPassword] = PruefPass,
+            });
+
+            var fänger = new LoginFänger();
+            var pflegeContext = new SourceEngineContext(
+                new HttpClient(fänger),
+                NullLogger.Instance,
+                TimeProvider.System,
+                DataFolder: dataDir);
+            var pflegeRegistry = SourceRegistry.BuildMaintenance(pflegeContext, config);
+            var pflegeEngine = pflegeRegistry.Maintenance.FirstOrDefault();
+
+            // Der Login ist der erste Netzweg dieser Engine: er muss die Werte der DATEI tragen. Der
+            // Handler antwortet mit Absicht unbrauchbar — gemessen wird die Anfrage, nicht die Antwort.
+            _ = pflegeEngine?.ListAsync(new SourceSubmissionQuery(MaxPages: 1), CancellationToken.None)
+                .GetAwaiter().GetResult();
+
+            string login = fänger.LoginBody;
+            Check(login.Contains("email=" + Uri.EscapeDataString(PruefKonto), StringComparison.Ordinal)
+                  && login.Contains("password=" + Uri.EscapeDataString(PruefPass), StringComparison.Ordinal),
+                "F-M729 (4): die Anmeldung traegt Konto und Passwort aus sources/subdl.json",
+                login.Length == 0 ? "keine Login-Anfrage gesehen" : "aus der Datei");
+
+            // (5) Die Engine liest die Datei wirklich — und die Konfiguration nicht.
+            string pflegeQuelle = File.ReadAllText(Path.Combine(plugin, "Sources", "Subdl", "SubdlMaintenance.cs"));
+            Check(pflegeQuelle.Contains("SourceSettings", StringComparison.Ordinal)
+                  && pflegeQuelle.Contains("SubdlEngine.FieldApiKey", StringComparison.Ordinal)
+                  && !pflegeQuelle.Contains("PluginConfiguration", StringComparison.Ordinal),
+                "F-M729 (5): der Adapter liest SourceSettings und kennt die Plugin-Konfiguration nicht");
+
+            // (6) Der Nachlauf geht ueber den Vertrag: die alten Direktaufrufe sind weg.
+            string pipeline = File.ReadAllText(Path.Combine(plugin, "Pipeline", "UploadPipeline.cs"));
+            int start = pipeline.IndexOf("private static async Task RunUploadPostprocessingInternalAsync", StringComparison.Ordinal);
+            int ende = start < 0 ? -1 : pipeline.IndexOf("private static async Task", start + 10, StringComparison.Ordinal);
+            string nachlauf = start >= 0 ? pipeline.Substring(start, (ende > start ? ende : pipeline.Length) - start) : string.Empty;
+            Check(nachlauf.Contains("SourceRegistry.BuildMaintenance(", StringComparison.Ordinal)
+                  && !nachlauf.Contains("ListMySubtitlesAsync(", StringComparison.Ordinal)
+                  && !nachlauf.Contains("ListMyPublishedSubtitlesAsync(", StringComparison.Ordinal)
+                  && !nachlauf.Contains("DeleteMySubtitleAsync(", StringComparison.Ordinal),
+                "F-M729 (6): der Upload-Nachlauf ruft den Vertrag und keinen Client mehr",
+                nachlauf.Length == 0 ? "Nachlauf nicht gefunden" : "0 Direktaufrufe");
+        }
+        finally
+        {
+            try { Directory.Delete(dataDir, true); } catch (IOException) { }
+        }
+    }
+
+    /// <summary>
+    /// Ein Handler, der die Login-Anfrage festhaelt. Antwortet mit 200 und einem Rumpf, der keine
+    /// Auskunft gibt — die Pruefung misst die ANFRAGE, nicht die Antwort.
+    /// </summary>
+    private sealed class LoginFänger : HttpMessageHandler
+    {
+        /// <summary>Gets der formkodierte Rumpf der ersten Anfrage an <c>/login</c>.</summary>
+        public string LoginBody { get; private set; } = string.Empty;
+
+        /// <inheritdoc />
+        protected override async Task<HttpResponseMessage> SendAsync(
+            HttpRequestMessage request, CancellationToken cancellationToken)
+        {
+            if (request.RequestUri is not null
+                && request.RequestUri.AbsolutePath.EndsWith("/login", StringComparison.Ordinal)
+                && LoginBody.Length == 0)
+            {
+                LoginBody = request.Content is null
+                    ? string.Empty
+                    : await request.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
+            }
+
+            return new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+            {
+                Content = new StringContent("{\"status\":false,\"error\":\"probe\"}", System.Text.Encoding.UTF8, "application/json"),
+            };
+        }
+    }
+
     /// <summary>F-M693: eine Quelldatei mit genau diesen Feldern schreiben (Pruefstand).</summary>
     private static void QuelleSchreiben(
         string dataDir, string key, IReadOnlyList<SourceField> schema, Dictionary<string, string> werte)

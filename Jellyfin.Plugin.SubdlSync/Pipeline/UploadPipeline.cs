@@ -6438,55 +6438,74 @@ public sealed class UploadPipeline : IPackFiller
 
             // F-M343: same client identity as every other SubDL call.
             var http = ScribeApiClient.NewHttpClient(TimeSpan.FromSeconds(30));
-            var api = new ScribeApiClient(http)
-            {
-                Username = cfg.Username,
-                Password = cfg.Password,
-                ApiKey = cfg.ApiKey
-            };
-            api.Log += msg => LogUtil.Detail(logger, "[Sub Scribe-Postprocessing] {Msg}", msg);
+
+            // F-M729 (Betreiber-Entscheidung 24.11.2026: „Zweiter schmaler Vertrag als maintenance engine.
+            // Mit Zugangsdaten aus dem source konfi file"): der Nachlauf spricht nicht mehr selbst mit der
+            // Quelle. Er nimmt den zweiten, schmalen Vertrag aus der Registry, und der Zugang kommt aus
+            // `sources/subdl.json` — die Plugin-Konfiguration wird hier nicht mehr gelesen (F-M688 hat
+            // diesen Schritt als eigenen benannt). Angemeldet wird beim ersten Gebrauch.
+            var pflege = Sources.SourceRegistry.BuildMaintenance(
+                new Sources.SourceEngineContext(
+                    http,
+                    logger,
+                    TimeProvider.System,
+                    DataFolder: plugin.DataFolderPath),
+                cfg);
 
             var limiter = new GlobalRateLimiter(cfg.UploadsPerHour, cfg.MinCallPauseSec);
 
-            try
+            var einsendungen = new System.Collections.Generic.List<(Sources.ISourceMaintenance Owner, Sources.SourceSubmission Entry)>();
+            bool gelesen = false;
+            string? leseFehler = null;
+            foreach (var maintenance in pflege.Maintenance)
             {
-                // F-M20 (03.10.2026): no local budget left to exhaust — the pause is the
-                // whole throttle and the login always goes ahead.
-                await limiter.PauseAsync(ct).ConfigureAwait(false);
-                await api.LoginAsync(ct).ConfigureAwait(false);
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning("[Sub Scribe] Upload postprocessing login failed: {Msg}", ex.Message);
-                return;
+                try
+                {
+                    // F-M20 (03.10.2026): no local budget left to exhaust — the pause is the
+                    // whole throttle and this fetch always goes ahead.
+                    await limiter.PauseAsync(ct).ConfigureAwait(false);
+                    var answer = await maintenance
+                        .ListAsync(new Sources.SourceSubmissionQuery(MaxPages: maxPages), ct)
+                        .ConfigureAwait(false);
+                    if (!answer.Ok)
+                    {
+                        leseFehler ??= answer.Why ?? answer.Fault.ToString();
+                        logger.LogWarning(
+                            "[Sub Scribe] Upload postprocessing could not fetch mySubtitles from {Source}: {Fault} {Why}",
+                            maintenance.Key,
+                            answer.Fault,
+                            answer.Why);
+                        continue;
+                    }
+
+                    einsendungen.AddRange(answer.Submissions.Select(e => (maintenance, e)));
+                    gelesen = true;
+                }
+                catch (OperationCanceledException)
+                {
+                    logger.LogWarning("[Sub Scribe] Upload postprocessing: fetching mySubtitles timed out.");
+                    break;
+                }
+                catch (Exception ex)
+                {
+                    leseFehler ??= ex.Message;
+                    logger.LogWarning("[Sub Scribe] Upload postprocessing could not fetch mySubtitles: {Msg}", ex.Message);
+                }
             }
 
-            List<OwnSubtitleEntry>? allMySubtitles = null;
-            try
-            {
-                // F-M20 (03.10.2026): no local budget left to exhaust — the pause is the
-                // whole throttle and this fetch always goes ahead.
-                await limiter.PauseAsync(ct).ConfigureAwait(false);
-                allMySubtitles = await api.ListMySubtitlesAsync(ct, maxPages: maxPages).ConfigureAwait(false);
-            }
-            catch (OperationCanceledException)
-            {
-                logger.LogWarning("[Sub Scribe] Upload postprocessing: fetching mySubtitles timed out.");
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning("[Sub Scribe] Upload postprocessing could not fetch mySubtitles: {Msg}", ex.Message);
-            }
-
-            if (allMySubtitles == null)
+            if (!gelesen)
             {
                 _postprocessingRunning = false;
-                _postprocessingLastResult = "failed: could not fetch mySubtitles";
+                _postprocessingLastResult = leseFehler == null
+                    ? "failed: no source offers its submissions"
+                    : "failed: could not fetch mySubtitles";
                 return;
             }
 
-            var rejectedEntries = allMySubtitles
-                .Where(o => string.Equals(o.Status, "rejected", StringComparison.OrdinalIgnoreCase))
+            // F-M729: jede Zeile merkt sich, WESSEN Konto sie gehört — zurückgezogen wird über den
+            // Vertrag, aus dem sie kam. Kein Quellenvergleich, nur der Griff, den sie mitbringt.
+            var rejectedEntries = einsendungen
+                .Where(o => o.Entry.State == Sources.SubmissionState.Rejected)
                 .ToList();
 
             // F-M435 (operator order 03.11.2026): an entry that was still awaiting review when it was
@@ -6497,46 +6516,62 @@ public sealed class UploadPipeline : IPackFiller
             int pagesWalked = 0;
             DateTime watermark = cfg.PostprocessWatermarkUtc?.ToUniversalTime() ?? DateTime.MinValue;
             DateTime newestSeen = DateTime.MinValue;
-            try
+            // F-M437 (operator decision 04.11.2026): walk down only until the entries are older than the
+            // last pass reached. The list is newest first, so this is where the work of the last days
+            // sits; a pass after a pause keeps going until the watermark and catches up on its own.
+            // maxPages stays as the ceiling of that walk, not as its length. F-M729: der Wasserstand
+            // fährt als Frage über die Grenze, statt dass der Nachlauf die Liste selbst ablaeuft.
+            var wasserstand = watermark == DateTime.MinValue
+                ? (DateTimeOffset?)null
+                : new DateTimeOffset(watermark, TimeSpan.Zero);
+            foreach (var maintenance in pflege.Maintenance)
             {
-                await limiter.PauseAsync(ct).ConfigureAwait(false);
-                // F-M437 (operator decision 04.11.2026): walk down only until the entries are older than
-                // the last pass reached. The list is newest first, so this is where the work of the last
-                // days sits; a pass after a pause keeps going until the watermark and catches up on its
-                // own. maxPages stays as the ceiling of that walk, not as its length.
-                var publishedEntries = await api.ListMyPublishedSubtitlesAsync(
-                    ct,
-                    maxPages: maxPages,
-                    shouldStop: e => watermark != DateTime.MinValue
-                                     && e.CreatedAt != default
-                                     && e.CreatedAt.ToUniversalTime() < watermark,
-                    pageRead: n => pagesWalked = n).ConfigureAwait(false);
-                foreach (var publishedEntry in publishedEntries ?? new List<OwnSubtitleEntry>())
+                try
                 {
-                    if (publishedEntry.CreatedAt != default
-                        && publishedEntry.CreatedAt.ToUniversalTime() > newestSeen)
+                    await limiter.PauseAsync(ct).ConfigureAwait(false);
+                    var answer = await maintenance
+                        .ListAsync(
+                            new Sources.SourceSubmissionQuery(
+                                Published: true,
+                                MaxPages: maxPages,
+                                NewerThan: wasserstand),
+                            ct)
+                        .ConfigureAwait(false);
+                    if (!answer.Ok)
                     {
-                        newestSeen = publishedEntry.CreatedAt.ToUniversalTime();
-                    }
-
-                    if (publishedEntry.EntryId <= 0 || publishedEntry.UploadId <= 0
-                        || publishedEntry.EntryId == publishedEntry.UploadId)
-                    {
+                        logger.LogWarning(
+                            "[Sub Scribe] Upload postprocessing could not read myPublishedSubtitles from {Source}: {Fault} {Why}",
+                            maintenance.Key,
+                            answer.Fault,
+                            answer.Why);
                         continue;
                     }
 
-                    remappedHandles += registry.RemapSubdlId(
-                        publishedEntry.UploadId.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                        publishedEntry.EntryId.ToString(System.Globalization.CultureInfo.InvariantCulture));
+                    pagesWalked = Math.Max(pagesWalked, answer.PagesWalked);
+                    foreach (var publishedEntry in answer.Submissions)
+                    {
+                        if (publishedEntry.CreatedAtUtc > newestSeen)
+                        {
+                            newestSeen = publishedEntry.CreatedAtUtc.UtcDateTime;
+                        }
+
+                        if (publishedEntry.EntryHandle is not { Length: > 0 } entryHandle
+                            || string.Equals(entryHandle, publishedEntry.Handle, StringComparison.Ordinal))
+                        {
+                            continue;
+                        }
+
+                        remappedHandles += registry.RemapSubdlId(publishedEntry.Handle, entryHandle);
+                    }
                 }
-            }
-            catch (OperationCanceledException)
-            {
-                throw;
-            }
-            catch (Exception ex)
-            {
-                logger.LogWarning("[Sub Scribe] Upload postprocessing could not read myPublishedSubtitles: {Msg}", ex.Message);
+                catch (OperationCanceledException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    logger.LogWarning("[Sub Scribe] Upload postprocessing could not read myPublishedSubtitles: {Msg}", ex.Message);
+                }
             }
 
             // F-M437: the watermark is the newest createdAt this pass saw — stored through the partial
@@ -6553,12 +6588,12 @@ public sealed class UploadPipeline : IPackFiller
                 pagesWalked, remappedHandles);
 
 
-            LogUtil.Normal(logger, "[Sub Scribe] Upload postprocessing: fetched {Total} mySubtitles entries, {Rejected} rejected to clean up.", allMySubtitles.Count, rejectedEntries.Count);
+            LogUtil.Normal(logger, "[Sub Scribe] Upload postprocessing: fetched {Total} mySubtitles entries, {Rejected} rejected to clean up.", einsendungen.Count, rejectedEntries.Count);
 
             int matchedDeleted = 0, unmatchedDeleted = 0, failedToDelete = 0;
             var uploadedCandidates = registry.GetUploadedEmbeds();
 
-            foreach (var rejected in rejectedEntries)
+            foreach (var (owner, rejected) in rejectedEntries)
             {
                 if (ct.IsCancellationRequested)
                 {
@@ -6577,14 +6612,14 @@ public sealed class UploadPipeline : IPackFiller
                     if (upMedia != null)
                     {
                         byId = string.Equals(rejected.ImdbId, upMedia.ImdbId, StringComparison.OrdinalIgnoreCase)
-                            || (!string.IsNullOrEmpty(rejected.TmdbId?.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                            || (!string.IsNullOrEmpty(rejected.TmdbId)
                                 && !string.IsNullOrEmpty(upMedia.TmdbId)
-                                && string.Equals(rejected.TmdbId?.ToString(System.Globalization.CultureInfo.InvariantCulture), upMedia.TmdbId, StringComparison.OrdinalIgnoreCase));
+                                && string.Equals(rejected.TmdbId, upMedia.TmdbId, StringComparison.OrdinalIgnoreCase));
                     }
                     bool seasonOk = rejected.Season == 0 || rejected.Season == (upMedia?.Season ?? 0);
                     bool episodeOk = rejected.Episode == 0 || rejected.Episode == (upMedia?.Episode ?? 0);
                     bool byMetadata = byId && seasonOk && episodeOk
-                        && string.Equals(LanguageMapper.MapToSubdlName(rejected.Language), up.Language, StringComparison.OrdinalIgnoreCase);
+                        && string.Equals(rejected.Language, up.Language, StringComparison.OrdinalIgnoreCase);
 
                     if (byContentHash || byMetadata)
                     {
@@ -6601,16 +6636,25 @@ public sealed class UploadPipeline : IPackFiller
                     await limiter.PauseAsync(ct).ConfigureAwait(false);
                     var delStart = DateTime.UtcNow;
                     using var deleteCts = new CancellationTokenSource(TimeSpan.FromSeconds(10));
-                    deleted = await api.DeleteMySubtitleAsync(rejected.UploadId, deleteCts.Token).ConfigureAwait(false);
-                    LogUtil.Detail(logger, "[Sub Scribe-Postprocessing] delete {UploadId} took {ElapsedMs} ms (pause+network).", rejected.UploadId, (DateTime.UtcNow - delStart).TotalMilliseconds);
+                    var widerruf = await owner.WithdrawAsync(rejected.Handle, deleteCts.Token).ConfigureAwait(false);
+                    deleted = widerruf.Ok;
+                    if (!deleted && widerruf.Reason is { Length: > 0 } grund)
+                    {
+                        LogUtil.Detail(
+                            logger,
+                            "[Sub Scribe-Postprocessing] withdraw {Handle} not confirmed: {Reason}",
+                            rejected.Handle,
+                            grund);
+                    }
+                    LogUtil.Detail(logger, "[Sub Scribe-Postprocessing] delete {UploadId} took {ElapsedMs} ms (pause+network).", rejected.Handle, (DateTime.UtcNow - delStart).TotalMilliseconds);
                 }
                 catch (OperationCanceledException)
                 {
-                    logger.LogWarning("[Sub Scribe] Upload postprocessing: delete rejected upload {UploadId} timed out.", rejected.UploadId);
+                    logger.LogWarning("[Sub Scribe] Upload postprocessing: delete rejected upload {UploadId} timed out.", rejected.Handle);
                 }
                 catch (Exception delEx)
                 {
-                    logger.LogWarning("[Sub Scribe] Upload postprocessing: delete rejected upload {UploadId} failed: {Msg}", rejected.UploadId, delEx.Message);
+                    logger.LogWarning("[Sub Scribe] Upload postprocessing: delete rejected upload {UploadId} failed: {Msg}", rejected.Handle, delEx.Message);
                 }
 
                 if (deleted)
@@ -6629,44 +6673,44 @@ public sealed class UploadPipeline : IPackFiller
                             if (upMedia != null)
                             {
                                 byId = string.Equals(rejected.ImdbId, upMedia.ImdbId, StringComparison.OrdinalIgnoreCase)
-                                    || (!string.IsNullOrEmpty(rejected.TmdbId?.ToString(System.Globalization.CultureInfo.InvariantCulture))
+                                    || (!string.IsNullOrEmpty(rejected.TmdbId)
                                         && !string.IsNullOrEmpty(upMedia.TmdbId)
-                                        && string.Equals(rejected.TmdbId?.ToString(System.Globalization.CultureInfo.InvariantCulture), upMedia.TmdbId, StringComparison.OrdinalIgnoreCase));
+                                        && string.Equals(rejected.TmdbId, upMedia.TmdbId, StringComparison.OrdinalIgnoreCase));
                             }
                             bool seasonOk = rejected.Season == 0 || rejected.Season == (upMedia?.Season ?? 0);
                             bool episodeOk = rejected.Episode == 0 || rejected.Episode == (upMedia?.Episode ?? 0);
                             bool byMetadata = byId && seasonOk && episodeOk
-                                && string.Equals(LanguageMapper.MapToSubdlName(rejected.Language), up.Language, StringComparison.OrdinalIgnoreCase);
+                                && string.Equals(rejected.Language, up.Language, StringComparison.OrdinalIgnoreCase);
 
                             if (byContentHash || byMetadata)
                             {
                                 registry.MarkAndFlush(() =>
                                 {
                                     registry.PatchMediaMetadata(up.MediaHash, upMedia?.ImdbId,
-                                        upMedia?.Season ?? 0, upMedia?.Episode, rejected.NId, upMedia?.TmdbId);
-                                    // F-M670: `rejected.NId` ist die Id des FREMDEN Eintrags, den dieser
+                                        upMedia?.Season ?? 0, upMedia?.Episode, rejected.ForeignId, upMedia?.TmdbId);
+                                    // F-M670: `rejected.ForeignId` ist die Id des FREMDEN Eintrags, den dieser
                                     // Upload dupliziert — ein Fund, keine Einsendung; er gehört als
                                     // `subdlDownloadId` (Matrix `SourceId`) an die Marke.
                                     registry.MarkEmbed(up.MediaHash, up.SubPos, up.Language, up.HearingImpaired ?? false,
                                         SubtitleStatus.Rejected, contentHash: up.ContentHash,
-                                        reason: RejectReason.DuplicateRemote, subdlDownloadId: rejected.NId);
+                                        reason: RejectReason.DuplicateRemote, subdlDownloadId: rejected.ForeignId);
                                 });
                                 break;
                             }
                         }
 
-                        LogUtil.PerItem(logger, "[Sub Scribe] Upload postprocessing: deleted matched rejected upload {UploadId} ({Name}) and marked remote-duplicate.", rejected.UploadId, rejected.Name);
+                        LogUtil.PerItem(logger, "[Sub Scribe] Upload postprocessing: deleted matched rejected upload {UploadId} ({Name}) and marked remote-duplicate.", rejected.Handle, rejected.Name);
                     }
                     else
                     {
                         unmatchedDeleted++;
-                        LogUtil.PerItem(logger, "[Sub Scribe] Upload postprocessing: deleted unmatched rejected upload {UploadId} ({Name}).", rejected.UploadId, rejected.Name);
+                        LogUtil.PerItem(logger, "[Sub Scribe] Upload postprocessing: deleted unmatched rejected upload {UploadId} ({Name}).", rejected.Handle, rejected.Name);
                     }
                 }
                 else
                 {
                     failedToDelete++;
-                    logger.LogWarning("[Sub Scribe] Upload postprocessing: failed to delete rejected upload {UploadId}.", rejected.UploadId);
+                    logger.LogWarning("[Sub Scribe] Upload postprocessing: failed to delete rejected upload {UploadId}.", rejected.Handle);
                 }
             }
 

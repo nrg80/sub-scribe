@@ -946,6 +946,10 @@
     "T391": {
       "suite": "dupskip",
       "checks": 7
+    },
+    "T392": {
+      "suite": "sources",
+      "checks": 6
     }
   }
 }
