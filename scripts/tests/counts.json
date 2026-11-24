@@ -928,6 +928,10 @@
     "T388": {
       "suite": "endpoints",
       "checks": 1
+    },
+    "T389": {
+      "suite": "endpoints",
+      "checks": 1
     }
   }
 }

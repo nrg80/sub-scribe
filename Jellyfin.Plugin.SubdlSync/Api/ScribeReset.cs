@@ -373,13 +373,25 @@ public class ScribeReset : ControllerBase
             int spurZeilen = 0;
             int wagenZeilen = 0;
             int markenGesamt = 0;
+            // F-M727: die FUND-Zahlen. „0 geloescht" allein sagte nicht, ob nichts zu loeschen war oder
+            // ob der Schluessel nicht traf — die offene S01-Frage hing genau daran.
+            int spurGefunden = 0;
+            int wagenGefunden = 0;
+            int dateienUnbekannt = 0;
             foreach (string hash in hashes)
             {
                 if (alles)
                 {
-                    var (spurenWeg, wagenWeg, stempelWeg, markenWeg) = registry.ForgetMedia(hash);
+                    var (spurenWeg, wagenWeg, stempelWeg, markenWeg, gefundenSpuren, gefundenWagen, bekannt) =
+                        registry.ForgetMedia(hash);
                     spurZeilen += spurenWeg;
                     wagenZeilen += wagenWeg;
+                    spurGefunden += gefundenSpuren;
+                    wagenGefunden += gefundenWagen;
+                    if (!bekannt)
+                    {
+                        dateienUnbekannt++;
+                    }
                     stempelGesamt += stempelWeg;
                     markenGesamt += markenWeg;
                     packAbsagen += registry.ReopenPackRefusals(hash);
@@ -450,6 +462,9 @@ public class ScribeReset : ControllerBase
                 forgottenTracks = spurZeilen,
                 forgottenSidecars = wagenZeilen,
                 forgottenMarks = markenGesamt,
+                foundTracks = spurGefunden,
+                foundSidecars = wagenGefunden,
+                unknownFiles = dateienUnbekannt,
             });
         }
         catch (Exception ex)

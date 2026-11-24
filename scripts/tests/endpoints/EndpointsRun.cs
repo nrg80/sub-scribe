@@ -3634,20 +3634,33 @@ internal static class Program
         Check(
             "F-M723: 'everything of this file' drops all rows of the file, not just rejections",
             resetDatei.Contains("bool alles = teile.Contains(\"all\")", StringComparison.Ordinal)
-            && resetDatei.Contains("var (spurenWeg, wagenWeg, stempelWeg, markenWeg) = registry.ForgetMedia(hash);", StringComparison.Ordinal)
-            && registryDatei.Contains("public (int Tracks, int Sidecars, int Stamps, int Marks) ForgetMedia(", StringComparison.Ordinal)
+            && resetDatei.Contains("registry.ForgetMedia(hash);", StringComparison.Ordinal)
+            && registryDatei.Contains("public (int Tracks, int Sidecars, int Stamps, int Marks, int FoundTracks, int FoundSidecars, bool Known) ForgetMedia(", StringComparison.Ordinal)
             // alle Spuren, nicht nur die abgelehnten
             && registryDatei.Contains("var spuren = _db.Tracks.FindAll()", StringComparison.Ordinal)
             // F-M723a: die Datei-Kennung ist der verlaessliche Schluessel — der Medienhash einer Zeile
             // kann von dem der Datei abweichen (neu gepackt), dann lief die Suche leer.
             && registryDatei.Contains("|| string.Equals(t.FileId, media.FileId, StringComparison.Ordinal))", StringComparison.Ordinal)
-            && registryDatei.Contains("|| string.Equals(w.FileId, media.FileId, StringComparison.Ordinal))", StringComparison.Ordinal)
+            && registryDatei.Contains("|| string.Equals(w.FileId, media.FileId, StringComparison.Ordinal)", StringComparison.Ordinal)
             && registryDatei.Contains("_db.Sidecars.Delete(wagenZeile.TrackId)", StringComparison.Ordinal)
             && registryDatei.Contains("marken += SourceStore.ForgetSubject(_db, subjekt);", StringComparison.Ordinal)
             // die Marken zuerst, sonst findet sie ihr Subjekt nicht mehr
             && registryDatei.IndexOf("ForgetSubject(_db, subjekt)", StringComparison.Ordinal)
                 < registryDatei.IndexOf("_db.Tracks.Delete(spur.TrackId)", StringComparison.Ordinal)
             && guiDatei.Contains("<option value=\"all\">everything of this file</option>", StringComparison.Ordinal));
+        // F-M727 (Betreiber-Anweisung 24.11.2026 „Alle 4"): „0 geloescht" war keine Auskunft. Der Reset
+        // meldet jetzt, wie viele Zeilen er VORHER gefunden hat und ob ihm die Datei ueberhaupt bekannt
+        // war; Seitenwagen werden zusaetzlich ueber den Pfad-Stamm der Mediendatei gefunden.
+        Check(
+            "F-M727: the reset reports what it found, and sidecars answer to the file's own path stem",
+            registryDatei.Contains("bool GehoertZurDatei(string? pfad) =>", StringComparison.Ordinal)
+            && registryDatei.Contains("pfad.StartsWith(stamm + \".\", StringComparison.Ordinal)", StringComparison.Ordinal)
+            && registryDatei.Contains("|| GehoertZurDatei(w.Path))", StringComparison.Ordinal)
+            && registryDatei.Contains("return (0, 0, 0, 0, 0, 0, false);", StringComparison.Ordinal)
+            && registryDatei.Contains("return (spurWeg, wagenWeg, stempel, marken, spuren.Count, wagen.Count, true);", StringComparison.Ordinal)
+            && resetDatei.Contains("foundTracks = spurGefunden,", StringComparison.Ordinal)
+            && resetDatei.Contains("foundSidecars = wagenGefunden,", StringComparison.Ordinal)
+            && resetDatei.Contains("unknownFiles = dateienUnbekannt,", StringComparison.Ordinal));
         Check(
             "F-M620: without confirm=true and a rooted path nothing is written",
             resetDatei.Contains("error = \"confirmation-missing\"", StringComparison.Ordinal)

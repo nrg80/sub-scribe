@@ -3140,12 +3140,17 @@ public sealed class ContentHashRegistry : IDisposable
     /// </para>
     /// </summary>
     /// <param name="mediaHash">Der Medienhash der Datei.</param>
-    /// <returns>Wie viele Spur-Zeilen, Seitenwagen, Stempel und Marken gefallen sind.</returns>
-    public (int Tracks, int Sidecars, int Stamps, int Marks) ForgetMedia(string? mediaHash)
+    /// <returns>
+    /// Wie viele Spur-Zeilen, Seitenwagen, Stempel und Marken gefallen sind — und wie viele VORHER da
+    /// waren (<c>Found…</c>, F-M727). Ohne die Fund-Zahlen ist „0 geloescht" nicht von „nichts da" zu
+    /// unterscheiden; genau daran hing die offene S01-Frage.
+    /// </returns>
+    public (int Tracks, int Sidecars, int Stamps, int Marks, int FoundTracks, int FoundSidecars, bool Known) ForgetMedia(string? mediaHash)
     {
         if (string.IsNullOrEmpty(mediaHash) || GetMedia(mediaHash) is not { } media)
         {
-            return (0, 0, 0, 0);
+            // F-M727: die Datei ist dem Store UNBEKANNT — das ist eine Auskunft, keine Null.
+            return (0, 0, 0, 0, 0, 0, false);
         }
 
         // F-M723a (Befund 24.11.2026 am Prod-Lauf): der verlaessliche Schluessel ist die DATEI-Kennung,
@@ -3157,9 +3162,31 @@ public sealed class ContentHashRegistry : IDisposable
             .Where(t => string.Equals(t.MediaHash, mediaHash, StringComparison.Ordinal)
                         || string.Equals(t.FileId, media.FileId, StringComparison.Ordinal))
             .ToList();
+        // F-M727 (Betreiber-Anweisung 24.11.2026 „Alle 4"): der DRITTE Schluessel. Seitenwagen tragen
+        // ihren eigenen Pfad, und der beginnt mit Verzeichnis + Dateiname-Stamm der Mediendatei
+        // ("<Ordner>/<Stamm>.<sprache>.<nn>.srt"). Liegt eine Zeile unter einer Kennung, die keine
+        // Datei-Zeile mehr hat (Datei neu gepackt, neu eingelesen), faengt dieser Vergleich sie —
+        // ohne ihn blieb der Lauf bei 0 Zeilen stehen, obwohl die .srt neben der Datei lag.
+        string? stamm = null;
+        if (!string.IsNullOrWhiteSpace(media.Path))
+        {
+            string? ordner = Path.GetDirectoryName(media.Path);
+            string? name = Path.GetFileNameWithoutExtension(media.Path);
+            if (!string.IsNullOrWhiteSpace(ordner) && !string.IsNullOrWhiteSpace(name))
+            {
+                stamm = Path.Combine(ordner, name);
+            }
+        }
+
+        bool GehoertZurDatei(string? pfad) =>
+            stamm != null
+            && !string.IsNullOrWhiteSpace(pfad)
+            && pfad.StartsWith(stamm + ".", StringComparison.Ordinal);
+
         var wagen = _db.Sidecars.FindAll()
             .Where(w => string.Equals(w.MediaHash, mediaHash, StringComparison.Ordinal)
-                        || string.Equals(w.FileId, media.FileId, StringComparison.Ordinal))
+                        || string.Equals(w.FileId, media.FileId, StringComparison.Ordinal)
+                        || GehoertZurDatei(w.Path))
             .ToList();
 
         // Die Subjekte zuerst: die Marken haengen an Spur-, Seitenwagen- und Datei-Kennung. Waeren die
@@ -3196,13 +3223,15 @@ public sealed class ContentHashRegistry : IDisposable
 
         LogUtil.Normal(
             _logger,
-            "[Sub Scribe-DB] forgot a whole file: {Tracks} track row(s), {Sidecars} sidecar row(s), {Stamps} stamp(s), {Marks} mark(s).",
+            "[Sub Scribe-DB] forgot a whole file: {Tracks}/{FoundTracks} track row(s), {Sidecars}/{FoundSidecars} sidecar row(s), {Stamps} stamp(s), {Marks} mark(s).",
             spurWeg,
+            spuren.Count,
             wagenWeg,
+            wagen.Count,
             stempel,
             marken);
 
-        return (spurWeg, wagenWeg, stempel, marken);
+        return (spurWeg, wagenWeg, stempel, marken, spuren.Count, wagen.Count, true);
     }
 
     /// <summary>
