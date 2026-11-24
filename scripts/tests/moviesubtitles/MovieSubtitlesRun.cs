@@ -847,12 +847,13 @@ internal static class Program
             clientQuelle.Contains("ClassifyAddMovieAnswer(plain)", StringComparison.Ordinal)
             && clientQuelle.Contains("MovieSubtitlesAddOutcome.Rejected", StringComparison.Ordinal)
             && clientQuelle.Contains("MovieSubtitlesAddOutcome.ExistsUnknownId", StringComparison.Ordinal)
-            && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/Endpoints/MsubMovieResolver.cs"))
-                .Contains("MsubMovieStatus.ExistsFound", StringComparison.Ordinal)
-            && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/Endpoints/MsubMovieResolver.cs"))
-                .Contains("MsubMovieStatus.ExistsWithoutId", StringComparison.Ordinal)
-            && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/Endpoints/MsubMovieResolver.cs"))
-                .Contains("MovieSubtitlesClient.AddMovieExistsMarker", StringComparison.Ordinal),
+            // F-M734: die drei Zweige fuehrt jetzt die Seite der Titel-Frage (der Nachschlageweg loest nur auf).
+            && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/Endpoints/MsubMovieLookup.cs"))
+                .Contains("MovieSubtitlesAddStatus.Take", StringComparison.Ordinal)
+            && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/Endpoints/MsubMovieLookup.cs"))
+                .Contains("MovieSubtitlesAddOutcome.ExistsUnknownId", StringComparison.Ordinal)
+            && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/Endpoints/MsubMovieLookup.cs"))
+                .Contains("SourceTitleState.ExistsWithoutId", StringComparison.Ordinal),
             "client/aufloeser-Bindung");
 
 
@@ -908,27 +909,30 @@ internal static class Program
             && blindSeite.Posts == 0,
             "status=" + blind.Status + " answers=" + blind.Answers);
 
-        // Die Anlage steht im UPLOAD-Pfad und nirgends sonst, ihre Zeile ist fest, und die neue Nummer
-        // geht in dieselbe Spalte wie die Auflösung.
+        // F-M734: Die Anlage steht im SENDE-AUFTRAG und nirgends sonst — der Ablauf liest und schreibt
+        // den Bestand weiterhin selbst, die Seite der Film-Frage kennt ihn nicht. Die neue Nummer geht in
+        // dieselbe Spalte wie die Auflösung.
         var anlageUploadQuelle = ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Pipeline/UploadPipeline.cs"));
         var anlageDownloadQuelle = ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Pipeline/DownloadPipeline.cs"));
-        var anlageAufloeserQuelle = ReadText(
-            Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/Endpoints/MsubMovieResolver.cs"));
-        Check("angelegt wird nur im Upload-Pfad — der Download-Pfad ruft die anlegende Fassung nicht (F-M513)",
-            anlageUploadQuelle.Contains(
-                "ResolveOrCreateForMediaAsync(Registry, mediaHash, movie, _config.DryRun, ct, mediaPath)", StringComparison.Ordinal)
+        var anlageSendeAuftrag = ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Sources/Msub/MsubEngine.cs"));
+        var anlageLookup = ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/Endpoints/MsubMovieLookup.cs"));
+        Check("angelegt wird nur im Sende-Auftrag — kein Ablauf ruft einen anlegenden Nachschlageweg (F-M513, F-M734)",
+            anlageSendeAuftrag.Contains("FindOrCreateAsync(", StringComparison.Ordinal)
+            && !anlageUploadQuelle.Contains("ResolveOrCreateForMediaAsync", StringComparison.Ordinal)
             && !anlageDownloadQuelle.Contains("ResolveOrCreateForMediaAsync", StringComparison.Ordinal)
             && anlageDownloadQuelle.Contains(
                 "ResolveForMediaAsync(Registry, mediaHash, movie, _config.DownloadDryRun, ct, mediaPath)", StringComparison.Ordinal));
 
-        Check("die Anlage hat ihre feste Logzeile, und die neue Nummer geht sofort in MsubMovieId (F-M513)",
-            anlageAufloeserQuelle.Contains("neu angelegt — Id {Id} — {Note}", StringComparison.Ordinal)
-            && anlageAufloeserQuelle.Contains(
-                "Persist(registry, mediaHash, mediaPath, angelegt.MovieId.Value)", StringComparison.Ordinal)
-            // F-M517: die Spalte wird jetzt im Store geschrieben (Hash ODER Pfad), nicht mehr hier
+        Check("die Anlage entscheidet über den Doppeleintrag, und die neue Nummer geht in MsubMovieId (F-M513)",
+            // die eine Suchrunde, die Auflösung UND Doppeleintrag-Schutz beantwortet
+            anlageLookup.Contains("MovieSubtitlesAddStatus.Refuse", StringComparison.Ordinal)
+            // „angelegt, Nummer nicht lesbar" ist ein eigener Zustand und keine erfundene Nummer
+            && anlageLookup.Contains("SourceTitleState.CreatedWithoutId", StringComparison.Ordinal)
+            // die neue Nummer schreibt der ABLAUF, in dieselbe Spalte wie die Auflösung
+            && anlageUploadQuelle.Contains("Registry.SetMsubMovieId(mediaHash, mediaPath, filmNummer)", StringComparison.Ordinal)
+            // F-M517: die Spalte wird im Store geschrieben (Hash ODER Pfad), nicht in der Seite
             && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Registry/ContentHashRegistry.cs"))
-                .Contains("media.MsubMovieId = movieId.ToString(", StringComparison.Ordinal)
-            && anlageAufloeserQuelle.Contains("MovieSubtitlesAddStatus.Refuse", StringComparison.Ordinal));
+                .Contains("media.MsubMovieId = movieId.ToString(", StringComparison.Ordinal));
 
         // ---- F-M517: die Nummer geht AUCH OHNE Medien-Hash in die Zeile, die ihr PFAD adressiert ----
         // Gemessen 16.11.2026, 04:13 auf jf-test: `[moviesubtitles] ?: 'Hotel Transylvania 2' (2015) ist

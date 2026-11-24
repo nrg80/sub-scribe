@@ -6966,12 +6966,13 @@ public sealed class UploadPipeline : IPackFiller
     /// wird diese Adresse uebersprungen und die Kette laeuft weiter. Der TRANSPORT ist der Endpunkt.
     /// </para>
     /// <para>
-    /// F-M513: FEHLT DER FILM, WIRD ER HIER ANGELEGT — und nur hier. <see cref="Api.Endpoints.MsubMovieResolver.ResolveOrCreateForMediaAsync"/>
-    /// ist die einzige Fassung, die anlegen darf, und dieser Zweig ist ihre einzige Aufrufstelle: er
-    /// wird ausschliesslich betreten, wenn der Upload-Schalter der Film-Adresse an ist (Gate der Kette,
-    /// <c>SourceAllowed</c>), und der Trockenlauf baut die Anlege-Nutzlast, ohne sie zu senden. Ob
-    /// angelegt, gefunden oder verweigert wurde, steht im <see cref="Api.Endpoints.MsubMovieResolution.Status"/>
-    /// — nicht nur im Log.
+    /// F-M734: FEHLT DER FILM, LEGT IHN DER SENDE-AUFTRAG AN — nicht diese Datei. Der Auftrag traegt die
+    /// Titel-Frage (<see cref="Sources.SourceSendRequest.EnsureTitle"/>); sucht und legt die Seite an, so
+    /// fragt sie <see cref="Api.Endpoints.MsubMovieLookup"/> und meldet neutral zurueck, was geschah
+    /// (<see cref="Sources.SourceTitleAnswer"/>). Der ABLAUF gibt die gespeicherte Nummer mit und schreibt
+    /// die neue selbst — er liest und schreibt den Bestand, die Seite kennt ihn nicht. Betreten wird der
+    /// Zweig nur, wenn der Upload-Schalter der Film-Adresse an ist (Gate der Kette, <c>SourceAllowed</c>);
+    /// ein Trockenlauf legt nichts an und entscheidet nichts.
     /// </para>
     /// <para>
     /// GESPERRT BLEIBT SIE UEBER DEN SCHALTER: der Upload-Schalter dieser Adresse ist im ungesetzten Fall
