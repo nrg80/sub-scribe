@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.40",
-        "changelog": "v12.3.8.40: the identity test now decides over the PAIR of ids, and stored season verdicts can be forgotten without triggering a re-upload.",
+        "version": "12.3.8.41",
+        "changelog": "v12.3.8.41: one season can be taken out of the store completely — counted first, then deleted.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.40-dev/Jellyfin.Plugin.SubdlSync_12.3.8.40.zip",
-        "checksum": "a918af384c01b56ea192d9178d7cf29e",
-        "timestamp": "2026-11-24T16:51:06Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.41-dev/Jellyfin.Plugin.SubdlSync_12.3.8.41.zip",
+        "checksum": "b6e59c3a9ef431fc4a91f339fe07d007",
+        "timestamp": "2026-11-24T17:19:34Z"
       }
     ]
   }
