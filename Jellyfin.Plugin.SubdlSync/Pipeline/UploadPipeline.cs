@@ -4092,7 +4092,14 @@ public sealed class UploadPipeline : IPackFiller
         // the spent allowance. Uploads draw on the same search allowance, so a trip that
         // left requests free is a rate-limit respacing (one fire after JobSpacingMinutes),
         // not a day-long stop. A spent OR unreadable allowance keeps the day-long path.
-        var read = await _api.ReadQuotaAsync(forDownload: false, ct).ConfigureAwait(false);
+        // F-M733: das Kontingent kommt aus dem Status-Vertrag — die Pipeline fragt keine Quelle direkt.
+        var kontingent = await _sources.QuotaAsync(forDownload: false, ct).ConfigureAwait(false);
+        var read = kontingent.State switch
+        {
+            Sources.SourceQuotaState.Available => QuotaRead.Available,
+            Sources.SourceQuotaState.Spent => QuotaRead.Spent,
+            _ => QuotaRead.Unreadable,
+        };
         if (read == QuotaRead.Available)
         {
             _api.ResetRateLimitFlag();
@@ -4839,14 +4846,28 @@ public sealed class UploadPipeline : IPackFiller
         }
 
         int offen = _offeneSubdlIds.Count;
-        var benutzt = new HashSet<int>();
+        var benutzt = new HashSet<string>(StringComparer.Ordinal);
         var erledigt = new HashSet<PendingSubdlId>();
         int getroffen = 0;
 
-        List<OwnSubtitleEntry>? einreichungen = null;
+        // F-M732: die Kontobuchhaltung laeuft ueber den zweiten, schmalen Vertrag (Konto-Pflege) — die
+        // Pipeline ruft den Quellen-Client nicht mehr selbst. Welche Quelle sie fragt, sagt die Registry.
+        var pflege = _sources.Maintenance.Count > 0 ? _sources.Maintenance[0] : null;
+        if (pflege == null)
+        {
+            _logger.LogWarning(
+                "[Sub Scribe] deferred upload ids: no source offers its submissions — {Open} id(s) stay open (F-M588).",
+                offen);
+            return;
+        }
+
+        IReadOnlyList<Sources.SourceSubmission>? einreichungen = null;
         try
         {
-            einreichungen = await _api.ListMySubtitlesAsync(ct, maxPages: 1).ConfigureAwait(false);
+            var antwort = await pflege
+                .ListAsync(new Sources.SourceSubmissionQuery(MaxPages: 1), ct)
+                .ConfigureAwait(false);
+            einreichungen = antwort.Ok ? antwort.Submissions : null;
         }
         catch (OperationCanceledException)
         {
@@ -4861,10 +4882,13 @@ public sealed class UploadPipeline : IPackFiller
 
         if (getroffen < offen)
         {
-            List<OwnSubtitleEntry>? veroeffentlicht = null;
+            IReadOnlyList<Sources.SourceSubmission>? veroeffentlicht = null;
             try
             {
-                veroeffentlicht = await _api.ListMyPublishedSubtitlesAsync(ct, maxPages: 2).ConfigureAwait(false);
+                var antwort = await pflege
+                    .ListAsync(new Sources.SourceSubmissionQuery(Published: true, MaxPages: 2), ct)
+                    .ConfigureAwait(false);
+                veroeffentlicht = antwort.Ok ? antwort.Submissions : null;
             }
             catch (OperationCanceledException)
             {
@@ -4890,7 +4914,21 @@ public sealed class UploadPipeline : IPackFiller
                 offen - getroffen);
         }
 
-        int Zuteilen(List<OwnSubtitleEntry>? liste, string quelle)
+        // F-M732: die Sprache kommt in unserer ISO-Schreibweise ueber die Grenze, der Schluessel der
+        // Gruppe traegt den Code der Quelle — beide Seiten werden auf ISO gebracht, dann verglichen.
+        static bool GleicheSprache(string? quelleSprache, string? unserCode)
+        {
+            if (string.IsNullOrWhiteSpace(quelleSprache) || string.IsNullOrWhiteSpace(unserCode))
+            {
+                return true;
+            }
+
+            string a = LanguageMapper.ToIso6392(quelleSprache) ?? LanguageMapper.Canonical(quelleSprache) ?? quelleSprache;
+            string b = LanguageMapper.ToIso6392(unserCode) ?? LanguageMapper.Canonical(unserCode) ?? unserCode;
+            return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+        }
+
+        int Zuteilen(IReadOnlyList<Sources.SourceSubmission>? liste, string quelle)
         {
             if (liste == null || liste.Count == 0)
             {
@@ -4904,12 +4942,12 @@ public sealed class UploadPipeline : IPackFiller
                          .GroupBy(x => (x.ImdbId, x.Season, x.Episode, x.Lang)))
             {
                 var kandidaten = liste
-                    .Where(e => !benutzt.Contains(e.HandleId) && SameLanguage(e.Language, gruppe.Key.Lang))
+                    .Where(e => !benutzt.Contains(e.Handle) && GleicheSprache(e.Language, gruppe.Key.Lang))
                     .Where(e => gruppe.Key.ImdbId is null
                                 || string.Equals(e.ImdbId, gruppe.Key.ImdbId, StringComparison.OrdinalIgnoreCase))
                     .Where(e => gruppe.Key.Season <= 0 || e.Season == gruppe.Key.Season)
                     .Where(e => gruppe.Key.Episode <= 0 || e.Episode == gruppe.Key.Episode)
-                    .OrderBy(e => e.CreatedAt)
+                    .OrderBy(e => e.CreatedAtUtc)
                     .ToList();
                 if (kandidaten.Count == 0)
                 {
@@ -4920,17 +4958,17 @@ public sealed class UploadPipeline : IPackFiller
                 {
                     // Erst der Release-Name, dann die Zeit: derselbe Griff wie in ResolveOwnUploadIdAsync,
                     // nur ohne einen Netzaufruf je Spur.
-                    var treffer = kandidaten.FirstOrDefault(e => !benutzt.Contains(e.HandleId)
+                    var treffer = kandidaten.FirstOrDefault(e => !benutzt.Contains(e.Handle)
                             && (MatchesRelease(e.Name, p.Release) || MatchesRelease(e.Name, p.FileName)))
-                        ?? kandidaten.FirstOrDefault(e => !benutzt.Contains(e.HandleId));
+                        ?? kandidaten.FirstOrDefault(e => !benutzt.Contains(e.Handle));
                     if (treffer == null)
                     {
                         break;
                     }
 
-                    benutzt.Add(treffer.HandleId);
+                    benutzt.Add(treffer.Handle);
                     erledigt.Add(p);
-                    string id = treffer.HandleId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                    string id = treffer.Handle;
 
                     // F-M413/F-M435: dieselbe Auskunft wie frueher je Upload — nur jetzt fuer alle
                     // Uploads zusammen, deshalb auf der PerItem-Ebene statt auf der Lauf-Ebene.
@@ -5976,8 +6014,8 @@ public sealed class UploadPipeline : IPackFiller
     /// </summary>
     /// <param name="source">Der Quellenschluessel.</param>
     /// <returns>Kurzform.</returns>
-    private static string PackSourceName(string source)
-        => source == PackEntity.TvSubtitlesSource ? "tvst" : source;
+    private string PackSourceName(string source)
+        => _sources.ByKey(source)?.Capabilities.Short ?? source;
 
     private List<(string ImdbId, int Season, string Lang, bool Hi)> PlanPacksFromStore(
         IReadOnlyDictionary<(string ImdbId, int Season), IReadOnlyList<int>> complete,

@@ -144,6 +144,19 @@ public sealed record SourceCapabilities
     /// <summary>Gets der Anzeigename für Log und Oberfläche.</summary>
     public string DisplayName { get; init; } = string.Empty;
 
+    /// <summary>
+    /// Gets F-M731: der Kurzname, den eine Quelle in einer Zeile führt („subdl", „tvst"). Leer heißt:
+    /// nimm <see cref="Key"/>. Bis hierher hatte der Koordinator dafür einen Sonderfall für GENAU eine
+    /// Quelle (`source == "tvsubtitles" ? "tvst" : source`, zweimal) — eine Weiche, die jede vierte
+    /// Quelle gezwungen hätte, den Koordinator anzufassen. Jetzt sagt es die Quelle selbst.
+    /// </summary>
+    public string ShortName { get; init; } = string.Empty;
+
+    /// <summary>
+    /// Gets der Kurzname mit Vorgabe: leer heißt „nimm <see cref="Key"/>".
+    /// </summary>
+    public string Short => string.IsNullOrEmpty(ShortName) ? Key : ShortName;
+
     /// <summary>Gets kann die Quelle eigene Untertitel annehmen?</summary>
     public bool CanUpload { get; init; }
 

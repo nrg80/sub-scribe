@@ -125,6 +125,7 @@ public sealed class TvstEngine : ISourceEngine
         {
             Key = SourceKey,
             DisplayName = "tvsubtitles.net",
+            ShortName = "tvst",   // F-M731: der Kurzname der Zeile je Paar (F-M648)
             CanUpload = true,
             // F-M696: tvsubtitles.net fuehrt ausschliesslich Serien.
             ServesSeries = true,

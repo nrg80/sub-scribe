@@ -9,6 +9,8 @@
 // warranty of MERCHANTABILITY or FITNESS FOR A PARTICULAR PURPOSE.
 // See the GNU General Public License for more details.
 
+using System.Threading;
+using System.Threading.Tasks;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -190,6 +192,34 @@ public sealed class SourceRegistry
 
         _ = config;
         return new SourceRegistry(Array.Empty<ISourceEngine>(), pflege, StatusEngines(context, subdlSettings));
+    }
+
+    /// <summary>
+    /// F-M733: das Kontingent, LIVE — gefragt wird die Quelle, deren Fähigkeiten <c>CanQuota</c> sagen.
+    /// Der Koordinator nennt dabei keine Quelle beim Namen; er fragt „wer führt ein Kontingent".
+    /// </summary>
+    /// <param name="forDownload">True für den Download-Zähler, false für Suche/Upload.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Der Ausgang samt Zahlen, wenn die Quelle welche nennt.</returns>
+    public async Task<SourceQuotaAnswer> QuotaAsync(bool forDownload, CancellationToken ct)
+    {
+        foreach (var engine in _engines)
+        {
+            if (!engine.Capabilities.CanQuota)
+            {
+                continue;
+            }
+
+            foreach (var status in _status)
+            {
+                if (string.Equals(status.Key, engine.Capabilities.Key, StringComparison.Ordinal))
+                {
+                    return await status.QuotaAsync(forDownload, ct).ConfigureAwait(false);
+                }
+            }
+        }
+
+        return new SourceQuotaAnswer(SourceQuotaState.Unreadable, Reason: "no source offers a quota");
     }
 
     /// <summary>

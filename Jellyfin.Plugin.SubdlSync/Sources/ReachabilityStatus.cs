@@ -57,6 +57,12 @@ public sealed class ReachabilityStatus : ISourceStatus
     public string Key { get; }
 
     /// <inheritdoc />
+    public Task<SourceQuotaAnswer> QuotaAsync(bool forDownload, CancellationToken ct)
+        => Task.FromResult(new SourceQuotaAnswer(
+            SourceQuotaState.Unreadable,
+            Reason: "this source keeps no quota"));   // F-M733: die Fähigkeit CanQuota sagt das schon vorher
+
+    /// <inheritdoc />
     public async Task<SourceStatusAnswer> StatusAsync(CancellationToken ct)
     {
         var uhr = Stopwatch.StartNew();

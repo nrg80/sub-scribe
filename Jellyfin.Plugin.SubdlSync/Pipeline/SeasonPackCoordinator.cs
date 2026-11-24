@@ -1274,7 +1274,7 @@ public sealed class SeasonPackCoordinator
     /// <summary>F-M647: die Quellen eines Slots als ein Satz für das Log.</summary>
     /// <param name="sources">Die Quellen.</param>
     /// <returns>„subdl and tvst".</returns>
-    private static string JoinSources(IReadOnlyList<string> sources)
+    private string JoinSources(IReadOnlyList<string> sources)
     {
         var names = sources.Select(ShortName).ToList();
         return names.Count switch
@@ -1288,8 +1288,8 @@ public sealed class SeasonPackCoordinator
     /// <summary>F-M648: der kurze Name einer Quelle für die eine Zeile je Paar.</summary>
     /// <param name="source">Der Quellenschlüssel.</param>
     /// <returns>„subdl" oder „tvst".</returns>
-    private static string ShortName(string source)
-        => source == PackEntity.TvSubtitlesSource ? "tvst" : source;
+    private string ShortName(string source)
+        => _sources?.ByKey(source)?.Capabilities.Short ?? source;
 
     /// <summary>F-M644: eine gemerkte Absage in Worten der Zeile (Grund, nicht Satz).</summary>
     /// <param name="reason">Der gespeicherte Grund.</param>
@@ -1396,11 +1396,23 @@ public sealed class SeasonPackCoordinator
     private async Task<string?> ResolveOwnPackIdAsync(
         IReadOnlyList<string> releases, (string ImdbId, int Season, string Lang, bool Hi) key, CancellationToken ct)
     {
-        List<OwnSubtitleEntry>? entries;
+        // F-M732: Kontobuchhaltung ueber den zweiten, schmalen Vertrag — der Koordinator ruft den
+        // Quellen-Client nicht mehr selbst; welche Quelle sie fragt, sagt die Registry.
+        var pflege = _sources?.Maintenance.Count > 0 ? _sources.Maintenance[0] : null;
+        if (pflege == null)
+        {
+            _logger.LogDebug("[Sub Scribe] no source offers its submissions — pack id unknown (F-M414).");
+            return null;
+        }
+
+        IReadOnlyList<Sources.SourceSubmission>? entries;
         try
         {
             // F-M587: nur Seite 1 — die API ignoriert page/per_page, Seite 2 wiederholt Seite 1.
-            entries = await _api.ListMySubtitlesAsync(ct, maxPages: 1).ConfigureAwait(false);
+            var antwort = await pflege
+                .ListAsync(new Sources.SourceSubmissionQuery(MaxPages: 1), ct)
+                .ConfigureAwait(false);
+            entries = antwort.Ok ? antwort.Submissions : null;
         }
         catch (OperationCanceledException)
         {
@@ -1415,8 +1427,8 @@ public sealed class SeasonPackCoordinator
         var byRelease = entries?.FirstOrDefault(e => releases.Any(r => MatchesRelease(e.Name, r)));
         byRelease ??= entries?
             .Where(e => string.Equals(e.ImdbId, key.ImdbId, StringComparison.OrdinalIgnoreCase)
-                        && e.Season == key.Season && SameLanguage(e.Language, key.Lang))
-            .OrderByDescending(e => e.CreatedAt)
+                        && e.Season == key.Season && GleicheSprache(e.Language, key.Lang))
+            .OrderByDescending(e => e.CreatedAtUtc)
             .FirstOrDefault();
 
         if (byRelease != null)
@@ -1424,16 +1436,19 @@ public sealed class SeasonPackCoordinator
             LogUtil.Normal(
                 _logger,
                 "[Sub Scribe] pack id {Id} taken from mySubtitles for {Imdb} S{Season} [{Lang}] — without it the pack could never be matched against the account's own list.",
-                byRelease.HandleId, key.ImdbId, key.Season, SeasonPack.LangTag(key.Lang, key.Hi));
-            return byRelease.HandleId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+                byRelease.Handle, key.ImdbId, key.Season, SeasonPack.LangTag(key.Lang, key.Hi));
+            return byRelease.Handle;
         }
 
         // F-M432: same fallback as the single path — once SubDL has published everything, the submission
         // list is empty and the pack id has to come from the published list, matched by its release name.
-        List<OwnSubtitleEntry>? published;
+        IReadOnlyList<Sources.SourceSubmission>? published;
         try
         {
-            published = await _api.ListMyPublishedSubtitlesAsync(ct, maxPages: 2).ConfigureAwait(false);
+            var antwort = await pflege
+                .ListAsync(new Sources.SourceSubmissionQuery(Published: true, MaxPages: 2), ct)
+                .ConfigureAwait(false);
+            published = antwort.Ok ? antwort.Submissions : null;
         }
         catch (OperationCanceledException)
         {
@@ -1456,8 +1471,31 @@ public sealed class SeasonPackCoordinator
         LogUtil.Normal(
             _logger,
             "[Sub Scribe] pack entry id {Id} taken from myPublishedSubtitles for {Imdb} S{Season} [{Lang}] (upload id {UploadId}) — the submission list knows nothing, the published list names it (F-M432/F-M435).",
-            publishedMatch.HandleId, key.ImdbId, key.Season, SeasonPack.LangTag(key.Lang, key.Hi), publishedMatch.UploadId);
-        return publishedMatch.HandleId.ToString(System.Globalization.CultureInfo.InvariantCulture);
+            publishedMatch.Handle, key.ImdbId, key.Season, SeasonPack.LangTag(key.Lang, key.Hi), publishedMatch.EntryHandle);
+        return publishedMatch.Handle;
+    }
+
+    /// <summary>
+    /// F-M732: die Grenze liefert die Sprache in unserer ISO-Schreibweise, der Schluessel traegt den Code
+    /// der Quelle — beide Seiten werden auf ISO gebracht, dann verglichen.
+    /// </summary>
+    /// <param name="quelleSprache">Die Sprache der Zeile.</param>
+    /// <param name="unserCode">Der Code aus dem Schluessel.</param>
+    /// <returns>True, wenn beide dasselbe meinen.</returns>
+    private static bool GleicheSprache(string? quelleSprache, string? unserCode)
+    {
+        if (string.IsNullOrWhiteSpace(quelleSprache) || string.IsNullOrWhiteSpace(unserCode))
+        {
+            return true;
+        }
+
+        string a = Language.LanguageMapper.ToIso6392(quelleSprache)
+                   ?? Language.LanguageMapper.Canonical(quelleSprache)
+                   ?? quelleSprache;
+        string b = Language.LanguageMapper.ToIso6392(unserCode)
+                   ?? Language.LanguageMapper.Canonical(unserCode)
+                   ?? unserCode;
+        return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary>F-M414: the entry's release name carries ours, extension and case aside.</summary>

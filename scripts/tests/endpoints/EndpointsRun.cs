@@ -1660,8 +1660,10 @@ internal static class Program
         Check("F-M588: EIN Listenabruf am Laufende traegt die Ids nach, jeden Eintrag genau einmal",
             uploadSource588.Contains("await ResolveDeferredUploadIdsAsync(runCt)", StringComparison.Ordinal)
             && uploadSource588.Contains("private async Task ResolveDeferredUploadIdsAsync(CancellationToken ct)", StringComparison.Ordinal)
-            && uploadSource588.Contains("benutzt.Add(treffer.HandleId);", StringComparison.Ordinal)
-            && uploadSource588.Contains(".OrderBy(e => e.CreatedAt)", StringComparison.Ordinal)
+            // F-M732: die Zeile kommt jetzt aus der Konto-Pflege — der Griff heisst `Handle` (neutral),
+            // die Zeit `CreatedAtUtc`. Die Aussage bleibt: jeder Eintrag wird genau einmal vergeben.
+            && uploadSource588.Contains("benutzt.Add(treffer.Handle);", StringComparison.Ordinal)
+            && uploadSource588.Contains(".OrderBy(e => e.CreatedAtUtc)", StringComparison.Ordinal)
             && uploadSource588.Contains("deferred upload ids: {Hit} of {Open} assigned with one list fetch (F-M588)", StringComparison.Ordinal));
         Check("F-M588: die Id landet ueber den Marken-Schluessel in der Zeile, und Freigegebenes kommt aus der veroeffentlichten Liste",
             // F-M670: nachgetragen wird sie an der MARKEN-Zeile (`SetDeferredUploadId`), nicht mehr an
@@ -1669,7 +1671,7 @@ internal static class Program
             registrySource588.Contains("public int SetDeferredSubdlId(", StringComparison.Ordinal)
             && registrySource588.Contains("SourceStore.SetDeferredUploadId(", StringComparison.Ordinal)
             && uploadSource588.Contains("Registry.SetDeferredSubdlId(", StringComparison.Ordinal)
-            && uploadSource588.Contains("ListMyPublishedSubtitlesAsync(ct, maxPages: 2)", StringComparison.Ordinal)
+            && uploadSource588.Contains("new Sources.SourceSubmissionQuery(Published: true, MaxPages: 2)", StringComparison.Ordinal)
             && uploadSource588.Contains("their singles stay beside a pack that replaces them", StringComparison.Ordinal));
 
         // --- F-M587: Quellen gleichzeitig, mySubtitles nur Seite 1 --------------------------------
@@ -1684,9 +1686,10 @@ internal static class Program
             && uploadSource587.Contains("await Task.Delay(Random.Shared.Next(1, versatzMs + 1), ct)", StringComparison.Ordinal)
             && uploadSource587.Contains("if (index > 0)", StringComparison.Ordinal));
         Check("F-M587: mySubtitles wird nur noch von Seite 1 gelesen, und ein Quellenfehler wird zurueckgegeben statt geworfen",
-            uploadSource587.Contains("ListMySubtitlesAsync(ct, maxPages: 1)", StringComparison.Ordinal)
-            && !uploadSource587.Contains("ListMySubtitlesAsync(ct, maxPages: 2)", StringComparison.Ordinal)
-            && packCoordSource587.Contains("ListMySubtitlesAsync(ct, maxPages: 1)", StringComparison.Ordinal)
+            // F-M732: gelesen wird ueber die Konto-Pflege; „nur Seite 1" heisst jetzt MaxPages: 1 in der Frage.
+            uploadSource587.Contains("new Sources.SourceSubmissionQuery(MaxPages: 1)", StringComparison.Ordinal)
+            && !uploadSource587.Contains("new Sources.SourceSubmissionQuery(MaxPages: 2)", StringComparison.Ordinal)
+            && packCoordSource587.Contains("new Sources.SourceSubmissionQuery(MaxPages: 1)", StringComparison.Ordinal)
             && uploadSource587.Contains("the other source is still tried.", StringComparison.Ordinal)
             // F-M609: die Ausnahme ist keine Antwort — NoVerdict.
             && uploadSource587.Contains("return UploadResult.NoVerdict(ex.Message);", StringComparison.Ordinal));

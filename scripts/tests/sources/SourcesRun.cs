@@ -1354,11 +1354,15 @@ internal static class Program
         Console.WriteLine("(j) F-M730: Selbstauskunft als dritter, schmaler Vertrag");
         Selbstauskunft(root, plugin);
 
+        Console.WriteLine();
+        Console.WriteLine("(k) F-M731/F-M732/F-M733: der Koordinator nennt keine Quelle mehr");
+        Koordinator(root, plugin);
+
         // -----------------------------------------------------------------------------------------
         // Bericht.
         // -----------------------------------------------------------------------------------------
         Console.WriteLine();
-        Console.WriteLine("sources: " + _checks + " Prüfungen (T339-T348, T392, T393, F-M682-F-M730)");
+        Console.WriteLine("sources: " + _checks + " Prüfungen (T339-T348, T392-T394, F-M682-F-M733)");
         if (Failures.Count == 0)
         {
             Console.WriteLine(">>> SOURCES OK: " + _checks + " Prüfungen bestanden");
@@ -2776,9 +2780,11 @@ internal static class Program
             .Select(m => m.Name)
             .OrderBy(n => n, StringComparer.Ordinal)
             .ToArray();
-        Check(mitglieder.SequenceEqual(new[] { "Key", "StatusAsync" })
+        // F-M733 hat das LIVE-Kontingent dazugetan: die Laufsteuerung braucht es frisch, die Kachel darf
+        // eine zwischengespeicherte Zahl zeigen.
+        Check(mitglieder.SequenceEqual(new[] { "Key", "QuotaAsync", "StatusAsync" })
               && File.ReadAllText(Path.Combine(plugin, "Sources", "MaintenanceContract.cs")).Contains("interface ISourceStatus", StringComparison.Ordinal),
-            "F-M730 (1): ISourceStatus traegt Key und StatusAsync — neben der Konto-Pflege, nicht darin",
+            "F-M730/F-M733 (1): ISourceStatus traegt Key, StatusAsync und QuotaAsync — neben der Konto-Pflege, nicht darin",
             string.Join(", ", mitglieder));
 
         // (2) JEDE Quelle kann sie beantworten — auch die ohne Konto.
@@ -2879,6 +2885,93 @@ internal static class Program
                   && !quota.Contains("Configuration.ApiKey", StringComparison.Ordinal),
                 "F-M730 (7): ausserhalb von Sources/ liest keine Datei mehr ein Quellen-Zugangsdatum aus der Konfiguration",
                 treffer.Count == 0 ? "0 Treffer" : string.Join(", ", treffer.Take(3)));
+        }
+        finally
+        {
+            try { Directory.Delete(dataDir, true); } catch (IOException) { }
+        }
+    }
+
+    /// <summary>
+    /// F-M731/F-M732/F-M733 / T394: der Koordinator arbeitet ohne Quellenwissen — Kurzname aus den
+    /// Faehigkeiten, Kontobuchhaltung und Kontingent ueber die schmalen Vertraege. Sechs Pruefungen.
+    /// </summary>
+    /// <param name="root">Repo-Wurzel.</param>
+    /// <param name="plugin">Pfad des Plugin-Projekts.</param>
+    private static void Koordinator(string root, string plugin)
+    {
+        var context = new SourceEngineContext(new HttpClient(), NullLogger.Instance, TimeProvider.System);
+        var registry = SourceRegistry.Build(context, new PluginConfiguration());
+        var kurz = registry.Engines.ToDictionary(
+            e => e.Capabilities.Key,
+            e => e.Capabilities.Short,
+            StringComparer.Ordinal);
+
+        // (1) Der Kurzname kommt aus den Faehigkeiten; leer heisst: der volle Schluessel.
+        Check(kurz.TryGetValue("tvsubtitles", out string? tvst) && tvst == "tvst"
+              && kurz.TryGetValue("subdl", out string? subdl) && subdl == "subdl"
+              && kurz.TryGetValue("moviesubtitles", out string? mst) && mst == "moviesubtitles",
+            "F-M731 (1): die Quelle sagt ihren Kurznamen selbst — subdl und moviesubtitles fallen auf den Schluessel zurueck",
+            string.Join(", ", kurz.Select(k => k.Key + "=" + k.Value)));
+
+        // (2) Und die Weiche im Koordinator ist weg.
+        string upload = File.ReadAllText(Path.Combine(plugin, "Pipeline", "UploadPipeline.cs"));
+        string pack = File.ReadAllText(Path.Combine(plugin, "Pipeline", "SeasonPackCoordinator.cs"));
+        Check(!upload.Contains("== PackEntity.TvSubtitlesSource ?", StringComparison.Ordinal)
+              && !pack.Contains("== PackEntity.TvSubtitlesSource ?", StringComparison.Ordinal)
+              && upload.Contains("Capabilities.Short", StringComparison.Ordinal)
+              && pack.Contains("Capabilities.Short", StringComparison.Ordinal),
+            "F-M731 (2): kein Quellenvergleich fuer den Kurznamen mehr — beide Dateien fragen die Faehigkeiten");
+
+        // (3) Kontobuchhaltung im Koordinator laeuft ueber den zweiten Vertrag.
+        Check(upload.Contains(".Maintenance", StringComparison.Ordinal)
+              && pack.Contains(".Maintenance", StringComparison.Ordinal)
+              && !upload.Contains("_api.ListMySubtitlesAsync", StringComparison.Ordinal)
+              && !upload.Contains("_api.ListMyPublishedSubtitlesAsync", StringComparison.Ordinal)
+              && !pack.Contains("_api.ListMySubtitlesAsync", StringComparison.Ordinal)
+              && !pack.Contains("_api.ListMyPublishedSubtitlesAsync", StringComparison.Ordinal),
+            "F-M732 (3): die Listen kommen aus der Konto-Pflege — 0 Direktaufrufe in beiden Koordinatoren");
+
+        // (4) Kontingent ueber den Status-Vertrag, und nirgends mehr direkt.
+        string dl = File.ReadAllText(Path.Combine(plugin, "Pipeline", "DownloadPipeline.cs"));
+        Check(upload.Contains(".QuotaAsync(", StringComparison.Ordinal)
+              && dl.Contains(".QuotaAsync(", StringComparison.Ordinal)
+              && !upload.Contains("_api.ReadQuotaAsync", StringComparison.Ordinal)
+              && !dl.Contains("_api.ReadQuotaAsync", StringComparison.Ordinal),
+            "F-M733 (4): das LIVE-Kontingent kommt aus dem Status-Vertrag — 0 Direktaufrufe");
+
+        // (5) Und der Weg dorthin fragt nur, wer ein Kontingent fuehrt: mit Handler gemessen.
+        const string PruefKey = "pruef-key-733";
+        string dataDir = Path.Combine(Path.GetTempPath(), "sources-quota-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(dataDir);
+        try
+        {
+            SourceSettingsFile.Save(dataDir, SubdlEngine.SourceKey, SubdlEngine.Declared, new Dictionary<string, string>
+            {
+                [SourceSwitches.UploadField] = "true",
+                [SubdlEngine.FieldApiKey] = PruefKey,
+            });
+
+            var fänger = new StatusFänger();
+            var quotaContext = new SourceEngineContext(
+                new HttpClient(fänger), NullLogger.Instance, TimeProvider.System, DataFolder: dataDir);
+            var quotaRegistry = SourceRegistry.Build(quotaContext, new PluginConfiguration());
+            var antwort = quotaRegistry.QuotaAsync(forDownload: false, CancellationToken.None).GetAwaiter().GetResult();
+            Check(antwort.State == SourceQuotaState.Unreadable
+                  && fänger.Urls.Count > 0
+                  && fänger.Urls.All(u => u.Contains("/api/v2/me", StringComparison.Ordinal))
+                  && fänger.Urls.All(u => u.Contains("api_key=" + PruefKey, StringComparison.Ordinal)),
+                "F-M733 (5): allein die Quelle mit CanQuota wird gefragt (SubDLs /me), mit dem Schluessel aus der Quelldatei",
+                antwort.State + ", " + fänger.Urls.Count + " Anfrage(n)");
+
+            // (6) Eine Quelle ohne Konto fuehrt kein Kontingent — sie sagt das, statt zu antworten.
+            var tvstQuota = SourceRegistry.BuildStatus(quotaContext, new PluginConfiguration())
+                .Status.First(s => s.Key == TvstEngine.SourceKey)
+                .QuotaAsync(forDownload: false, CancellationToken.None).GetAwaiter().GetResult();
+            Check(tvstQuota.State == SourceQuotaState.Unreadable
+                  && tvstQuota.Reason == "this source keeps no quota",
+                "F-M733 (6): tvst fuehrt kein Kontingent und sagt genau das",
+                tvstQuota.Reason ?? "?");
         }
         finally
         {

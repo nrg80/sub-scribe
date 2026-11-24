@@ -241,6 +241,38 @@ public sealed record SourceStatusAnswer(
     long LatencyMs = 0);
 
 /// <summary>
+/// F-M733: was das Kontingent einer Quelle gerade sagt, in neutralen Worten.
+/// </summary>
+public enum SourceQuotaState
+{
+    /// <summary>Es ist noch etwas frei.</summary>
+    Available,
+
+    /// <summary>Für heute erschöpft.</summary>
+    Spent,
+
+    /// <summary>Nicht lesbar — Netz, Schlüssel oder Antwort unbrauchbar.</summary>
+    Unreadable,
+}
+
+/// <summary>
+/// F-M733: die Antwort auf „wie viel ist heute noch frei". Sie trägt, was der Lauf braucht, um zwischen
+/// kurzfristiger Drosselung und Tageslimit zu unterscheiden (F-M238): den Ausgang und, wenn bekannt, die
+/// Zahlen und den Zeitpunkt des Zurücksetzens.
+/// </summary>
+/// <param name="State">Der Ausgang.</param>
+/// <param name="Limit">Die Tagesgrenze, 0 wenn unbekannt.</param>
+/// <param name="Remaining">Was heute noch geht, -1 wenn unbekannt.</param>
+/// <param name="ResetAtUtc">Wann der Zähler zurückgesetzt wird, null wenn unbekannt.</param>
+/// <param name="Reason">Der Klartext der Quelle, wenn sie einen mitgibt.</param>
+public sealed record SourceQuotaAnswer(
+    SourceQuotaState State,
+    int Limit = 0,
+    int Remaining = -1,
+    DateTimeOffset? ResetAtUtc = null,
+    string? Reason = null);
+
+/// <summary>
 /// F-M730: der DRITTE, schmale Vertrag — die Selbstauskunft einer Quelle. Betreiber-Entscheidung
 /// 24.11.2026: „Auch das könnte man in die maintenance/status engine einbringen." Bis dahin baute die
 /// Statusseite ihre Clients selbst und las die Zugangsdaten aus der Plugin-Konfiguration; jetzt fragt
@@ -263,4 +295,14 @@ public interface ISourceStatus
     /// <param name="ct">Cancellation token.</param>
     /// <returns>Die Selbstauskunft. Sie wirft nicht — ein Fehler ist ein rotes Licht.</returns>
     Task<SourceStatusAnswer> StatusAsync(CancellationToken ct);
+
+    /// <summary>
+    /// F-M733: das Kontingent, LIVE gelesen — die Laufsteuerung entscheidet damit, ob eine 429 eine
+    /// kurzfristige Drosselung oder das Tageslimit ist (F-M238), und darf dafür nicht auf eine
+    /// zwischengespeicherte Zahl aus der Selbstauskunft zurückgreifen.
+    /// </summary>
+    /// <param name="forDownload">True für den Download-Zähler, false für Suche/Upload.</param>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Der Ausgang samt Zahlen, wenn die Quelle welche nennt.</returns>
+    Task<SourceQuotaAnswer> QuotaAsync(bool forDownload, CancellationToken ct);
 }

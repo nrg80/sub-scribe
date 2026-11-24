@@ -50,6 +50,39 @@ public sealed class SubdlStatus : ISourceStatus
     public string Key => SubdlEngine.SourceKey;
 
     /// <inheritdoc />
+    public async Task<SourceQuotaAnswer> QuotaAsync(bool forDownload, CancellationToken ct)
+    {
+        QuotaRead gelesen;
+        try
+        {
+            gelesen = await _client.ReadQuotaAsync(forDownload, ct).ConfigureAwait(false);
+        }
+        catch (OperationCanceledException)
+        {
+            throw;
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug("[Sub Scribe-Q] {Source} quota: read failed: {Msg}", Key, ex.Message);
+            return new SourceQuotaAnswer(SourceQuotaState.Unreadable, Reason: ex.Message);
+        }
+
+        var zahlen = _client.Quota;
+        return new SourceQuotaAnswer(
+            gelesen switch
+            {
+                QuotaRead.Available => SourceQuotaState.Available,
+                QuotaRead.Spent => SourceQuotaState.Spent,
+                _ => SourceQuotaState.Unreadable,
+            },
+            Limit: (forDownload ? zahlen?.DownloadsLimit : zahlen?.SearchLimit) ?? 0,
+            Remaining: (forDownload ? zahlen?.DownloadsRemaining : zahlen?.SearchRemaining) ?? -1,
+            ResetAtUtc: zahlen?.ResetAtUtc is { } r
+                ? new DateTimeOffset(DateTime.SpecifyKind(r.ToUniversalTime(), DateTimeKind.Utc))
+                : null);
+    }
+
+    /// <inheritdoc />
     public async Task<SourceStatusAnswer> StatusAsync(CancellationToken ct)
     {
         var uhr = Stopwatch.StartNew();
