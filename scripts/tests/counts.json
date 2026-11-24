@@ -950,6 +950,10 @@
     "T392": {
       "suite": "sources",
       "checks": 7
+    },
+    "T393": {
+      "suite": "sources",
+      "checks": 7
     }
   }
 }

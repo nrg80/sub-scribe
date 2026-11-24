@@ -40,11 +40,16 @@ public sealed class SourceRegistry
 {
     private readonly IReadOnlyList<ISourceEngine> _engines;
     private readonly IReadOnlyList<ISourceMaintenance> _maintenance;
+    private readonly IReadOnlyList<ISourceStatus> _status;
 
-    private SourceRegistry(IReadOnlyList<ISourceEngine> engines, IReadOnlyList<ISourceMaintenance> maintenance)
+    private SourceRegistry(
+        IReadOnlyList<ISourceEngine> engines,
+        IReadOnlyList<ISourceMaintenance> maintenance,
+        IReadOnlyList<ISourceStatus> status)
     {
         _engines = engines;
         _maintenance = maintenance;
+        _status = status;
     }
 
     /// <summary>Gets die Engines in der Reihenfolge, in der gefragt wird.</summary>
@@ -56,6 +61,12 @@ public sealed class SourceRegistry
     /// einfach; der Ablauf fragt keine Quelle nach ihrem Namen.
     /// </summary>
     public IReadOnlyList<ISourceMaintenance> Maintenance => _maintenance;
+
+    /// <summary>
+    /// F-M730: die Selbstauskunft jeder Quelle — der DRITTE, schmale Vertrag. Jede Quelle kann ihn
+    /// erfüllen (auch eine ohne Konto), und die Statusseite malt nur noch, was hier zurückkommt.
+    /// </summary>
+    public IReadOnlyList<ISourceStatus> Status => _status;
 
     /// <summary>Gets die Schlüssel der Engines, in derselben Reihenfolge.</summary>
     public IReadOnlyList<string> Keys
@@ -156,7 +167,7 @@ public sealed class SourceRegistry
             new Subdl.SubdlMaintenance(context, subdlSettings),
         };
 
-        return new SourceRegistry(gehoert, pflege);
+        return new SourceRegistry(gehoert, pflege, StatusEngines(context, subdlSettings));
     }
 
     /// <summary>
@@ -178,8 +189,44 @@ public sealed class SourceRegistry
         };
 
         _ = config;
-        return new SourceRegistry(Array.Empty<ISourceEngine>(), pflege);
+        return new SourceRegistry(Array.Empty<ISourceEngine>(), pflege, StatusEngines(context, subdlSettings));
     }
+
+    /// <summary>
+    /// F-M730: baut NUR die Selbstauskunft — für die Statusseite, die keinen Lauf fährt.
+    /// </summary>
+    /// <param name="context">Was das Plugin reicht (HttpClient, Logger, Zeitgeber).</param>
+    /// <param name="config">Die Plugin-Einstellungen (heute nicht gelesen: der Zugang steht in den Quelldateien).</param>
+    /// <returns>Die Registrierung mit leerer Auftragsliste.</returns>
+    public static SourceRegistry BuildStatus(SourceEngineContext context, PluginConfiguration config)
+    {
+        ArgumentNullException.ThrowIfNull(context);
+
+        var subdlSettings = Settings(context, SubdlEngine.SourceKey, SubdlEngine.Declared);
+        _ = config;
+        return new SourceRegistry(
+            Array.Empty<ISourceEngine>(),
+            Array.Empty<ISourceMaintenance>(),
+            StatusEngines(context, subdlSettings));
+    }
+
+    /// <summary>
+    /// F-M730: die Selbstauskunft aller drei Quellen. SubDL weiß am meisten (Konto und Kontingent), die
+    /// beiden anderen beantworten nur die Frage nach der Erreichbarkeit — die einzige, die sie selbst
+    /// beantworten können.
+    /// </summary>
+    /// <param name="context">Was das Plugin reicht.</param>
+    /// <param name="subdlSettings">Die gelesenen Einstellungen von SubDL.</param>
+    /// <returns>Die Liste in Anzeigereihenfolge.</returns>
+    private static ISourceStatus[] StatusEngines(SourceEngineContext context, SourceSettings subdlSettings) =>
+        new ISourceStatus[]
+        {
+            new Subdl.SubdlStatus(context, subdlSettings),
+            new ReachabilityStatus(
+                Tvst.TvstEngine.SourceKey, "tvst", "tvst (tvsubtitles.net)", Api.TvSubtitlesClient.BaseUrl, context),
+            new ReachabilityStatus(
+                Msub.MsubEngine.SourceKey, "mst", "mst (moviesubtitles.org)", Api.MovieSubtitlesClient.BaseUrl, context),
+        };
 
     /// <summary>
     /// F-M683: die Einstellungen EINER Quelle aus ihrer eigenen Datei. Kein Zwischenspeicher: die Datei

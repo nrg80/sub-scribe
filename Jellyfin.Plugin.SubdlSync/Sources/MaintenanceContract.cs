@@ -184,3 +184,83 @@ public interface ISourceMaintenance
     /// <returns>Der Ausgang.</returns>
     Task<SourceWithdrawAnswer> WithdrawAsync(string handle, CancellationToken ct);
 }
+
+/// <summary>
+/// F-M730: wie eine Quelle dasteht — grün, gelb oder rot. Dieselbe Ampel, die die Statusseite zeigt,
+/// nur ohne dass die Seite die Quelle kennt.
+/// </summary>
+public enum SourceHealth
+{
+    /// <summary>Die Quelle antwortet und tut, was sie soll.</summary>
+    Good,
+
+    /// <summary>Die Quelle antwortet, aber eingeschränkt (Drosselung, kein Zugang hinterlegt).</summary>
+    Warn,
+
+    /// <summary>Die Quelle antwortet nicht oder weist den Zugang ab.</summary>
+    Bad,
+}
+
+/// <summary>
+/// F-M730: EIN Licht auf der Statusseite, so wie die Quelle es selbst beschreibt. Der Schlüssel ist ein
+/// Datenwert (die Seite hängt ihre Kachel daran), die Beschriftung ist Klartext, und der Klartext der
+/// Meldung kommt aus der Quelle — er nennt keine unserer Kennungen und keine Zugangsdaten.
+/// </summary>
+/// <param name="Key">Woran die Seite die Kachel hängt: <c>subdl</c>, <c>subdlLogin</c>, <c>tvst</c>, <c>mst</c>.</param>
+/// <param name="Label">Die Beschriftung im Klartext.</param>
+/// <param name="Health">Die Ampel.</param>
+/// <param name="Configured">True, wenn der nötige Zugang hinterlegt ist (sonst ist die Ampel gelb, nicht rot).</param>
+/// <param name="Message">Was die Quelle zu sagen hat, in ihren Worten.</param>
+public sealed record SourceStatusLight(
+    string Key,
+    string Label,
+    SourceHealth Health,
+    bool Configured,
+    string Message);
+
+/// <summary>
+/// F-M730: die Antwort einer Quelle auf „wie stehst du da". Sie trägt ihre Lichter und, wenn sie ein
+/// Konto führt, die Zahlen ihres Kontingents — mehr weiß die Seite nicht und mehr braucht sie nicht.
+/// </summary>
+/// <param name="Source">Der Schlüssel der Quelle.</param>
+/// <param name="Lights">Die Lichter, die diese Quelle setzt (eine Quelle darf mehrere haben).</param>
+/// <param name="SearchLimit">Tagesgrenze der Suche, 0 wenn unbekannt.</param>
+/// <param name="SearchRemaining">Was heute noch geht, -1 wenn unbekannt.</param>
+/// <param name="DownloadLimit">Tagesgrenze der Downloads, 0 wenn unbekannt.</param>
+/// <param name="DownloadRemaining">Was heute noch geht, -1 wenn unbekannt.</param>
+/// <param name="ResetAtUtc">Wann beide Zähler zurückgesetzt werden, null wenn unbekannt.</param>
+/// <param name="LatencyMs">Wie lange die Quelle für die Antwort brauchte.</param>
+public sealed record SourceStatusAnswer(
+    string Source,
+    IReadOnlyList<SourceStatusLight> Lights,
+    int SearchLimit = 0,
+    int SearchRemaining = -1,
+    int DownloadLimit = 0,
+    int DownloadRemaining = -1,
+    DateTimeOffset? ResetAtUtc = null,
+    long LatencyMs = 0);
+
+/// <summary>
+/// F-M730: der DRITTE, schmale Vertrag — die Selbstauskunft einer Quelle. Betreiber-Entscheidung
+/// 24.11.2026: „Auch das könnte man in die maintenance/status engine einbringen." Bis dahin baute die
+/// Statusseite ihre Clients selbst und las die Zugangsdaten aus der Plugin-Konfiguration; jetzt fragt
+/// sie jede Quelle, wie sie dasteht, und malt nur noch Kacheln.
+/// <para>
+/// Diesen Vertrag kann JEDE Quelle erfüllen — auch eine ohne Konto, denn „bin ich erreichbar" weiß sie
+/// selbst am besten. Deshalb steht er hier neben der Konto-Pflege (<see cref="ISourceMaintenance"/>) und
+/// nicht darin: Konto und Erreichbarkeit sind zwei verschiedene Fragen, und eine Quelle ohne Konto kann
+/// die zweite beantworten, ohne die erste zu erfinden.
+/// </para>
+/// </summary>
+public interface ISourceStatus
+{
+    /// <summary>Gets der Schlüssel dieser Quelle — derselbe Wert, den der Bestand führt.</summary>
+    string Key { get; }
+
+    /// <summary>
+    /// Wie die Quelle dasteht: ihre Lichter und, wenn sie ein Konto führt, ihr Kontingent.
+    /// </summary>
+    /// <param name="ct">Cancellation token.</param>
+    /// <returns>Die Selbstauskunft. Sie wirft nicht — ein Fehler ist ein rotes Licht.</returns>
+    Task<SourceStatusAnswer> StatusAsync(CancellationToken ct);
+}

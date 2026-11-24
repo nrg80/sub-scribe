@@ -66,12 +66,10 @@ public class PluginServiceRegistrator : IPluginServiceRegistrator
         // the identity is set once here as the client's own default rather than at a fourth site.
         http.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", ScribeApiClient.DefaultUserAgent);
 
-        var api = new ScribeApiClient(http)
-        {
-            Username = config.Username,
-            Password = config.Password,
-            ApiKey = config.ApiKey
-        };
+        // F-M729/F-M730: der Zugang steht NICHT mehr hier. Jede Engine setzt ihn aus ihrer eigenen Datei
+        // (`sources/<key>.json`), sobald sie den Client benutzt — die Plugin-Konfiguration ist für die
+        // Quellen keine zweite Ablage mehr.
+        var api = new ScribeApiClient(http);
         // The handler is built before the client, but the client owns the log channel: route the
         // retry lines back into it so a hidden retry still shows up.
         retry.Log = msg => api.RaiseLog(msg);

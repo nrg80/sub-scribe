@@ -60,22 +60,9 @@ public sealed class SubdlMaintenance : ISourceMaintenance
         _client = context.Subdl ?? new ScribeApiClient(context.Http);
         Settings = settings ?? SourceSettings.Empty(SubdlEngine.SourceKey, SubdlEngine.Declared);
 
-        // F-M729: die Datei antwortet zuerst. Steht dort ein Schlüssel, gilt er; sonst bleibt stehen,
-        // was der Client schon trägt.
-        if (Settings.IsConfigured && Settings.Secret(SubdlEngine.FieldApiKey) is { Length: > 0 } key)
-        {
-            _client.ApiKey = key;
-        }
-
-        if (Settings.Text(SubdlEngine.FieldAccount) is { Length: > 0 } account)
-        {
-            _client.Username = account;
-        }
-
-        if (Settings.Secret(SubdlEngine.FieldPassword) is { Length: > 0 } password)
-        {
-            _client.Password = password;
-        }
+        // F-M729/F-M730: die Datei antwortet. Derselbe Griff wie in der Selbstauskunft — eine Stelle,
+        // eine Wahrheit über den Zugang.
+        SubdlEngine.ApplyCredentials(_client, Settings);
     }
 
     /// <summary>Gets der Quellenschlüssel — derselbe Wert, den der Bestand führt.</summary>

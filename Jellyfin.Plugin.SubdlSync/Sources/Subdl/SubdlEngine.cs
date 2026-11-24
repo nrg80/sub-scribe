@@ -36,6 +36,35 @@ public sealed class SubdlEngine : ISourceEngine
     /// <summary>Der Schlüssel dieser Quelle — derselbe Wert, den der Bestand führt.</summary>
     public const string SourceKey = "subdl";
 
+    /// <summary>
+    /// F-M729/F-M730: setzt den Zugang aus der EIGENEN Datei dieser Quelle (<c>sources/subdl.json</c>) auf
+    /// den Client — an genau EINER Stelle, damit die vier Aufträge, die Konto-Pflege und die
+    /// Selbstauskunft nicht drei Wahrheiten über denselben Zugang bekommen. Steht in der Datei nichts,
+    /// bleibt stehen, was der Client schon trägt.
+    /// </summary>
+    /// <param name="client">Der gereichte Client.</param>
+    /// <param name="settings">Die Einstellungen dieser Quelle.</param>
+    public static void ApplyCredentials(Api.ScribeApiClient client, SourceSettings settings)
+    {
+        ArgumentNullException.ThrowIfNull(client);
+        ArgumentNullException.ThrowIfNull(settings);
+
+        if (settings.Secret(FieldApiKey) is { Length: > 0 } key)
+        {
+            client.ApiKey = key;
+        }
+
+        if (settings.Text(FieldAccount) is { Length: > 0 } account)
+        {
+            client.Username = account;
+        }
+
+        if (settings.Secret(FieldPassword) is { Length: > 0 } password)
+        {
+            client.Password = password;
+        }
+    }
+
     /// <summary>Der Griff trägt seine Herkunft: <c>n:</c> + Eintrags-Kennung.</summary>
     private const string HandlePrefix = "n:";
 
