@@ -3878,6 +3878,12 @@ internal static class Program
             && purgeQuelle.Contains("PackSeasonRows.Where(r => r.Id.StartsWith(urteilPraeferenz))", StringComparison.Ordinal),
             "Hash und Schluessel statt Spaltenraten");
         Check(
+            "F-M740: keine Abfrage auf das ungemappte FileId — Spuren und Beiwerk werden ueber ihre eigene Kennung gefunden",
+            !purgeQuelle.Contains(".FileId ==", StringComparison.Ordinal)
+            && !purgeQuelle.Contains("x.FileId", StringComparison.Ordinal)
+            && purgeQuelle.Contains("db.TrackRows.Where(t => t.TrackId.StartsWith(praefix))", StringComparison.Ordinal),
+            "TrackId traegt die Dateikennung (#yyyyy#zzz, F-M676)");
+        Check(
             "F-M740: der Reset bietet den Bereich \"season\" mit dry an, und der Store wird angehaengt",
             resetQuelle.Contains("scope.Equals(\"season\", StringComparison.OrdinalIgnoreCase)", StringComparison.Ordinal)
             && resetQuelle.Contains("Registry.SeasonPurge.Purge(imdb, season, dry)", StringComparison.Ordinal)

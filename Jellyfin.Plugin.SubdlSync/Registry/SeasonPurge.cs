@@ -12,20 +12,20 @@ namespace Jellyfin.Plugin.SubScribe.Registry;
 /// **eine Staffel vollständig aus dem Store nehmen.**
 /// <para>
 /// Warum es dafür einen eigenen Weg braucht: der Store führt zu einer Staffel nichts Einfaches, sondern
-/// ein Geflecht. Die Dateien (<see cref="FileEntity"/>) tragen Spur-Kennungen, die Spuren
-/// (<see cref="TrackEntity"/>) hängen an den Dateien, Beiwerk (<see cref="SidecarEntity"/>) hängt an den
-/// Dateien, die Marken-Matrix (<see cref="UploadEntity"/>, <see cref="ReferenceEntity"/>) hängt an
-/// Datei- ODER Spurkennungen, der Behälter (<see cref="PackEntity"/>) und sein Urteil
-/// (<see cref="PackSeasonEntity"/>) hängen am Schlüssel <c>imdb|staffel|…</c>, die Zahl der
-/// ausgestrahlten Folgen (<see cref="AiredSeasonEntity"/>) ebenso, die Sprachabsagen
-/// (<see cref="SourceRefusalEntity"/>) hängen am Medienhash, und die Titel-Erschöpfung
+/// ein Geflecht. Die Datei (<see cref="FileEntity"/>) ist der Anker; ihre Spuren und ihr Beiwerk tragen
+/// die Dateikennung **in ihrer eigenen Kennung** (<c>#yyyyy#zzz</c>, F-M676) — die Spalte <c>FileId</c>
+/// existiert nicht, sie wäre dieselbe Aussage doppelt. Die Marken-Matrix
+/// (<see cref="UploadEntity"/>, <see cref="ReferenceEntity"/>) hängt an Datei- oder Spurkennung, die
+/// Behälter-Mitgliedschaft (<see cref="PackTrackEntity"/>) am Behälter, Behälter und Staffelurteil am
+/// Schlüssel <c>imdb|staffel|…</c>, die ausgestrahlte Folgenzahl ebenso, die Sprachabsagen
+/// (<see cref="SourceRefusalEntity"/>) am Medienhash und die Titel-Erschöpfung
 /// (<see cref="TitleFailureEntity"/>) am <c>quelle|titel</c>-Schlüssel. Wer nur eine Tabelle leert,
 /// hinterlässt den Rest — und der nächste Lauf verhält sich weiter, als wäre die Staffel erledigt.
 /// </para>
 /// <para>
-/// Die Reihenfolge ist die der Abhängigkeiten: erst die Kinder (Spuren, Beiwerk, Marken), dann die
-/// Dateien. <c>dryRun</c> zählt nur und löscht nichts — die Zahlen werden vorher genannt, damit das
-/// Löschen keine Überraschung ist. Eine Sicherung der Store-Datei legt der Aufrufer an.
+/// Die Reihenfolge ist die der Abhängigkeiten: Marken und Beiwerk, dann Spuren, dann die Dateien.
+/// <c>dryRun</c> zählt nur und löscht nichts — die Zahlen werden vorher genannt, damit das Löschen keine
+/// Überraschung ist. Eine Sicherung der Store-Datei legt der Aufrufer an.
 /// </para>
 /// </summary>
 public static class SeasonPurge
@@ -63,18 +63,26 @@ public static class SeasonPurge
         }
 
         string id = imdbId.Trim().ToLowerInvariant();
-        string staffel = season.ToString(CultureInfo.InvariantCulture);
 
         lock (Gate)
         {
-            // ---- die Kinder der Dateien -------------------------------------------------------
+            // ---- der Anker: die Dateien der Staffel ------------------------------------------
             var dateien = db.FileRows.Where(f => f.ImdbId == id && f.Season == season).ToList();
             var dateiIds = dateien.Select(f => f.FileId).ToList();
-            var spuren = db.TrackRows.Where(t => dateiIds.Contains(t.FileId)).ToList();
-            var spurIds = spuren.Select(t => t.TrackId).ToList();
-            var beiwerk = db.SidecarRows.Where(s => dateiIds.Contains(s.FileId)).ToList();
 
-            // ---- die Marken-Matrix haengt an Datei- ODER Spurkennung ----------------------------
+            // ---- Spuren und Beiwerk tragen die Dateikennung in ihrer eigenen Kennung ----------
+            var spuren = new List<TrackEntity>();
+            var beiwerk = new List<SidecarEntity>();
+            foreach (string dateiId in dateiIds)
+            {
+                string praefix = dateiId;
+                spuren.AddRange(db.TrackRows.Where(t => t.TrackId.StartsWith(praefix)).ToList());
+                beiwerk.AddRange(db.SidecarRows.Where(s => s.TrackId.StartsWith(praefix)).ToList());
+            }
+
+            var spurIds = spuren.Select(t => t.TrackId).ToList();
+
+            // ---- die Marken-Matrix haengt an Datei- ODER Spurkennung --------------------------
             var hochgeladen = db.UploadRows
                 .Where(u => dateiIds.Contains(u.SubjectId) || spurIds.Contains(u.SubjectId))
                 .ToList();
@@ -82,9 +90,11 @@ public static class SeasonPurge
                 .Where(r => dateiIds.Contains(r.SubjectId) || spurIds.Contains(r.SubjectId))
                 .ToList();
 
-            // ---- Staffel-Ebene: Behaelter und Urteil ------------------------------------------
+            // ---- Staffel-Ebene: Behaelter, Mitgliedschaft, Urteil ----------------------------
             var packs = db.PackRows.Where(p => p.ImdbId == id && p.Season == season).ToList();
-            string urteilPraeferenz = id + "|" + staffel + "|";
+            var packIds = packs.Select(p => p.PackId).ToList();
+            var mitglieder = db.Set<PackTrackEntity>().Where(m => packIds.Contains(m.PackId)).ToList();
+            string urteilPraeferenz = id + "|" + season.ToString(CultureInfo.InvariantCulture) + "|";
             var urteile = db.PackSeasonRows.Where(r => r.Id.StartsWith(urteilPraeferenz)).ToList();
 
             // ---- die ausgestrahlte Folgenzahl -------------------------------------------------
@@ -118,6 +128,7 @@ public static class SeasonPurge
             zahlen["uploads"] = hochgeladen.Count;
             zahlen["references"] = verweise.Count;
             zahlen["packs"] = packs.Count;
+            zahlen["pack members"] = mitglieder.Count;
             zahlen["season verdicts"] = urteile.Count;
             zahlen["aired counts"] = ausgestrahlt.Count;
             zahlen["source refusals"] = absagen.Count;
@@ -134,6 +145,7 @@ public static class SeasonPurge
                 db.ReferenceRows.RemoveRange(verweise);
                 db.SidecarRows.RemoveRange(beiwerk);
                 db.TrackRows.RemoveRange(spuren);
+                db.Set<PackTrackEntity>().RemoveRange(mitglieder);
                 db.PackRows.RemoveRange(packs);
                 db.PackSeasonRows.RemoveRange(urteile);
                 db.AiredSeasonRows.RemoveRange(ausgestrahlt);

@@ -981,7 +981,7 @@
     },
     "T400": {
       "suite": "endpoints",
-      "checks": 5
+      "checks": 6
     }
   }
 }
