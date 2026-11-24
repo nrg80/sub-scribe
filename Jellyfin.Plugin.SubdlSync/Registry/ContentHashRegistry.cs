@@ -3148,11 +3148,18 @@ public sealed class ContentHashRegistry : IDisposable
             return (0, 0, 0, 0);
         }
 
+        // F-M723a (Befund 24.11.2026 am Prod-Lauf): der verlaessliche Schluessel ist die DATEI-Kennung,
+        // nicht der Medienhash. `TrackId = TrackIdOf(FileId, segment)` — die Zeilen haengen an der Datei.
+        // Der Medienhash einer Zeile kann von dem der Datei abweichen (die Datei wurde neu gepackt und
+        // traegt seither einen anderen OsHash), dann lief die Suche nach `MediaHash` leer: 244 Marken
+        // fielen, 0 Spur- und 0 Seitenwagen-Zeilen. Beide Schluessel werden deshalb gefragt.
         var spuren = _db.Tracks.FindAll()
-            .Where(t => string.Equals(t.MediaHash, mediaHash, StringComparison.Ordinal))
+            .Where(t => string.Equals(t.MediaHash, mediaHash, StringComparison.Ordinal)
+                        || string.Equals(t.FileId, media.FileId, StringComparison.Ordinal))
             .ToList();
         var wagen = _db.Sidecars.FindAll()
-            .Where(w => string.Equals(w.MediaHash, mediaHash, StringComparison.Ordinal))
+            .Where(w => string.Equals(w.MediaHash, mediaHash, StringComparison.Ordinal)
+                        || string.Equals(w.FileId, media.FileId, StringComparison.Ordinal))
             .ToList();
 
         // Die Subjekte zuerst: die Marken haengen an Spur-, Seitenwagen- und Datei-Kennung. Waeren die

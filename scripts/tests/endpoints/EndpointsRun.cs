@@ -3620,6 +3620,10 @@ internal static class Program
             && registryDatei.Contains("public (int Tracks, int Sidecars, int Stamps, int Marks) ForgetMedia(", StringComparison.Ordinal)
             // alle Spuren, nicht nur die abgelehnten
             && registryDatei.Contains("var spuren = _db.Tracks.FindAll()", StringComparison.Ordinal)
+            // F-M723a: die Datei-Kennung ist der verlaessliche Schluessel — der Medienhash einer Zeile
+            // kann von dem der Datei abweichen (neu gepackt), dann lief die Suche leer.
+            && registryDatei.Contains("|| string.Equals(t.FileId, media.FileId, StringComparison.Ordinal))", StringComparison.Ordinal)
+            && registryDatei.Contains("|| string.Equals(w.FileId, media.FileId, StringComparison.Ordinal))", StringComparison.Ordinal)
             && registryDatei.Contains("_db.Sidecars.Delete(wagenZeile.TrackId)", StringComparison.Ordinal)
             && registryDatei.Contains("marken += SourceStore.ForgetSubject(_db, subjekt);", StringComparison.Ordinal)
             // die Marken zuerst, sonst findet sie ihr Subjekt nicht mehr
