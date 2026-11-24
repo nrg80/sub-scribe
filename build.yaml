@@ -10,7 +10,7 @@
 # See the GNU General Public License for more details.
 name: "Sub Scribe"
 guid: "7d1c5a2e-3f4b-4d6e-9a8b-5c2f8e1d4a9b"
-version: "12.3.8.38"
+version: "12.3.8.39"
 targetAbi: "12.1.0.0"
 framework: "net10.0"
 owner: "nrg80"
@@ -26,6 +26,7 @@ artifacts:
 - "Jellyfin.Plugin.SubdlSync.dll"
 - "LanguageDetection.dll"
 changelog: >
+  v12.3.8.39: a season is judged under the series it really is — a name-alike in the library no longer costs a whole season its pack.
   v12.3.8.38: every incoming name (file, archive entry, source list entry) is now prepared by one shared function, so a styled name no longer looks like a different episode.
   v12.3.8.37: which languages a source accepts is now answered by the source itself — the tables moved out of the HTTP clients, so the run never has to name a client to ask.
   v12.3.8.36: a film or series is created only while a subtitle is uploaded — the separate lookup paths that could create one while merely searching are gone.
