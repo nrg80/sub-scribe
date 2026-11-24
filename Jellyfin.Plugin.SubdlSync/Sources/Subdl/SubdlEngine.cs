@@ -250,7 +250,7 @@ public sealed class SubdlEngine : ISourceEngine
             Pace = new SourcePace(UploadsPerHour: 500, MinCallPauseSeconds: 0),
 
             // F-M10/F-M557: die Sprachbrücke dieser Quelle steht in LanguageMapper, nicht hier.
-            LanguageCode = LanguageMapper.MapToSubdl,
+            Language = SourceLanguages.Voice(SourceKey),
         };
     }
 

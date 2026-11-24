@@ -48,6 +48,7 @@ Dieses Dokument legt fest, **welcher Vertrag welche Frage beantwortet** und **wa
 4. **Der Quellenname ist ein Datenwert, keine Weiche.** Er steht in der Ablage, in der Herkunftszeile und auf der Kachel; es wird nicht nach ihm entschieden.
 5. **Fähigkeiten statt Namensvergleiche.** Ob eine Quelle hochladen, melden, Behälter annehmen, einen Titel anlegen oder ein Kontingent führen kann, sagt sie über ihre Fähigkeiten — nicht ihr Name (F-M682, F-M734).
 6. **Ein Vertrag ist eine Zusage, keine Pflicht zur Vollständigkeit.** Wer eine Aufgabe nicht kann, erfüllt den Vertrag nicht; er tut nicht so, als könnte er sie.
+7. **Wer welche Sprache annimmt, sagt die Quelle** — in beide Richtungen und mit der Angabe, ob sie eine geschlossene Liste führt. „Ich führe keine Liste" ist eine eigene Auskunft und **nicht** dasselbe wie eine leere Liste, die „ich kann nichts" hieße (F-M735).
 
 ## 6. Wer in den Bestand schreibt
 
@@ -76,6 +77,7 @@ Dieses Dokument legt fest, **welcher Vertrag welche Frage beantwortet** und **wa
 - **Diagnose am Konto** (seitenweise Zählung der eigenen Einsendungen) benutzt die Kontobuchung mit einer Seitentiefe von eins — sie erfindet keinen eigenen Weg (F-M729).
 - **Statusampen** benutzen die Selbstauskunft; sie bauen keine eigene Verbindung zur Quelle (F-M730).
 - **Der Kurzname einer Quelle** ist eine Fähigkeit, keine Bedingung im Ablauf (F-M731).
+- **Die Sprachtafel einer Seite** ist ein Datenwert der Quelle, keine Angelegenheit des Abrufs; die eine neutrale Schreibweise des Bestandes bleibt über den Quellen (F-M557, F-M735).
 
 ## 9. Prüfungen, die die Grenze halten
 
@@ -84,3 +86,4 @@ Dieses Dokument legt fest, **welcher Vertrag welche Frage beantwortet** und **wa
 - **T393:** der Selbstauskunftsvertrag trägt genau seine Aufgaben, jede Quelle erfüllt ihn, und ausserhalb der Quelle liest keine Datei ein Zugangsdatum aus der allgemeinen Konfiguration.
 - **T394:** der Ablauf nennt keine Quelle mehr — Kurzname aus den Fähigkeiten, Listen aus der Kontobuchung, Kontingent aus der Selbstauskunft.
 - **T395:** der Sende-Auftrag trägt die Titel-Frage; die beiden Seiten, die Titel anlegen, tun es ohne unseren Bestand, und im Trockenlauf ohne Urteil.
+- **T396:** jede Quelle gibt ihre Sprachauskunft her — die beiden Seiten mit geschlossener Liste, die dritte offen; der Rückweg liefert die Schreibweise des Bestandes, und der Ablauf fragt keinen Client mehr nach seiner Tafel.

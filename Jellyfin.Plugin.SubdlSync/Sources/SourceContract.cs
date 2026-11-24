@@ -128,6 +128,23 @@ public sealed record SourceEngineContext(
     string? DataFolder = null);
 
 /// <summary>
+/// F-M735: die Sprachauskunft einer Quelle. Sie beantwortet drei Fragen, die vorher über die statischen
+/// Tafeln der HTTP-Clients liefen: wie schreibe ich ein ISO-Kennzeichen auf DIESER Seite, was bedeutet ein
+/// Kennzeichen DIESER Seite im Bestand (F-M557), und führt die Seite überhaupt eine geschlossene Liste.
+/// <para>
+/// <see cref="Supported"/> ist <c>null</c>, wenn die Quelle keine Liste führt (SubDL nimmt, was kommt) —
+/// das ist etwas anderes als eine leere Liste, die „ich kann nichts" heißen würde.
+/// </para>
+/// </summary>
+/// <param name="ToSite">ISO-Kennzeichen → Schreibweise der Seite.</param>
+/// <param name="FromSite">Schreibweise der Seite → ISO-Kennzeichen des Bestandes.</param>
+/// <param name="Supported">Die geschlossene Liste, oder null für „führt keine".</param>
+public sealed record SourceLanguageVoice(
+    Func<string?, string?> ToSite,
+    Func<string?, string?> FromSite,
+    IReadOnlyList<string>? Supported);
+
+/// <summary>
 /// F-M682: was eine Quelle kann — erfragt, nicht am Namen abgelesen.
 /// <para>
 /// Die Werte beschreiben die Engine SO, WIE DAS PLUGIN SIE FÜR DIESEN LAUF VERDRAHTET HAT: die
@@ -223,11 +240,10 @@ public sealed record SourceCapabilities
     public SourcePace Pace { get; init; } = new();
 
     /// <summary>
-    /// Gets die Abbildung unserer ISO-639-2-Kennzeichen (<c>DEU</c>) auf den Code DIESER Quelle
-    /// (<c>DE</c>, <c>de</c>) — als Abfrage über die eigene Sprachbrücke der Quelle, damit es keine
-    /// zweite Liste gibt, die auseinanderlaufen kann.
+    /// F-M735: die Sprachauskunft DIESER Quelle — in beide Richtungen und mit der Angabe, ob sie eine
+    /// geschlossene Liste führt. Der Ablauf fragt hier; er nennt keinen Client und keine Tafel.
     /// </summary>
-    public Func<string, string?> LanguageCode { get; init; } = _ => null;
+    public SourceLanguageVoice? Language { get; init; }
 
     /// <summary>
     /// F-M682: kann diese Engine einen Auftrag dieser Art überhaupt beantworten? Eine fehlende

@@ -126,7 +126,7 @@ public sealed class MsubEngine : ISourceEngine
             SearchesByName = true,
             SearchesByHash = false,
             Pace = new SourcePace(),
-            LanguageCode = MovieSubtitlesClient.SiteLanguage,
+            Language = SourceLanguages.Voice(SourceKey),
         };
     }
 

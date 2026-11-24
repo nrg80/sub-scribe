@@ -208,12 +208,12 @@ internal static class Program
             nichtNachschlagbar.Count == 0 ? "3 von 3, unbekannt → null" : "fehlt: " + string.Join(", ", nichtNachschlagbar));
 
         var sprachlos = mitTvst.Engines
-            .Where(e => e.Capabilities.LanguageCode("DEU") is not { Length: > 0 })
+            .Where(e => e.Capabilities.Language?.ToSite("DEU") is not { Length: > 0 })
             .Select(e => e.Capabilities.Key)
             .ToList();
         Check(sprachlos.Count == 0,
             "F-M682: jede Engine bildet unsere ISO-Sprachen auf ihre Codes ab (DEU → Code der Quelle)",
-            string.Join(", ", mitTvst.Engines.Select(e => e.Capabilities.Key + "→" + e.Capabilities.LanguageCode("DEU"))));
+            string.Join(", ", mitTvst.Engines.Select(e => e.Capabilities.Key + "→" + (e.Capabilities.Language?.ToSite("DEU") ?? "<null>"))));
 
         var subdlCap = mitTvst.ByKey("subdl")!.Capabilities;
         var tvstCap = mitTvst.ByKey("tvsubtitles")!.Capabilities;
@@ -1367,10 +1367,22 @@ internal static class Program
         TitelAnlage(root, plugin);
 
         // -----------------------------------------------------------------------------------------
+        // (m) F-M735: die Sprachauskunft der Quelle.
+        //
+        //     Die Tafeln lagen als statische Daten in den HTTP-Clients — dort, wo sich nichts aendert,
+        //     wenn die SEITE sich aendert. Jetzt gibt jede Quelle ihre Auskunft selbst her: wie ein
+        //     ISO-Kennzeichen auf ihrer Seite heisst, was ein Kuerzel ihrer Seite im Bestand bedeutet
+        //     (F-M557), und ob sie ueberhaupt eine geschlossene Liste fuehrt.
+        // -----------------------------------------------------------------------------------------
+        Console.WriteLine();
+        Console.WriteLine("(m) F-M735: die Sprachauskunft der Quelle");
+        Sprachauskunft(root, plugin);
+
+        // -----------------------------------------------------------------------------------------
         // Bericht.
         // -----------------------------------------------------------------------------------------
         Console.WriteLine();
-        Console.WriteLine("sources: " + _checks + " Prüfungen (T339-T348, T392-T395, F-M682-F-M734)");
+        Console.WriteLine("sources: " + _checks + " Prüfungen (T339-T348, T392-T396, F-M682-F-M735)");
         if (Failures.Count == 0)
         {
             Console.WriteLine(">>> SOURCES OK: " + _checks + " Prüfungen bestanden");
@@ -3101,6 +3113,75 @@ internal static class Program
                 Content = new StringContent("{\"status\":false,\"error\":\"probe\"}", System.Text.Encoding.UTF8, "application/json"),
             };
         }
+    }
+
+    /// <summary>
+    /// F-M735: die Sprachauskunft der Quelle — beide Richtungen, geschlossene Liste oder offen, und der
+    /// Ablauf fragt die Quelle statt den Client beim Namen.
+    /// </summary>
+    /// <param name="root">Wurzel des Baums.</param>
+    /// <param name="plugin">Das Plugin-Verzeichnis.</param>
+    private static void Sprachauskunft(string root, string plugin)
+    {
+        string[] keys = { "subdl", "tvsubtitles", "moviesubtitles" };
+        var ohneAuskunft = keys.Where(k => SourceLanguages.Voice(k) is null).ToList();
+        Check(ohneAuskunft.Count == 0,
+            "F-M735: jede Quelle gibt eine Sprachauskunft her (zwei Richtungen und die Liste)",
+            ohneAuskunft.Count == 0
+                ? string.Join(", ", keys.Select(k =>
+                    k + ":"
+                    + SourceLanguages.Voice(k)!.ToSite("DEU")
+                    + "/"
+                    + (SourceLanguages.Voice(k)!.Supported is null ? "offen" : SourceLanguages.Voice(k)!.Supported!.Count.ToString(System.Globalization.CultureInfo.InvariantCulture))))
+                : "fehlt: " + string.Join(", ", ohneAuskunft));
+
+        // Die beiden Seiten fuehren eine geschlossene Liste, SubDL keine — und „keine Liste" ist NICHT
+        // dasselbe wie „leere Liste": die leere wuerde jede Sendung schliessen.
+        var tvst = SourceLanguages.Voice("tvsubtitles")!;
+        var mst = SourceLanguages.Voice("moviesubtitles")!;
+        var subdl = SourceLanguages.Voice("subdl")!;
+        Check(tvst.Supported is { Count: > 0 } && mst.Supported is { Count: > 0 } && subdl.Supported is null,
+            "F-M735: die beiden Seiten fuehren eine geschlossene Liste, SubDL keine (null, nicht leer)",
+            "tvst=" + (tvst.Supported?.Count.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "null")
+            + " mst=" + (mst.Supported?.Count.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "null")
+            + " subdl=" + (subdl.Supported?.Count.ToString(System.Globalization.CultureInfo.InvariantCulture) ?? "offen"));
+
+        // Eine Sprache, die die Seite nicht fuehrt, wird verneint; die offene Quelle verneint nie.
+        Check(!SourceLanguages.NimmtSprache("tvsubtitles", "HIN")
+              && !SourceLanguages.NimmtSprache("moviesubtitles", "HIN")
+              && SourceLanguages.NimmtSprache("tvsubtitles", "DEU")
+              && SourceLanguages.NimmtSprache("subdl", "HIN")
+              && SourceLanguages.NimmtSprache("gibtesnicht", "HIN"),
+            "F-M735: nimmt diese Quelle diese Sprache an? Die Seiten sagen bei Unbekanntem nein, die offene Quelle und ein unbekannter Schluessel nie",
+            "tvst(HIN)=" + SourceLanguages.NimmtSprache("tvsubtitles", "HIN")
+            + " tvst(DEU)=" + SourceLanguages.NimmtSprache("tvsubtitles", "DEU")
+            + " subdl(HIN)=" + SourceLanguages.NimmtSprache("subdl", "HIN"));
+
+        // Die Gegenrichtung liefert die Schreibweise des Bestandes (F-M557) — und raet nicht.
+        Check(tvst.FromSite("gr") == "GRE"
+              && tvst.FromSite("cz") == "CZE"
+              && tvst.FromSite("jp") == "JPN"
+              && tvst.FromSite("gibtsnicht") is null
+              && tvst.ToSite("GRE") == "gr",
+            "F-M735: der Rueckweg liefert das ISO-Kennzeichen des Bestandes, Unbekanntes ergibt null",
+            "gr→" + (tvst.FromSite("gr") ?? "<null>")
+            + " cz→" + (tvst.FromSite("cz") ?? "<null>")
+            + " GRE→" + (tvst.ToSite("GRE") ?? "<null>")
+            + " unbekannt→" + (tvst.FromSite("gibtsnicht") ?? "<null>"));
+
+        // Der Ablauf nennt keinen Client mehr, wenn er eine Sprache pruefen will.
+        var ablauf = Directory.GetFiles(Path.Combine(plugin, "Pipeline"), "*.cs", SearchOption.AllDirectories)
+            .Concat(Directory.GetFiles(Path.Combine(plugin, "ScheduledTasks"), "*.cs", SearchOption.AllDirectories))
+            .ToList();
+        var clientTreffer = ablauf
+            .Where(f => File.ReadAllText(f).Contains("Client.SiteLanguage(", StringComparison.Ordinal))
+            .Select(Path.GetFileName)
+            .ToList();
+        Check(clientTreffer.Count == 0,
+            "F-M735: der Ablauf fragt die Sprachauskunft der Quelle, nicht die Tafel eines Clients",
+            clientTreffer.Count == 0
+                ? "0 Treffer in " + ablauf.Count + " Datei(en)"
+                : string.Join(", ", clientTreffer));
     }
 
     /// <summary>F-M693: eine Quelldatei mit genau diesen Feldern schreiben (Pruefstand).</summary>

@@ -7003,7 +7003,8 @@ public sealed class UploadPipeline : IPackFiller
         }
 
         // F-M538: dasselbe fuer die Film-Adresse — sie hat ihr eigenes Sprachset, nicht das der Serienseite.
-        if (Api.MovieSubtitlesClient.SiteLanguage(lang) is null)
+        if (!Sources.SourceLanguages.NimmtSprache(
+                Api.Endpoints.SourceOrder.KeyOf(Configuration.SubtitleProvider.MovieSubtitles), lang))
         {
             LogUtil.PerItem(_config.LogMode, _logger,
                 "[moviesubtitles] {Name} [{Lang}] — skipped: the site has no such language (F-M538)",
@@ -7357,7 +7358,8 @@ public sealed class UploadPipeline : IPackFiller
 
         // F-M538: die Seite fuehrt diese Sprache nicht — senden waere eine Ablehnung, die niemand
         // erklaeren kann.
-        if (Api.TvSubtitlesClient.SiteLanguage(plan.Lang) is null)
+        if (!Sources.SourceLanguages.NimmtSprache(
+                Api.Endpoints.SourceOrder.KeyOf(Configuration.SubtitleProvider.TvSubtitles), plan.Lang))
         {
             return new Sources.SourcePackRequest(null, "second-source-no-language");
         }
@@ -7448,7 +7450,8 @@ public sealed class UploadPipeline : IPackFiller
         // Fehlschlag gebucht. Vorher antwortete der Endpunkt „nicht angenommen", die Kette machte
         // daraus ein Failed, und das Log meldete fuer dasselbe Paar in jedem Lauf
         // „UPLOAD FAILED …: tvsubtitles.net has no language 'HR'".
-        if (Api.TvSubtitlesClient.SiteLanguage(lang) is null)
+        if (!Sources.SourceLanguages.NimmtSprache(
+                Api.Endpoints.SourceOrder.KeyOf(Configuration.SubtitleProvider.TvSubtitles), lang))
         {
             LogUtil.PerItem(_config.LogMode, _logger,
                 "[tvsubtitles] {Name} [{Lang}] — skipped: the site has no such language (F-M538)",
@@ -7782,18 +7785,26 @@ public sealed class UploadPipeline : IPackFiller
     /// <param name="language">Sprache des Paares.</param>
     /// <param name="isSeries">Wahr für eine Serie, falsch für einen Film, null wenn unbekannt.</param>
     /// <returns>True, wenn die Quelle diese Sprache annehmen kann.</returns>
+    /// <remarks>
+    /// F-M735: die Sprachfrage geht an die QUELLE (über ihre Auskunft), nicht mehr an den HTTP-Client
+    /// beim Namen. SubDL führt keine Liste und ist damit von selbst offen; die beiden Seiten führen je
+    /// eine geschlossene und sagen bei Unbekanntem nein.
+    /// </remarks>
     public static bool NimmtSprache(Configuration.SubtitleProvider quelle, string? language, bool? isSeries) => quelle switch
     {
-        // SubDL fuehrt praktisch jede Sprache; das Plugin hat fuer diese Adresse keine Tabelle.
-        Configuration.SubtitleProvider.Subdl => true,
         // F-M509: die Serienseite ist nur fuer Serien zustaendig, die Filmseite nur fuer Filme. Ist die
         // Medienart unbekannt, zaehlt jede Seite, die die Sprache fuehrt — das kann eine Quelle hoechstens
         // WEITER als offen zaehlen, nie eine faelschlich schliessen.
         Configuration.SubtitleProvider.TvSubtitles =>
-            Api.TvSubtitlesClient.SiteLanguage(language) is not null && isSeries != false,
+            Sources.SourceLanguages.NimmtSprache(
+                Api.Endpoints.SourceOrder.KeyOf(Configuration.SubtitleProvider.TvSubtitles), language)
+            && isSeries != false,
         Configuration.SubtitleProvider.MovieSubtitles =>
-            Api.MovieSubtitlesClient.SiteLanguage(language) is not null && isSeries != true,
-        _ => true,
+            Sources.SourceLanguages.NimmtSprache(
+                Api.Endpoints.SourceOrder.KeyOf(Configuration.SubtitleProvider.MovieSubtitles), language)
+            && isSeries != true,
+        _ => Sources.SourceLanguages.NimmtSprache(
+            Api.Endpoints.SourceOrder.KeyOf(quelle), language),
     };
 
     private bool AnyUploadSourceStillWants(
@@ -7813,7 +7824,8 @@ public sealed class UploadPipeline : IPackFiller
         // 700 solcher Zeilen an 43 Dateien, bei Invasion S01E03/04/08 je 38 Spuren (ET, HR, ES …) — ganze
         // Dateien „erledigt" ohne eine einzige Sendung; 5.114 solche Zeilen im Store.
         // Queue und Sprachset gehoeren in die KETTE: die Kette prueft beides selbst, bevor sie eine Quelle
-        // antreten laesst (QueuedForSource im Einreiher, SiteLanguage in SendToTv/ SendToMsub, F-M538).
+        // antreten laesst (QueuedForSource im Einreiher, die Sprachauskunft der Quelle in SendToTv/
+        // SendToMsub, F-M538).
         // F-M721: auch hier keine Aufzaehlung — die Medienart und die Sprache fragt das Tor je Engine,
         // die Ziele kommen aus der Registry.
         && Api.Endpoints.UploadGate.Decide(

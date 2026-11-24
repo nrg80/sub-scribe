@@ -971,9 +971,9 @@ public sealed class ScribeSeeder
                     }
 
                     string? mapped = LanguageMapper.MapToSubdl(s.Language) ?? s.Language;
-                    return quelle == Configuration.SubtitleProvider.TvSubtitles
-                        ? Api.TvSubtitlesClient.SiteLanguage(mapped) is not null
-                        : Api.MovieSubtitlesClient.SiteLanguage(mapped) is not null;
+                    // F-M735: die Sprachauskunft der QUELLE, nicht die Tafel ihres HTTP-Clients.
+                    return Sources.SourceLanguages.NimmtSprache(
+                        Api.Endpoints.SourceOrder.KeyOf(quelle), mapped);
                 });
                 if (!anyUntagged && !anyCarried)
                 {

@@ -152,7 +152,7 @@ public sealed class TvstEngine : ISourceEngine
 
             // F-M502: die Brücke von ISO auf die Kürzel der Seite steht im Client — hier wird sie nur
             // durchgereicht, damit es keine zweite Tabelle gibt.
-            LanguageCode = TvSubtitlesClient.SiteLanguage,
+            Language = SourceLanguages.Voice(SourceKey),
         };
     }
 

@@ -1711,8 +1711,12 @@ internal static class Program
         var entitiesSource586 = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/Entities.cs"));
         Check("F-M586: NimmtSprache ist die eine Stelle fuer Sprache x Quelle, und die Quelle ohne Sprache faellt aus der offenen Liste",
             uploadSource586.Contains("public static bool NimmtSprache(Configuration.SubtitleProvider quelle, string? language, bool? isSeries)", StringComparison.Ordinal)
-            && uploadSource586.Contains("Api.TvSubtitlesClient.SiteLanguage(language) is not null && isSeries != false", StringComparison.Ordinal)
-            && uploadSource586.Contains("Api.MovieSubtitlesClient.SiteLanguage(language) is not null && isSeries != true", StringComparison.Ordinal)
+            && uploadSource586.Contains(
+                "Api.Endpoints.SourceOrder.KeyOf(Configuration.SubtitleProvider.TvSubtitles), language)", StringComparison.Ordinal)
+            && uploadSource586.Contains(
+                "Api.Endpoints.SourceOrder.KeyOf(Configuration.SubtitleProvider.MovieSubtitles), language)", StringComparison.Ordinal)
+            && uploadSource586.Contains("&& isSeries != false,", StringComparison.Ordinal)
+            && uploadSource586.Contains("&& isSeries != true,", StringComparison.Ordinal)
             && uploadSource586.Contains("bool nurSpracheAusgeschlossen = quellen.Count < alleQuellen.Count", StringComparison.Ordinal)
             && uploadSource586.Contains("alsoTakes: key => Api.Endpoints.Provenance.Provider(key) is { } quelle", StringComparison.Ordinal)
             && uploadSource586.Contains("&& NimmtSprache(quelle, language, isSeries)", StringComparison.Ordinal));
@@ -2246,9 +2250,15 @@ internal static class Program
                 // Operator-Anweisung 16.11.2026: „Sprachen die tvst nicht unterstuetzt, nicht mehr in
                 // die Kette fuer tvst. Fuer subdl gilt ein anderes sprachset."
                 // F-M581: die Sprachtafel wird in der KETTE geprueft, nicht mehr in der Paar-Frage.
+                // F-M735: die Kette fragt nicht mehr den HTTP-Client beim Namen, sondern die QUELLE über
+                // ihre Sprachauskunft — je Adresse ihre eigene, weil der Schlüssel aus dem Anbieter kommt.
                 Check("F-M538: both site families gate the chain by their OWN language table",
-                    uploadSource.Contains("if (Api.TvSubtitlesClient.SiteLanguage(lang) is null)", StringComparison.Ordinal)
-                    && uploadSource.Contains("if (Api.MovieSubtitlesClient.SiteLanguage(lang) is null)", StringComparison.Ordinal));
+                    uploadSource.Contains("Sources.SourceLanguages.NimmtSprache(", StringComparison.Ordinal)
+                    && uploadSource.Contains("SourceOrder.KeyOf(Configuration.SubtitleProvider.TvSubtitles), plan.Lang", StringComparison.Ordinal)
+                    && uploadSource.Contains("SourceOrder.KeyOf(Configuration.SubtitleProvider.TvSubtitles), lang", StringComparison.Ordinal)
+                    && uploadSource.Contains("SourceOrder.KeyOf(Configuration.SubtitleProvider.MovieSubtitles), lang", StringComparison.Ordinal)
+                    && !uploadSource.Contains("Api.TvSubtitlesClient.SiteLanguage(", StringComparison.Ordinal)
+                    && !uploadSource.Contains("Api.MovieSubtitlesClient.SiteLanguage(", StringComparison.Ordinal));
                 Check("F-M538: a language the site does not carry is a skip with its own reason, not a failure",
                     uploadSource.Contains("return UploadResult.Skipped(\"second-source-no-language\")", StringComparison.Ordinal)
                     && uploadSource.Contains("the site has no such language (F-M538)", StringComparison.Ordinal));
@@ -2432,8 +2442,10 @@ internal static class Program
                     && seederSource.Contains("registry.CountKnownPairsFor(mediaHash, quelle)", StringComparison.Ordinal)
                     && seederSource.Contains("UploadTodoFor(item, mediaPath, config, quelle,", StringComparison.Ordinal));
                 Check("F-M540: the queue asks whether the site carries the language at all",
-                    seederSource.Contains("Api.TvSubtitlesClient.SiteLanguage(mapped) is not null", StringComparison.Ordinal)
-                    && seederSource.Contains("Api.MovieSubtitlesClient.SiteLanguage(mapped) is not null", StringComparison.Ordinal)
+                    seederSource.Contains("Sources.SourceLanguages.NimmtSprache(", StringComparison.Ordinal)
+                    && seederSource.Contains("SourceOrder.KeyOf(quelle), mapped", StringComparison.Ordinal)
+                    && !seederSource.Contains("Api.TvSubtitlesClient.SiteLanguage(", StringComparison.Ordinal)
+                    && !seederSource.Contains("Api.MovieSubtitlesClient.SiteLanguage(", StringComparison.Ordinal)
                     && seederSource.Contains("return false; // diese Seite führt keine dieser Sprachen", StringComparison.Ordinal));
                 Check("F-M540: an untagged stream keeps the item queued",
                     seederSource.Contains("bool anyUntagged = textStreams.Any(s => string.IsNullOrWhiteSpace(s.Language));", StringComparison.Ordinal)
