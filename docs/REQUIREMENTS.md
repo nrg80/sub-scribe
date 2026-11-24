@@ -1,7 +1,7 @@
 # Requirements Specification — Jellyfin Plugin "Sub Scribe" (Upload + Download)
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.27.
+**Status:** Implementation — v12.3.8.28.
 
 **Die Begründungen (warum eine Regel gilt, Messungen, Vorfälle) stehen nicht hier, sondern lokal in der Methodik-Ablage, nach Kapiteln sortiert und mit der Requirement-Nummer
 markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test — sonst nichts.**
@@ -33,7 +33,7 @@ markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
 - [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 46 requirements
-- [14. Data Model and Persistence](#14-data-model-and-persistence) — 76 requirements
+- [14. Data Model and Persistence](#14-data-model-and-persistence) — 77 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 51 requirements
 - [16. Non-Goals](#16-non-goals)
 - [17. Non-Functional Requirements](#17-non-functional-requirements)
@@ -2018,6 +2018,8 @@ Grund (gemessen 18.11.2026): die Queue entsteht nur aus offenen Stempeln (F-M557
 
 **F-M722 [U]:** **Die Herkunftsfrage hat kein Ziel — sie wird einmal gestellt.** Präzisierung des Betreibers 23.11.2026: „Ist dieses sub/sidecar jemals von uns von irgendeiner 1...10 Quellen geladen worden, dann kein upload", und zu F-M721: „Genau das klingt falsch." Berechtigt: `Provenance.MayUploadTo(origin, target)` nahm einen Quellenschlüssel entgegen und warf ihn mit `_ = target;` weg — eine Zielabhängigkeit, die es nicht gibt, und damit eine Suche nach einer Quelle, die niemand benutzt. Neu: **`Provenance.MayUpload(string? origin)`** ohne Zielparameter; `UploadGate.Decide` fragt sie **einmal** vor der Schleife (`herkunftErlaubt`), und je Ziel bleiben nur zwei Fragen — steht der Schalter offen (`SwitchedOn`), und hat diese Quelle den Text an dieser Position schon (`AlreadyThere`, F-M669/F-M488). Die Herkunft selbst ist ein **dauerhafter Beleg**: sie wird beim Herunterladen an `track.Origin` und `sidecar.Origin` geschrieben (F-M486/F-M493, vier Schreibstellen im Download) und weder vom Refresh noch von einem neuen Urteil gelöscht; sie hängt am **Inhalt** (Hash), also sperrt sie jedes spätere Hochladen desselben Textes, unabhängig davon, wie viele Quellen inzwischen dazukommen.
 
+**F-M723 [G]:** **Das Expert-Dropdown kann „alles zu dieser Datei" wegnehmen — und der Block erklärt nichts mehr.** Betreiberanweisung 24.11.2026: „Bitte drop down für alle Einträge des files aus der plugin db resetten einführen und die gui Beschreibung deutlich einkurzen. Manuel manipulation of a file in the plugin database." Bis dahin nahm `ResetPath` nur **Absagen** zurück (`ReopenForRetry` löscht ausschließlich `Status == Rejected`) und ließ die Seitenwagen ganz aus — bei einer Staffel, deren Urteile alle `uploaded`/`observed`/`downloaded` sind, meldete er deshalb 24 × 0. Neu ist der Wert **`all`** im Dropdown („everything of this file"): er ruft `ContentHashRegistry.ForgetMedia(mediaHash)` und das nimmt **alle** Spur-Zeilen der Datei (jeder Status), **alle** Seitenwagen mit diesem `MediaHash`, die Zugeh-Stempel sowie über `SourceStore.ForgetSubject` die Marken der Subjekte (Datei-, Spur- und Seitenwagen-Kennung) — Reihenfolge: Marken zuerst, sonst findet keine Marke ihr Subjekt mehr. Pack-Absagen und Staffel-Urteile fallen mit. Danach sieht der nächste Scan die Datei als neu. Die Erklärung des Blocks ist auf **einen Satz** eingekürzt: „Manual manipulation of a file in the plugin database." — die drei früheren Absätze (Queue-Rückkehr, Reup-Schutz, Pack-Andenken) sind entfallen; `both`/`stamps`/`verdicts`/`pack` und ihre Bedeutung bleiben unverändert im Dropdown.
+
 
 #### 14.9 Die Marken-Matrix — die einzige Wahrheit (bis Schema 22; abgelöst durch 14.11)
 
@@ -2909,6 +2911,10 @@ Kein Grund, keine Vorgeschichte, keine Bitte, kein Vorschlag. Gebaut in `Pipelin
 **T383:** Der Pack-Schalter gehört der Quelle und meint beide Richtungen (F-M719), in `seasonpack` — **3 Prüfungen**: das Konfigurationsfeld ist entfallen, die Upload-Seite führt kein Kästchen, und `UploadPipeline` packt bei `PackSlotSources().Count > 0`. Ergänzend in `gui-structure` und `endpoints` je eine Prüfung, dass das Kästchen nicht zurückkommt.
 
 **T384:** Eine Regel, n Quellen (F-M721/F-M722), in `sources` — **3 Prüfungen**: der Entscheidungsrumpf läuft über die Liste und nennt keine Quelle, `TargetsFrom` fragt jede Engine der Registry, und vier bzw. fünf Ziele laufen ohne Änderung (bekannte Herkunft sperrt alle, eine Marke sperrt genau eine). Die Herkunft wird dabei genau **einmal** je Entscheidung gefragt und nimmt kein Ziel entgegen.
+
+**T385:** Ein Dropdown-Wert nimmt alles zu einer Datei (F-M723), in `endpoints` — **1 Prüfung**: `what=all` ruft `ForgetMedia`, dieses löscht alle Spur-Zeilen und Seitenwagen und die Marken **vor** den Zeilen, und das Dropdown bietet den Eintrag an.
+
+**T386:** Der Expert-Block ist ein Satz (F-M723), in `gui-structure` — **2 Prüfungen**: der Eintrag „everything of this file" steht im Dropdown, und die drei alten Erklärungsabsätze sind weg.
 
 **T336:** Die vier Ebenen und die drei Quellen-Tabellen seit Schema 23 (F-M672…F-M677), in `storex` gegen echte Altdateien: Kennungsformen `[xxxx]`/`#yyyyy`/`#yyyyy#zzz`/`#yyyyy&zzz`, ein Nummernkreis je Datei über Spur und Seitenwagen, `pack_track` mit Fremdschlüsseln, `upload`/`reference`/`badapple` mit einer Subjekt-Spalte, keine fremde Kennung außerhalb `reference`/`badapple`, `source_matrix` und `rejected_candidates` nach dem Aufstieg weg, `OriginId` ohne Wertverlust nach `reference`, Aufstieg 17→23 und 22→23 mit genau einer Sicherung und einem zweiten Start, der nichts tut — **15 Prüfungen**, die letzte für die Quellenneutralitaet von `badapple` (auch eine nicht-numerische Kennung wie `download-3234-2-en` neben einer SubDL-Nummer).
 

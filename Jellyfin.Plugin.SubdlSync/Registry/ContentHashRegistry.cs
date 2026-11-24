@@ -3129,6 +3129,76 @@ public sealed class ContentHashRegistry : IDisposable
     }
 
     /// <summary>
+    /// F-M723 (Betreiberanweisung 24.11.2026: „drop down für alle Einträge des files aus der plugin db
+    /// resetten"): ALLES vergessen, was der Store über EINE Mediendatei sagt — Spur-Urteile jedes
+    /// Status (nicht nur die abgelehnten), ihre Seitenwagen, die Zugeh-Stempel und die Marken der
+    /// Subjekte (Urteil, Beleg, schlechter Download). Der nächste Scan sieht die Datei als neu.
+    /// <para>
+    /// Warum das nicht <see cref="ReopenForRetry"/> ist: jenes oeffnet nur Absagen und Stempel und
+    /// laesst „echte" Urteile stehen (Reup-Schutz). Hier ist das Gegenteil gewollt und ausdruecklich
+    /// vom Bediener angestossen — deshalb ein eigener Weg und keine Erweiterung des Retry-Pfads.
+    /// </para>
+    /// </summary>
+    /// <param name="mediaHash">Der Medienhash der Datei.</param>
+    /// <returns>Wie viele Spur-Zeilen, Seitenwagen, Stempel und Marken gefallen sind.</returns>
+    public (int Tracks, int Sidecars, int Stamps, int Marks) ForgetMedia(string? mediaHash)
+    {
+        if (string.IsNullOrEmpty(mediaHash) || GetMedia(mediaHash) is not { } media)
+        {
+            return (0, 0, 0, 0);
+        }
+
+        var spuren = _db.Tracks.FindAll()
+            .Where(t => string.Equals(t.MediaHash, mediaHash, StringComparison.Ordinal))
+            .ToList();
+        var wagen = _db.Sidecars.FindAll()
+            .Where(w => string.Equals(w.MediaHash, mediaHash, StringComparison.Ordinal))
+            .ToList();
+
+        // Die Subjekte zuerst: die Marken haengen an Spur-, Seitenwagen- und Datei-Kennung. Waeren die
+        // Zeilen schon weg, liesse sich keine Marke mehr zuordnen.
+        var subjekte = new List<string> { media.FileId };
+        subjekte.AddRange(spuren.Select(t => t.TrackId));
+        subjekte.AddRange(wagen.Select(w => w.TrackId));
+
+        int marken = 0;
+        foreach (string subjekt in subjekte.Where(x => !string.IsNullOrWhiteSpace(x)).Distinct(StringComparer.Ordinal))
+        {
+            marken += SourceStore.ForgetSubject(_db, subjekt);
+        }
+
+        int stempel = SourceStore.ClearFileMarks(_db, mediaHash);
+
+        int spurWeg = 0;
+        foreach (var spur in spuren)
+        {
+            if (_db.Tracks.Delete(spur.TrackId))
+            {
+                spurWeg++;
+            }
+        }
+
+        int wagenWeg = 0;
+        foreach (var wagenZeile in wagen)
+        {
+            if (_db.Sidecars.Delete(wagenZeile.TrackId))
+            {
+                wagenWeg++;
+            }
+        }
+
+        LogUtil.Normal(
+            _logger,
+            "[Sub Scribe-DB] forgot a whole file: {Tracks} track row(s), {Sidecars} sidecar row(s), {Stamps} stamp(s), {Marks} mark(s).",
+            spurWeg,
+            wagenWeg,
+            stempel,
+            marken);
+
+        return (spurWeg, wagenWeg, stempel, marken);
+    }
+
+    /// <summary>
     /// F-M576: der jüngste Zugeh-Stempel dieser Datei, egal welcher Quelle — die Zeit, zu der die
     /// Datei zuletzt als erledigt vermerkt wurde. Der billige Kopf-Ausstieg braucht sie für EINE
     /// Frage: kann seitdem ein loser Seitenwagen dazugekommen sein? Ist das Verzeichnis älter als

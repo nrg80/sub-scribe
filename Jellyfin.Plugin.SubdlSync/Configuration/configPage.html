@@ -401,16 +401,10 @@
                              Handvoll falsch gestempelter Dateien unverhaeltnismaessig — hier steht der
                              Weg fuer genau eine Datei. -->
                         <h3>Reset one file</h3>
+                        <!-- F-M723 (Betreiberanweisung 24.11.2026: "die gui Beschreibung deutlich einkurzen.
+                             Manuell manipulation of a file in the plugin database."): ein Satz, keine Erklaerung. -->
                         <div class="fieldDescription" style="max-width:60em;">
-                            <b>Put one file back into the queue.</b> The source stamps and the rejected
-                            track verdicts fall; real uploads and where a find came from stay, so nothing
-                            is uploaded a second time. Nothing else in the store is touched, and the next
-                            scan queues that file again.
-                            <br /><b>Pack verdicts</b> are a separate memory: when the pack phase gave up on
-                            this season, the reason is stored with the files' signature, and it stays until
-                            the files change — a lifted track lock does not touch it. Pick
-                            &bdquo;only the pack verdicts&ldquo; (or combine it) to let the plan look at the
-                            season again.
+                            Manual manipulation of a file in the plugin database.
                         </div>
                         <div style="display:flex; gap:0.6em; align-items:flex-end; flex-wrap:wrap; margin-top:0.6em;">
                             <div style="flex:1; min-width:24em;">
@@ -418,6 +412,7 @@
                                        placeholder="/data/movies/…/Episode.mkv" />
                             </div>
                             <select is="emby-select" id="ResetPathWhat" class="emby-select-withcolor emby-select" style="width:auto; margin:0;">
+                                <option value="all">everything of this file</option>
                                 <option value="both">stamps and rejected verdicts</option>
                                 <option value="stamps">only the stamps</option>
                                 <option value="verdicts">only the rejected verdicts</option>

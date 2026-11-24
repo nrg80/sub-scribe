@@ -2286,8 +2286,16 @@ def main():
     check("F-M660: the reset dropdown offers the pack verdicts as its own choice",
           '<option value="pack">' in page_src
           and '<option value="verdicts+pack">' in page_src)
-    check("F-M660: the reset block says that pack verdicts are a separate memory",
-          "Pack verdicts" in page_src and "only the pack verdicts" in page_src)
+    # F-M723 (Betreiberanweisung 24.11.2026: "drop down für alle Einträge des files aus der plugin db
+    # resetten" + "die gui Beschreibung deutlich einkurzen. Manuell manipulation of a file in the
+    # plugin database."): das Dropdown bietet den Eintrag, der ALLES nimmt, und der Block erklaert
+    # nichts mehr — ein Satz.
+    check("F-M723: the reset dropdown offers 'everything of this file'",
+          '<option value="all">everything of this file</option>' in page_src)
+    check("F-M723: the reset block is one sentence — manual manipulation of a file in the plugin database",
+          "Manual manipulation of a file in the plugin database." in page_src
+          and "Put one file back into the queue." not in page_src
+          and "Pack verdicts" not in page_src)
 
     # ---- F-M688 (Betreiber-Entscheidung 22.11.2026: „Die übergeordneten Einstellungen haben wir ja
     # schon. Was wir jetzt brauchen sind flexibel einblendbare Eigenschaften pro engine", „Und

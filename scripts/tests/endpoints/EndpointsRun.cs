@@ -3610,6 +3610,22 @@ internal static class Program
             && guiDatei.Contains("id=\"ResetPathWhat\"", StringComparison.Ordinal)
             && guiDatei.Contains("id=\"ResetPathRun\"", StringComparison.Ordinal)
             && guiDatei.Contains("Plugins/SubdlReset/ResetPath", StringComparison.Ordinal));
+        // F-M723 (Betreiberanweisung 24.11.2026): ein Weg, der ALLES zu einer Datei nimmt — Spur-Zeilen
+        // jeden Status, ihre Seitenwagen, Stempel und die Marken der Subjekte. Das ist bewusst NICHT der
+        // Retry-Pfad (der laesst echte Urteile stehen), sondern der ausdrueckliche Wunsch des Bedieners.
+        Check(
+            "F-M723: 'everything of this file' drops all rows of the file, not just rejections",
+            resetDatei.Contains("bool alles = teile.Contains(\"all\")", StringComparison.Ordinal)
+            && resetDatei.Contains("var (spurenWeg, wagenWeg, stempelWeg, markenWeg) = registry.ForgetMedia(hash);", StringComparison.Ordinal)
+            && registryDatei.Contains("public (int Tracks, int Sidecars, int Stamps, int Marks) ForgetMedia(", StringComparison.Ordinal)
+            // alle Spuren, nicht nur die abgelehnten
+            && registryDatei.Contains("var spuren = _db.Tracks.FindAll()", StringComparison.Ordinal)
+            && registryDatei.Contains("_db.Sidecars.Delete(wagenZeile.TrackId)", StringComparison.Ordinal)
+            && registryDatei.Contains("marken += SourceStore.ForgetSubject(_db, subjekt);", StringComparison.Ordinal)
+            // die Marken zuerst, sonst findet sie ihr Subjekt nicht mehr
+            && registryDatei.IndexOf("ForgetSubject(_db, subjekt)", StringComparison.Ordinal)
+                < registryDatei.IndexOf("_db.Tracks.Delete(spur.TrackId)", StringComparison.Ordinal)
+            && guiDatei.Contains("<option value=\"all\">everything of this file</option>", StringComparison.Ordinal));
         Check(
             "F-M620: without confirm=true and a rooted path nothing is written",
             resetDatei.Contains("error = \"confirmation-missing\"", StringComparison.Ordinal)
