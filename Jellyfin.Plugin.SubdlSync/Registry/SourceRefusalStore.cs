@@ -225,6 +225,59 @@ public static class SourceRefusalStore
         }
     }
 
+    /// <summary>
+    /// F-M728: steht das gemerkte NEIN dieser Quelle auf DIESER SPUR? Gefragt wird ueber die Position
+    /// — der Schluessel ist <c>mediaHash|subPos|langTag|quelle</c> — und nicht ueber den Sprach-Tag:
+    /// der Store fuehrt ISO (ENG, F-M557), die Ablehnung steht unter dem Code der Quelle (EN), und
+    /// beide meinen dieselbe Spur, weil die Spur die Position IST (F-M669). Gueltig nur bei gleicher
+    /// Signatur: ein neuer Text (andere Fassung) traegt einen anderen Hash und wird wieder gefragt.
+    /// </summary>
+    /// <param name="mediaHash">Hash of the media file.</param>
+    /// <param name="subPos">Stream position, -1 for a loose file.</param>
+    /// <param name="provider">The source in question.</param>
+    /// <param name="signature">Content hash of the subtitle right now.</param>
+    /// <param name="reason">The remembered reason.</param>
+    /// <returns>True when this source already said no to exactly this content on this track.</returns>
+    public static bool RefusedAtPosition(
+        string? mediaHash,
+        int subPos,
+        Configuration.SubtitleProvider provider,
+        string? signature,
+        out string reason)
+    {
+        reason = string.Empty;
+        ScribeSqliteContext? db = Store();
+        if (db == null || string.IsNullOrWhiteSpace(mediaHash) || string.IsNullOrEmpty(signature))
+        {
+            return false;
+        }
+
+        string prefix = (mediaHash ?? string.Empty).Trim().ToLowerInvariant()
+                        + "|" + subPos.ToString(CultureInfo.InvariantCulture) + "|";
+        string suffix = "|" + provider.ToString().Trim().ToLowerInvariant();
+        try
+        {
+            lock (Gate)
+            {
+                var row = db.SourceRefusalRows.AsNoTracking()
+                    .Where(r => r.Id.StartsWith(prefix) && r.Id.EndsWith(suffix) && r.Signature == signature)
+                    .FirstOrDefault();
+                if (row == null)
+                {
+                    return false;
+                }
+
+                reason = row.Reason ?? string.Empty;
+                return true;
+            }
+        }
+        catch (Exception)
+        {
+            // Ein Store, der nicht antwortet, darf nichts schliessen — dann wird eben gefragt.
+            return false;
+        }
+    }
+
     private static string Trunc(string? text, int max)
         => string.IsNullOrEmpty(text) ? string.Empty : (text.Length <= max ? text : text[..max]);
 

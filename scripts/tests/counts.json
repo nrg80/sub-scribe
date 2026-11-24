@@ -86,6 +86,12 @@
       "args": [
         "<root>"
       ]
+    },
+    "dupskip": {
+      "args": [
+        "<temp>/dupskip"
+      ],
+      "invariant": true
     }
   },
   "tests": {
@@ -936,6 +942,10 @@
     "T390": {
       "suite": "endpoints",
       "checks": 1
+    },
+    "T391": {
+      "suite": "dupskip",
+      "checks": 7
     }
   }
 }

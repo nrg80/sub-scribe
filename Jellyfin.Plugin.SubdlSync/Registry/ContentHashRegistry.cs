@@ -1271,6 +1271,18 @@ public sealed class ContentHashRegistry : IDisposable
             return true;
         }
 
+        // F-M728 (Operator-Entscheidung 24.11.2026: „Code: eine mst-Ablehnung … schliesst die Spur
+        // dauerhaft“): das gemerkte NEIN einer Quelle (F-M605/F-M609) schliesst die Spur fuer GENAU
+        // diese Quelle. Bis heute schrieb es nur der Versand — die Ablehnung verhinderte den zweiten
+        // Aufruf, die Spur blieb aber offen: jede Datei meldete „14 of 37 track(s) open“ und wurde in
+        // JEDEM Lauf erneut entpackt und in einem ffmpeg-Pass ausgelesen (gemessen 24.11.2026 an
+        // „Resident.Evil.2026“: 06:30, 08:12, 09:04, 09:52 je 37 Spuren, 112 DUE-Zeilen, 0 Uploads).
+        // Die andere Quelle bleibt offen — das Nein gilt nur fuer den, der es gesagt hat.
+        if (SourceRefusalStore.RefusedAtPosition(mediaHash, track.SubPos, provider, track.ContentHash, out _))
+        {
+            return true;
+        }
+
         // F-M669: die Spur IST eine Position — gefragt wird IHRE Marke, nicht die irgendeiner anderen
         // Spur derselben Sprache.
         return IsUploadedToPosition(mediaHash, track.SubPos, track.Language, track.HearingImpaired ?? false, provider);

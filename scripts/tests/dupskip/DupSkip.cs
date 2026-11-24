@@ -110,14 +110,76 @@ internal static class DupSkip
         bool caseB = !otherSettled && otherStatus == SubtitleStatus.Rejected
             && otherReason == RejectReason.DuplicateContent;
 
+        // ---- F-M728 / T391: das gemerkte NEIN einer Quelle schliesst die SPUR dieser Quelle.
+        // Gemessen am 24.11.2026 an "Resident.Evil.2026": mst lehnt mit "film-source-id-not-usa" ab,
+        // die Spur blieb offen, und die Datei wurde um 06:30, 08:12, 09:04 und 09:52 je erneut
+        // entpackt und in einem ffmpeg-Pass ausgelesen — 37 Spuren, 112 DUE-Zeilen, 0 Uploads.
+        SourceRefusalStore.Attach(db.Context);
+        const string refusedText = "1\r\n00:00:10,000 --> 00:00:12,000\r\nRefused line.\r\n\r\n";
+        string refusedHash = ContentHashRegistry.ComputeHash(refusedText);
+        reg.MarkEmbed(newHash, 7, "EN", false, SubtitleStatus.Observed, contentHash: refusedHash);
+        SourceRefusalStore.Put(newHash, 7, "EN non-HI", SubtitleProvider.MovieSubtitles.ToString(),
+            refusedHash, "film-source-id-not-usable");
+
+        bool closedForMst = reg.IsEmbedTerminalFor(newHash, 7, SubtitleProvider.MovieSubtitles);
+        bool stillOpenForSubdl = !reg.IsEmbedTerminalFor(newHash, 7, SubtitleProvider.Subdl);
+
+        // Ein NEUER Text auf derselben Spur traegt eine andere Signatur -> die Quelle wird wieder gefragt.
+        string changedText = "1\r\n00:00:10,000 --> 00:00:12,000\r\nCorrected line.\r\n\r\n";
+        string changedHash = ContentHashRegistry.ComputeHash(changedText);
+        reg.MarkEmbed(newHash, 8, "EN", false, SubtitleStatus.Observed, contentHash: changedHash);
+        SourceRefusalStore.Put(newHash, 8, "EN non-HI", SubtitleProvider.MovieSubtitles.ToString(),
+            refusedHash, "film-source-id-not-usable");
+        bool asksAgainOnNewText = !reg.IsEmbedTerminalFor(newHash, 8, SubtitleProvider.MovieSubtitles);
+
+        // Der Seitenwagen (Position -1) haengt an derselben Regel — sonst bleibt eine Datei offen,
+        // weil mst sie nie bekommt ("Sister.Act.2 ... still open: moviesubtitles").
+        // Eigener Text, der im Store NICHT bekannt ist — sonst erledigt die Regel "Inhalt bekannt"
+        // (F-M500) den Seitenwagen fuer jede Quelle, und der Test pruefte nicht mehr das Nein.
+        string looseText = "1\r\n00:00:20,000 --> 00:00:22,000\r\nSidecar line.\r\n\r\n";
+        string looseRefusedHash = ContentHashRegistry.ComputeHash(looseText);
+        string loosePath = Path.Combine(root, "Loose.en.srt");
+        File.WriteAllText(loosePath, looseText);
+        var loose = new System.Collections.Generic.List<(string Path, string Lang, bool HearingImpaired, bool Forced)>
+        {
+            (loosePath, "EN", false, false),
+        };
+        // Eigenes Medium: auf `newHash` traegt Fall A bereits die EN-Marke fuer SubDL, und die
+        // Paar-Frage wuerde den Seitenwagen fuer SubDL erledigen — der Test prueft dann nicht mehr das Nein.
+        const string looseMedia = "b41d0c7a55e21f83";
+        reg.EnsureFile(looseMedia, "tt1234567", "/data/movies2/Loose/Loose.mkv");
+        SourceRefusalStore.Put(looseMedia, -1, "EN non-HI", SubtitleProvider.MovieSubtitles.ToString(),
+            looseRefusedHash, "film-source-title-closed");
+        bool looseClosedForMst = !Jellyfin.Plugin.SubScribe.Pipeline.UploadPipeline.SidecarsNeedWorkFor(
+            loose, looseMedia, SubtitleProvider.MovieSubtitles, reg);
+        bool looseOpenForSubdl = Jellyfin.Plugin.SubScribe.Pipeline.UploadPipeline.SidecarsNeedWorkFor(
+            loose, looseMedia, SubtitleProvider.Subdl, reg);
+
+        int checks = 0;
+        void Case(bool ok, string what)
+        {
+            if (ok) checks++;
+            Console.WriteLine(ok ? "  OK   " + what : "  FAIL " + what);
+        }
+
+        Console.WriteLine();
+        Case(closedForMst, "T391: mst-Nein schliesst die Spur fuer mst");
+        Case(stillOpenForSubdl, "T391: dieselbe Spur bleibt fuer SubDL offen");
+        Case(asksAgainOnNewText, "T391: neuer Text auf derselben Spur wird wieder gefragt");
+        Case(looseClosedForMst, "T391: Seitenwagen (Position -1) schliesst fuer mst");
+        Case(looseOpenForSubdl, "T391: Seitenwagen bleibt fuer SubDL offen");
+
         Console.WriteLine();
         Console.WriteLine("Fall A (Inhalt oben -> uploaded bleibt): " + (caseA ? "OK" : "FEHLER"));
         Console.WriteLine("Fall B (Inhalt nicht oben -> rejected):  " + (caseB ? "OK" : "FEHLER"));
         Console.WriteLine();
-        Console.WriteLine(caseA && caseB
-            ? ">>> OK: ein duplicate-content-Skip loescht keine uploaded-Marke, erfindet aber auch keine"
-            : ">>> FEHLER: F-M298 nicht erfuellt");
-        return caseA && caseB ? 0 : 1;
+        bool all = caseA && caseB && checks == 5;
+        Console.WriteLine(all
+            ? ">>> OK: ein duplicate-content-Skip loescht keine uploaded-Marke, erfindet aber auch keine;"
+              + " das Nein einer Quelle schliesst die Spur dieser Quelle (F-M298, F-M728)"
+            : ">>> FEHLER: F-M298/F-M728 nicht erfuellt");
+        Console.WriteLine("dupskip: " + (checks + 2) + " checks");
+        return all ? 0 : 1;
     }
 
     /// <summary>Zaehlt die uploaded-Zeilen zu diesem Inhalt im ganzen Bestand.</summary>
