@@ -1791,14 +1791,15 @@ def main():
         DEFAULT, "..", "..", "Sources", "Subdl", "SubdlStatus.cs")), encoding="utf-8").read()
     erreichbar = open(os.path.normpath(os.path.join(
         DEFAULT, "..", "..", "Sources", "ReachabilityStatus.cs")), encoding="utf-8").read()
+    # F-M742: die Texte sind wieder Englisch (wie vor dem dritten Vertrag) — die Regel bleibt dieselbe.
     check("F-M354: each light names the STATE, not its own label again (SubDL API, SubDL Login, TMDb, tvst/mst)",
           'dto.Message = "reachable";' in status
           and 'dto.Message = "API reachable";' not in status
-          and '"erreichbar"' in subdl_lichter and '"API erreichbar"' not in subdl_lichter
-          and 'erreichbar' in erreichbar,
+          and '"reachable"' in subdl_lichter and '"API reachable"' not in subdl_lichter
+          and 'reachable' in erreichbar,
           "one of the four lights repeats its label in the message")
-    check("F-M354: the login success line says 'angemeldet', not 'Login OK' (the label says SubDL Login)",
-          '"angemeldet"' in subdl_lichter and "Login OK" not in subdl_lichter,
+    check("F-M354: the login success line says 'OK', not 'Login OK' (the label says SubDL Login)",
+          '"OK"' in subdl_lichter and "Login OK" not in subdl_lichter,
           "'Login OK' next to the label 'SubDL Login'")
     for gone in ("Login failed: wrong username/password", "Login failed: not authorized — check API key",
                  "Login rate-limited — try again later", "Login succeeded but returned no token"):

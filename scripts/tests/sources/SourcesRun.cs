@@ -2826,8 +2826,10 @@ internal static class Program
               && tvstLicht.Health == SourceHealth.Good
               && tvstLicht.Configured
               && tvstLicht.Key == "tvst"
-              && tvstLicht.Message.Contains("HTTP 200", StringComparison.Ordinal),
-            "F-M730 (3): eine Quelle ohne Konto sagt 'erreichbar (HTTP 200)' — ohne Zugangsdaten, Kachel heisst tvst",
+              // F-M742: die Zeile nennt den ZUSTAND — „erreichbar (HTTP 200)" sagte den Code
+              // mit, obwohl er nichts zu sagen hat.
+              && tvstLicht.Message.Contains("reachable", StringComparison.Ordinal),
+            "F-M730 (3): eine Quelle ohne Konto sagt 'reachable' — ohne Zugangsdaten, Kachel heisst tvst",
             tvstLicht is null ? "kein Licht" : tvstLicht.Key + ": " + tvstLicht.Message);
 
         // (4) Und die Quelle MIT Konto nimmt ihren Schluessel aus der eigenen Datei.

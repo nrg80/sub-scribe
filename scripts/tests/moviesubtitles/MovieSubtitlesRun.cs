@@ -1018,7 +1018,7 @@ internal static class Program
                     ohneZeile.Resolved && ohneZeile.MovieId == 13392
                     && dbLeer.Files.Count() == 0
                     && MediaNumberNote.Of(Jellyfin.Plugin.SubScribe.Registry.MediaNumberWrite.None) == MediaNumberNote.NotStored
-                    && MediaNumberNote.NotStored.Contains("gilt nur für diesen Lauf", StringComparison.Ordinal)
+                    && MediaNumberNote.NotStored.Contains("applies to this run only", StringComparison.Ordinal)
                     && MediaNumberNote.Of(Jellyfin.Plugin.SubScribe.Registry.MediaNumberWrite.ByPath)
                         == MediaNumberNote.ByPath,
                     "zeilen=" + dbLeer.Files.Count());
