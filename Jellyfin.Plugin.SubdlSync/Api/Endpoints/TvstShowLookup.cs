@@ -21,7 +21,7 @@ namespace Jellyfin.Plugin.SubScribe.Api.Endpoints;
 
 /// <summary>
 /// F-M734: die SEITE der Serien-Frage — „steht die Serie da, und darf ich sie anlegen?" — ohne unseren
-/// Bestand. Das Gegenstück zu <see cref="MsubMovieLookup"/>, aus <see cref="TvstShowResolver"/> gelöst.
+/// Bestand. Das Gegenstück zu <see cref="MsubMovieLookup"/>, aus <see cref="TvstShowStatus"/> gelöst.
 /// <para>
 /// Die Regel ist die von F-M501/F-M516, unverändert: erst die Serienliste (exakt verglichen), dann —
 /// nur im Ernstfall und nur einmal je Lauf — anlegen, danach NACHSEHEN statt der Anlege-Antwort zu
@@ -129,7 +129,7 @@ public sealed class TvstShowLookup
         }
 
         var gefunden = await FindShowIdAsync(name, ct).ConfigureAwait(false);
-        var zustand = TvstShowResolver.SettleStatus(outcome, gefunden);
+        var zustand = SettleStatus(outcome, gefunden);
 
         if (gefunden is > 0)
         {
@@ -231,4 +231,28 @@ public sealed class TvstShowLookup
     /// <param name="id">Die Nummer der Seite.</param>
     /// <returns>Die Kennung, oder null.</returns>
     private static string? Id(int? id) => id is > 0 ? id.Value.ToString(CultureInfo.InvariantCulture) : null;
+
+    /// <summary>
+    /// F-M516: was aus Antwort und Nachschau folgt. Die Regel ist absichtlich klein und prüfbar:
+    /// gefunden und bestätigt → angelegt; gefunden ohne Bestätigung → stand schon da; nicht gefunden,
+    /// aber bestätigt → angelegt ohne lesbare Nummer; nicht gefunden und abgelehnt → abgelehnt; alles
+    /// andere → ohne Urteil.
+    /// </summary>
+    /// <param name="outcome">Der Ausgang der Anlage.</param>
+    /// <param name="showId">Die danach gefundene Nummer, oder null.</param>
+    /// <returns>Einer der Werte aus <see cref="TvstShowStatus"/>.</returns>
+    public static string SettleStatus(string outcome, int? showId)
+    {
+        if (showId is > 0)
+        {
+            return outcome == TvstAddShowOutcome.Created ? TvstShowStatus.Created : TvstShowStatus.Existed;
+        }
+
+        return outcome switch
+        {
+            TvstAddShowOutcome.Created => TvstShowStatus.CreatedIdUnknown,
+            TvstAddShowOutcome.Refused => TvstShowStatus.Refused,
+            _ => TvstShowStatus.Unclear,
+        };
+    }
 }

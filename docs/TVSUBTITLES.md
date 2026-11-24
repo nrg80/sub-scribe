@@ -146,7 +146,7 @@ die neue Serie unmittelbar danach ebenfalls (4242) — es ist der Rückfall. `/t
 geschrieben und taugt nicht als Beleg. Die Staffelzahl wurde übernommen: `/tvshow-4242.html`
 antwortet 302 auf `tvshow-4242-4.html`, die Seite heißt „… season 4“ und verlinkt die Staffeln 1–4.
 
-**Wer anlegt, steht fest (F-M501):** `TvstShowResolver` — und zwar **nur** mit dem TMDb-Titel, dem
+**Wer anlegt, steht fest (F-M501):** die Seite der Titel-Frage (`TvstShowLookup`) — und zwar **nur** mit dem TMDb-Titel, dem
 TMDb-Erstausstrahlungsjahr und der TMDb-Staffelzahl (auf 1..22 begrenzt). Die Nummer der Serie steht
 danach in `MediaEntity.TvstShowId` auf derselben Ebene wie `TmdbId`/`ImdbId` und wird beim nächsten Mal
 gelesen statt gesucht. Angelegt wird **höchstens einmal je Medium und Lauf**, und nur, wenn die Seite

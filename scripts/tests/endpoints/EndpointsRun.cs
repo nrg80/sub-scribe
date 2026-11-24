@@ -2166,46 +2166,41 @@ internal static class Program
                 var tvstReg = new Jellyfin.Plugin.SubScribe.Registry.ContentHashRegistry(tvstDb, null, null);
                 var mitte = new TmdbSeriesInfo("The Middle", "The Middle", 2009, 9);
 
-                // (a) Die gespeicherte Nummer fuehrt: kein Netz, kein Vergleich, keine Anlage.
+                // (a) F-M734: die gespeicherte Nummer fuehrt — der ABLAUF liest sie und gibt sie im
+                // Auftrag mit; die Engine antwortet darauf „bereit", ohne die Seite zu fragen. Der
+                // Nachschlageweg, der früher selbst in den Store sah und schrieb, ist entfallen.
                 tvstReg.EnsureFile("aaaa000000000001", patch: m => m.TvstShowId = "512");
-                var handlerGespeichert = new TvstSiteHandler(512, "The Middle");
-                var aufloeserGespeichert = new TvstShowResolver(
-                    new TvSubtitlesClient(new HttpClient(handlerGespeichert)));
-                var gespeichert = await aufloeserGespeichert
-                    .ResolveForMediaAsync(tvstReg, "aaaa000000000001", mitte, dryRun: false, CancellationToken.None)
-                    .ConfigureAwait(false);
                 Check("eine gespeicherte TvstShowId verhindert Suche UND Anlage (F-M501)",
-                    gespeichert.Resolved && gespeichert.ShowId == 512
-                    && gespeichert.Status == TvstShowStatus.Stored
-                    && handlerGespeichert.Gets == 0 && handlerGespeichert.Posts == 0,
-                    "id=" + gespeichert.ShowId + " status=" + gespeichert.Status
-                    + " gets=" + handlerGespeichert.Gets + " posts=" + handlerGespeichert.Posts);
+                    uploadSource.Contains("Registry.GetMedia(mediaHash!)?.TvstShowId", StringComparison.Ordinal)
+                    && uploadSource.Contains("Registry.TvstShowIdAtPath(first.Item?.Path)", StringComparison.Ordinal)
+                    && uploadSource.Contains("MediaId = bekannteSerienId,", StringComparison.Ordinal)
+                    && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Sources/Tvst/TvstEngine.cs"))
+                        .Contains("SourceTitleState.Ready, showId.Value.ToString(CultureInfo.InvariantCulture)", StringComparison.Ordinal),
+                    "Ablauf oder Engine kennt die gespeicherte Nummer nicht mehr");
 
-                // (b) Ein Treffer in der Liste: die Nummer wird geschrieben und benutzt, ohne Anlage.
+                // (b) Ein Treffer in der Liste: die Nummer ist die Antwort, angelegt wird nichts. Den
+                // Bestand schreibt der Ablauf (F-M734) — die Seite der Titel-Frage kennt ihn nicht.
                 var handlerVorhanden = new TvstSiteHandler(512, "The Middle");
-                var aufloeserVorhanden = new TvstShowResolver(
-                    new TvSubtitlesClient(new HttpClient(handlerVorhanden)));
-                var vorhanden = await aufloeserVorhanden
-                    .ResolveForMediaAsync(tvstReg, "aaaa000000000002", mitte, dryRun: false, CancellationToken.None)
+                var seiteVorhanden = new TvstShowLookup(new TvSubtitlesClient(new HttpClient(handlerVorhanden)));
+                var vorhanden = await seiteVorhanden
+                    .FindOrCreateAsync(mitte.Name, mitte.FirstAirYear, mitte.Seasons, "aaaa000000000002", dryRun: false, CancellationToken.None)
                     .ConfigureAwait(false);
-                Check("der TMDb-Titel findet die Serie eng verglichen und schreibt die Nummer ins Medium (F-M501)",
-                    vorhanden.Resolved && vorhanden.ShowId == 512 && vorhanden.Status == TvstShowStatus.Found
-                    && tvstReg.GetMedia("aaaa000000000002")?.TvstShowId == "512"
+                Check("der TMDb-Titel findet die Serie eng verglichen, ohne Anlage (F-M501)",
+                    vorhanden.State == Jellyfin.Plugin.SubScribe.Sources.SourceTitleState.Ready && vorhanden.TitleId == "512"
                     && handlerVorhanden.Posts == 0 && handlerVorhanden.Gets == 1,
-                    "status=" + vorhanden.Status + " store=" + (tvstReg.GetMedia("aaaa000000000002")?.TvstShowId ?? "-"));
+                    "state=" + vorhanden.State + " posts=" + handlerVorhanden.Posts);
 
-                // (c) Kein Treffer: genau EINE Anlage, danach wird erneut gesucht und erst dann geschrieben.
+                // (c) Kein Treffer: genau EINE Anlage, danach wird erneut gesucht.
                 var neu = new TmdbSeriesInfo("Beispielserie Test", "Beispielserie Test", 2026, 3);
                 var handlerNeu = new TvstSiteHandler(512, "The Middle") { AddAfterPost = (9001, "Beispielserie Test") };
-                var aufloeserNeu = new TvstShowResolver(new TvSubtitlesClient(new HttpClient(handlerNeu)));
-                var angelegt = await aufloeserNeu
-                    .ResolveForMediaAsync(tvstReg, "aaaa000000000003", neu, dryRun: false, CancellationToken.None)
+                var seiteNeu = new TvstShowLookup(new TvSubtitlesClient(new HttpClient(handlerNeu)));
+                var angelegt = await seiteNeu
+                    .FindOrCreateAsync(neu.Name, neu.FirstAirYear, neu.Seasons, "aaaa000000000003", dryRun: false, CancellationToken.None)
                     .ConfigureAwait(false);
                 Check("ohne Treffer wird genau einmal angelegt und danach erneut gesucht (F-M501)",
-                    angelegt.Resolved && angelegt.ShowId == 9001 && angelegt.Status == TvstShowStatus.Created
-                    && handlerNeu.Posts == 1 && handlerNeu.Gets == 2
-                    && tvstReg.GetMedia("aaaa000000000003")?.TvstShowId == "9001",
-                    "status=" + angelegt.Status + " posts=" + handlerNeu.Posts + " gets=" + handlerNeu.Gets);
+                    angelegt.State == Jellyfin.Plugin.SubScribe.Sources.SourceTitleState.Created && angelegt.TitleId == "9001"
+                    && handlerNeu.Posts == 1 && handlerNeu.Gets == 2,
+                    "state=" + angelegt.State + " posts=" + handlerNeu.Posts + " gets=" + handlerNeu.Gets);
 
                 Check("die Anlage traegt Name, Jahr und Staffelzahl aus TMDb (F-M501)",
                     handlerNeu.LastBody is string rumpf
@@ -2216,16 +2211,12 @@ internal static class Program
 
                 // Staffelzahl: die Seite kennt nur 1..22 — 30 wird auf 22 gezogen, "keine Angabe" auf 1.
                 var handlerViele = new TvstSiteHandler(512, "The Middle") { AddAfterPost = (9002, "Viele Staffeln") };
-                var aufloeserViele = new TvstShowResolver(new TvSubtitlesClient(new HttpClient(handlerViele)));
-                await aufloeserViele.ResolveForMediaAsync(
-                        tvstReg, "aaaa000000000004", new TmdbSeriesInfo("Viele Staffeln", null, 2001, 30),
-                        dryRun: false, CancellationToken.None)
+                var seiteViele = new TvstShowLookup(new TvSubtitlesClient(new HttpClient(handlerViele)));
+                await seiteViele.FindOrCreateAsync("Viele Staffeln", 2001, 30, "aaaa000000000004", dryRun: false, CancellationToken.None)
                     .ConfigureAwait(false);
                 var handlerOhne = new TvstSiteHandler(512, "The Middle") { AddAfterPost = (9003, "Ohne Angabe") };
-                var aufloeserOhne = new TvstShowResolver(new TvSubtitlesClient(new HttpClient(handlerOhne)));
-                await aufloeserOhne.ResolveForMediaAsync(
-                        tvstReg, "aaaa000000000005", new TmdbSeriesInfo("Ohne Angabe", null, 2001, null),
-                        dryRun: false, CancellationToken.None)
+                var seiteOhne = new TvstShowLookup(new TvSubtitlesClient(new HttpClient(handlerOhne)));
+                await seiteOhne.FindOrCreateAsync("Ohne Angabe", 2001, null, "aaaa000000000005", dryRun: false, CancellationToken.None)
                     .ConfigureAwait(false);
                 Check("die Staffelzahl wird auf 1..22 begrenzt, und BuildAddShow weist 23 ab (F-M501)",
                     handlerViele.LastBody!.Contains("name=\"seasons\"\r\n\r\n22", StringComparison.Ordinal)
@@ -2235,23 +2226,21 @@ internal static class Program
                     && !Throws(() => TvSubtitlesClient.BuildAddShow("XY", 2026, 22)),
                     "30->" + (handlerViele.LastBody!.Contains("seasons\"\r\n\r\n22", StringComparison.Ordinal) ? "22" : "?"));
 
-                // (d) Die Anlage scheitert: nichts wird geschrieben, die Kette laeuft weiter (Skipped, kein Wurf).
+                // (d) Die Anlage scheitert: es gibt keine Kennung, und die Kette laeuft weiter (Skipped, kein
+                // Wurf). Geschrieben wird hier ohnehin nichts — die Seite der Titel-Frage kennt den Bestand nicht.
                 var handlerKaputt = new TvstSiteHandler(512, "The Middle") { PostStatus = 500 };
-                var aufloeserKaputt = new TvstShowResolver(new TvSubtitlesClient(new HttpClient(handlerKaputt)));
-                var kaputt = await aufloeserKaputt
-                    .ResolveForMediaAsync(
-                        tvstReg, "aaaa000000000006", new TmdbSeriesInfo("Beispielserie Test", null, 2026, 3),
-                        dryRun: false, CancellationToken.None)
+                var seiteKaputt = new TvstShowLookup(new TvSubtitlesClient(new HttpClient(handlerKaputt)));
+                var kaputt = await seiteKaputt
+                    .FindOrCreateAsync("Beispielserie Test", 2026, 3, "aaaa000000000006", dryRun: false, CancellationToken.None)
                     .ConfigureAwait(false);
                 Check("eine gescheiterte Anlage blockiert die Kette nicht und schreibt nichts (F-M501/F-M516)",
-                    !kaputt.Resolved && kaputt.Status == TvstShowStatus.Refused
-                    && tvstReg.GetMedia("aaaa000000000006")?.TvstShowId is null
+                    kaputt.State == Jellyfin.Plugin.SubScribe.Sources.SourceTitleState.NotFound && kaputt.TitleId is null
                     && handlerKaputt.Posts == 1
                     // die Kette antwortet mit Skipped (die andere Quelle bekommt ihren Versuch), nicht mit Failed
                     // F-M734: die Kette antwortet mit Skipped (die andere Quelle bekommt ihren Versuch),
                     // nicht mit Failed — der Grund heisst jetzt "Titel zu".
                     && uploadSource.Contains("return UploadResult.Skipped(\"second-source-title-closed\");", StringComparison.Ordinal),
-                    "status=" + kaputt.Status + " posts=" + handlerKaputt.Posts);
+                    "state=" + kaputt.State + " posts=" + handlerKaputt.Posts);
 
                 // ---- F-M538: jede Seite fuehrt ihr eigenes Sprachset --------------------------
                 // Operator-Anweisung 16.11.2026: „Sprachen die tvst nicht unterstuetzt, nicht mehr in
@@ -2451,44 +2440,37 @@ internal static class Program
                     && seederSource.Contains("if (!anyUntagged && !anyCarried)", StringComparison.Ordinal));
 
                 // Anlegen hoechstens einmal je Medium und Lauf: derselbe Fehlschlag wird NICHT wiederholt.
-                var zweiterVersuch = await aufloeserKaputt
-                    .ResolveForMediaAsync(
-                        tvstReg, "aaaa000000000006", new TmdbSeriesInfo("Beispielserie Test", null, 2026, 3),
-                        dryRun: false, CancellationToken.None)
+                var zweiterVersuch = await seiteKaputt
+                    .FindOrCreateAsync("Beispielserie Test", 2026, 3, "aaaa000000000006", dryRun: false, CancellationToken.None)
                     .ConfigureAwait(false);
                 Check("ein Fehlschlag legt nicht bei jeder Folge erneut an (F-M501)",
-                    !zweiterVersuch.Resolved
-                    && zweiterVersuch.Status == TvstShowStatus.CreateAlreadyTried
+                    zweiterVersuch.State == Jellyfin.Plugin.SubScribe.Sources.SourceTitleState.Unclear
+                    && zweiterVersuch.TitleId is null
                     && handlerKaputt.Posts == 1,
-                    "status=" + zweiterVersuch.Status + " posts=" + handlerKaputt.Posts);
+                    "state=" + zweiterVersuch.State + " posts=" + handlerKaputt.Posts);
 
                 // (e) Trockenlauf: nichts anlegen, nichts schreiben.
                 var handlerTrocken = new TvstSiteHandler(512, "The Middle");
-                var aufloeserTrocken = new TvstShowResolver(new TvSubtitlesClient(new HttpClient(handlerTrocken)));
-                var trocken = await aufloeserTrocken
-                    .ResolveForMediaAsync(
-                        tvstReg, "aaaa000000000007", new TmdbSeriesInfo("Beispielserie Test", null, 2026, 3),
-                        dryRun: true, CancellationToken.None)
+                var seiteTrocken = new TvstShowLookup(new TvSubtitlesClient(new HttpClient(handlerTrocken)));
+                var trocken = await seiteTrocken
+                    .FindOrCreateAsync("Beispielserie Test", 2026, 3, "aaaa000000000007", dryRun: true, CancellationToken.None)
                     .ConfigureAwait(false);
-                Check("der Trockenlauf legt nichts an und schreibt nichts (F-M501)",
-                    !trocken.Resolved && trocken.Status == TvstShowStatus.WouldCreate
-                    && handlerTrocken.Posts == 0
-                    && tvstReg.GetMedia("aaaa000000000007")?.TvstShowId is null,
-                    "status=" + trocken.Status + " posts=" + handlerTrocken.Posts);
+                Check("der Trockenlauf legt nichts an und entscheidet nichts (F-M501)",
+                    trocken.State == Jellyfin.Plugin.SubScribe.Sources.SourceTitleState.NotAskable
+                    && trocken.TitleId is null
+                    && handlerTrocken.Posts == 0,
+                    "state=" + trocken.State + " posts=" + handlerTrocken.Posts);
 
                 // (f) Unklare Seite: einmal nachfragen, dann NICHT schreiben und tvst ueberspringen.
                 var handlerLeer = new TvstSiteHandler(512, "The Middle") { EmptyList = true };
-                var aufloeserLeer = new TvstShowResolver(new TvSubtitlesClient(new HttpClient(handlerLeer)));
-                var leer = await aufloeserLeer
-                    .ResolveForMediaAsync(
-                        tvstReg, "aaaa000000000008", new TmdbSeriesInfo("Beispielserie Test", null, 2026, 3),
-                        dryRun: false, CancellationToken.None)
+                var seiteLeer = new TvstShowLookup(new TvSubtitlesClient(new HttpClient(handlerLeer)));
+                var leer = await seiteLeer
+                    .FindOrCreateAsync("Beispielserie Test", 2026, 3, "aaaa000000000008", dryRun: false, CancellationToken.None)
                     .ConfigureAwait(false);
-                Check("eine unklare Serienliste wird einmal nachgefragt, dann wird nicht geschrieben (F-M501)",
-                    !leer.Resolved && leer.Status == TvstShowStatus.Unclear
-                    && handlerLeer.Gets == 2 && handlerLeer.Posts == 0
-                    && tvstReg.GetMedia("aaaa000000000008")?.TvstShowId is null,
-                    "status=" + leer.Status + " gets=" + handlerLeer.Gets);
+                Check("eine unklare Serienliste wird nicht als Abwesenheit gelesen (F-M501)",
+                    leer.State == Jellyfin.Plugin.SubScribe.Sources.SourceTitleState.Unclear && leer.TitleId is null
+                    && handlerLeer.Posts == 0,
+                    "state=" + leer.State + " gets=" + handlerLeer.Gets);
 
                 // (g) Der Endpunkt mit Nummer im Ticket: die Serienliste wird gar nicht erst geholt.
                 var handlerEndpunkt = new TvstSiteHandler(512, "The Middle");

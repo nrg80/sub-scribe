@@ -445,7 +445,7 @@ public sealed class TvSubtitlesClient
     /// und zwar auch beim Download): die Nummer, die die letzte Suche in der Serienliste gefunden hat.
     /// <para>
     /// Warum sie hier steht: der Endpunkt löst die Nummer beim Suchen auf und brauchte sie bisher nur
-    /// für den einen Abruf. Schreiben konnte sie nur der Upload-Weg (<c>TvstShowResolver</c>) — deshalb
+    /// für den einen Abruf. Schreiben konnte sie nur der Upload-Weg (<c>die Seite der Titel-Frage</c>) — deshalb
     /// hatte The Middle 512 aus dem Staffel-Upload im Store, MobLand und Stranger Things aus dem
     /// Download aber nicht, und jeder Lauf holte die Serienliste erneut. Der Endpunkt legt die Nummer
     /// hier ab, die Download-Pipeline schreibt sie über denselben Weg wie die Filmnummer

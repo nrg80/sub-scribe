@@ -20,7 +20,7 @@ namespace Jellyfin.Plugin.SubScribe.Api.Endpoints;
 
 /// <summary>
 /// F-M507 (Etappe 2a): die Nummer des Films bei moviesubtitles.org — ermittelt, gespeichert,
-/// wiederverwendet. Das Muster ist das von <see cref="TvstShowResolver"/>, weil die Frage dieselbe ist:
+/// wiederverwendet. Das Muster ist das von <see cref="TvstShowLookup"/>, weil die Frage dieselbe ist:
 /// welche Nummer hat DIESES Medium bei der Gegenseite.
 /// <para>
 /// DIE REIHENFOLGE IST FEST UND KURZ:

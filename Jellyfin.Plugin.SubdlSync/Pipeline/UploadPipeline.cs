@@ -239,7 +239,7 @@ public sealed class UploadPipeline : IPackFiller
 
     /// <summary>
     /// F-M501: der Client der zweiten Quelle und die Auflösung ihrer Seriennummer. Beide leben so lange
-    /// wie die Pipeline, weil die Anlege-Sperre EINEN LAUF lang gilt (<see cref="Api.Endpoints.TvstShowResolver.BeginRun"/>):
+    /// wie die Pipeline, weil die Anlege-Sperre EINEN LAUF lang gilt (<see cref="Api.Endpoints.TvstShowLookup.BeginRun"/>):
     /// ein je Aufruf neuer Auflöser würde dieselbe Serie bei jeder Folge erneut anzulegen versuchen.
     /// </summary>
     private readonly Api.TvSubtitlesClient _tvstClient;
@@ -249,7 +249,7 @@ public sealed class UploadPipeline : IPackFiller
     /// <summary>
     /// F-M508: der Client der Film-Adresse derselben Familie und ihre Filmmummer-Auflösung. Dieselbe
     /// Lebensdauer wie die der Serien-Adresse — die Merkliste der Auflösung gilt je Lauf
-    /// (<see cref="Api.Endpoints.MsubMovieResolver.BeginRun"/>), damit ein Film mit vier fehlenden
+    /// (ein Lauf-Speicher des Nachschlagewegs), damit ein Film mit vier fehlenden
     /// Sprachen nicht viermal bei der Seite sucht.
     /// </summary>
     private readonly Api.MovieSubtitlesClient _msubClient;
@@ -7246,7 +7246,7 @@ public sealed class UploadPipeline : IPackFiller
     /// Seriennummer aus dem Store — nicht mehr aus dem Dateinamen. Der Name aus dem Dateinamen war eine
     /// Vermutung über eine Schreibweise (der Uploader hat ihn getippt), und die Nummer der Serie wurde
     /// bei jedem Aufruf neu gesucht, weshalb der Store sie nie lernen konnte. Die Reihenfolge steht in
-    /// <see cref="Api.Endpoints.TvstShowResolver"/>: gespeicherte Nummer → eng verglichener TMDb-Titel →
+    /// <see cref="Api.Endpoints.TvstShowLookup"/>: gespeicherte Nummer → eng verglichener TMDb-Titel →
     /// anlegen und erneut suchen. Fehlt am Ende die Nummer, wird tvst übersprungen; die Kette laeuft
     /// weiter, denn die andere Quelle bekommt ihren Versuch unabhaengig davon.
     /// </para>
