@@ -65,112 +65,18 @@ public sealed class MovieSubtitlesClient
     public const string BaseUrl = "https://www.moviesubtitles.org";
 
     /// <summary>
-    /// F-M506: the language table of THIS site — thirteen values, taken verbatim from
-    /// <c>&lt;select name="lang"&gt;</c> on <c>add.php</c> (measured 15.11.2026). It is NOT the
-    /// tvsubtitles.net table: that one carries 24 codes, this one 13, and the two disagree in the parts
-    /// that matter (no <c>cz</c>, no <c>cn</c>, no <c>jp</c>, no European Portuguese, no Dutch, no
-    /// Swedish, no Danish, no Finnish, no Korean, no Bulgarian, no Romanian).
-    /// <para>
-    /// The value carries (a) the display name exactly as the form spells it — <c>portugese(br)</c>, with
-    /// the site's own typo — and (b) the code the site writes into the download name. That code is the
-    /// select value itself (measured: <c>Oppenheimer_2023.WEB-DL.MA.en.zip</c> and
-    /// <c>Matrix_The_1999.ru(2).zip</c>), not an ISO-639-2/B form — which is exactly the difference to
-    /// <see cref="TvSubtitlesClient.Languages"/>, whose third column is an ISO3 code.
-    /// </para>
+    /// F-M735: die Sprachtafel der Seite wohnt bei der Quelle (<c>Sources.Msub.MsubLanguages</c>). Hier steht
+    /// nur noch die Brücke für die Aufrufer, die den Abruf ohnehin in der Hand halten.
     /// </summary>
-    public static readonly IReadOnlyDictionary<string, MovieSubtitlesLanguage> Languages =
-        new Dictionary<string, MovieSubtitlesLanguage>(StringComparer.Ordinal)
-        {
-            ["en"] = new("en", "english", "en"),
-            ["es"] = new("es", "spanish", "es"),
-            ["fr"] = new("fr", "french", "fr"),
-            ["de"] = new("de", "german", "de"),
-            ["br"] = new("br", "portugese(br)", "br"),
-            ["ru"] = new("ru", "russian", "ru"),
-            ["ua"] = new("ua", "ukrainian", "ua"),
-            ["it"] = new("it", "italian", "it"),
-            ["gr"] = new("gr", "greek", "gr"),
-            ["ar"] = new("ar", "arabic", "ar"),
-            ["hu"] = new("hu", "hungarian", "hu"),
-            ["pl"] = new("pl", "polish", "pl"),
-            ["tr"] = new("tr", "turkish", "tr"),
-        };
+    public static IReadOnlyDictionary<string, MovieSubtitlesLanguage> Languages =>
+        Sources.Msub.MsubLanguages.Site;
 
     /// <summary>
-    /// F-M506: die Bruecke von ISO auf die Kuerzel DIESER Seite — und nur hier (dieselbe Trennung wie
-    /// F-M502 fuer tvsubtitles.net: kein gemeinsames Mapping mit SubDL, keins mit der Schwester).
-    /// <para>
-    /// Die Liste ist absichtlich KURZ. Aufgenommen ist nur, was die 13er-Liste wirklich kennt:
-    /// <c>eng spa fra/fre deu/ger pob rus uk/ukr ita el/ell/gre ara hun pol tur</c> und die Region, die
-    /// die Sprache ist (<c>pt-BR</c>/<c>pt_BR</c> → <c>br</c>). NICHT aufgenommen — und damit
-    /// verweigert — sind die Codes, die die Seite nicht fuehrt: <c>pt</c>/<c>por</c> (europaeisches
-    /// Portugiesisch; die Seite kennt NUR die brasilianische Fassung, und <c>pt</c> auf <c>br</c> zu
-    /// ziehen waere eine falsche Kennzeichnung), <c>nl dut nld sv swe da dan fi fin ko kor cn zh zho chi
-    /// jp ja jpn bg bul cs ces cze ro ron rum</c>.
-    /// </para>
+    /// F-M735: die Umrechnung selbst steht bei der Quelle — der Abruf reicht weiter.
     /// </summary>
-    private static readonly IReadOnlyDictionary<string, string> LanguageAliases =
-        new Dictionary<string, string>(StringComparer.Ordinal)
-        {
-            ["eng"] = "en",
-            ["spa"] = "es",
-            ["fra"] = "fr",
-            ["fre"] = "fr",
-            ["deu"] = "de",
-            ["ger"] = "de",
-            ["pob"] = "br",
-            ["rus"] = "ru",
-            ["uk"] = "ua",
-            ["ukr"] = "ua",
-            ["ita"] = "it",
-            ["el"] = "gr",
-            ["ell"] = "gr",
-            ["gre"] = "gr",
-            ["ara"] = "ar",
-            ["hun"] = "hu",
-            ["pol"] = "pl",
-            ["tur"] = "tr",
-        };
-
-    /// <summary>
-    /// F-M506: der Sprachcode, den die Seite versteht — aus einem ISO-Code, einem Seitenkuerzel oder
-    /// einer Angabe mit Region/Skript (<c>pt-BR</c>, <c>zh-Hans</c>).
-    /// <para>
-    /// Gross-/Kleinschreibung zaehlt nicht. Die Region entscheidet nur dort, wo die Seite die Sprache
-    /// danach trennt — und das tut sie nur bei Portugiesisch: <c>pt-BR</c> ist <c>br</c>. Bei allen
-    /// anderen Sprachen faellt die Region weg; hilft das nicht weiter, ist die Antwort <c>null</c>.
-    /// </para>
-    /// </summary>
-    /// <param name="code">Der ankommende Code, in beliebiger Schreibweise.</param>
-    /// <returns>Ein Kuerzel aus <see cref="Languages"/>, oder null — dann ist die Sprache der Seite
-    /// unbekannt und wird NICHT auf Englisch zurueckgefallen und nicht geraten.</returns>
-    public static string? SiteLanguage(string? code)
-    {
-        if (string.IsNullOrWhiteSpace(code))
-        {
-            return null;
-        }
-
-        var text = code.Trim().ToLowerInvariant().Replace('_', '-');
-
-        // Die eine Stelle, an der die REGION die Sprache ist: brasilianisches Portugiesisch.
-        // Muss vor der Grundcode-Reduktion stehen, sonst faellt "pt-br" auf "pt" und damit ins Leere.
-        if (string.Equals(text, "pt-br", StringComparison.Ordinal))
-        {
-            return "br";
-        }
-
-        var dash = text.IndexOf('-', StringComparison.Ordinal);
-        var baseCode = dash > 0 ? text[..dash] : text;
-
-        if (LanguageAliases.TryGetValue(baseCode, out var mapped))
-        {
-            return mapped;
-        }
-
-        // Das Kuerzel der Seite selbst (en, de, br, gr, ua …) ist bereits das Ziel.
-        return Languages.ContainsKey(baseCode) ? baseCode : null;
-    }
+    /// <param name="code">Ein Sprachkennzeichen, in beliebiger Schreibweise.</param>
+    /// <returns>Ein Kürzel der Seite, oder null.</returns>
+    public static string? SiteLanguage(string? code) => Sources.Msub.MsubLanguages.ToSite(code);
 
     /// <summary>
     /// F-M506: the rip select of the upload form, in the form's own order, plus the empty value — nine

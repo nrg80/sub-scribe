@@ -152,15 +152,19 @@ internal static class Program
         // -----------------------------------------------------------------------------------------
         Console.WriteLine("(c) jede Engine ist in der Registry erreichbar und nennt Key + Capabilities");
         string registryQuelle = File.ReadAllText(Path.Combine(sourcesDir, "SourceRegistry.cs"));
+        // Nur die ENGINES: seit F-M735 liegen auch Datenwerte der Quelle unter Sources/<Quelle>/
+        // (Sprachtafeln). Die sind keine Engines und gehören nicht in die Registry — die Regel „jede
+        // Engine wird ausdrücklich gebaut" bleibt davon unberührt.
         var engineKlassen = engineDateien
             .Select(f => Path.GetFileNameWithoutExtension(f))
+            .Where(n => n.EndsWith("Engine", StringComparison.Ordinal))
             .OrderBy(n => n, StringComparer.Ordinal)
             .ToList();
 
         var nichtEingetragen = engineKlassen
             .Where(k => !registryQuelle.Contains(k, StringComparison.Ordinal))
             .ToList();
-        Check(nichtEingetragen.Count == 0,
+        Check(nichtEingetragen.Count == 0 && engineKlassen.Count >= 3,
             "F-M682 (c): jede Engine-Datei wird in der Registry ausdrücklich gebaut (kein Reflection-Scan)",
             nichtEingetragen.Count == 0 ? string.Join(", ", engineKlassen) : "fehlt: " + string.Join(", ", nichtEingetragen));
 
