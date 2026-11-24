@@ -970,6 +970,10 @@
     "T397": {
       "suite": "seasonpack",
       "checks": 6
+    },
+    "T398": {
+      "suite": "endpoints",
+      "checks": 5
     }
   }
 }

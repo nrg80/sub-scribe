@@ -3775,6 +3775,51 @@ internal static class Program
             && guiDatei.Contains("'Next cycle '", StringComparison.Ordinal)
             && guiDatei.Contains("d.CycleAttemptLimit", StringComparison.Ordinal));
 
+        // -----------------------------------------------------------------------------------------
+        // F-M738 (Befund 24.11.2026): "TMDb-Kennung weicht ab" wurde als "es wurde korrigiert"
+        // gemeldet, und bei fehlender IMDb im Treffer blieb die ALTE IMDb neben der NEUEN
+        // TMDb-Kennung stehen — ein Paar aus zwei Serien (Too Good to Be True: IMDb der 2024er
+        // Serie, TMDb-Kennung des 2003er Zweiteilers).
+        // -----------------------------------------------------------------------------------------
+        var ohneTrefferImdb = Jellyfin.Plugin.SubScribe.Api.TmdbImdbResolver.MergeVerifiedIds(
+            "tt30291270", "331627", null, "245996", true, true);
+        Check(
+            "F-M738: ohne IMDb im Treffer wird die alte IMDb VERWORFEN, nicht mit der neuen TMDb-Kennung gemischt",
+            ohneTrefferImdb.Imdb == null && string.Equals(ohneTrefferImdb.Tmdb, "245996", StringComparison.Ordinal),
+            $"imdb={ohneTrefferImdb.Imdb ?? "null"} tmdb={ohneTrefferImdb.Tmdb}");
+
+        var gleich = Jellyfin.Plugin.SubScribe.Api.TmdbImdbResolver.MergeVerifiedIds(
+            "tt6773088", "250203", "tt6773088", "250203", true, true);
+        Check(
+            "F-M738: stimmt das Paar ueberein, meldet die Pruefung KEINE Korrektur",
+            !gleich.Corrected,
+            "Corrected=" + gleich.Corrected);
+
+        var echtAnders = Jellyfin.Plugin.SubScribe.Api.TmdbImdbResolver.MergeVerifiedIds(
+            "tt6155146", "66515", "tt6773088", "250203", true, true);
+        Check(
+            "F-M738: eine wirklich andere Serie liefert beide Kennungen des Treffers und meldet die Korrektur",
+            echtAnders.Corrected
+            && string.Equals(echtAnders.Imdb, "tt6773088", StringComparison.Ordinal)
+            && string.Equals(echtAnders.Tmdb, "250203", StringComparison.Ordinal),
+            $"{echtAnders.Imdb}/{echtAnders.Tmdb} corrected={echtAnders.Corrected}");
+
+        var typWechsel = Jellyfin.Plugin.SubScribe.Api.TmdbImdbResolver.MergeVerifiedIds(
+            "tt30291270", "245996", "tt30291270", "245996", false, true);
+        Check(
+            "F-M738: auch ein Typwechsel (Serie zu Film und zurueck) gilt als Korrektur",
+            typWechsel.Corrected && !typWechsel.IsSeries,
+            "Corrected=" + typWechsel.Corrected + " IsSeries=" + typWechsel.IsSeries);
+
+#pragma warning disable CA1849 // Pruefpfad, kein Serverpfad: die Datei wird einmal gelesen.
+        var resolverQuelle = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/TmdbImdbResolver.cs"));
+#pragma warning restore CA1849
+        Check(
+            "F-M738: die alte Mischzeile ist weg — der Resolver entscheidet ueber MergeVerifiedIds",
+            resolverQuelle.Contains("var entschieden = MergeVerifiedIds(", StringComparison.Ordinal)
+            && !resolverQuelle.Contains("return (strict.Imdb ?? jfImdb, strict.Tmdb, strict.IsSeries, true);", StringComparison.Ordinal),
+            "Rueckgabe kommt aus der reinen Rechnung");
+
         if (_failures > 0)
         {
             Console.WriteLine($">>> ENDPUNKTE: {_failures} von {_checks} Pruefungen fehlgeschlagen");

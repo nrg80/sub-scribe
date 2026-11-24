@@ -28,7 +28,7 @@ markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test
 - [7. OSHash Refresh](#7-oshash-refresh) — 3 requirements
 - [8. Rules Shared by Both Directions](#8-rules-shared-by-both-directions) — 5 requirements
 
-- [9. SubDL/TMDb API, IDs and Credentials](#9-subdltmdb-api-ids-and-credentials) — 66 requirements
+- [9. SubDL/TMDb API, IDs and Credentials](#9-subdltmdb-api-ids-and-credentials) — 67 requirements
 - [10. Scheduler, Quota and Timing](#10-scheduler-quota-and-timing) — 24 requirements
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
@@ -1281,6 +1281,8 @@ The seeder parses the file name before it asks TMDb (the same parser, F-M217), a
 Year source: the file name's year first, Jellyfin's only as fallback (Jellyfin's film year, else Jellyfin's series year) — Jellyfin's year comes from the metadata that may be pinned to the wrong title.
 
 Correction only on an EXACT year match (the strict year match, the strict twin of the multi-search). No exact hit ⇒ Jellyfin's ids stand, so a missing year or a differently spelled title costs nothing (F-M190).
+
+**F-M738 [D]:** **Die Identitätsprüfung entscheidet über das PAAR, nicht über eine Kennung.** Befund 24.11.2026: `Too Good to Be True` lag als Serie mit der IMDb-Kennung der 2024er Vierteilers und der TMDb-Kennung des 2003er Zweiteilers in der Bibliothek — zwei Entitäten in einem Item. Die Prüfung verglich nur die TMDb-Kennung und trug bei fehlender IMDb im Treffer die **alte** IMDb weiter: `(strict.Imdb ?? jfImdb, strict.Tmdb, …)`. Ergebnis war ein Paar aus zwei Serien, das je nach Datenlage zufällig richtig oder falsch lag. Ebenso meldete das Flag `Corrected` schon dann eine Korrektur, wenn sich **nichts** änderte — es bedeutete „TMDb-Kennung weicht ab", nicht „es wurde etwas geändert"; Aufrufer und Protokoll behaupteten daraufhin eine Korrektur, die keine war. Neu rechnet eine **reine Funktion** das Ergebnis: (1) TMDb gewinnt; (2) **ein Paar bleibt ein Paar** — fehlt im Treffer die IMDb-Kennung, wird Jellyfins IMDb **verworfen** statt gemischt; (3) `Corrected` heißt „was herauskommt, unterscheidet sich von dem, was hereinkam", und zwar über alle drei Felder (IMDb, TMDb, Typ). Ein Typwechsel (Serie ↔ Film) zählt als Korrektur. Geprüft von T398.
 
 **F-M232:** **A login that fails on a server error is CLASSIFIED, never propagated raw.**
 
@@ -2921,6 +2923,8 @@ Kein Grund, keine Vorgeschichte, keine Bitte, kein Vorschlag. Gebaut in `Pipelin
 **T379:** Ein Timeout nimmt die Quelle für den Rest des Laufs heraus (F-M715), in `sources` — **1 Prüfung**: der Timeout-Zweig des Uploads trägt die Quelle in `_quellenAus` ein, nennt F-M715 und lässt die andere Quelle weiterlaufen.
 
 **T397:** Die Serien-Identität steht vor dem Staffelurteil (F-M737), in `seasonpack` — **6 Prüfungen**: es gibt genau eine Stelle, die die Identität prüft; die Gruppierung ruft sie auf, bevor sie den Staffelschlüssel bildet; der Aufruf liegt im Einlesen der Bibliothek, nicht dahinter; gefragt wird mit dem Jahr aus dem Dateinamen (F-M231); eine Korrektur wird mit Titel, Jahr und beiden Kennungen genannt; und der Merker gilt je Lauf (`_packIdentity.Clear()` beim Start).
+
+**T398:** Die Identitätsprüfung entscheidet über das Paar (F-M738), in `endpoints` — **5 Prüfungen**: ohne IMDb im Treffer wird die alte IMDb verworfen statt gemischt; ein übereinstimmendes Paar meldet keine Korrektur; eine wirklich andere Serie liefert beide Kennungen des Treffers; ein Typwechsel gilt als Korrektur; und die alte Mischzeile steht nicht mehr im Resolver.
 
 **T380:** Eine verschwundene Zeile beendet den Aufräumlauf nicht (F-M716), in `seasonpack` — **2 Prüfungen**: `DeleteMany` überspringt `EntityState.Deleted`, und `SaveChanges` fängt die `DbUpdateConcurrencyException`, hakt die Zeile als erledigt ab und wiederholt den Schreibvorgang.
 

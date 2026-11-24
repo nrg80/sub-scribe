@@ -411,18 +411,47 @@ public sealed class TmdbImdbResolver
             return (jfImdb, jfTmdb, isSeries, false);
         }
 
-        if (string.Equals(strict.Tmdb, jfTmdb, StringComparison.Ordinal))
+        // F-M738: das Paar entscheidet, nicht die einzelne Kennung. Vorher hiess "Corrected"
+        // lediglich "TMDb-Kennung weicht ab", und die Rueckgabe mischte bei fehlender IMDb des
+        // Treffers die ALTE IMDb mit der NEUEN TMDb-Kennung — ein Paar aus zwei Serien.
+        var entschieden = MergeVerifiedIds(jfImdb, jfTmdb, strict.Imdb, strict.Tmdb, strict.IsSeries, isSeries);
+        if (!entschieden.Corrected)
         {
-            // TMDb's own title+year answer IS Jellyfin's id — real confirmation, not the
+            // TMDb's own title+year answer IS Jellyfin's pair — real confirmation, not the
             // pair check's tautology.
             Trace?.Invoke($"[TMDB] id test: \"{title}\" ({wantYear}) confirms Jellyfin's tmdb {strict.Tmdb}");
-            return (jfImdb, jfTmdb, isSeries, false);
+            return entschieden;
         }
 
-        // A different entity carries this title at this year — TMDb wins, ids and type.
+        // Eine andere Entitaet traegt diesen Titel in diesem Jahr — TMDb gewinnt, Kennungen und Typ.
         IdMismatch?.Invoke($"ID conflict for \"{title}\" ({wantYear}): Jellyfin says tmdb={jfTmdb ?? "-"} imdb={jfImdb ?? "-"}, TMDb's title+year match says tmdb={strict.Tmdb} imdb={strict.Imdb ?? "-"} — using the TMDb id.");
-        Trace?.Invoke($"[TMDB] id test: \"{title}\" ({wantYear}) → tmdb {strict.Tmdb} (Jellyfin had {jfTmdb ?? "-"}) — correcting");
-        return (strict.Imdb ?? jfImdb, strict.Tmdb, strict.IsSeries, true);
+        Trace?.Invoke($"[TMDB] id test: \"{title}\" ({wantYear}) → tmdb {entschieden.Tmdb} imdb {entschieden.Imdb ?? "-"} (Jellyfin had tmdb {jfTmdb ?? "-"} imdb {jfImdb ?? "-"}) — correcting");
+        return entschieden;
+    }
+
+    /// <summary>
+    /// F-M738: was aus Jellyfins Kennungen und TMDbs Gegenantwort wird — als reine Rechnung, damit
+    /// die Regel prüfbar ist. Drei Sätze: (1) TMDb gewinnt. (2) **Ein Paar bleibt ein Paar:** hat der
+    /// Treffer keine IMDb-Kennung, wird Jellyfins IMDb nicht weitergetragen, sondern **verworfen** —
+    /// sonst stünde die Serie des einen Titels neben der Kennung des anderen. (3) `Corrected` heisst
+    /// „was herauskommt, unterscheidet sich von dem, was hereinkam" — nicht „TMDb hatte eine andere
+    /// Kennung"; vorher meldeten Aufrufer eine Korrektur, bei der sich nichts aenderte.
+    /// </summary>
+    /// <param name="jfImdb">IMDb-Kennung, die Jellyfin fuehrt.</param>
+    /// <param name="jfTmdb">TMDb-Kennung, die Jellyfin fuehrt.</param>
+    /// <param name="strictImdb">IMDb-Kennung des TMDb-Treffers (darf fehlen).</param>
+    /// <param name="strictTmdb">TMDb-Kennung des Treffers.</param>
+    /// <param name="strictIsSeries">Typ, den TMDb meldet.</param>
+    /// <param name="isSeries">Typ, mit dem gefragt wurde.</param>
+    /// <returns>Die Kennungen, die gelten, und ob sie sich vom Eingang unterscheiden.</returns>
+    public static (string? Imdb, string? Tmdb, bool IsSeries, bool Corrected) MergeVerifiedIds(
+        string? jfImdb, string? jfTmdb, string? strictImdb, string? strictTmdb, bool strictIsSeries, bool isSeries)
+    {
+        string? imdb = string.IsNullOrWhiteSpace(strictImdb) ? null : strictImdb;
+        bool corrected = !string.Equals(imdb, jfImdb, StringComparison.Ordinal)
+                         || !string.Equals(strictTmdb, jfTmdb, StringComparison.Ordinal)
+                         || strictIsSeries != isSeries;
+        return (imdb, strictTmdb, strictIsSeries, corrected);
     }
 
     /// <summary>

@@ -4526,12 +4526,17 @@ public sealed class UploadPipeline : IPackFiller
                 var geprueft = await _tmdb
                     .VerifyIdsAgainstTmdbAsync(imdb, tmdb, titel, bekanntesJahr, true, ct)
                     .ConfigureAwait(false);
-                if (geprueft.Corrected && geprueft.IsSeries && !string.IsNullOrWhiteSpace(geprueft.Imdb))
+                // F-M738: nur melden, wenn sich die Kennung wirklich aendert — "TMDb hatte eine
+                // andere TMDb-Kennung" ist keine Korrektur und las sich wie eine.
+                if (geprueft.Corrected
+                    && geprueft.IsSeries
+                    && !string.IsNullOrWhiteSpace(geprueft.Imdb)
+                    && !string.Equals(geprueft.Imdb, imdb, StringComparison.Ordinal))
                 {
                     ergebnis = (geprueft.Imdb!, geprueft.Tmdb);
                     LogUtil.Normal(
                         _logger,
-                        "[Sub Scribe] season pack: identity checked before the judgement — \"{Title}\" ({Year}) is {Imdb} on TMDb, the library carries {Library}; the season is judged under the TMDb id (F-M737).",
+                        "[Sub Scribe] season pack: identity checked before the judgement — '{Title}' ({Year}) is {Imdb} on TMDb, the library carries {Library}; the season is judged under the TMDb id (F-M737).",
                         titel, bekanntesJahr, ergebnis.Imdb, imdb);
                 }
             }
