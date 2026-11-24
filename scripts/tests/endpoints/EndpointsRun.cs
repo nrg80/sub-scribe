@@ -869,7 +869,7 @@ internal static class Program
         // ("scan finished (upload) — 0 upload queued"), weil "schon hochgeladen" aus Status=Uploaded
         // gelesen wurde — also "irgendwo hochgeladen". Der zweite Endpunkt bekam nie seinen Versuch.
         Check("die Upload-Queue fragt je Quelle statt quellenblind (F-M499)",
-            seederSource.Contains("UploadTodoFor(item, mediaPath, config, quelle)", StringComparison.Ordinal)
+            seederSource.Contains("UploadTodoFor(item, mediaPath, config, quelle,", StringComparison.Ordinal)
             && seederSource.Contains("registry.ArePositionsTerminalFor(mediaHash", StringComparison.Ordinal)
             && seederSource.Contains("registry.CountKnownPairsFor(mediaHash, quelle)", StringComparison.Ordinal)
             && uploadSource.Contains("registry.IsSidecarUploadedTo(looseHash, quelle)", StringComparison.Ordinal)
@@ -2425,7 +2425,7 @@ internal static class Program
                 Check("F-M540: the queue keeps asking per source (F-M499) and no longer guesses a settled item",
                     seederSource.Contains("registry.ArePositionsTerminalFor(mediaHash", StringComparison.Ordinal)
                     && seederSource.Contains("registry.CountKnownPairsFor(mediaHash, quelle)", StringComparison.Ordinal)
-                    && seederSource.Contains("UploadTodoFor(item, mediaPath, config, quelle)", StringComparison.Ordinal));
+                    && seederSource.Contains("UploadTodoFor(item, mediaPath, config, quelle,", StringComparison.Ordinal));
                 Check("F-M540: the queue asks whether the site carries the language at all",
                     seederSource.Contains("Api.TvSubtitlesClient.SiteLanguage(mapped) is not null", StringComparison.Ordinal)
                     && seederSource.Contains("Api.MovieSubtitlesClient.SiteLanguage(mapped) is not null", StringComparison.Ordinal)

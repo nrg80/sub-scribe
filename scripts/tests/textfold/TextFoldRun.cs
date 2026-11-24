@@ -261,7 +261,9 @@ internal static class Program
         Check(File.Exists(mediaParser) && !File.ReadAllText(mediaParser).Contains("Normalize(", StringComparison.Ordinal),
             "F-M724: the media parser no longer calls Normalize( — there is one fold, not two");
 
-        Console.WriteLine(_checks + " checks, " + Failures.Count + " failed");
+        // The summary line carries the suite NAME: docs/counts binds the number from the requirements
+        // document to exactly this line, so it must stay in the shape "<name>: <n> checks".
+        Console.WriteLine("textfold: " + _checks + " checks, " + Failures.Count + " failed");
         Console.WriteLine(Failures.Count == 0 ? ">>> TEXT-FOLD OK" : ">>> TEXT-FOLD FAILED");
         return Failures.Count == 0 ? 0 : 1;
     }
