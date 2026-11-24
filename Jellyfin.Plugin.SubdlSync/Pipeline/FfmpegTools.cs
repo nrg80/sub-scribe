@@ -330,6 +330,21 @@ public static class FfmpegTools
                         result[idx] = string.IsNullOrWhiteSpace(text) ? null : text;
                     }
                 }
+                // F-M726 (Befund 24.11.2026 an "Yaga.S01E01"): ein Abbruch ist kein Fehler. Vorher fing
+                // der allgemeine catch unten die TaskCanceledException des Zuruecklesens und schrieb je
+                // Spur eine ERR-Zeile — 24 Zeilen fuer EINEN abgebrochenen Vorlauf, und die Schleife
+                // machte danach mit jeder weiteren Spur dasselbe. Der Abbruch geht jetzt durch: die
+                // Methode sagt damit "nicht gelesen", nicht "kein Text" (ExitCode 0 plus lauter nulls
+                // war von einem echten Befund nicht zu unterscheiden).
+                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                {
+                    LogUtil.Detail(
+                        logger,
+                        "[Sub Scribe] read-back of the extracted streams cancelled for {File} at stream {Idx} — not an error, the pass ended early.",
+                        Path.GetFileName(mediaPath),
+                        idx);
+                    throw;
+                }
                 catch (Exception ex)
                 {
                     logger.LogError("[Sub Scribe] reading extracted stream {Idx} failed for {File}: {Msg}",

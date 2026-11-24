@@ -924,6 +924,10 @@
     "T387": {
       "suite": "textfold",
       "checks": 25
+    },
+    "T388": {
+      "suite": "endpoints",
+      "checks": 1
     }
   }
 }

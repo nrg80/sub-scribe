@@ -3613,6 +3613,24 @@ internal static class Program
         // F-M723 (Betreiberanweisung 24.11.2026): ein Weg, der ALLES zu einer Datei nimmt — Spur-Zeilen
         // jeden Status, ihre Seitenwagen, Stempel und die Marken der Subjekte. Das ist bewusst NICHT der
         // Retry-Pfad (der laesst echte Urteile stehen), sondern der ausdrueckliche Wunsch des Bedieners.
+        // F-M726 (Befund 24.11.2026 an "Yaga.S01E01"): ein Abbruch beim Zuruecklesen ist kein Fehler.
+        // Vorher schrieb der allgemeine catch je Spur eine ERR-Zeile (24 fuer einen abgebrochenen
+        // Vorlauf) und die Schleife lief weiter; die Methode gab danach ExitCode 0 plus lauter nulls
+        // zurueck — von "diese Spur hat keinen Text" nicht zu unterscheiden.
+        string ffmpegDatei = await File.ReadAllTextAsync(
+            Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Pipeline", "FfmpegTools.cs")).ConfigureAwait(false);
+        int leseStart = ffmpegDatei.IndexOf("foreach (var (idx, outFile) in outputs)", StringComparison.Ordinal);
+        int leseEnde = ffmpegDatei.IndexOf("return (result, proc.ExitCode);", leseStart, StringComparison.Ordinal);
+        string leseRumpf = leseStart > 0 && leseEnde > leseStart ? ffmpegDatei[leseStart..leseEnde] : string.Empty;
+        Check(
+            "F-M726: a cancelled read-back goes through instead of being logged once per stream",
+            leseRumpf.Length > 0
+            && leseRumpf.Contains("catch (OperationCanceledException) when (ct.IsCancellationRequested)", StringComparison.Ordinal)
+            && leseRumpf.Contains("read-back of the extracted streams cancelled", StringComparison.Ordinal)
+            // der Abbruch-Fang steht VOR dem allgemeinen Fang und reicht weiter
+            && leseRumpf.IndexOf("catch (OperationCanceledException)", StringComparison.Ordinal)
+                < leseRumpf.IndexOf("logger.LogError(\"[Sub Scribe] reading extracted stream", StringComparison.Ordinal)
+            && leseRumpf.Contains("throw;", StringComparison.Ordinal));
         Check(
             "F-M723: 'everything of this file' drops all rows of the file, not just rejections",
             resetDatei.Contains("bool alles = teile.Contains(\"all\")", StringComparison.Ordinal)

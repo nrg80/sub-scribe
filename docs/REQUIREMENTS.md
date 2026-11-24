@@ -1,7 +1,7 @@
 # Requirements Specification — Jellyfin Plugin "Sub Scribe" (Upload + Download)
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.30.
+**Status:** Implementation — v12.3.8.31.
 
 **Die Begründungen (warum eine Regel gilt, Messungen, Vorfälle) stehen nicht hier, sondern lokal in der Methodik-Ablage, nach Kapiteln sortiert und mit der Requirement-Nummer
 markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test — sonst nichts.**
@@ -33,7 +33,7 @@ markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
 - [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 46 requirements
-- [14. Data Model and Persistence](#14-data-model-and-persistence) — 79 requirements
+- [14. Data Model and Persistence](#14-data-model-and-persistence) — 80 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 51 requirements
 - [16. Non-Goals](#16-non-goals)
 - [17. Non-Functional Requirements](#17-non-functional-requirements)
@@ -2022,6 +2022,8 @@ Grund (gemessen 18.11.2026): die Queue entsteht nur aus offenen Stempeln (F-M557
 
 **F-M723a [G]:** **Der Schlüssel ist die Datei, nicht der Medienhash.** Befund am ersten Prod-Lauf (24.11.2026): `what=all` über alle 24 S01-Folgen nahm **244 Marken** und **0** Spur-/Seitenwagen-Zeilen. Ursache: `TrackId = TrackIdOf(FileId, Segment)` — die Zeilen hängen an der **Datei-Kennung**; ihr `MediaHash` kann von dem der Datei abweichen, wenn die Datei neu gepackt wurde und seither einen anderen `OsHash` trägt. `ForgetMedia` fragt deshalb beide Schlüssel (`MediaHash` **oder** `FileId`), für Spuren und Seitenwagen gleich.
 
+**F-M726 [G]:** **Ein Abbruch beim Zurücklesen ist kein Fehler — und keine Auskunft über den Inhalt.** Befund 24.11.2026 an `Yaga.S01E01.The.Burning.Man…mkv` (27 Untertitelspuren im Container, 26 Dialogspuren, keine Beidateien): 24 ERR-Zeilen „reading extracted stream 3…26 failed: A task was canceled" für **einen** abgebrochenen Vorlauf. Ursache: im Rücklese-Schleifenkopf von `FfmpegTools.ExtractAllAsync` fing `catch (Exception ex)` die `TaskCanceledException` von `File.ReadAllTextAsync(outFile, ct)`, schrieb je Spur eine Fehlerzeile und machte mit der nächsten Spur weiter; die Methode gab danach `ExitCode` **0** plus lauter `null` zurück — „nicht gelesen" war von „kein Text" nicht zu unterscheiden. Jetzt: `catch (OperationCanceledException) when (ct.IsCancellationRequested)` **vor** dem allgemeinen Fang, eine Detailzeile, und der Abbruch geht durch (`throw`). Die Aufrufer sind darauf eingerichtet — der Vorlauf (`ExtractionLookahead`) fängt ihn als „Plan beendet" und extrahiert frisch, Lauf und Zyklus behandeln `OperationCanceledException` als Abbruch; der Sammler ruft ohnehin `ct.ThrowIfCancellationRequested()`. Die Beidateien-Zählung bleibt unberührt: `ContainerSubtitleStreams()` filtert `IsExternal` (F-M658), `-map 0:s:N` zählt also nur Spuren im Container.
+
 
 **F-M724 [U]:** **Ein Fold für jeden Namensvergleich — und er rechnet, statt zu normalisieren.** Auftrag 24.11.2026 („Oben der fold Auftrag", Umsetzung nach Freigabe). Bis dahin gab es **zwei** Falt-Implementierungen mit verschiedenen Antworten: `Pipeline/MediaNameParser` rief `Normalize(FormKD)` — das braucht ICU und tut unter `InvariantGlobalization` **nichts** (im Harness messbar: der gestylte Name blieb gestylt, die Prüfung übersprang sich selbst mit „SKIP fold checks"), während `Api/ScribeApiClient` bewusst arithmetisch faltete. Neu ist **`Pipeline/TextFold`** als der eine Ort: `Fold(string?)` / `NeedsFold(string?)`. Abgedeckt sind die mathematischen Alphanumerika U+1D400–U+1D7FF (13 Letter-Stile plus die Ziffernläufe), das italic small h U+210E, die **ganzen** Fullwidth-Formen U+FF01–U+FF5E (also auch `．`/`－`, die die Episodenmuster brauchen), die Circled Letters U+24B6–U+24E9, die Squared Letters U+1F130–U+1F149, Super-/Subscript-**Ziffern** und die Small Capitals — die liegen **nicht** in einem Block, sondern verstreut über fünf Bereiche, und werden Slot für Slot abgebildet (ein Small-Capital-X gibt es in Unicode nicht; die Lücke bleibt Lücke). **Nicht** gefaltet werden die Modifier Letters U+02B0–U+02FF: „ᵃ"/„ʸ" stehen auch für Lautschrift, ein Fold würde einen Aussprachehinweis als Buchstaben lesen.
 
@@ -2923,6 +2925,8 @@ Kein Grund, keine Vorgeschichte, keine Bitte, kein Vorschlag. Gebaut in `Pipelin
 **T385:** Ein Dropdown-Wert nimmt alles zu einer Datei (F-M723), in `endpoints` — **1 Prüfung**: `what=all` ruft `ForgetMedia`, dieses löscht alle Spur-Zeilen und Seitenwagen und die Marken **vor** den Zeilen, und das Dropdown bietet den Eintrag an.
 
 **T386:** Der Expert-Block ist ein Satz (F-M723), in `gui-structure` — **2 Prüfungen**: der Eintrag „everything of this file" steht im Dropdown, und die drei alten Erklärungsabsätze sind weg.
+
+**T388:** Ein Abbruch ist kein Fehler (F-M726), in `endpoints` — **1 Prüfung**: der Rücklese-Rumpf fängt `OperationCanceledException` mit `ct.IsCancellationRequested` **vor** dem allgemeinen Fang, schreibt eine Detailzeile und reicht den Abbruch mit `throw` weiter.
 
 **T387:** Ein Fold für jeden Namensvergleich (F-M724), in `textfold` — **25 Prüfungen**: der Fold liest Bold, Small Caps (`ꜱ01ᴇ05`), Fullwidth (`Ｓ０２Ｅ０７`, auch die Endung), Circled, Squared und Super-/Subscript-Ziffern; Modifier Letters bleiben **und** werden nicht als faltbar gemeldet; ein ungestylter Name kommt als **dieselbe Instanz** zurück; die Mitgliedersuche findet `ꜱ01ᴇ05` und liefert E6 nicht dafür aus; `ⒶⒷ` faltet zu Buchstaben, nennt aber **keine** Folge (Absage dokumentiert); der Entpacker findet einen gestylten Archiveintrag über seinen Klartextnamen, einen unbekannten Namen weiterhin als `null`; `ReadSeasonArchive`/`EpisodesInZip` lesen vollbreite tvst-Namen und behalten den Originalnamen; der Medienparser liest den gestylten Namen **unter `InvariantGlobalization`** (der alte `Normalize`-Weg tat hier nichts); und **eine** Quelltext-Zusicherung: `MediaNameParser` enthält kein `Normalize(` mehr.
 
