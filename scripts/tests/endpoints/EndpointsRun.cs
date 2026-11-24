@@ -1407,7 +1407,8 @@ internal static class Program
             upload603.Contains("if (answer.Title.Settled)", StringComparison.Ordinal)
             && upload603.Contains("return UploadResult.AcceptedWithoutId(\"film-source-movie-\" + answer.Title.State);", StringComparison.Ordinal));
         Check("F-M603: die Serien-Adresse (tvst) genauso — derselbe Uploader, dieselbe Luecke",
-            upload603.Contains("if (string.Equals(show.Status, Api.Endpoints.TvstShowStatus.CreatedIdUnknown, StringComparison.Ordinal))", StringComparison.Ordinal)
+            // F-M734: die Serie meldet ihren Beleg jetzt neutral aus dem Auftrag; die Marke heisst weiter so.
+            upload603.Contains("if (answer.Title.Settled)", StringComparison.Ordinal)
             && upload603.Contains("return UploadResult.AcceptedWithoutId(\"second-source-show-created-id-unknown\");", StringComparison.Ordinal));
         Check("F-M603: die Marke wird geschrieben, BEVOR das Urteil faellt, und MarkOf laesst sie durch",
             upload603.Contains("if (result.SourceAccepted && result.Source is { } angenommeneQuelle)", StringComparison.Ordinal)
@@ -2243,7 +2244,9 @@ internal static class Program
                     && tvstReg.GetMedia("aaaa000000000006")?.TvstShowId is null
                     && handlerKaputt.Posts == 1
                     // die Kette antwortet mit Skipped (die andere Quelle bekommt ihren Versuch), nicht mit Failed
-                    && uploadSource.Contains("return UploadResult.Skipped(\"second-source-show-\" + show.Status)", StringComparison.Ordinal),
+                    // F-M734: die Kette antwortet mit Skipped (die andere Quelle bekommt ihren Versuch),
+                    // nicht mit Failed — der Grund heisst jetzt "Titel zu".
+                    && uploadSource.Contains("return UploadResult.Skipped(\"second-source-title-closed\");", StringComparison.Ordinal),
                     "status=" + kaputt.Status + " posts=" + handlerKaputt.Posts);
 
                 // ---- F-M538: jede Seite fuehrt ihr eigenes Sprachset --------------------------
@@ -2507,10 +2510,14 @@ internal static class Program
                 // Die Kette selbst: kein Dateiname mehr als Serienname, die Nummer geht ins Ticket.
                 Check("die Upload-Kette loest ueber TMDb und den Store auf, nicht ueber den Dateinamen (F-M501)",
                     uploadSource.Contains("var series = await _tmdb.SeriesInfoAsync(tmdbId!, ct)", StringComparison.Ordinal)
-                    && uploadSource.Contains(
-                        ".ResolveForMediaAsync(Registry, mediaHash, series, _config.DryRun, ct, mediaPath)", StringComparison.Ordinal)
-                    && uploadSource.Contains("MediaId = show.ShowId", StringComparison.Ordinal)
-                    && uploadSource.Contains("_tvstShows.BeginRun()", StringComparison.Ordinal)
+                    // F-M734: die Nummer kommt aus dem Bestand, das Anlegen ist ein Feld des Auftrags.
+                    && uploadSource.Contains("Registry.GetMedia(mediaHash!)?.TvstShowId", StringComparison.Ordinal)
+                    && uploadSource.Contains("MediaId = bekannteSerienId,", StringComparison.Ordinal)
+                    && uploadSource.Contains("Registry.SetTvstShowId(mediaHash, mediaPath, serienNummer)", StringComparison.Ordinal)
+                    // Der Behaelter-Weg (Staffel-Zip) loest seinen Titel noch ueber den Nachschlageweg auf
+                    // — er baut den Behaelter VOR dem Senden, seine Leiter kann den Auftrag deshalb noch
+                    // nicht umschliessen. Die Einzelfolge fragt den Weg nicht mehr.
+                    && uploadSource.Split(".ResolveForMediaAsync(").Length - 1 == 1
                     // der alte Weg (Serienname aus dem Dateinamen) steht im tvst-Zweig nicht mehr
                     && !uploadSource.Contains(
                         "var parsed = Pipeline.MediaNameParser.Parse(Path.GetFileNameWithoutExtension(releaseName))",

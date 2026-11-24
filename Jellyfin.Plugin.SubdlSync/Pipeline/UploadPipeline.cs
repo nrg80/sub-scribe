@@ -7572,91 +7572,99 @@ public sealed class UploadPipeline : IPackFiller
             return UploadResult.Skipped("second-source-title-closed");
         }
 
-        var (show, tvstGelungen, tvstGeschlossen) = await MitTitelLeiterAsync(
+        // F-M734: Titel und Versand sind EIN Auftrag — wie bei der Film-Adresse. Fehlt die Serie, legt die
+        // Engine sie auf der Seite an (EnsureTitle) und meldet, was geschah; die Kennung schreibt die
+        // PIPELINE in den Bestand. Die Leiter (F-M608) wiederholt nur, solange nichts gesendet wurde: die
+        // Engine bricht vor dem Senden ab, wenn der Titel nicht steht.
+        string? bekannteSerienId = !string.IsNullOrEmpty(mediaHash)
+            ? Registry.GetMedia(mediaHash!)?.TvstShowId
+            : Registry.TvstShowIdAtPath(mediaPath);
+
+        var (answer, tvstGelungen, tvstGeschlossen) = await MitTitelLeiterAsync(
                 "tvsubtitles",
                 tvstTitelId,
-                () => _tvstShows.ResolveForMediaAsync(Registry, mediaHash, series, _config.DryRun, ct, mediaPath),
-                s => s.Resolved,
-                s => s.Status,
-                // F-M610: „angelegt, Kennung unbekannt" ist ein Beleg — Paar zu, Titel offen.
-                s => string.Equals(s.Status, Api.Endpoints.TvstShowStatus.CreatedIdUnknown, StringComparison.Ordinal),
-                s => string.Equals(s.Status, Api.Endpoints.TvstShowStatus.Unclear, StringComparison.Ordinal),
-                () => _tvstShows.BeginRun(),
+                () => SendAsync(
+                    Configuration.SubtitleProvider.TvSubtitles,
+                    new Sources.SourceSendRequest
+                    {
+                        Bytes = System.Text.Encoding.UTF8.GetBytes(srtContent),
+                        FileName = neutralName,
+                        Language = lang,
+                        HearingImpaired = hearingImpaired,
+                        ReleaseName = SeasonPack.ReleaseGroup(releaseName) ?? string.Empty,
+                        Quality = Api.TvSubtitlesClient.RipFromQuality(quality),
+                        EpisodeTitle = EpisodeTitleOf(mediaPath),
+                        Comment = Api.Endpoints.UploadComment.Series(
+                            imdbId, tmdbId, season, episode, series.Name, EpisodeTitleOf(mediaPath),
+                            series.FirstAirYear ?? 0),
+                        Target = new Sources.SourceSendTarget(
+                            IsSeries: true,
+                            Title: series.Name,
+                            Year: series.FirstAirYear ?? 0,
+                            ImdbId: imdbId,
+                            TmdbId: tmdbId,
+                            Season: season,
+                            Episode: episode)
+                        {
+                            // F-M501: die Nummer aus dem Bestand führt — kein zweites Suchen im Versand.
+                            MediaId = bekannteSerienId,
+                        },
+                        AsPack = false,
+
+                        // F-M734: die Titel-Frage steht im Auftrag.
+                        EnsureTitle = true,
+                        DryRun = _config.DryRun,
+                    },
+                    ct),
+                a => a.Title.Resolved,
+                a => a.Title.Reason ?? a.Reason,
+                a => a.Title.Settled,
+                a => a.Title.State == Sources.SourceTitleState.Unclear,
+                () => { },
                 ct)
             .ConfigureAwait(false);
-        if (!tvstGelungen)
+
+        if (!answer.Title.Resolved && !answer.Title.Settled)
         {
+            // F-M610: nur ein inhaltliches Nein schliesst den Titel. Ohne Urteil bleibt alles offen.
             if (!tvstGeschlossen)
             {
                 LogUtil.PerItem(_config.LogMode, _logger,
-                    "[tvsubtitles] {Name} [{Lang}] — title {Title} got no verdict after the ladder ({Status}), nothing closed (F-M610)",
-                    neutralName, lang, tvstTitelId, show?.Status ?? "?");
+                    "[tvsubtitles] {Name} [{Lang}] — title {Title} got no verdict after the ladder ({State}), nothing closed (F-M610)",
+                    neutralName, lang, tvstTitelId, answer.Title.State);
                 return UploadResult.NoVerdict("second-source-title-no-verdict");
             }
 
             _titelGeschlossen.Add("tvsubtitles|" + tvstTitelId);
             LogUtil.PerItem(_config.LogMode, _logger,
-                "[tvsubtitles] {Name} [{Lang}] — title {Title} could not be created and found after the ladder ({Status}), nothing sent (F-M608)",
-                neutralName, lang, tvstTitelId, show?.Status ?? "?");
+                "[tvsubtitles] {Name} [{Lang}] — title {Title} could not be created and found after the ladder ({State}), nothing sent (F-M608)",
+                neutralName, lang, tvstTitelId, answer.Title.State);
             return UploadResult.Skipped("second-source-title-closed");
         }
 
-        if (!show.Resolved)
+        if (answer.Title.Settled)
         {
-            // F-M603 (Operator-Frage 18.11.2026: „Müsste ja derselbe uploader sein?"): JA — dieselbe
-            // Luecke wie bei der Film-Adresse. `created-id-unknown` heisst „die Seite hat die Serie
-            // angelegt, die Nummer ist nicht lesbar"; ohne Marke bleibt das Paar fuer tvst offen und
-            // die Datei kehrt in jeden Lauf zurueck. Der angenommene Versuch bekommt deshalb seine
-            // Marke (Weg „A"), die Statistik zaehlt ihn weiterhin als SKIP.
-            if (string.Equals(show.Status, Api.Endpoints.TvstShowStatus.CreatedIdUnknown, StringComparison.Ordinal))
-            {
-                LogUtil.PerItem(_config.LogMode, _logger,
-                    "[tvsubtitles] {Name} [{Lang}] — created, the id is not readable ({Status}); the pair is settled (F-M603)",
-                    neutralName, lang, show.Status);
-                return UploadResult.AcceptedWithoutId("second-source-show-created-id-unknown");
-            }
-
-            // F-M501: KEIN Blocker. Die Zeile nennt den Grund (Status), damit im Lauf steht, warum tvst
-            // fuer dieses Medium nichts bekommt, und die Kette laeuft weiter.
+            // F-M603 (Operator-Frage 18.11.2026: „Müsste ja derselbe uploader sein?"): JA — dieselbe Luecke
+            // wie bei der Film-Adresse. „Angelegt, Kennung nicht lesbar" ist ein ANGENOMMENER Versuch: das
+            // Paar bekommt seine Marke (Weg „A"), die Statistik zaehlt ihn weiterhin als SKIP.
             LogUtil.PerItem(_config.LogMode, _logger,
-                "[tvsubtitles] {Name} [{Lang}] — skipped: no show id ({Status}) (F-M501)",
-                neutralName, lang, show.Status);
-            return UploadResult.Skipped("second-source-show-" + show.Status);
+                "[tvsubtitles] {Name} [{Lang}] — created, the id is not readable ({State}); the pair is settled (F-M603)",
+                neutralName, lang, answer.Title.State);
+            return UploadResult.AcceptedWithoutId("second-source-show-created-id-unknown");
         }
 
-        // F-M687: die Abgabe geht als Auftrag an die Engine. Sie trägt die Seriennummer, die der Lauf
-        // gerade aufgelöst hat (F-M501), den Rip und die Gruppe, die die Seite in ihren Feldern führt
-        // (F-M498/F-M505), den Folgentitel für den Kommentar (F-M572) und das Jahr der ERSTAUSSTRAHLUNG
-        // (F-M574) — derselbe Rumpf wie zuvor, jetzt über einen Auftrag statt über einen Endpunkt.
-        var answer = await SendAsync(
-            Configuration.SubtitleProvider.TvSubtitles,
-            new Sources.SourceSendRequest
-            {
-                Bytes = System.Text.Encoding.UTF8.GetBytes(srtContent),
-                FileName = neutralName,
-                Language = lang,
-                HearingImpaired = hearingImpaired,
-                ReleaseName = SeasonPack.ReleaseGroup(releaseName) ?? string.Empty,
-                Quality = Api.TvSubtitlesClient.RipFromQuality(quality),
-                EpisodeTitle = EpisodeTitleOf(mediaPath),
-                Comment = Api.Endpoints.UploadComment.Series(
-                    imdbId, tmdbId, season, episode, series.Name, EpisodeTitleOf(mediaPath),
-                    series.FirstAirYear ?? 0),
-                Target = new Sources.SourceSendTarget(
-                    IsSeries: true,
-                    Title: series.Name,
-                    Year: series.FirstAirYear ?? 0,
-                    ImdbId: imdbId,
-                    TmdbId: tmdbId,
-                    Season: season,
-                    Episode: episode)
-                {
-                    // F-M501: die Nummer aus dem Bestand führt — kein zweites Suchen im Versand.
-                    MediaId = show.ShowId?.ToString(System.Globalization.CultureInfo.InvariantCulture),
-                },
-                AsPack = false,
-            },
-            ct).ConfigureAwait(false);
+        // Der Titel steht und die Kennung ist da: sie gehoert in den Bestand.
+        if (!_config.DryRun
+            && answer.Title.TitleId is { Length: > 0 } neueSerienId
+            && int.TryParse(neueSerienId, System.Globalization.NumberStyles.Integer,
+                System.Globalization.CultureInfo.InvariantCulture, out int serienNummer)
+            && serienNummer > 0)
+        {
+            Registry.MarkAndFlush(() => Registry.SetTvstShowId(mediaHash, mediaPath, serienNummer));
+            LogUtil.PerItem(_config.LogMode, _logger,
+                "[tvsubtitles] {Name} [{Lang}] — show {Id} written to the store (F-M501/F-M734)",
+                neutralName, lang, serienNummer);
+        }
 
         // LOGGING.md 1.9/1.11: kein leeres Suffix und kein gequotetes Wort — zwei Vorlagen
         // statt eines angehängten Leerstrings, `:l` druckt das Wort ohne Anführungszeichen.
