@@ -50,7 +50,7 @@ with where the value comes from (F-M222):
 - **The SubDL API key** — it stands in the source card, not in the page's own form: the engine declares
   it as a secret field and marks it required in its own schema (F-M222, F-M497, F-M688). Its short
   description says where the key comes from: a free key from the account panel, documented at
-  `subdl.com/api-doc`.
+  `subdl.com/api-doc` (F-M745 — the access field is the one field of a card that may carry such a line).
 - **The TMDb API key** (F-M203).
 - **The target languages** (F-M42).
 
@@ -85,6 +85,11 @@ never its value, and `VisibleWhen` shows a field only while another field holds 
 | `subdl` | `apiKey` (secret, required), `account` (text, visible while a key is stored), `baseUrl` (URL), `preferSeasonZip` (switch, on) | the account is the login the key belongs to |
 | `tvsubtitles` | `baseUrl` (URL) | the site demands no access data |
 | `moviesubtitles` | `baseUrl` (URL) | the access field fell out — it was empty from the start |
+
+A source that cannot take part reads **`off`** — in the card head and as a hollow dot on its tab (F-M744).
+The word comes from the endpoint's own answer (`participates`), so a source without its access data, or one
+whose directions are both closed, never looks like a running one; the hint under the name says what is
+missing. The state is grey, not red — red stays reserved for destructive and failing states (F-M228).
 
 The three cards stand behind **one tab per source**, not stacked one below the other (F-M743). The strip
 carries the source name and a dot when the source is configured, so one glance says which sources run at

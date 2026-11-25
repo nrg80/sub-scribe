@@ -518,14 +518,25 @@ internal static class Program
             // („Default: off."). Ein Satz mit Begruendung gehoert in die Doku, nicht auf die Karte.
             // F-M702 (Betreiberansage 22.11.2026: „und das bla blah weglassen … keine weitere Beschreibung"):
             // eine Karte traegt GAR KEINE Beschreibung mehr — nur Beschriftungen und Schalter.
+            // F-M745 (Betreiberwunsch 25.11.2026: "a short description below the subdl api key should be
+            // introduced"): die Zugangsstelle einer Quelle darf EINE kurze Zeile tragen, die sagt, woher
+            // der Wert kommt. Sie ueberholt damit genau den Satz aus F-M702, der jedem Feld den Hilfetext
+            // verbietet — alles andere jener Regel steht weiter (kein Platzhalter, keine set/not-set-Zeile,
+            // keine Anfrage-pro-Staffel-Notiz).
             var mitText = registry.Engines
-                .SelectMany(e => e.Fields.Select(f => (Quelle: e.Capabilities.Key, Feld: f.Key, Text: f.Help)))
+                .SelectMany(e => e.Fields.Select(f => (Quelle: e.Capabilities.Key, Feld: f.Key, IstZugang: f.Key == "apiKey", Text: f.Help)))
                 .Where(t => !string.IsNullOrWhiteSpace(t.Text))
                 .ToList();
-            Check(mitText.Count == 0,
-                "F-M702: keine Quelle haengt eine Beschreibung an ein Feld — die Karte sagt nur, was das Feld ist",
-                mitText.Count == 0 ? "0 Beschreibungen" : string.Join(" | ",
-                    mitText.Select(t => t.Quelle + "/" + t.Feld + " = " + t.Text)));
+            var fremde = mitText.Where(t => !t.IstZugang).ToList();
+            Check(fremde.Count == 0,
+                "F-M745: nur die Zugangsstelle traegt eine kurze Beschreibung — jedes andere Feld keine",
+                fremde.Count == 0
+                    ? (mitText.Count == 0 ? "0 Beschreibungen" : "1 Beschreibung (subdl/apiKey)")
+                    : string.Join(" | ", fremde.Select(t => t.Quelle + "/" + t.Feld + " = " + t.Text)));
+            var zugangstext = mitText.FirstOrDefault(t => t.IstZugang).Text;
+            Check(!string.IsNullOrWhiteSpace(zugangstext) && zugangstext!.Length <= 120,
+                "F-M745: die Beschreibung der Zugangsstelle bleibt EINE kurze Zeile (max. 120 Zeichen)",
+                zugangstext ?? "(leer)");
 
             // F-M696: die Art der Quelle steht als Variable in den Faehigkeiten — nicht als Name.
             var arten = registry.Engines.ToDictionary(

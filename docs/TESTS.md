@@ -21,7 +21,7 @@ stands in §19 of `SPECIFICATION.md`, and the binding of a test to its suite in 
 - [8. Tests of the scheduler, the quota and the timing (§10)](#8-tests-of-the-scheduler-the-quota-and-the-timing-10) — 17 tests
 - [9. Tests of the content registry and identity (§11)](#9-tests-of-the-content-registry-and-identity-11) — 11 tests
 - [10. Tests of the library scope and the skip filters (§12)](#10-tests-of-the-library-scope-and-the-skip-filters-12) — 3 tests
-- [11. Tests of the configuration and the settings page (§13)](#11-tests-of-the-configuration-and-the-settings-page-13) — 31 tests
+- [11. Tests of the configuration and the settings page (§13)](#11-tests-of-the-configuration-and-the-settings-page-13) — 32 tests
 - [12. Tests of the data model and persistence (§14)](#12-tests-of-the-data-model-and-persistence-14) — 75 tests
 - [13. Tests of logging, status and transparency (§15)](#13-tests-of-logging-status-and-transparency-15) — 19 tests
 - [14. Tests of the test discipline itself (§19)](#14-tests-of-the-test-discipline-itself-19) — 34 tests
@@ -467,6 +467,8 @@ Without a hash **and** without a path row it stays with the honest result: the n
 
 **T405:** The 'Required' marker in the headings keeps its accent blue (F-M228), in `gui-structure`. **1 check**. `.subdl-required` has its own CSS rule with `color: #00a4dc`, and at least three headings carry the class. The rule had gone missing while the source cards were built, and without it the span falls back to the heading's text colour — the marker read as just another word.
 
+**T406:** A source that cannot take part reads `off` (F-M744), in `gui-structure`. **3 checks**. The card head carries the word from the endpoint's `participates` (never from a second check of the page), the tab's dot switches between `on` and `off` with the same answer, and the `off` colour is grey — red stays reserved for destructive and failing states (F-M228).
+
 ## 12. Tests of the data model and persistence (§14)
 
 **T17:** Two streams of the same language keep independent verdicts (F-M197)
@@ -635,7 +637,7 @@ The three old SubDL fields (`Username`, `Password`, `ApiKey`) have disappeared f
 
 **T364:** Without a stored list the order shows the old setting (F-M701), in `gui-structure`. **1 check**: both preassignments (`tvsubtitles,moviesubtitles,subdl` and `subdl,tvsubtitles,moviesubtitles`) stand in the page, and the fallback is bound to `if (!liste)`.
 
-**T365:** A card says only what a field is (F-M702). **1 check** in `sources`: no engine gives a field a help text (0 descriptions across all three sources).
+**T365:** A card says only what a field is (F-M702, F-M745). **2 checks** in `sources`: no field carries a help text except the access field, and that one stays one line of at most 120 characters (SubDL's `apiKey` names where the key comes from). The check was one until the operator asked for the SubDL description back; the exception is written as an exception, not as a loosened rule.
 
 **T366:** The order stands under Endpoints (F-M703), in `gui-structure`. **1 check**: the block `SourceOrderBlock` lies in the section between the heading `Endpoints` and `Media files`, **before** `SourceCards`, and no longer in the General tab.
 

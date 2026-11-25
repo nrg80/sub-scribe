@@ -767,7 +767,8 @@
         .subdl-source-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.6em; }
         .subdl-source-name { font-weight: 600; font-size: 1.05em; }
         .subdl-source-state.on { color: #107c10; }
-        .subdl-source-state.off { color: #a4262c; }
+        .subdl-source-state.off { color: #767676; }
+        .subdl-source-tab-dot.off { color: #767676; }
         /* F-M693: die Reihe der Moeglichkeiten — vier Schalter, jeder mit seinem Namen. */
         .subdl-source-badges { display: flex; flex-wrap: wrap; gap: 1.2em; margin: 0.55em 0 0.8em 0; }
         .subdl-badge { display: flex; align-items: center; margin: 0; }
@@ -2321,6 +2322,21 @@ workers.forEach(function (w) {
                 // nicht aus ihrem Namen — deshalb steht sie auch als Variable im Endpunkt.
                 var art = subdlSourceServes(entry);
                 if (art) { head.appendChild(art); }
+
+                // Betreiberwunsch 25.11.2026: "Wenn irgendein endpoint nicht konfiguriert ist, keine
+                // Zugangsdaten fuer subdl zb, soll er als off angezeigt werden". Die Auskunft steht
+                // schon in der Antwort (configured: falsch bei fehlendem Pflichtfeld oder kaputter
+                // Datei) — die Seite prueft die Felder nicht ein zweites Mal. Der Klartext darunter
+                // (hint) sagt, WAS fehlt.
+                var beteiligt = entry.participates === true;
+                var zustand = subdlSourceEl('span', 'subdl-source-state ' + (beteiligt ? 'on' : 'off'),
+                    beteiligt ? 'on' : 'off');
+                zustand.title = beteiligt
+                    ? 'this source takes part'
+                    : (entry.configured === true
+                        ? 'configured, but no direction is open'
+                        : 'not configured - it stays out of the run');
+                head.appendChild(zustand);
                 // F-M699 (Betreiberbefund 22.11.2026: „es ist komisch dass subdl subdl hintereinander
                 // steht. Fuer tvst und mst genauso"): der Schluessel steht NICHT mehr neben dem Namen —
                 // "SubDL subdl" sagte dasselbe zweimal. Er bleibt als Titel am Namen erreichbar, weil man
@@ -2635,7 +2651,7 @@ workers.forEach(function (w) {
             function subdlSourceTabState(list, key) {
                 for (var i = 0; i < list.length; i++) {
                     if (list[i] && list[i].key === key) {
-                        return list[i].configured === true;
+                        return list[i].participates === true;
                     }
                 }
                 return false;
@@ -2674,11 +2690,10 @@ workers.forEach(function (w) {
                     btn.setAttribute('data-source-tab', eintrag.key);
                     btn.setAttribute('role', 'tab');
                     btn.textContent = eintrag.displayName || eintrag.key;
-                    if (subdlSourceTabState(list, eintrag.key)) {
-                        var punkt = subdlSourceEl('span', 'subdl-source-tab-dot', '●');
-                        punkt.title = 'running';
-                        btn.appendChild(punkt);
-                    }
+                    var an = subdlSourceTabState(list, eintrag.key);
+                    var punkt = subdlSourceEl('span', 'subdl-source-tab-dot ' + (an ? 'on' : 'off'), an ? '●' : '○');
+                    punkt.title = an ? 'on' : 'off';
+                    btn.appendChild(punkt);
                     btn.addEventListener('click', (function (k) {
                         return function () { subdlSourceTab(k); };
                     })(eintrag.key));

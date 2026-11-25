@@ -1918,6 +1918,24 @@ def main():
                                             page_src_f497.find("function subdlLoadSources(")],
           "F-M743: eigene Klasse fuer die Quellenreiter (subdlShowTab fasst .subdl-tab-btn an)")
 
+    # ---- F-M744 (Betreiberwunsch 25.11.2026: „Wenn irgendein endpoint nicht konfiguriert ist, keine
+    # Zugangsdaten fuer subdl zb, soll er als off angezeigt werden"): eine Quelle, die nicht teilnehmen
+    # kann, steht als "off" da — im Kopf der Karte und als hohler Punkt am Reiter. Das Wort kommt aus
+    # der Antwort (participates), nicht aus einer zweiten Pruefung der Seite.
+    check("F-M744: a source that cannot take part reads 'off', from the endpoint's answer",
+          "entry.participates === true" in page_src_f497
+          and "'subdl-source-state ' + (beteiligt ? 'on' : 'off')" in page_src_f497
+          and "list[i].participates === true" in page_src_f497,
+          "F-M744: off/on kommen aus participates, nicht aus einer eigenen Feldpruefung")
+    check("F-M744: the tab dot carries the same state as the card",
+          "subdl-source-tab-dot ' + (an ? 'on' : 'off')" in page_src_f497
+          and ".subdl-source-tab-dot.off { color: #767676; }" in page_src_f497,
+          "F-M744: ein Reiterpunkt je Quelle, gruen fuer an, grau fuer aus")
+    check("F-M744: the off state is grey, not red",
+          ".subdl-source-state.off { color: #767676; }" in page_src_f497
+          and ".subdl-source-state.off { color: #a4262c; }" not in page_src_f497,
+          "F-M228: rot bleibt fuer zerstoerende und fehlerhafte Zustaende")
+
     # ---- F-M497 (Nachtrag des Nutzers: „Tmdb confi dann auch vor subdl konfi in der gui"): die
     # Pflicht steht VOR der optionalen Quelle — wer die Seite liest, sieht zuerst, was er haben MUSS.
     # Nur die beiden Blöcke sind getauscht; geladen und gespeichert wird über die Feld-IDs
