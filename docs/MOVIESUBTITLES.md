@@ -1,5 +1,7 @@
 # moviesubtitles.org — protocol and methods
 
+**Owner: the site.** Paths, tables, peculiarities and methods of moviesubtitles.org; the contract view of the same source stands in `engines/moviesubtitles.md`.
+
 As of 15.11.2026. Recorded **read-only throughout**: no POST to `add.php`, `add-movie.php` or
 `rate.php`, no upload, no film created, no login attempted. Nothing was written —
 not even the search, although it submits its form by POST and creates nothing thereby (checked,
@@ -13,6 +15,21 @@ The site has **no API**: `/api.php`, `/sitemap.xml`, `/rss.xml` answer with 302 
 Layout, CSS classes (`left_articles`, `description`, `stat`, `footer`) and form wording are those
 of tvsubtitles.net, and the header carries the reference „TV Show subtitles" to the sister. It is
 the same family — the same build, different data.
+
+## Contents
+
+- [Assignment](#assignment)
+- [The path (download)](#the-path-download)
+- [The path (upload)](#the-path-upload)
+- [Tables](#tables)
+- [Site peculiarities](#site-peculiarities)
+- [What is NOT proven](#what-is-not-proven)
+- [Implemented in stage 1](#implemented-in-stage-1)
+- [Implemented in stage 2b — the upload path (locked)](#implemented-in-stage-2b-the-upload-path-locked)
+- [Implemented in stage 3 — creating a film (F-M513)](#implemented-in-stage-3-creating-a-film-f-m513)
+- [Live proof 16.11.2026 — the answer to `add-movie.php` (F-M515)](#live-proof-16112026-the-answer-to-add-moviephp-f-m515)
+- [F-M517 — the number survives without a media hash too](#f-m517-the-number-survives-without-a-media-hash-too)
+- [What a client will need here (seam: stage 2)](#what-a-client-will-need-here-seam-stage-2)
 
 ## Assignment
 

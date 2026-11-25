@@ -1,5 +1,7 @@
 # tvsubtitles.net — the page-based source
 
+**Owner: the source at a glance.** The detailed site material — paths, tables, peculiarities, methods — stands in `../TVSUBTITLES.md`.
+
 ## 1. What it is
 
 tvsubtitles.net carries subtitles for **series only**, and it has no API: the site is opened the way a

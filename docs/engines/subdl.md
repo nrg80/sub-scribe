@@ -1,5 +1,7 @@
 # subdl.com — the API source
 
+**Owner: the source at a glance** — contracts, capabilities, languages, transport, cost, failure shapes, the ledger, the boundary. The detailed site material stands in `../MULTI-SOURCE.md` and `../REQUIREMENTS.md`.
+
 ## 1. What it is
 
 subdl.com is the only one of the three that offers an API (F-M682). It carries film and series

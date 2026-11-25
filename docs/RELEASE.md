@@ -1,5 +1,7 @@
 # Releasing Sub Scribe
 
+**Owner: the release process.** From the version bump to the published asset.
+
 ## The release
 
 ```bash

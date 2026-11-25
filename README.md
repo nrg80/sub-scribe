@@ -1,5 +1,7 @@
 # Sub Scribe
 
+**Owner: the way in.** Install, quick start, build — and the list of documents with what each one owns.
+
 Sub Scribe keeps your Jellyfin library subtitled. It draws on three sources — [SubDL](https://subdl.com),
 [tvsubtitles.net](https://www.tvsubtitles.net) and [moviesubtitles.org](https://www.moviesubtitles.org) —
 and **downloads** missing subtitles for the

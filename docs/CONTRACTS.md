@@ -1,5 +1,7 @@
 # The contracts of the sources — where the boundary runs
 
+**Owner: the boundaries.** The three contracts and the rules that hold them apart; the rules themselves stand in `REQUIREMENTS.md` (§22 with §§3, 4 and 10).
+
 **The vocabulary is `docs/TERMS.md`; this document uses it without repeating it.**
 
 This document fixes **which contract answers which question** and **what none of them may do**. It
