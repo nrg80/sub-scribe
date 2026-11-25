@@ -5366,8 +5366,9 @@ public sealed class DownloadPipeline : IDisposable
 
         // F-M43: the window is a floor plus a share of the runtime, never the floor alone — a long
         // film carries long credits, and a subtitle that stops with the dialogue is complete.
-        long toleranceSec = Qa.RuntimeWindow.ToleranceSeconds(floorSec, runtimeSec);
-        if (!Qa.RuntimeWindow.Covers(spanSec, runtimeSec, floorSec))
+        bool episode = item is Episode;
+        long toleranceSec = Qa.RuntimeWindow.ToleranceSeconds(floorSec, runtimeSec, episode);
+        if (!Qa.RuntimeWindow.Covers(spanSec, runtimeSec, floorSec, episode))
         {
             reason = $"span {spanSec}s vs runtime {runtimeSec}s (tolerance ±{toleranceSec}s)";
             return false;

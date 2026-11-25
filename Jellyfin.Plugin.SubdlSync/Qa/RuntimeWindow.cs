@@ -15,8 +15,9 @@ namespace Jellyfin.Plugin.SubScribe.Qa;
 /// <summary>
 /// F-M43 stage 2: how far a subtitle's cue span may sit from the item runtime.
 /// <para>
-/// The window is a FLOOR plus a SHARE. The floor is the operator's setting (default 420 s = 7 min,
-/// 0 = off).
+/// The window is a FLOOR plus a SHARE. The floor depends on what is being matched: an episode gets
+/// 4 minutes, a feature film 7 minutes — an operator who wants another film floor sets it, and `0`
+/// switches the whole check off.
 /// The share is 12 % of the item runtime and applies whenever it is the larger of the two: a long
 /// film carries long credits, and a subtitle that stops when the dialogue stops is complete, not
 /// broken. A fixed window measures the credits of a short film and the credits of a long film with
@@ -32,25 +33,31 @@ public static class RuntimeWindow
     /// <summary>Share of the item runtime that is always allowed (F-M43).</summary>
     public const double Share = 0.12;
 
-    /// <summary>Default floor in seconds: 7 minutes (F-M43).</summary>
-    public const int DefaultFloorSeconds = 420;
+    /// <summary>Floor for a feature film in seconds: 7 minutes (F-M43).</summary>
+    public const int FilmFloorSeconds = 420;
+
+    /// <summary>Floor for an episode in seconds: 4 minutes (F-M43).</summary>
+    public const int EpisodeFloorSeconds = 240;
 
     /// <summary>
     /// The effective window in seconds: the configured floor, or the share of the runtime when that
     /// is larger.
     /// </summary>
-    /// <param name="floorSec">Configured tolerance in seconds (0 or less = check off).</param>
+    /// <param name="floorSec">Configured film floor in seconds (0 or less = check off).</param>
     /// <param name="runtimeSec">Item runtime in seconds.</param>
+    /// <param name="episode">True for an episode, false for a film.</param>
     /// <returns>Effective window in seconds.</returns>
-    public static long ToleranceSeconds(int floorSec, long runtimeSec)
+    public static long ToleranceSeconds(int floorSec, long runtimeSec, bool episode)
     {
         if (floorSec <= 0)
         {
             return 0;
         }
 
+        // An episode gets the smaller floor, but never more than the operator allowed for films.
+        long floor = episode ? Math.Min(EpisodeFloorSeconds, floorSec) : floorSec;
         long share = runtimeSec <= 0 ? 0 : (long)Math.Round(runtimeSec * Share, MidpointRounding.AwayFromZero);
-        return Math.Max(floorSec, share);
+        return Math.Max(floor, share);
     }
 
     /// <summary>
@@ -59,11 +66,12 @@ public static class RuntimeWindow
     /// </summary>
     /// <param name="spanSec">Cue span in seconds (last end minus first start).</param>
     /// <param name="runtimeSec">Item runtime in seconds.</param>
-    /// <param name="floorSec">Configured tolerance in seconds (0 or less = check off).</param>
+    /// <param name="floorSec">Configured film floor in seconds (0 or less = check off).</param>
+    /// <param name="episode">True for an episode, false for a film.</param>
     /// <returns>True when the span is inside the window.</returns>
-    public static bool Covers(long spanSec, long runtimeSec, int floorSec)
+    public static bool Covers(long spanSec, long runtimeSec, int floorSec, bool episode)
     {
-        long tolerance = ToleranceSeconds(floorSec, runtimeSec);
+        long tolerance = ToleranceSeconds(floorSec, runtimeSec, episode);
         if (tolerance <= 0 || runtimeSec <= 0)
         {
             return true;

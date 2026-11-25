@@ -1033,7 +1033,7 @@
     },
     "T409": {
       "suite": "reporting",
-      "checks": 8
+      "checks": 10
     }
   }
 }

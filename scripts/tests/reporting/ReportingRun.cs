@@ -394,25 +394,30 @@ internal static class ReportingRun
         // that morning — both were reported to SubDL under the fixed 600 s window, both carry 88 % and
         // 91 % of their film. The floor is 7 minutes, so a short episode is judged less harshly than a
         // feature film, and the share takes over from about 58 minutes on.
-        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.DefaultFloorSeconds == 420
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.FilmFloorSeconds == 420
+              && Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.EpisodeFloorSeconds == 240
               && new Jellyfin.Plugin.SubScribe.Configuration.PluginConfiguration().DownloadRuntimeToleranceSec
-                 == Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.DefaultFloorSeconds,
-            "F-M43: the floor is 7 minutes, and the shipped setting IS that floor — no second number to drift");
-        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(420, 5414) == 650,
-            "F-M43: 12 % of a 90-minute runtime is larger than the 7-minute floor, so the window grows");
-        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(420, 1320) == 420,
-            "F-M43: the share never tightens the floor — a 22-minute episode keeps the 7-minute window");
-        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(4772, 5414, 420),
+                 == Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.FilmFloorSeconds,
+            "F-M43: 7 minutes for a film, 4 minutes for an episode, and the shipped setting IS the film floor");
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(420, 5414, false) == 650,
+            "F-M43: 12 % of a 90-minute film is larger than the 7-minute floor, so the window grows");
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(420, 1320, true) == 240,
+            "F-M43: a 22-minute episode keeps its own 4-minute floor — the share is smaller than the floor there");
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(420, 2700, true) == 324,
+            "F-M43: a 45-minute episode is judged by the share (12 %), because it exceeds the 4-minute floor");
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(180, 1320, true) == 180,
+            "F-M43: the episode floor never exceeds the configured film floor — an operator below 4 min stays below");
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(4772, 5414, 420, false),
             "F-M43: the reported 88 % subtitle (span 4772s of 5414s) now sits inside the window");
-        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(6074, 6682, 420),
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(6074, 6682, 420, false),
             "F-M43: the reported 91 % subtitle (span 6074s of 6682s) now sits inside the window");
-        Check(!Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 6600, 420),
+        Check(!Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 6600, 420, false),
             "F-M43: a genuinely cut subtitle (span 3600s short) is still rejected — the window is no free pass");
-        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 0, 420)
-              && Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 6600, 0),
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 0, 420, false)
+              && Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 6600, 0, true),
             "F-M43: no runtime metadata and a switched-off check pass everything, as before");
         Check(Read(plugin, "Pipeline/DownloadPipeline.cs")
-                  .Contains("Qa.RuntimeWindow.ToleranceSeconds(floorSec, runtimeSec)", StringComparison.Ordinal)
+                  .Contains("Qa.RuntimeWindow.ToleranceSeconds(floorSec, runtimeSec, episode)", StringComparison.Ordinal)
               && Read(plugin, "Pipeline/DownloadPipeline.cs")
                   .Contains("(tolerance ±{toleranceSec}s)", StringComparison.Ordinal),
             "F-M43: the gate asks the window and the verdict names the window that was applied");

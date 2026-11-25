@@ -456,7 +456,7 @@ public class PluginConfiguration : BasePluginConfiguration
     public bool DownloadOnlyMissing { get; set; } = true;
 
     /// <summary>Gets or sets the runtime tolerance in seconds for post-download validation (F-M43 Stufe 2). 0 = disabled. Default 600s to cover intro skip and credits end (subtitles often start late and end before the credits).</summary>
-    public int DownloadRuntimeToleranceSec { get; set; } = Qa.RuntimeWindow.DefaultFloorSeconds;
+    public int DownloadRuntimeToleranceSec { get; set; } = Qa.RuntimeWindow.FilmFloorSeconds;
 
     /// <summary>Gets or sets a value indicating whether the hearing-impaired (SDH) variant is additionally downloaded when available (F-M42b). Default off: regular subs only.</summary>
     public bool DownloadHearingImpaired { get; set; }
