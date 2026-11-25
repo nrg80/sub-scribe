@@ -3,7 +3,7 @@
 **Owner: the two-source architecture.** What two sources do to one pair; how a pair is allocated to a slot stands in §8 of `CONTRACTS.md`.
 
 This sheet pulls together what is
-spread across many numbers in [`REQUIREMENTS.md`](REQUIREMENTS.md): how the sources
+spread across many numbers in [`SPECIFICATION.md`](SPECIFICATION.md): how the sources
 relate to one another, what „done" means, and how download and upload behave
 with several sources. It is the one place where the source question can be read as a whole.
 

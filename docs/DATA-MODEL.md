@@ -1,8 +1,8 @@
 # Data Model — the plugin database
 
-**Owner: the shape.** The tables, their keys and what each one carries; the normative rules stand in §14 of `REQUIREMENTS.md`.
+**Owner: the shape.** The tables, their keys and what each one carries; the normative rules stand in §14 of `SPECIFICATION.md`.
 
-*Derived document: the rules are stated normatively in `§14` of `REQUIREMENTS.md`. This paper describes
+*Derived document: the rules are stated normatively in `§14` of `SPECIFICATION.md`. This paper describes
 the shape those rules produce: the tables, their keys, what each one carries and what it never carries.
 The words are those of `TERMS.md`. Where a table name and a level name are the same word, that is the
 rule, not a coincidence (F-M671).*
@@ -231,4 +231,4 @@ four cases:
 The suites that hold this shape: `storex` (the tables and their keys), `statefile` (the file and its
 takeover), `coverage` (what a reader may conclude from the rows), `matrix` (`source_matrix`) and
 `hipool`. The normative rules are `F-M194`…`F-M207`, `F-M282`…`F-M285` and `F-M639`…`F-M680` in
-`REQUIREMENTS.md` §14.
+`SPECIFICATION.md` §14.

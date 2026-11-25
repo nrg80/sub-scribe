@@ -5,7 +5,7 @@
 ## The release
 
 ```bash
-# 1. bump the version in build.yaml, the csproj and docs/REQUIREMENTS.md
+# 1. bump the version in build.yaml, the csproj and docs/SPECIFICATION.md
 # 2. write the changelog entry at the top of build.yaml's changelog block
 # 3. build, verify, tag, release and check the result
 scripts/release.sh
@@ -24,7 +24,7 @@ v12.1.12.256: Modified autosync to feature a segment postprocessing step.
 
 That is the whole entry. A release note is a signpost for the person deciding whether to install;
 the reasoning, the calibration numbers and the rejected variants belong in the requirement entry in
-`docs/REQUIREMENTS.md`, which is where the next person looks when the behaviour surprises them.
+`docs/SPECIFICATION.md`, which is where the next person looks when the behaviour surprises them.
 Long prose in the changelog does not get read, it gets skimmed — so it protects nobody and buries
 the one sentence that mattered.
 

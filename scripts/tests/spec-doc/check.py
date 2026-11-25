@@ -10,7 +10,7 @@
 # See the GNU General Public License for more details.
 
 # F-M301: the spec is checked like the code, because nothing else does. Seven test suites
-# guarded the plugin and NOT ONE touched docs/REQUIREMENTS.md, so its table of contents could
+# guarded the plugin and NOT ONE touched docs/SPECIFICATION.md, so its table of contents could
 # disagree with its own body indefinitely without a single red check — and it did: three
 # counters were wrong and nobody could tell by reading. This is the eighth suite.
 #
@@ -36,10 +36,10 @@
 # sub-headings included, superseded entries included, so the counter stays a plain count and
 # never encodes a policy about what is still in force.
 #
-# Run: python3 scripts/tests/spec-doc/check.py [path/to/REQUIREMENTS.md]
+# Run: python3 scripts/tests/spec-doc/check.py [path/to/SPECIFICATION.md]
 # Exit code 0 = all checks pass.
 
-"""Structural checks for docs/REQUIREMENTS.md (the Lastenheft), no build needed.
+"""Structural checks for docs/SPECIFICATION.md, no build needed.
 
 What it asserts, and why each one has bitten or would bite:
 
@@ -136,7 +136,7 @@ def blocks(text):
 def repo_root(start):
     """Walk up until the repo root (the directory holding build.yaml) is found.
 
-    Counted parent hops are what put this file at scripts/docs/REQUIREMENTS.md on the first run:
+    Counted parent hops are what put this file at scripts/docs/SPECIFICATION.md on the first run:
     the check sat one directory deeper than the suite it was copied from. Walking up to a MARKER
     cannot be off by one.
     """
@@ -150,15 +150,15 @@ def repo_root(start):
 
 def main():
     root = repo_root(os.path.dirname(os.path.abspath(__file__)))
-    path = sys.argv[1] if len(sys.argv) > 1 else os.path.join(root, "docs", "REQUIREMENTS.md")
+    path = sys.argv[1] if len(sys.argv) > 1 else os.path.join(root, "docs", "SPECIFICATION.md")
     # The metric runner calls every suite with the repository root; accept that as "the spec here".
     if os.path.isdir(path):
-        path = os.path.join(path, "docs", "REQUIREMENTS.md")
+        path = os.path.join(path, "docs", "SPECIFICATION.md")
     with open(path, encoding="utf-8") as fh:
         text = fh.read()
 
     # The test catalogue is its own document (docs/TESTS.md): 404 entries in one chapter made
-    # REQUIREMENTS.md unreadable. Checks 3 and 4 therefore read the numbers from BOTH files — the
+    # SPECIFICATION.md unreadable. Checks 3 and 4 therefore read the numbers from BOTH files — the
     # requirement side still cites T-numbers, so the union is what "defined" means here.
     tests_path = os.path.join(os.path.dirname(path), "TESTS.md")
     test_text = ""

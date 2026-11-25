@@ -1,6 +1,6 @@
 # The GUI — the settings page and what it shows
 
-*Derived document: the rules stand in §13 of `REQUIREMENTS.md`, the per-source fields in §22. This paper
+*Derived document: the rules stand in §13 of `SPECIFICATION.md`, the per-source fields in §22. This paper
 describes the page as the operator meets it — the tabs, the fields, the switches, the readouts, the
 colours and the wording. Every statement carries its `F-M` tag; where the rule itself is meant, the
 chapter is named. The words are those of `TERMS.md`.*

@@ -1,6 +1,6 @@
 # subdl.com — the API source
 
-**Owner: the source at a glance** — contracts, capabilities, languages, transport, cost, failure shapes, the ledger, the boundary. The detailed site material stands in `../MULTI-SOURCE.md` and `../REQUIREMENTS.md`.
+**Owner: the source at a glance** — contracts, capabilities, languages, transport, cost, failure shapes, the ledger, the boundary. The detailed site material stands in `../MULTI-SOURCE.md` and `../SPECIFICATION.md`.
 
 ## 1. What it is
 
