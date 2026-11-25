@@ -92,6 +92,9 @@
         "<temp>/dupskip"
       ],
       "invariant": true
+    },
+    "spec-doc": {
+      "python": "scripts/tests/spec-doc/check.py"
     }
   },
   "tests": {
@@ -990,6 +993,10 @@
     "T402": {
       "suite": "endpoints",
       "checks": 4
+    },
+    "T403": {
+      "suite": "spec-doc",
+      "checks": 1
     }
   }
 }

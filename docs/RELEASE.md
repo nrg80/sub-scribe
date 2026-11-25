@@ -117,7 +117,7 @@ curl -sS https://raw.githubusercontent.com/nrg80/sub-scribe/main/manifest.json \
 ```
 
 **Never rehearse the release flow against a cloned copy without cutting the API off.** `REPO_SLUG` is
-hardcoded to `nrg80/sub-scribe` and the token is read from `/opt/data/.secrets.json`, so a
+hardcoded to `nrg80/sub-scribe` and the token is read from `the local secrets file (path not part of the repository)`, so a
 `release.sh` run in a throwaway clone does not stay local: it looks up and creates real releases on
 GitHub. In a sandbox run it found the existing release and tried to re-upload its asset — GitHub
 rejected the duplicate name and the asset stayed intact, but that was luck, not containment. For any
