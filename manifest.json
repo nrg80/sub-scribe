@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.58",
-        "changelog": "v12.3.8.58: the TMDb key shows the card's dot pattern, the refetch interval sits above the media files, one name for the season pack.",
+        "version": "12.3.8.59",
+        "changelog": "v12.3.8.59: the TMDb help line is one sentence, the address as the link word.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.58-dev/Jellyfin.Plugin.SubdlSync_12.3.8.58.zip",
-        "checksum": "5d3b480549b906facb1ebe08f0338c39",
-        "timestamp": "2026-11-25T12:58:34Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.59-dev/Jellyfin.Plugin.SubdlSync_12.3.8.59.zip",
+        "checksum": "858242d5e543f7035902d405939df646",
+        "timestamp": "2026-11-25T13:15:49Z"
       }
     ]
   }
