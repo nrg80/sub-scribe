@@ -93,6 +93,50 @@ public class SourceSettingsController : ControllerBase
     }
 
     /// <summary>
+    /// F-M748: den abgelegten Wert eines Geheimfelds liefern, damit die Seite ihn für die Dauer eines
+    /// Drucks zeigen kann. Antwort ist <c>{"value": "…"}</c>; jeder Zugriff steht im Log, ohne den Wert.
+    /// </summary>
+    /// <param name="key">Der Quellenschlüssel.</param>
+    /// <param name="field">Der Feldschlüssel des Geheimnisses.</param>
+    /// <returns>Der Wert, oder der Grund der Ablehnung.</returns>
+    [HttpGet("Sources/{key}/secret/{field}")]
+    public IActionResult GetSourceSecret(string key, string field)
+    {
+        Plugin? plugin = Plugin.Instance;
+        if (plugin is null)
+        {
+            return StatusCode(503, new { error = "Plugin instance not available" });
+        }
+
+        try
+        {
+            SourceRegistry registry = Registry(plugin, _logger);
+            ISourceEngine? engine = registry.ByKey(key);
+            if (engine is null)
+            {
+                return NotFound(new { error = "unknown source '" + (key ?? string.Empty) + "'" });
+            }
+
+            (string? value, string? error) = SourceSettingsView.RevealSecret(engine, plugin.DataFolderPath, field);
+            if (value is null)
+            {
+                return BadRequest(new { error = error });
+            }
+
+            _logger.LogInformation(
+                "[Sub Scribe] secret shown for the length of one press: {Source}/{Field}",
+                key,
+                field);
+            return Ok(new { value });
+        }
+        catch (Exception ex)
+        {
+            _logger.LogError(ex, "[Sub Scribe] reading a source secret failed");
+            return StatusCode(500, new { error = "the secret could not be read" });
+        }
+    }
+
+    /// <summary>
     /// F-M683: speichert die Einstellungen GENAU EINER Quelle. Übergebene Felder werden geschrieben,
     /// leere Geheimfelder bedeuten „unverändert lassen", unbekannte Felder werden abgewiesen.
     /// <para>

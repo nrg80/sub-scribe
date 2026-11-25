@@ -2217,6 +2217,20 @@ def main():
           and "(aus ? '\u2716 ' : '\u2714 ')" in page_src
           and "subdlSourceResult(key, aus ? 'fail' : 'ok'" in page_src,
           "Download off, rot mit Kreuz")
+    # F-M748 (Betreiberwunsch 25.11.2026: "Können wir noch so ein auge machen das das passwort den api key
+    # statt ... einblendet für die Dauer die man draufdrückt?"): der Wert kommt auf Druck, geht beim
+    # Loslassen wieder weg, und ein gezeigtes Geheimnis zaehlt nicht als Aenderung.
+    check("F-M748: the eye shows the stored secret while pressed and gives it back on release",
+          "data-source-eye" in page_src
+          and "/secret/' + encodeURIComponent(field.key)" in page_src
+          and "auge.addEventListener('pointerdown'" in page_src
+          and "auge.addEventListener('pointerup', verbergen);" in page_src
+          and "input.value = '';" in page_src
+          and "if (!gedrueckt || !res || !res.value) { return; }" in page_src)
+    check("F-M748: a secret the eye is showing is not sent as a change, and the eye only stands on a stored secret",
+          "if (ctrl.getAttribute('data-shown-secret') === 'true') { continue; }" in page_src
+          and "if (field.gesetzt) {" in page_src
+          and "input.placeholder = field.gesetzt ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022' : '';" in page_src)
     # F-M708 (Betreiberbefund 25.11.2026: "die ampel auf den slides geht nicht mit aus"): der Reiter
     # trug seinen Punkt weiter auf "on", weil die Leiste nach dem Speichern nicht neu gezeichnet wurde.
     check("F-M708: the lamp on the tab strip is redrawn from the same answer, and the open tab stays open",

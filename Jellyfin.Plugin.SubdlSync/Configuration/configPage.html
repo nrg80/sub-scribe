@@ -754,6 +754,10 @@
         .subdl-source-tab.active { background: #00a4dc; color: #fff; }
         .subdl-source-tab-lamp { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-left: 6px; vertical-align: middle; background: #107c10; }
         .subdl-source-tab-lamp.off { background: transparent; box-shadow: inset 0 0 0 1px #767676; }
+            /* F-M748: die Zeile eines Geheimfelds traegt rechts ein Auge — es zeigt den abgelegten Wert,
+               solange gedrueckt wird, und gibt ihn beim Loslassen wieder her. */
+            .subdl-source-secret { display: flex; align-items: center; gap: 6px; }
+            .subdl-eye { flex: 0 0 auto; min-width: 44px; padding: 2px 8px; line-height: 1.4; cursor: pointer; }
         .subdl-source-pane { display: none; }
         .subdl-source-pane.active { display: block; }
         /* F-M688: eine Karte je Quelle. Der Rahmen trennt die Quellen, weil je KARTE gespeichert
@@ -2229,6 +2233,53 @@ workers.forEach(function (w) {
                     // aus, ohne ein Wort und ohne den Wert. F-M702 hatte den Platzhalter samt "set"
                     // entfernt; das Wort bleibt weg, die Punkte kommen zurueck.
                     input.placeholder = field.gesetzt ? '••••••••' : '';
+
+                    // F-M748 (Betreiberwunsch 25.11.2026: "Können wir noch so ein auge machen das das
+                    // passwort den api key statt ... einblendet für die Dauer die man draufdrückt?"):
+                    // Das Auge holt den ABGELEGTEN Wert eigens aus der Datei — die Seite hat ihn sonst
+                    // nirgends — und nimmt ihn beim Loslassen sofort wieder aus dem Feld. Ein bereits
+                    // eingetippter Wert wird nur sichtbar geschaltet, dafuer braucht es keine Anfrage.
+                    if (field.gesetzt) {
+                        boxWrap.classList.add('subdl-source-secret');
+                        input.style.flex = '1 1 auto';
+                        var gedrueckt = false;
+                        var auge = document.createElement('button');
+                        auge.type = 'button';
+                        auge.className = 'subdl-eye raised emby-button';
+                        auge.setAttribute('data-source-eye', field.key);
+                        auge.title = 'Hold to show the stored value';
+                        auge.textContent = '\u{1F441}';
+                        auge.addEventListener('pointerdown', function (ev) {
+                            ev.preventDefault();
+                            gedrueckt = true;
+                            if (input.value !== '') { input.type = 'text'; return; }
+                            var url = ApiClient.getUrl('Plugins/SubdlSync/Sources/' + encodeURIComponent(entry.key)
+                                + '/secret/' + encodeURIComponent(field.key));
+                            fetch(url, { headers: { 'Accept': 'application/json' } })
+                                .then(function (r) { return r.ok ? r.json() : null; })
+                                .then(function (res) {
+                                    // Wer waehrend der Antwort schon losgelassen hat, bekommt nichts zu sehen.
+                                    if (!gedrueckt || !res || !res.value) { return; }
+                                    input.value = res.value;
+                                    input.type = 'text';
+                                    input.setAttribute('data-shown-secret', 'true');
+                                })
+                                .catch(function () { });
+                        });
+                        var verbergen = function () {
+                            gedrueckt = false;
+                            if (input.getAttribute('data-shown-secret') === 'true') {
+                                input.value = '';
+                                input.removeAttribute('data-shown-secret');
+                            }
+                            input.type = 'password';
+                        };
+                        auge.addEventListener('pointerup', verbergen);
+                        auge.addEventListener('pointerleave', verbergen);
+                        auge.addEventListener('pointercancel', verbergen);
+                        auge.addEventListener('blur', verbergen);
+                        boxWrap.appendChild(auge);
+                    }
                 } else {
                     // Ein Geheimnis bekommt KEIN data-value — der Wert steht damit nirgends im DOM.
                     row.setAttribute('data-value',
@@ -2425,8 +2476,10 @@ workers.forEach(function (w) {
                     var name = row.getAttribute('data-source-field-label') || key;
                     if (kind === 'switch') { wert = !!ctrl.checked; }
                     else if (kind === 'secret') {
-                        // Ein Geheimnis geht nur mit, wenn wirklich etwas getippt wurde.
+                        // Ein Geheimnis geht nur mit, wenn wirklich etwas getippt wurde. Ein Wert, den
+                        // gerade das Auge zeigt (F-M748), ist der ABGELEGTE — er ist keine Aenderung.
                         if (ctrl.value === '') { continue; }
+                        if (ctrl.getAttribute('data-shown-secret') === 'true') { continue; }
                         wert = ctrl.value;
                     } else { wert = ctrl.value; }
 

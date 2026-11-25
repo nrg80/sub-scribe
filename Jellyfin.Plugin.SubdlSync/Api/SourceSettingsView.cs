@@ -253,6 +253,39 @@ public static class SourceSettingsView
         return new SourceSaveResult(true, null, Array.Empty<string>(), geschrieben, Entry(registry, engine, dataDir));
     }
 
+    /// <summary>
+    /// F-M748: den gespeicherten Wert EINES Geheimfelds lesen — für die Dauer eines Drucks auf das Auge.
+    /// Nur ein echtes Geheimfeld einer bekannten Quelle geht; alles andere wird abgewiesen, damit dieser
+    /// Weg kein allgemeines Lesetor in die Datei wird. Der Wert steht in keiner Antwort der Liste.
+    /// </summary>
+    /// <param name="engine">Die Quelle.</param>
+    /// <param name="dataDir">Der Datenordner des Plugins.</param>
+    /// <param name="fieldKey">Der Feldschlüssel.</param>
+    /// <returns>Der Wert (null = nichts abgelegt) und der Grund, falls es keinen gibt.</returns>
+    public static (string? Value, string? Error) RevealSecret(ISourceEngine engine, string? dataDir, string? fieldKey)
+    {
+        if (string.IsNullOrWhiteSpace(dataDir))
+        {
+            return (null, "no data folder — nothing to read");
+        }
+
+        SourceField? feld = engine.Fields
+            .FirstOrDefault(f => string.Equals(f.Key, fieldKey, StringComparison.Ordinal));
+        if (feld is null)
+        {
+            return (null, "unknown field '" + (fieldKey ?? string.Empty) + "'");
+        }
+
+        if (!feld.IsSecret)
+        {
+            return (null, "'" + feld.Key + "' is not a secret field — the list already carries its value");
+        }
+
+        SourceSettings settings = SourceSettingsFile.Load(dataDir, engine.Capabilities.Key, engine.Fields);
+        string wert = settings.Text(feld.Key);
+        return wert.Length == 0 ? (null, "nothing stored for '" + feld.Key + "'") : (wert, null);
+    }
+
     private static SourceEntryView Entry(SourceRegistry registry, ISourceEngine engine, string? dataDir)
     {
         string key = engine.Capabilities.Key;

@@ -143,7 +143,7 @@ else touches the file from the GUI.
 
 ## 9. What the page never shows
 
-- **No credential value.** A secret field shows that it is set, never what it holds.
+- **No credential value in the list.** A secret field shows that it is set, never what it holds. The eye beside it asks for the stored value one field at a time and holds it only as long as the button is pressed (F-M748).
 - **No measurement and no path of the operator** on the settings page (F-M299).
 - **No second place for the same setting** — a setting that exists in two controls is a defect, not a
   convenience (F-M479).

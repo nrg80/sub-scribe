@@ -39,7 +39,7 @@ states the rule, its constants, its ground and its test.**
 - [10. Scheduler, Quota and Timing](#10-scheduler-quota-and-timing) — 24 requirements
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
-- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 23 requirements
+- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 24 requirements
 - [14. Data Model and Persistence](#14-data-model-and-persistence) — 92 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 61 requirements
 - [16. Non-Goals](#16-non-goals)
@@ -2077,6 +2077,8 @@ The page shows the **effective** state: an empty field is displayed as ticked (t
 **F-M746 [U]:** **A tab carries an abbreviation of its source; the card head keeps the full name.** Concept decision: three full source names side by side eat the width of the bar, so the tabs read `SubDL`, `tvst` and `mst`. The abbreviation rides on its own carrier in the source's capabilities, and an empty carrier means "take the row's short name". It is *not* the row's short name itself: F-M731 keeps the labels of the pipeline lines as they are, and a tab label is not a log label. The full name stays in the tooltip and in the card head, so nothing has to be guessed. Checked in `gui-structure`.
 
 **F-M747 [U]:** **Reporting is a switch of the source, not of the download section.** Each source card carries the tick that decides whether broken subtitles of that source are reported back to it; the card of a source without a report route carries none. Concept decision: the old switch in the download section said the same thing for every source at once, which is wrong for a source that has no report route, and it hid the decision away from the card it belongs to. Its stored value survives as the fallback for a source file that predates the field, so nothing that was switched off comes back on. Checked in `reporting`.
+
+**F-M748 [U]:** **A secret field carries an eye that shows the stored value for as long as it is pressed.** Operator request: while the button is held the field shows the value instead of the dots, and on release the dots are back. Concept decision: the page never receives a secret with the list, and that rule stays. The value comes over a route of its own instead: one field per call, and only for a field the source declares as secret; anything else is refused. Every call is logged with source and field, never with the value. A value that is currently shown counts as unchanged, so pressing the eye and saving does not send the secret back. Checked in `sources` and `gui-structure`.
 
 ## 14. Data Model and Persistence
 

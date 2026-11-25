@@ -1403,6 +1403,19 @@ internal static class Program
         TitelAnlage(root, plugin);
 
         // -----------------------------------------------------------------------------------------
+        // (n) F-M748: das Auge am Geheimfeld.
+        //
+        //     Betreiberwunsch 25.11.2026: „Können wir noch so ein auge machen das das passwort den api
+        //     key statt ... einblendet für die Dauer die man draufdrückt?" Der Wert eines Geheimfelds
+        //     verlaesst das Plugin nur noch auf ausdrueckliches Verlangen — ueber einen eigenen Weg, nur
+        //     fuer ein echtes Geheimfeld. Gemessen wird genau das: der Wert kommt, ein unbekanntes Feld
+        //     und ein gewoehnliches Feld werden abgewiesen, und die Liste traegt weiter nichts.
+        // -----------------------------------------------------------------------------------------
+        Console.WriteLine();
+        Console.WriteLine("(n) F-M748: das Auge am Geheimfeld");
+        Auge(plugin);
+
+        // -----------------------------------------------------------------------------------------
         // (m) F-M735: die Sprachauskunft der Quelle.
         //
         //     Die Tafeln lagen als statische Daten in den HTTP-Clients — dort, wo sich nichts aendert,
@@ -3220,6 +3233,64 @@ internal static class Program
             clientTreffer.Count == 0
                 ? "0 Treffer in " + ablauf.Count + " Datei(en)"
                 : string.Join(", ", clientTreffer));
+    }
+
+    /// <summary>
+    /// F-M748: der abgelegte Wert eines Geheimfelds kommt auf Verlangen heraus — und nur dann, nur fuer
+    /// ein echtes Geheimfeld. Der eigene Weg nennt im Log Quelle und Feld, nie den Wert.
+    /// </summary>
+    /// <param name="plugin">Der Wurzelordner des Plugins im Repo.</param>
+    private static void Auge(string plugin)
+    {
+        string ordner = Path.Combine(Path.GetTempPath(), "sub-scribe-auge-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(ordner);
+        try
+        {
+            var config = new PluginConfiguration();
+            var registry = SourceRegistry.Build(
+                new SourceEngineContext(new HttpClient(), NullLogger.Instance, TimeProvider.System),
+                config);
+            var engine = registry.ByKey(SubdlEngine.SourceKey)!;
+            QuelleSchreiben(ordner, SubdlEngine.SourceKey, SubdlEngine.Declared, new Dictionary<string, string>
+            {
+                [SubdlEngine.FieldApiKey] = "geheim-123",
+                [SubdlEngine.FieldAccount] = "jemand@example.org",
+            });
+
+            (string? wert, string? fehler) = SourceSettingsView.RevealSecret(engine, ordner, SubdlEngine.FieldApiKey);
+            Check(wert == "geheim-123" && fehler is null,
+                "F-M748: der abgelegte Wert eines Geheimfelds kommt auf Verlangen heraus",
+                wert ?? fehler);
+
+            (string? unbekannt, string? grund) = SourceSettingsView.RevealSecret(engine, ordner, "gibtesnicht");
+            Check(unbekannt is null && !string.IsNullOrEmpty(grund),
+                "F-M748: ein unbekanntes Feld wird abgewiesen",
+                grund);
+
+            (string? offen, string? grundZwei) =
+                SourceSettingsView.RevealSecret(engine, ordner, SubdlEngine.FieldUploadEnabled);
+            Check(offen is null && (grundZwei?.Contains("not a secret", StringComparison.Ordinal) ?? false),
+                "F-M748: ein gewoehnliches Feld wird abgewiesen — der Weg ist kein allgemeines Lesetor",
+                grundZwei);
+
+            string controller = File.ReadAllText(Path.Combine(plugin, "Api", "SourceSettingsController.cs"));
+            string sicht = File.ReadAllText(Path.Combine(plugin, "Api", "SourceSettingsView.cs"));
+            Check(controller.Contains("[HttpGet(\"Sources/{key}/secret/{field}\")]", StringComparison.Ordinal)
+                  && controller.Contains("secret shown for the length of one press: {Source}/{Field}", StringComparison.Ordinal)
+                  && sicht.Contains("feld.IsSecret ? null : settings.Text(feld.Key)", StringComparison.Ordinal),
+                "F-M748: ein eigener Weg liefert den Wert, das Log nennt Quelle und Feld — die Liste traegt weiter nichts",
+                "Route + Logvorlage + Maskierung in der Liste");
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(ordner, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+        }
     }
 
     /// <summary>F-M693: eine Quelldatei mit genau diesen Feldern schreiben (Pruefstand).</summary>

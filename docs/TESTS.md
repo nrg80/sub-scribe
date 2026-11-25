@@ -13,7 +13,7 @@ stands in §19 of `SPECIFICATION.md`, and the binding of a test to its suite in 
 
 - [1. Tests of the seeder (§2)](#1-tests-of-the-seeder-2) — 5 tests
 - [2. Tests of the upload pipeline (§3)](#2-tests-of-the-upload-pipeline-3) — 28 tests
-- [3. Tests of the download pipeline (§4)](#3-tests-of-the-download-pipeline-4) — 36 tests
+- [3. Tests of the download pipeline (§4)](#3-tests-of-the-download-pipeline-4) — 38 tests
 - [4. Tests of upload postprocessing (§5)](#4-tests-of-upload-postprocessing-5) — 7 tests
 - [5. Tests of the database refresh (§6)](#5-tests-of-the-database-refresh-6) — 5 tests
 - [6. Tests of the rules shared by both directions (§8)](#6-tests-of-the-rules-shared-by-both-directions-8) — 2 tests
@@ -136,6 +136,10 @@ number when it moves to another chapter, and a number is never reused.
 **T409:** The runtime window (F-M43), in `reporting`. **12 checks**. The tolerance is a share of the runtime with a fixed floor under it: 7 min for a film, 4 min for an episode, and neither floor is a configuration value. The share is the only setting: 0 leaves the floor alone, 20 % widens the window to a fifth of the runtime. The two reported cases of the run (88 % and 91 % of their film) sit inside the window, a genuinely cut subtitle is still rejected, and a missing runtime passes everything. The page carries the share and no field to type a floor in, and the verdict names the window applied.
 
 **T410:** Where the report switch lives (F-M747), in `reporting`. **10 checks**. A source file that says nothing falls back to the old value, and a source file with the tick set to off silences that source while the others keep reporting. The pipeline never asks the global switch and asks the source at every filing site, the download section carries no report switch, both sources with a report route declare the tick in their card, and the source without one carries none.
+
+**T411:** The eye on a secret field (F-M748), in `sources`. **4 checks**. The stored value of a secret field comes out on demand, an unknown field and an ordinary field are both refused, and one route of its own serves the value while the list keeps carrying nothing. The log names source and field, never the value.
+
+**T412:** The eye in the page (F-M748), in `gui-structure`. **2 checks**. The eye asks on pointer down and gives the value back on release; a late answer after the release shows nothing. A secret the eye is showing does not count as a change, and the eye stands only where a secret is stored.
 
 **T176:** The report of an observed defect — wording without justification, category per finding, name of the affected file in both tracks, sender line with version and account name. Report in the same run, deferral instead of discarding, locked candidate after the report, switch and its position as the second-to-last entry (F-M450). **4 checks on the file naming.**
 
