@@ -149,6 +149,9 @@ def repo_root(start):
 def main():
     root = repo_root(os.path.dirname(os.path.abspath(__file__)))
     path = sys.argv[1] if len(sys.argv) > 1 else os.path.join(root, "docs", "REQUIREMENTS.md")
+    # The metric runner calls every suite with the repository root; accept that as "the spec here".
+    if os.path.isdir(path):
+        path = os.path.join(path, "docs", "REQUIREMENTS.md")
     with open(path, encoding="utf-8") as fh:
         text = fh.read()
 
@@ -229,6 +232,42 @@ def main():
     check("no definition-shaped line escaped the pattern (the guard on the guard)",
           not unparsed, "%d unrecognised: %s" % (
               len(unparsed), ", ".join("L%d %s" % (l, i) for l, i in unparsed[:5])))
+
+
+    # ---- 7. Docs carry no credentials, addresses or operator paths (NF-10, T403) ----
+    # The documentation is published with the repository. A key, an address or a local path in a
+    # document is a leak that no test suite would otherwise see - the code is checked for secrets,
+    # the prose was not.
+    DOC_PATTERNS = [
+        # A credential is a VALUE, not the word: "VisibleWhen apiKey = set" is a UI label, and
+        # "api_key={key}" is a template. Only a single token of eight characters or more counts,
+        # and the state words of the page never do.
+        ("credential", re.compile(r"(?i)(?:api[_-]?key|token|passw(?:or)?d|secret|passwd)\s*[=:]\s*"
+                                  r"(?!(?:set|unset|empty|none|required|configured|present|absent)\b)"
+                                  r"(?!\{|<|\"|'|\.\.\.|…|TODO|X{3})[A-Za-z0-9][A-Za-z0-9_.-]{7,}")),
+        ("key shape", re.compile(r"\b(?:ghp_|gho_|ghs_|sk-[A-Za-z0-9]{16,}|xox[baprs]-|AKIA[0-9A-Z]{16})")),
+        ("hex secret", re.compile(r"\b[A-Fa-f0-9]{32,}\b")),
+        ("e-mail", re.compile(r"\b[\w.+-]+@(?!example\.(?:org|com|net|invalid))[\w-]+\.[\w.]{2,}")),
+        ("private host", re.compile(r"\b(?:192\.168|10\.\d{1,3}|172\.(?:1[6-9]|2\d|3[01]))\.\d{1,3}\.\d{1,3}\b")),
+        ("operator path", re.compile(r"(?:/opt/data|/data/|/mnt/|/home/|C:\\Users)")),
+        ("iban", re.compile(r"\b[A-Z]{2}\d{2}(?:\s?\d{4}){3,}\b")),
+    ]
+    doc_files = [os.path.join(root, "README.md")]
+    docs_dir = os.path.join(root, "docs")
+    for dirpath, _dirnames, filenames in os.walk(docs_dir):
+        doc_files.extend(os.path.join(dirpath, f) for f in sorted(filenames) if f.endswith(".md"))
+    leaks = []
+    for f in doc_files:
+        if not os.path.exists(f):
+            continue
+        with open(f, encoding="utf-8") as fh:
+            body = fh.read()
+        for name, rx in DOC_PATTERNS:
+            for m in rx.finditer(body):
+                leaks.append("%s: %s %r" % (
+                    os.path.relpath(f, root), name, body[max(0, m.start() - 12):m.end() + 12].replace("\n", " ")))
+    check("no document carries a credential, an address or an operator path (NF-10)",
+          not leaks, "%d found: %s" % (len(leaks), " | ".join(leaks[:4])))
 
     failed = [r for r in results if not r[1]]
     for name, ok, detail in results:

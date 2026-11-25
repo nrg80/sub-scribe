@@ -1,129 +1,129 @@
-# Mehrquellen-Architektur — SubDL und die tvst-Familie
+# Multi-Source Architecture — SubDL and the tvst family
 
-Stand 20.11.2026, Plugin 12.2.0.14. Dieses Blatt zieht zusammen, was in
-[`REQUIREMENTS.md`](REQUIREMENTS.md) über viele Nummern verteilt steht: wie sich die Quellen
-zueinander verhalten, was „erledigt" heißt, und wie Download und Upload mit mehreren Quellen
-umgehen. Es ist die eine Stelle, an der die Quellenfrage als Ganzes nachzulesen ist.
+As of 20.11.2026, plugin 12.2.0.14. This sheet pulls together what is
+spread across many numbers in [`REQUIREMENTS.md`](REQUIREMENTS.md): how the sources
+relate to one another, what „done" means, and how download and upload behave
+with several sources. It is the one place where the source question can be read as a whole.
 
-## 1. Zwei Quellen, nicht zwei Wahrheiten
+## 1. Two sources, not two truths
 
-Es gibt **zwei** Upload-Quellen:
+There are **two** upload sources:
 
-- **SubDL** — API, liefert Kennungen zurück, kennt Einzel- und Staffel-Uploads.
-- **die tvst-Familie** — `tvsubtitles.net` (Serien) und `moviesubtitles.org` (Filme), derselbe
-  Betreiber, kein Konto, keine Kennung in der Antwort. Die Familie ist *in sich* zweigeteilt; welche
-  Adresse ein Medium bekommt, entscheidet **TMDb/der Store** (Serie → tvsubtitles, Film →
-  moviesubtitles), nie der Titel und nie der Dateiname.
+- **SubDL** — API, returns identifiers, knows single and season uploads.
+- **the tvst family** — `tvsubtitles.net` (series) and `moviesubtitles.org` (movies), the same
+  operator, no account, no identifier in the answer. The family is *internally* split in two; which
+  address a medium gets is decided by **TMDb/the plugin database** (series → tvsubtitles, movie →
+  moviesubtitles), never the title and never the file name.
 
-Die Reihenfolge-Einstellung gilt für die **Familie**, nicht für die einzelne Adresse: „tvst zuerst"
-heißt beim Film moviesubtitles zuerst, bei der Serie tvsubtitles zuerst. Und die Oberfläche hat
-**einen Schalter je Richtung** — die beiden Adressfelder sind Datenfelder, keine Bedienelemente
+The order setting applies to the **family**, not to the individual address: „tvst first"
+means moviesubtitles first for a movie, tvsubtitles first for a series. And the interface has
+**one switch per direction** — the two address fields are data fields, not controls
 (F-M482, F-M496, F-M504).
 
-## 2. Der Grundsatz: was bei einer Quelle erledigt ist, ist bei der anderen offen
+## 2. The principle: what is done at one source is open at the other
 
-Das ist die Regel, aus der alles andere folgt, und sie ist mehrfach gebrochen worden:
+This is the rule from which everything else follows, and it has been broken several times:
 
-| Sachverhalt | Regel | Nummer |
+| Fact | Rule | Number |
 |---|---|---|
-| Hochgeladen | je Quelle eigenes Kennzeichen (`ScribeUploadId`, `TvSubtitlesUploadId`) — „irgendwo hochgeladen" ist kein Beleg | F-M488, F-M489 |
-| Dublette | gilt nur für **dieselbe** Quelle: was SubDL hat, geht trotzdem zu tvst | F-M582 |
-| Ablehnung | sperrt nur die Quelle, die sie ausgesprochen hat | F-M584 |
-| Staffelpack | ein Pack erledigt das Paar nur bei **seiner** Quelle; die Staffel ist erst erledigt, wenn **jede** Quelle des Slots ihren eigenen Pack hat | **F-M654**, F-M571, F-M573 |
-| Status | nennt offene Sprachen je Quelle, nicht als Summe | F-M570 |
-| Herkunft | ein Fund wird nie hochgeladen — weder zurück zur eigenen Quelle noch zur anderen | F-M487 |
+| Uploaded | its own mark per source (`ScribeUploadId`, `TvSubtitlesUploadId`) — „uploaded somewhere" is no evidence | F-M488, F-M489 |
+| Duplicate | applies only to **the same** source: what SubDL has still goes to tvst | F-M582 |
+| Rejection | locks only the source that pronounced it | F-M584 |
+| Season pack | a pack completes the pair only at **its own** source; the season is done only when **every** source of the slot has its own pack | **F-M654**, F-M571, F-M573 |
+| Status | names open languages per source, not as a sum | F-M570 |
+| Origin | a find is never uploaded — neither back to its own source nor to the other | F-M487 |
 
-**Der Pack-Fall ist der teuerste gewesen.** Bis 12.2.0.13 las der Plan die quellenblinde Summe
-`PacksBySeason()`; ein SubDL-Pack beendete die Staffel auch für tvsubtitles. Gemessen am 20.11.2026:
-**36 Staffeln mit 177 Paaren** endeten früh mit „already up as a pack", und tvsubtitles hatte für
-diese Staffeln **0** Packs. Seit 12.2.0.14 bildet der Plan die **Schnittmenge** über die Quellen des
-Slots (`PacksOfAllSlotSources`), und die Staffelzeile nennt die Quellen:
+**The pack case has been the most expensive one.** Up to 12.2.0.13 the plan read the source-blind sum
+`PacksBySeason()`; a SubDL pack ended the season for tvsubtitles as well. Measured on 20.11.2026:
+**36 seasons with 177 pairs** ended early with „already up as a pack", and tvsubtitles had for
+those seasons **0** packs. Since 12.2.0.14 the plan forms the **intersection** over the sources of the
+slot (`PacksOfAllSlotSources`), and the season line names the sources:
 `all N known pair(s) already up as a pack for subdl, tvsubtitles`.
 
-Der Pack-Schlüssel trägt die Quelle mit (`<imdb>|S<n>|<lang>|<hi|plain>|<source>`), jede Quelle hält
-ihre eigene Kennung (F-M642). tvst-Behälter tragen **keine** Kennung, weil die Seite keine
-zurückgibt (F-M612) — der Beleg ist dort die Zeile selbst.
+The pack key carries the source with it (`<imdb>|S<n>|<lang>|<hi|plain>|<source>`), each source keeps
+its own identifier (F-M642). tvst containers carry **no** identifier, because the site returns
+none (F-M612) — the evidence there is the line itself.
 
-## 3. Upload: ein Slot je Paar, zwei Quellen gleichzeitig
+## 3. Upload: one slot per pair, two sources at the same time
 
-Ein **Paar** ist (Serie, Staffel, Sprache, HI-Variante). Bis 12.2.0.8 liefen zwei getrennte
-Pack-Phasen — erst SubDL, dann tvst —, und die Mitglieder wurden zweimal gesammelt und zweimal
-beurteilt. Seit 12.2.0.9 gilt (F-M647):
+A **pair** is (series, season, language, HI variant). Up to 12.2.0.8 two separate
+pack phases ran — first SubDL, then tvst —, and the members were collected twice and
+judged twice. Since 12.2.0.9 the following applies (F-M647):
 
-1. **Einmal sammeln, einmal urteilen.** `FillAsync` baut aus den Mitgliedern *einen* Plan mit beiden
-   Behältern und beiden Dateinamensformen.
-2. **Je Quelle senden, gleichzeitig.** `SendAsync` läuft je Quelle, gestartet über `Task.WhenAll`,
-   die zweite Quelle mit **0–5 % Versatz** des Transfertakts (bei 400/h bis 0,45 s) statt Gleichstart
-   (F-M587). Gemessen im Betrieb: 270–429 ms Versatz.
-3. **Ein Fehler einer Quelle reißt die andere nicht mit** — das Ergebnis wird zurückgegeben, nicht
-   geworfen; je Quelle eigenes Erfolgskennzeichen und eigener Zeitstempel.
-4. **Eine Zeile je Paar** (F-M648, F-M651), mit beiden Seiten: `"subdl: already up as a pack; tvst
-   sent"`. Zwei Formulierungen für denselben Befund sind ein Fehler, nicht eine genauere Auskunft.
-5. **Nichts extrahieren, was keine Quelle mehr will** (F-M650): steht eine Ablehnung mit derselben
-   Staffel-Signatur im Store, endet das Paar vor dem Sammeln und Entpacken.
-6. **Ein Kontingent-Stopp ist kein Urteil** (F-M649): nichts wird gespeichert, das Paar bleibt offen.
-7. **Die Quellensteuerung bleibt Pflicht.** Wer „schon gepackt" fragt, fragt je Quelle; wer eine
-   Zeile schreibt, nennt die Quelle **ausdrücklich** — `RecordPack(..., source)` hat keinen
-   brauchbaren Vorgabewert für neue Aufrufe, ein vergessenes Argument schreibt sonst stillschweigend
+1. **Collect once, judge once.** `FillAsync` builds from the members *one* plan with both
+   containers and both file name forms.
+2. **Send per source, at the same time.** `SendAsync` runs per source, started via `Task.WhenAll`,
+   the second source with an **offset of 0–5 %** of the transfer rate (at 400/h up to 0,45 s) instead of a simultaneous start
+   (F-M587). Measured in operation: 270–429 ms offset.
+3. **A failure of one source does not drag the other down** — the result is returned, not
+   thrown; per source its own success mark and its own timestamp.
+4. **One line per pair** (F-M648, F-M651), with both sides: `"subdl: already up as a pack; tvst
+   sent"`. Two wordings for the same finding are a mistake, not a more precise statement.
+5. **Do not extract anything that no source wants any more** (F-M650): if a rejection with the same
+   season signature is in the plugin database, the pair ends before collecting and unpacking.
+6. **A quota stop is no verdict** (F-M649): nothing is saved, the pair stays open.
+7. **Source control stays mandatory.** Whoever asks „already packed" asks per source; whoever
+   writes a line names the source **explicitly** — `RecordPack(..., source)` has no
+   usable default value for new calls, otherwise a forgotten argument silently writes
    `subdl`.
 
-Für Einzel-Uploads gilt dasselbe Muster: ein Transfer, zwei Quellen, ein Versatz (F-M587); die
-Prüfungen je Quelle (Schalter, Zugangsdaten, Tor) laufen **vor** dem Versand in Kettenreihenfolge.
+For single uploads the same pattern applies: one transfer, two sources, one offset (F-M587); the
+checks per source (switch, access data, gate) run **before** sending, in chain order.
 
-## 4. Download: nacheinander in Reihenfolge — der Gegensatz zum Upload
+## 4. Download: one after another, in order — the opposite of upload
 
-**Der Download fragt die Quellen NACHEINANDER, nicht gleichzeitig.** Die eingestellte Reihenfolge ist
-Daten, kein Sonderfall: `DownloadPipeline` läuft `foreach (var quelle in quellenReihenfolge)`, und
-innerhalb einer Quelle wird gesucht, bevor die nächste gefragt wird. Es gibt dort **kein**
-`Task.WhenAll` und kein `Parallel.ForEach` — anders als beim Upload, wo die beiden Versandwege
-gleichzeitig laufen. Wer „paralleler Download" erwartet, findet ihn heute nicht; die Reihenfolge ist
-die einzige Steuerung.
+**The download asks the sources ONE AFTER ANOTHER, not at the same time.** The configured order is
+data, not a special case: `DownloadPipeline` runs `foreach (var quelle in quellenReihenfolge)`, and
+within a source it searches before the next one is asked. There is **no**
+`Task.WhenAll` and no `Parallel.ForEach` there — unlike upload, where the two send paths
+run at the same time. Whoever expects „parallel download" does not find it today; the order is
+the only control.
 
-Warum das so ist und was daran hängt:
+Why this is so and what depends on it:
 
-- Die Reihenfolge bestimmt die **Abfrage-Reihenfolge**, nicht nur den Rang der Treffer. Eine Quelle
-  mit ausgeschaltetem Schalter wird gar nicht erst gesucht (F-M477, F-M495).
-- Eine Quelle, die in diesem Lauf schon stumm geblieben ist, wird **nicht erneut** gefragt (F-M592):
-  sonst kostet jeder weitere Artikel den Timeout von 90 s ohne Aussicht auf Antwort.
-- Fällt die Hauptsuche (SubDL) in den Timeout, wird die nächste Quelle gefragt statt den Lauf zu
-  beenden (F-M591).
-- Das Ergebnis je Quelle wird **zusammengeführt**, nicht ersetzt: Rangfolge beginnt mit der
-  Quellenreihenfolge, dann Pack und Score.
-- Die Kandidaten werden **zusammengeführt**: tvst verdrängt SubDL nicht mehr, die Rangfolge beginnt
-  mit der Quellenreihenfolge, dann Pack und Score.
-- **Ein Ablehnungswort einer Quelle beendet die Suche der anderen nicht** — sonst käme die zweite
-  Quelle nie zum Zug.
-- Ein vorzeitiger Ausstieg nach „erste Quelle leer" ist der klassische Fehler: dann steht im Log
-  `no candidates on SubDL for [DE]`, obwohl tvst nie gefragt wurde. Beleg ist die per-Quelle-Zeile
-  (`[tvsubtitles-D] … — N candidate(s)`), nicht die Sammelzeile.
-- Der Kopf einer Datei entscheidet die Medienart **aus dem Store** (TMDb-korrigiert), nicht aus dem
-  Item-Typ; nur der Dateikopf des Upload-Laufs nimmt den Item-Typ, weil dort noch nichts aufgelöst ist.
+- The order determines the **inquiry order**, not only the rank of the hits. A source
+  with a switched-off switch is not searched at all (F-M477, F-M495).
+- A source that has already stayed silent in this run is **not asked again** (F-M592):
+  otherwise every further item costs the 90 s timeout with no prospect of an answer.
+- If the main search (SubDL) hits the timeout, the next source is asked instead of ending
+  the run (F-M591).
+- The result per source is **merged**, not replaced: the ranking begins with the
+  source order, then pack and score.
+- The candidates are **merged**: tvst no longer displaces SubDL, the ranking begins
+  with the source order, then pack and score.
+- **A rejection from one source does not end the search of the other** — otherwise the second
+  source would never get its turn.
+- An early exit after „first source empty" is the classic mistake: then the log says
+  `no candidates on SubDL for [DE]`, although tvst was never asked. The evidence is the per-source line
+  (`[tvsubtitles-D] … — N candidate(s)`), not the summary line.
+- The header of a file decides the media kind **from the plugin database** (TMDb-corrected), not from the
+  item type; only the file header of the upload run takes the item type, because nothing is resolved there yet.
 
-**Offen, nicht gebaut:** ob der Download die Quellen gleichzeitig fragen soll. Das wäre eine Änderung
-an der Abfrage-Reihenfolge und am Timeout-Verhalten (eine stumme Quelle dürfte die andere nicht
-bremsen), keine Beschreibung des Ist-Stands — und sie ist nicht entschieden.
+**Open, not built:** whether the download should ask the sources at the same time. That would be a change
+to the inquiry order and to the timeout behaviour (a silent source must not
+slow the other down), not a description of the current state — and it is not decided.
 
-## 5. Was das im Betrieb bedeutet
+## 5. What this means in operation
 
-Ein Lauf, zwei Etappen — die Pack-Phase zuerst, dann die Einzelphase (F-M429):
+One run, two stages — the pack phase first, then the single phase (F-M429):
 
-- **Pack-Phase**: vollständige Staffeln, ein Zip je (Sprache, Variante), an **jede** Quelle des Slots.
-- **Einzelphase**: alles Übrige, je Datei und Sprache ein Urteil, wieder je Quelle.
-- Ein Ankunftslauf packt nicht; die Bibliothek gehört dem vollen Lauf (F-M424). tvst ist im Slot nur,
-  wenn der volle Lauf läuft **und** ihr Upload-Schalter an ist (F-M495).
+- **Pack phase**: complete seasons, one zip per (language, variant), to **every** source of the slot.
+- **Single phase**: everything else, one verdict per file and language, again per source.
+- An arrival run does not pack; the library belongs to the full run (F-M424). tvst is in the slot only
+  when the full run is running **and** its upload switch is on (F-M495).
 
-Messwerte vom 20.11.2026 als Maßstab: 1.331 Videodateien, 113 lückenlose Staffeln, 811 Paare im
-Dateisystem, 540 für tvst tauglich — davon 397 in Staffeln, die schon vollständig gepackt waren,
-25 verschickt, 143 offen (unvollständige Staffeln oder gemischte Releases). Von den 25 gingen alle an
-tvst, keiner an SubDL (SubDL lehnte jeden Behälter als `Duplicate upload: identical file already
-published` ab).
+Measurements from 20.11.2026 as the benchmark: 1.331 video files, 113 complete seasons, 811 pairs in the
+file system, 540 suitable for tvst — of those 397 in seasons that were already fully packed,
+25 sent, 143 open (incomplete seasons or mixed releases). Of the 25, all went to
+tvst, none to SubDL (SubDL rejected every container as `Duplicate upload: identical file already
+published`).
 
-## 6. Prüfungen, die diese Architektur festhalten
+## 6. Checks that hold this architecture in place
 
-| Prüfung | Datei |
+| Check | File |
 |---|---|
-| Quellen-Trennung im Plan, Schnittmenge statt Summe | `scripts/tests/seasonpack/SeasonPackRun.cs` (10b) |
-| „schon gepackt" je Quelle, Quellenliste in der Zeile | `scripts/tests/packretry/PackRetryRun.cs` |
-| ein Slot je Paar, beide Quellen, eine Zeile | `scripts/tests/seasonpack/SeasonPackRun.cs` (10) |
-| Kennzeichen je Quelle, kein Reup, kein Cross-Block | `scripts/tests/endpoints/EndpointsRun.cs` |
-| Kommentar und Felder der tvst-Nutzlast | `scripts/tests/tvsubtitles/` |
+| Source separation in the plan, intersection instead of sum | `scripts/tests/seasonpack/SeasonPackRun.cs` (10b) |
+| „already packed" per source, source list in the line | `scripts/tests/packretry/PackRetryRun.cs` |
+| one slot per pair, both sources, one line | `scripts/tests/seasonpack/SeasonPackRun.cs` (10) |
+| mark per source, no reup, no cross block | `scripts/tests/endpoints/EndpointsRun.cs` |
+| Comment and fields of the tvst payload | `scripts/tests/tvsubtitles/` |

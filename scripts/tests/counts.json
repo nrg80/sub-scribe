@@ -92,6 +92,14 @@
         "<temp>/dupskip"
       ],
       "invariant": true
+    },
+    "spec-doc": {
+      "python": "scripts/tests/spec-doc/check.py"
+    },
+    "langcorrect": {
+      "args": [
+        "<root>"
+      ]
     }
   },
   "tests": {
@@ -990,6 +998,18 @@
     "T402": {
       "suite": "endpoints",
       "checks": 4
+    },
+    "T403": {
+      "suite": "spec-doc",
+      "checks": 1
+    },
+    "T163": {
+      "suite": "seasonpack",
+      "checks": 84
+    },
+    "T165": {
+      "suite": "langcorrect",
+      "checks": 19
     }
   }
 }

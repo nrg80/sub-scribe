@@ -42,7 +42,10 @@ def read_claims(doc_path):
     for k, (i, tid) in enumerate(defs):
         end = defs[k + 1][0] if k + 1 < len(defs) else len(lines)
         body = "\n".join(lines[i:end])
-        m = re.search(r"\*\*(\d+)\s*Prüfung", body)
+        # BUGFIX: the per-test claim was only recognised in its German form ("**29 Prüfungen**").
+        # With English as the master language the entries say "**29 checks**", and every such test
+        # would have counted as unbound. Accept both spellings.
+        m = re.search(r"\*\*(\d+)\s*(?:Prüfung(?:en)?|Pruefung(?:en)?|[Cc]heck(?:s)?)", body)
         if m:
             claims[tid] = int(m.group(1))
     return claims
