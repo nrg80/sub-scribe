@@ -659,7 +659,7 @@ The three old SubDL fields (`Username`, `Password`, `ApiKey`) have disappeared f
 
 **T371:** Endpoint order without media kind, light centred (F-M707), in `gui-structure`. **2 checks**: the heading reads `Endpoint order`, a row no longer builds a `subdl-order-tag`, and the light stands via `flex: 0 0 3.2em; text-align: center` in its column. Check F-M704 (c) moves along: it demanded the kind in the row.
 
-**T372:** Feedback and light (F-M708), in `gui-structure`. **2 checks**: the message builds `<Beschriftung> on|off` and chooses `fail` with ✖ on switching off, and the light of the order reads `participates` and is redrawn after saving.
+**T372:** Feedback and light (F-M708), in `gui-structure`. **3 checks**: the message builds `<Beschriftung> on|off` and chooses `fail` with ✖ on switching off, the light of the order reads `participates` and is redrawn after saving, and the lamp on the tab strip is redrawn from the same answer while the open tab stays open.
 
 **T373:** Every switch has an effect (F-M709), in `sources`. **9 checks**: with all switches on, three sources and both pack sources run in the slot; `downloadEnabled=false` really switches moviesubtitles.org **and** tvsubtitles.net off without dragging the other source along. `packsEnabled=false` takes SubDL out of the slot and names it as the reason; `reportEnabled=false` takes the report path; `uploadEnabled=false` switches the tvst upload off.
 

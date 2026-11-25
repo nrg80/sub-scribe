@@ -2503,6 +2503,9 @@ workers.forEach(function (w) {
                                 if (liste[q].key === key) { liste[q] = ant.quelle; }
                             }
                             subdlOrderDraw(window.__subdlQuellen);
+                            // F-M708: dieselbe Antwort traegt auch die Reiter — die Ampel am Reiter
+                            // muss mit demselben Klick ausgehen wie die Ampel der Reihenfolge.
+                            subdlSourceTabs(liste, key);
                         }
                     }
                     // F-M706 (Betreiberbefund 22.11.2026: "Wenn ich in den sources was austicke … als
@@ -2690,9 +2693,18 @@ workers.forEach(function (w) {
                 }
             }
 
-            function subdlSourceTabs(list) {
+            function subdlSourceTabs(list, keepKey) {
                 var strip = document.getElementById('SourceTabs');
                 if (!strip) { return; }
+                // F-M708 (Betreiberbefund 25.11.2026: "die ampel auf den slides geht nicht mit aus"):
+                // die Reiterleiste wurde nach dem Speichern nicht neu gezeichnet, also blieb die Ampel
+                // am Reiter auf "on", waehrend die Reihenfolge oben schon "off" zeigte. Welcher Reiter
+                // offen ist, bleibt dabei offen — ein Neuezeichnen darf nicht auf den ersten zurueckspringen.
+                var offen = keepKey || '';
+                if (!offen) {
+                    var aktivBtn = strip.querySelector('.subdl-source-tab.active');
+                    offen = aktivBtn ? aktivBtn.getAttribute('data-source-tab') : '';
+                }
                 strip.innerHTML = '';
                 var keys = [];
                 for (var i = 0; i < (list || []).length; i++) {
@@ -2725,7 +2737,7 @@ workers.forEach(function (w) {
                     strip.appendChild(btn);
                 }
                 strip.style.display = keys.length > 1 ? '' : 'none';
-                if (keys.length) { subdlSourceTab(keys[0]); }
+                if (keys.length) { subdlSourceTab(keys.indexOf(offen) >= 0 ? offen : keys[0]); }
             }
 
             function subdlLoadSources() {

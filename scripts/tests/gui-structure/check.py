@@ -1918,8 +1918,10 @@ def main():
           and "card.classList.add('subdl-source-pane');" in page_src_f497
           and page_src_f497.count("subdl-source-pane") >= 4,
           "F-M743: die sichtbare Karte braucht eine Regel UND einen Inline-Wert; versteckte bleiben im DOM")
-    check("F-M743: the first tab is open when the page is drawn",
-          "if (keys.length) { subdlSourceTab(keys[0]); }" in page_src_f497,
+    # F-M743, seit F-M708: beim Zeichnen ist der erste Reiter offen; beim Neuezeichnen nach dem Speichern
+    # bleibt der offene Reiter offen (sonst springt die Seite beim Schalten zurueck).
+    check("F-M743: the first tab is open when the page is drawn, and a redraw keeps the open one",
+          "subdlSourceTab(keys.indexOf(offen) >= 0 ? offen : keys[0]);" in page_src_f497,
           "F-M743: ohne diesen Aufruf steht die Seite mit drei versteckten Karten da")
     check("F-M743: the source tabs carry their own class, so the direction tabs do not clear them",
           "btn.className = 'subdl-source-tab raised emby-button';" in page_src_f497
@@ -2215,6 +2217,12 @@ def main():
           and "(aus ? '\u2716 ' : '\u2714 ')" in page_src
           and "subdlSourceResult(key, aus ? 'fail' : 'ok'" in page_src,
           "Download off, rot mit Kreuz")
+    # F-M708 (Betreiberbefund 25.11.2026: "die ampel auf den slides geht nicht mit aus"): der Reiter
+    # trug seinen Punkt weiter auf "on", weil die Leiste nach dem Speichern nicht neu gezeichnet wurde.
+    check("F-M708: the lamp on the tab strip is redrawn from the same answer, and the open tab stays open",
+          "subdlSourceTabs(liste, key);" in page_src
+          and "strip.querySelector('.subdl-source-tab.active')" in page_src
+          and "subdlSourceTab(keys.indexOf(offen) >= 0 ? offen : keys[0]);" in page_src)
     check("F-M708: the order lamp follows participation, not completeness of the file",
           "quelle.participates ? 'on' : 'off'" in page_src
           and "subdlSourceWert(eintrag, 'participates') === true" in page_src
