@@ -1013,7 +1013,7 @@
     },
     "T404": {
       "suite": "gui-structure",
-      "checks": 3
+      "checks": 4
     },
     "T405": {
       "suite": "gui-structure",
@@ -1022,6 +1022,10 @@
     "T406": {
       "suite": "gui-structure",
       "checks": 3
+    },
+    "T407": {
+      "suite": "gui-structure",
+      "checks": 2
     }
   }
 }

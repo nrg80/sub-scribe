@@ -104,6 +104,11 @@ public sealed record SourceCapabilityView(
 public sealed record SourceEntryView(
     string Key,
     string DisplayName,
+
+    // F-M746 (Betreiberwunsch 25.11.2026: "Wir koennen fuer die Reiter Abkuerzungen einfuehren SubDL, tvst, mst"):
+    // der Reiter traegt den Kurznamen der Quelle, der Kartenkopf weiter den vollen Namen. Der Kurzname kommt aus
+    // den Faehigkeiten der Quelle (SourceCapabilities.Short, Vorgabe der Schluessel), nicht aus einer Liste in der Seite.
+    string ShortName,
     bool Configured,
 
     // F-M708 (Betreiberbefund 22.11.2026: "Das on unter change order geht nie off"): die Ampel der
@@ -281,6 +286,7 @@ public static class SourceSettingsView
         return new SourceEntryView(
             key,
             engine.Capabilities.DisplayName,
+            engine.Capabilities.Short,
             eingerichtet,
             eingerichtet && richtung,
             hinweis,

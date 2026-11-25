@@ -1906,17 +1906,43 @@ def main():
           and "function subdlSourceTab(" in page_src_f497
           and "subdlSourceTabs(list);" in page_src_f497,
           "F-M743: eine Reiterleiste je Quelle im Abschnitt Endpoints")
-    check("F-M743: switching a tab hides the other cards but keeps them in the document",
-          "card.className = 'subdl-source-card subdl-source-pane';" in page_src_f497
-          and "cards[i].style.display = on ? '' : 'none';" in page_src_f497
-          and ".subdl-source-pane { display: none; }" in page_src_f497,
-          "F-M743: versteckte Karten bleiben im DOM, damit Werte und Speichern je Karte weiterlaufen")
+    # Der erste Anlauf pruefte Quelltext-Zeichenketten, die den Fehler enthielten: die Karte wurde
+    # versteckt (`.subdl-source-pane { display: none }`), und das Einschalten leerte nur den
+    # Inline-Wert (`style.display = ''`), sodass die Klassenregel weiter versteckte — die Reiter waren
+    # da, die Fenster nicht (Betreiberbefund 25.11.2026: "kein Fenster das es anzeigt oder cyclt").
+    # Die Pruefung haengt jetzt an dem, was die Karte wirklich sichtbar macht.
+    check("F-M743: exactly one card is visible, the others stay in the document",
+          ".subdl-source-pane { display: none; }" in page_src_f497
+          and ".subdl-source-pane.active { display: block; }" in page_src_f497
+          and "cards[i].style.display = on ? 'block' : 'none';" in page_src_f497
+          and "card.classList.add('subdl-source-pane');" in page_src_f497
+          and page_src_f497.count("subdl-source-pane") >= 4,
+          "F-M743: die sichtbare Karte braucht eine Regel UND einen Inline-Wert; versteckte bleiben im DOM")
+    check("F-M743: the first tab is open when the page is drawn",
+          "if (keys.length) { subdlSourceTab(keys[0]); }" in page_src_f497,
+          "F-M743: ohne diesen Aufruf steht die Seite mit drei versteckten Karten da")
     check("F-M743: the source tabs carry their own class, so the direction tabs do not clear them",
           "btn.className = 'subdl-source-tab raised emby-button';" in page_src_f497
           and '.subdl-source-tab.active' in page_src_f497
           and "subdl-tab-btn" not in page_src_f497[page_src_f497.find("function subdlSourceTabs("):
                                             page_src_f497.find("function subdlLoadSources(")],
           "F-M743: eigene Klasse fuer die Quellenreiter (subdlShowTab fasst .subdl-tab-btn an)")
+
+    # ---- F-M746 (Betreiberwunsch 25.11.2026: "Wir koennen fuer die Reiter Abkuerzungen einfuehren SubDL,
+    # tvst, mst"): der Reiter traegt den Kurznamen, der Kartenkopf den vollen Namen. Der Kurzname kommt
+    # aus den Faehigkeiten der Quelle — die Seite haelt keine eigene Namensliste.
+    view_src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))))), "Jellyfin.Plugin.SubdlSync/Api/SourceSettingsView.cs"),
+        encoding="utf-8").read()
+    check("F-M746: the tab carries the source's short name, the card head the full one",
+          "btn.textContent = eintrag.shortName || eintrag.displayName || eintrag.key;" in page_src_f497
+          and "btn.title = eintrag.displayName || eintrag.key;" in page_src_f497,
+          "F-M746: Reiter = Kurzname, Tooltip = voller Name")
+    check("F-M746: the short name comes from the source, not from a list in the page",
+          "string ShortName," in view_src
+          and "engine.Capabilities.Short," in view_src
+          and "subdl-source-tab" in page_src_f497,
+          "F-M746: ShortName kommt aus SourceCapabilities.Short")
 
     # ---- F-M744 (Betreiberwunsch 25.11.2026: „Wenn irgendein endpoint nicht konfiguriert ist, keine
     # Zugangsdaten fuer subdl zb, soll er als off angezeigt werden"): eine Quelle, die nicht teilnehmen

@@ -21,7 +21,7 @@ stands in §19 of `SPECIFICATION.md`, and the binding of a test to its suite in 
 - [8. Tests of the scheduler, the quota and the timing (§10)](#8-tests-of-the-scheduler-the-quota-and-the-timing-10) — 17 tests
 - [9. Tests of the content registry and identity (§11)](#9-tests-of-the-content-registry-and-identity-11) — 11 tests
 - [10. Tests of the library scope and the skip filters (§12)](#10-tests-of-the-library-scope-and-the-skip-filters-12) — 3 tests
-- [11. Tests of the configuration and the settings page (§13)](#11-tests-of-the-configuration-and-the-settings-page-13) — 32 tests
+- [11. Tests of the configuration and the settings page (§13)](#11-tests-of-the-configuration-and-the-settings-page-13) — 33 tests
 - [12. Tests of the data model and persistence (§14)](#12-tests-of-the-data-model-and-persistence-14) — 75 tests
 - [13. Tests of logging, status and transparency (§15)](#13-tests-of-logging-status-and-transparency-15) — 19 tests
 - [14. Tests of the test discipline itself (§19)](#14-tests-of-the-test-discipline-itself-19) — 34 tests
@@ -463,11 +463,13 @@ Without a hash **and** without a path row it stays with the honest result: the n
 
 **T327:** Every plugin database helps itself (F-M617): self-help in all five stores. **1 check** in `endpoints`.
 
-**T404:** The source cards sit behind a tab strip (F-M743), in `gui-structure`. **3 checks**. The strip `#SourceTabs` exists, and `subdlSourceTabs` is called after the cards are built. Switching a tab hides the other cards (`display: none`) but leaves them in the document, so values, `visibleWhen`, the per-card `Save` and the result line keep working. The source tabs carry their own class `subdl-source-tab`, because `subdlShowTab` clears `.subdl-tab-btn` and would otherwise strip their active state.
+**T404:** The source cards sit behind a tab strip (F-M743), in `gui-structure`. **4 checks**. The strip `#SourceTabs` exists, and `subdlSourceTabs` is called after the cards are built. Exactly one card is visible. The `active` card carries a CSS rule that shows it *and* an inline `display`, because a rule alone once kept every card hidden: the tabs were there and no window was. The hidden cards stay in the document, so values, `visibleWhen`, the per-card `Save` and the result line keep working. The first tab opens when the page is drawn. The source tabs carry their own class `subdl-source-tab`, because `subdlShowTab` clears `.subdl-tab-btn` and would otherwise strip their active state.
 
 **T405:** The 'Required' marker in the headings keeps its accent blue (F-M228), in `gui-structure`. **1 check**. `.subdl-required` has its own CSS rule with `color: #00a4dc`, and at least three headings carry the class. The rule had gone missing while the source cards were built, and without it the span falls back to the heading's text colour — the marker read as just another word.
 
 **T406:** A source that cannot take part reads `off` (F-M744), in `gui-structure`. **3 checks**. The card head carries the word from the endpoint's `participates` (never from a second check of the page), the tab's dot switches between `on` and `off` with the same answer, and the `off` colour is grey — red stays reserved for destructive and failing states (F-M228).
+
+**T407:** A tab carries the short name of its source (F-M746), in `gui-structure`. **2 checks**. The tab button takes `shortName`, falling back to the display name and then the key, and keeps the full name in its tooltip; the short name arrives through the source endpoint (`ShortName` from `SourceCapabilities.Short`), so the page holds no list of names of its own.
 
 ## 12. Tests of the data model and persistence (§14)
 

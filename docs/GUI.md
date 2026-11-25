@@ -91,7 +91,7 @@ The word comes from the endpoint's own answer (`participates`), so a source with
 whose directions are both closed, never looks like a running one; the hint under the name says what is
 missing. The state is grey, not red — red stays reserved for destructive and failing states (F-M228).
 
-The three cards stand behind **one tab per source**, not stacked one below the other (F-M743). The strip
+The three cards stand behind **one tab per source**, not stacked one below the other (F-M743). Each tab carries the source's short name — `SubDL`, `tvst`, `mst` (F-M746) — and the full name in its tooltip and in the card head. Exactly one card is visible; the first tab is open when the page is drawn. The strip
 carries the source name and a dot when the source is configured, so one glance says which sources run at
 all. Switching hides the other cards but keeps them in the document. A card's values, its `VisibleWhen`,
 its own `Save` and its result line keep working. The endpoint order stands directly under the `Endpoints`

@@ -760,6 +760,7 @@
         .subdl-source-tab { flex: 1 1 auto; min-width: 0; white-space: nowrap; }
         .subdl-source-tab.active { background: #00a4dc; color: #fff; }
         .subdl-source-pane { display: none; }
+        .subdl-source-pane.active { display: block; }
         .subdl-source-tab-dot { margin-left: 6px; font-size: 0.7em; vertical-align: middle; color: #107c10; }
         /* F-M688: eine Karte je Quelle. Der Rahmen trennt die Quellen, weil je KARTE gespeichert
            wird — ohne Rahmen sieht man nicht, welcher Speichern-Knopf zu welchen Feldern gehoert. */
@@ -2661,7 +2662,7 @@ workers.forEach(function (w) {
                 var cards = document.querySelectorAll('#SourceCards .subdl-source-pane');
                 for (var i = 0; i < cards.length; i++) {
                     var on = cards[i].getAttribute('data-source-key') === key;
-                    cards[i].style.display = on ? '' : 'none';
+                    cards[i].style.display = on ? 'block' : 'none';
                     if (on) { cards[i].classList.add('active'); } else { cards[i].classList.remove('active'); }
                 }
                 var btns = document.querySelectorAll('#SourceTabs .subdl-source-tab');
@@ -2681,7 +2682,7 @@ workers.forEach(function (w) {
                     if (!eintrag || !eintrag.key) { continue; }
                     var card = document.getElementById(subdlSourceId('SourceCard', eintrag.key));
                     if (!card) { continue; }
-                    card.className = 'subdl-source-card subdl-source-pane';
+                    card.classList.add('subdl-source-pane');
                     keys.push(eintrag.key);
 
                     var btn = document.createElement('button');
@@ -2689,7 +2690,9 @@ workers.forEach(function (w) {
                     btn.className = 'subdl-source-tab raised emby-button';
                     btn.setAttribute('data-source-tab', eintrag.key);
                     btn.setAttribute('role', 'tab');
-                    btn.textContent = eintrag.displayName || eintrag.key;
+                    // F-M746: der Reiter traegt den Kurznamen (SubDL, tvst, mst), der Kartenkopf den vollen.
+                    btn.textContent = eintrag.shortName || eintrag.displayName || eintrag.key;
+                    btn.title = eintrag.displayName || eintrag.key;
                     var an = subdlSourceTabState(list, eintrag.key);
                     var punkt = subdlSourceEl('span', 'subdl-source-tab-dot ' + (an ? 'on' : 'off'), an ? '●' : '○');
                     punkt.title = an ? 'on' : 'off';
