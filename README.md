@@ -118,6 +118,5 @@ Do not release by tagging and pushing alone: a release must carry exactly one as
 - The settings page as the operator meets it: [docs/GUI.md](docs/GUI.md)
 - How the two subtitle sources work together (marks, completion, parallel download and upload): [docs/MULTI-SOURCE.md](docs/MULTI-SOURCE.md)
 - Release process: [docs/RELEASE.md](docs/RELEASE.md)
-- Three sheets about this plugin, one page each — for users, for developers, and a one-page summary:
-  [docs/briefings/](docs/briefings/). They exist so that a person, or an assistant answering a person,
-  starts from a correct picture instead of from a guess.
+- The plugin on one page, written for a person or an assistant answering one:
+  [docs/briefings/short.md](docs/briefings/short.md).
