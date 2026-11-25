@@ -14,6 +14,7 @@ using System.IO;
 using System.Linq;
 using Jellyfin.Plugin.SubScribe.Sources;
 using Microsoft.Extensions.Logging;
+using Jellyfin.Plugin.SubScribe.Configuration;
 
 namespace Jellyfin.Plugin.SubScribe.Api;
 
@@ -190,7 +191,8 @@ public static class SourceSettingsView
         string? dataDir,
         string key,
         IReadOnlyDictionary<string, string?>? updates,
-        ILogger? logger = null)
+        ILogger? logger = null,
+        LogLevelMode? mode = null)
     {
         ArgumentNullException.ThrowIfNull(registry);
 
@@ -260,7 +262,8 @@ public static class SourceSettingsView
                 key,
                 feld,
                 current.Stored.TryGetValue(feldKey, out string? vorher) ? vorher : null,
-                merged[feldKey]);
+                merged[feldKey],
+                mode);
         }
 
         return new SourceSaveResult(true, null, Array.Empty<string>(), geschrieben, Entry(registry, engine, dataDir));

@@ -52,7 +52,11 @@ public static class SettingsChangeLog
     /// <param name="field">Das Feld, wie die Quelle es erklärt (Art entscheidet über die Anzeige).</param>
     /// <param name="oldValue">Der Wert, der in der Datei stand, oder null.</param>
     /// <param name="newValue">Der Wert, der jetzt in der Datei steht.</param>
-    public static void SourceField(ILogger? logger, string sourceKey, SourceField field, string? oldValue, string newValue)
+    /// <param name="mode">
+    /// Der LogMode, gegen den die Zeile läuft; null heisst: den laufenden Modus des Plugins fragen
+    /// (der Prüfstand gibt ihn mit, weil es dort keine Plugin-Instanz gibt).
+    /// </param>
+    public static void SourceField(ILogger? logger, string sourceKey, SourceField field, string? oldValue, string newValue, LogLevelMode? mode = null)
     {
         if (logger is null || field is null)
         {
@@ -71,14 +75,10 @@ public static class SettingsChangeLog
             neu += " (neu)";
         }
 
-        // Der Marker gehoert in den Text (F-M226), und der Pegel ist echtes Debug: eine seltene
-        // Zeile, die der Betreiber sucht — der Server-Pegel entscheidet, ob sie im Protokoll steht.
-        logger.LogDebug(
-            LogUtil.DebugTag + "[Sub Scribe] setting written: {Source}/{Field} {Old} -> {New}",
-            sourceKey,
-            field.Key,
-            alt,
-            neu);
+        // F-M226/F-M751: eine Detail-Zeile — sie steht auf Information, damit der Server-Pegel nie
+        // angehoben werden muss, und sie erscheint, sobald der Plugin-Modus Debug ist. Den Marker "[D]"
+        // setzt LogUtil.
+        Zeile(logger, mode, "[Sub Scribe] setting written: {Source}/{Field} {Old} -> {New}", sourceKey, field.Key, alt, neu);
     }
 
     /// <summary>
@@ -88,7 +88,8 @@ public static class SettingsChangeLog
     /// <param name="logger">Der Logger des Plugins.</param>
     /// <param name="before">Der Stand vor dem Schreiben, oder null bei der ersten Schreibung.</param>
     /// <param name="after">Der Stand, der jetzt gilt.</param>
-    public static void PluginSettings(ILogger? logger, PluginConfiguration? before, PluginConfiguration? after)
+    /// <param name="mode">Der LogMode; null heisst: den laufenden Modus des Plugins fragen.</param>
+    public static void PluginSettings(ILogger? logger, PluginConfiguration? before, PluginConfiguration? after, LogLevelMode? mode = null)
     {
         if (logger is null || after is null)
         {
@@ -124,11 +125,7 @@ public static class SettingsChangeLog
                 anzeigeNeu += " (neu)";
             }
 
-            logger.LogDebug(
-                LogUtil.DebugTag + "[Sub Scribe] setting written: {Property} {Old} -> {New}",
-                eigenschaft.Name,
-                anzeigeAlt,
-                anzeigeNeu);
+            Zeile(logger, mode, "[Sub Scribe] setting written: {Property} {Old} -> {New}", eigenschaft.Name, anzeigeAlt, anzeigeNeu);
         }
     }
 
@@ -141,6 +138,17 @@ public static class SettingsChangeLog
         }
 
         return n.ToString(CultureInfo.InvariantCulture) + " value(s)";
+    }
+
+    private static void Zeile(ILogger logger, LogLevelMode? mode, string vorlage, params object?[] args)
+    {
+        if (mode is null)
+        {
+            LogUtil.Detail(logger, vorlage, args);
+            return;
+        }
+
+        LogUtil.Detail(mode.Value, logger, vorlage, args);
     }
 
     private static string Anzeige(SourceFieldKind art, string? wert)

@@ -937,12 +937,13 @@ internal static class Program
                     ["preferSeasonZip"] = "false",
                     [SubdlEngine.FieldApiKey] = PruefSchluessel,
                 },
-                schreibLog);
+                schreibLog,
+                LogLevelMode.Debug);
             var zeilen = schreibLog.Lines.Select(l => l.Text).ToList();
             var kontZeilen = zeilen.Count(z => z.Contains("setting written", StringComparison.Ordinal)
                                                 && z.Contains("/account", StringComparison.Ordinal));
             Check(mitProtokoll.Ok
-                  && schreibLog.Lines.All(l => l.Level == Microsoft.Extensions.Logging.LogLevel.Debug)
+                  && schreibLog.Lines.All(l => l.Level == Microsoft.Extensions.Logging.LogLevel.Information)
                   && kontZeilen == 1
                   && zeilen.All(z => !z.Contains("preferSeasonZip", StringComparison.Ordinal))
                   && zeilen.All(z => z.StartsWith("[D] ", StringComparison.Ordinal))
@@ -959,9 +960,9 @@ internal static class Program
                 Password = "kennwort-xyz",
             };
             var configLog = new Rec();
-            Jellyfin.Plugin.SubScribe.Configuration.SettingsChangeLog.PluginSettings(configLog, configVorher, configNachher);
+            Jellyfin.Plugin.SubScribe.Configuration.SettingsChangeLog.PluginSettings(configLog, configVorher, configNachher, LogLevelMode.Debug);
             var configZeilen = configLog.Lines.Select(l => l.Text).ToList();
-            Check(configLog.Lines.All(l => l.Level == Microsoft.Extensions.Logging.LogLevel.Debug)
+            Check(configLog.Lines.All(l => l.Level == Microsoft.Extensions.Logging.LogLevel.Information)
                   && configZeilen.Any(z => z.Contains("UploadEnabled", StringComparison.Ordinal)
                                            && z.Contains("->", StringComparison.Ordinal))
                   && configZeilen.Any(z => z.Contains("TmdbApiKey", StringComparison.Ordinal)
@@ -980,7 +981,7 @@ internal static class Program
                 Password = configNachher.Password,
             };
             var austauschLog = new Rec();
-            Jellyfin.Plugin.SubScribe.Configuration.SettingsChangeLog.PluginSettings(austauschLog, configNachher, configZweit);
+            Jellyfin.Plugin.SubScribe.Configuration.SettingsChangeLog.PluginSettings(austauschLog, configNachher, configZweit, LogLevelMode.Debug);
             var austauschZeilen = austauschLog.Lines.Select(l => l.Text).ToList();
             Check(austauschZeilen.Count == 1
                   && austauschZeilen[0].Contains("TmdbApiKey", StringComparison.Ordinal)
