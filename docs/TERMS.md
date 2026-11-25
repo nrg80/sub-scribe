@@ -43,7 +43,11 @@ the retired one is named below so it cannot creep back in.
   Retired: Marke.
 - **lock** — pipeline knowledge that a title stays closed after repeated failure. Retired: Sperre.
 - **loose subtitle** — a subtitle file lying loose in the library next to the media file, as opposed
-  to one embedded in it. Retired: Beiwerk.
+  to one embedded in it. Retired: Beiwerk. **The plugin database keeps the old name as a LEVEL: the
+  table is called `sidecar` and its identifiers read `#yyyyy&zzz`** (F-M671, F-M674). That is one
+  double word with two homes and it stays: the level name is a stored key, renaming it would be a
+  migration for a word, while the concept in every text is `loose subtitle`. A document that means
+  the concept writes `loose subtitle`; a document that means the table writes `sidecar`.
 - **identifier** — a value that names something. Short form `id` in code only. Retired: Kennung.
 - **media container** — the file that carries the media itself and its streams (Matroska, MP4): its
   per-stream language tags are what the seeder writes and what `0:s:N` counts. Not a pack. Retired: —
