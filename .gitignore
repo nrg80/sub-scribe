@@ -23,3 +23,7 @@ __*
 # Python bytecode from the test scripts
 __pycache__/
 *.pyc
+
+# Local secrets never enter the repository
+.secrets.json
+.env

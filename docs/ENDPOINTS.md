@@ -84,8 +84,8 @@ nicht führt: je ein Grund, kein Sendeversuch.
 Suite `scripts/tests/endpoints` (T204, **28 Prüfungen**, kein Netz):
 
 ```bash
-DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 /opt/data/.dotnet/dotnet run \
-  --project scripts/tests/endpoints/endpoints.csproj -c Release -- /opt/data/subdl-scribe
+DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 <dotnet>/dotnet run \
+  --project scripts/tests/endpoints/endpoints.csproj -c Release -- <repo>
 ```
 
 Sie fährt die tvsubtitles-Seite über einen gefälschten HTTP-Handler gegen die echten Seiten aus

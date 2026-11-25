@@ -199,8 +199,8 @@ mit der lebenden Seite.
 Live-Probe (nur lesend, nicht Teil der Prüfungen):
 
 ```bash
-DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 /opt/data/.dotnet/dotnet run \
-  --project scripts/tests/tvsubtitles/tvsubtitles.csproj -c Release -- /opt/data/subdl-scribe --live
+DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 <dotnet>/dotnet run \
+  --project scripts/tests/tvsubtitles/tvsubtitles.csproj -c Release -- <repo> --live
 ```
 
 Sie zeigt: die Serienliste (am 16.11.2026: 2.774 Einträge im Auswahlfeld, einschließlich des

@@ -487,7 +487,7 @@ unverändert als Fixtures: `add-movie-added.html` (Erfolg), `add-movie-exists.ht
 **Der gewählte Film** war `The Little Rascals (1994)` — vorher belegt als fehlend: `POST search.php`
 mit `q=Little Rascals` und `q=Rascals` → 0 Treffer, `movies-L.html` und `movies-R.html` ohne
 „Rascal", `add.php?filter=Rascals` → 0 Zeilen; auf der Maschine liegt er als
-`/data/movies/The.Little.Rascals.1994/The.Little.Rascals.1994.1080p.BluRay.x265-RARBG.mp4`
+`<library>/The.Little.Rascals.1994/The.Little.Rascals.1994.1080p.BluRay.x265-RARBG.mp4`
 (1379629713 Bytes).
 
 **Und danach?** Die Nachsuche fand ihn **nicht** (`q=Little Rascals` → 0), `movies-L.html` blieb
@@ -517,7 +517,7 @@ Der Upload lief danach durch — nur die **Nummer** war weg.
 **Warum.** Der Medien-Hash kommt aus `ContentHashRegistry.GetMediaHash(mediaPath)`; die Methode
 antwortet `null`, sobald die Datei nicht lesbar ist. Genau das war hier der Fall: der Pfad
 `media/movies-test/Hotel Transylvania 2 (2015)/Hotel Transylvania 2 (2015).mkv` ist ein **Symlink ohne
-Ziel** (`readlink -f` → `/data/movies/…ShAaNiG.mkv`, `test -e` → nicht vorhanden) — also kein Hash,
+Ziel** (`readlink -f` → `<library>/…ShAaNiG.mkv`, `test -e` → nicht vorhanden) — also kein Hash,
 obwohl die Zeile über `Path` adressierbar wäre. `MsubMovieResolver.Persist` kehrte bei fehlendem Hash
 **stumm** zurück (die Spalte `MsubMovieId` wurde nie erreicht), und die Logzeile sagte das als
 „nicht gespeichert". Derselbe Weg schrieb auch die Seriennummer (`TvstShowId`) — der Serienfall hatte
@@ -534,7 +534,7 @@ dasselbe Loch.
 | Logzeile | `Api/Endpoints/MediaNumberNote` | `gespeichert (über den Medien-Hash).` / `gespeichert über den Pfad (kein Medien-Hash bekannt).` / `nicht gespeichert: kein Medien-Hash und keine eindeutige Pfad-Zeile im Store — die Nummer gilt nur für diesen Lauf.` |
 | Kette | `UploadPipeline` (Film- und Serien-Adresse), `DownloadPipeline` | geben den Pfad der Mediendatei mit |
 
-**Beleg am Store-Abbild** (Kopie des Live-Stores, `/opt/data/cache/scratch/fm517-proof/store`, nur die
+**Beleg am Store-Abbild** (Kopie des Live-Stores, `<scratch>/fm517-proof/store`, nur die
 Kopie beschrieben):
 
 | Schritt | Ergebnis |
