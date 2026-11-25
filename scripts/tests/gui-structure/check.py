@@ -1949,22 +1949,26 @@ def main():
           and "public string Tab =>" in kontrakt,
           "F-M746: eigener Traeger TabName/Tab, nicht der Kurzname der Zeile (F-M731)")
 
-    # ---- F-M744 (Betreiberwunsch 25.11.2026: „Wenn irgendein endpoint nicht konfiguriert ist, keine
-    # Zugangsdaten fuer subdl zb, soll er als off angezeigt werden"): eine Quelle, die nicht teilnehmen
-    # kann, steht als "off" da — im Kopf der Karte und als hohler Punkt am Reiter. Das Wort kommt aus
-    # der Antwort (participates), nicht aus einer zweiten Pruefung der Seite.
-    check("F-M744: a source that cannot take part reads 'off', from the endpoint's answer",
-          "entry.participates === true" in page_src_f497
-          and "'subdl-source-state ' + (beteiligt ? 'on' : 'off')" in page_src_f497
-          and "list[i].participates === true" in page_src_f497,
-          "F-M744: off/on kommen aus participates, nicht aus einer eigenen Feldpruefung")
-    check("F-M744: the tab dot carries the same state as the card",
-          "subdl-source-tab-dot ' + (an ? 'on' : 'off')" in page_src_f497
-          and ".subdl-source-tab-dot.off { color: #767676; }" in page_src_f497,
-          "F-M744: ein Reiterpunkt je Quelle, gruen fuer an, grau fuer aus")
-    check("F-M744: the off state is grey, not red",
-          ".subdl-source-state.off { color: #767676; }" in page_src_f497
-          and ".subdl-source-state.off { color: #a4262c; }" not in page_src_f497,
+    # ---- F-M744 (Betreiberwunsch 25.11.2026: "Wenn irgendein endpoint nicht konfiguriert ist, keine
+    # Zugangsdaten fuer subdl zb, soll er als off angezeigt werden"; Betreiberbefund am selben Tag:
+    # "3x on/off ist ein bisschen viel auf einer seite. Vorschlag: als Ampel aus der tabauswahl raus"):
+    # der Zustand steht NICHT in jedem Kartenkopf, sondern als Ampel an der Reiterleiste — dort, wo die
+    # Wahl zwischen den Quellen faellt. Das Wort kommt aus der Antwort (participates), nicht aus einer
+    # zweiten Pruefung der Seite.
+    check("F-M744: the state sits as one lamp per tab, not as a word in every card",
+          "subdl-source-tab-lamp ' + (an ? 'on' : 'off')" in page_src_f497
+          and "subdl-source-state" not in page_src_f497,
+          "F-M744: eine Ampel je Reiter; kein on/off-Wort mehr in den Karten")
+    check("F-M744: the lamp reads the endpoint's answer, not a second check of the page",
+          "list[i].participates === true" in page_src_f497
+          and ".subdl-source-tab-lamp.off" in page_src_f497,
+          "F-M744: participates entscheidet, hohler Ring statt Fuellung")
+    check("F-M744: the state colour is green or grey, never red",
+          ".subdl-source-tab-lamp { display: inline-block" in page_src_f497
+          and "background: #107c10" in page_src_f497
+          and "inset 0 0 0 1px #767676" in page_src_f497
+          and "#a4262c" not in page_src_f497[page_src_f497.find(".subdl-source-tab-lamp"):
+                                                 page_src_f497.find(".subdl-source-tab-lamp") + 400],
           "F-M228: rot bleibt fuer zerstoerende und fehlerhafte Zustaende")
 
     # ---- F-M497 (Nachtrag des Nutzers: „Tmdb confi dann auch vor subdl konfi in der gui"): die

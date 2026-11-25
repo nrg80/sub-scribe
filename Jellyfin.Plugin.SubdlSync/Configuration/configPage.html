@@ -759,17 +759,15 @@
         .subdl-source-tabs { display: flex; flex-wrap: wrap; gap: 6px; margin: 0.2em 0 0.9em 0; }
         .subdl-source-tab { flex: 1 1 auto; min-width: 0; white-space: nowrap; }
         .subdl-source-tab.active { background: #00a4dc; color: #fff; }
+        .subdl-source-tab-lamp { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-left: 6px; vertical-align: middle; background: #107c10; }
+        .subdl-source-tab-lamp.off { background: transparent; box-shadow: inset 0 0 0 1px #767676; }
         .subdl-source-pane { display: none; }
         .subdl-source-pane.active { display: block; }
-        .subdl-source-tab-dot { margin-left: 6px; font-size: 0.7em; vertical-align: middle; color: #107c10; }
         /* F-M688: eine Karte je Quelle. Der Rahmen trennt die Quellen, weil je KARTE gespeichert
            wird — ohne Rahmen sieht man nicht, welcher Speichern-Knopf zu welchen Feldern gehoert. */
         .subdl-source-card { border: 1px solid rgba(255,255,255,0.16); border-radius: 6px; padding: 0.8em 1em; margin: 0 0 1em 0; }
         .subdl-source-head { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0.6em; }
         .subdl-source-name { font-weight: 600; font-size: 1.05em; }
-        .subdl-source-state.on { color: #107c10; }
-        .subdl-source-state.off { color: #767676; }
-        .subdl-source-tab-dot.off { color: #767676; }
         /* F-M693: die Reihe der Moeglichkeiten — vier Schalter, jeder mit seinem Namen. */
         .subdl-source-badges { display: flex; flex-wrap: wrap; gap: 1.2em; margin: 0.55em 0 0.8em 0; }
         .subdl-badge { display: flex; align-items: center; margin: 0; }
@@ -2324,20 +2322,11 @@ workers.forEach(function (w) {
                 var art = subdlSourceServes(entry);
                 if (art) { head.appendChild(art); }
 
-                // Betreiberwunsch 25.11.2026: "Wenn irgendein endpoint nicht konfiguriert ist, keine
-                // Zugangsdaten fuer subdl zb, soll er als off angezeigt werden". Die Auskunft steht
-                // schon in der Antwort (configured: falsch bei fehlendem Pflichtfeld oder kaputter
-                // Datei) — die Seite prueft die Felder nicht ein zweites Mal. Der Klartext darunter
-                // (hint) sagt, WAS fehlt.
-                var beteiligt = entry.participates === true;
-                var zustand = subdlSourceEl('span', 'subdl-source-state ' + (beteiligt ? 'on' : 'off'),
-                    beteiligt ? 'on' : 'off');
-                zustand.title = beteiligt
-                    ? 'this source takes part'
-                    : (entry.configured === true
-                        ? 'configured, but no direction is open'
-                        : 'not configured - it stays out of the run');
-                head.appendChild(zustand);
+                // Betreiberbefund 25.11.2026 ("3x on/off ist ein bisschen viel auf einer seite.
+                // Vorschlag: als Ampel aus der tabauswahl raus"): der Zustand steht NICHT mehr im
+                // Kartenkopf. Die Auskunft gehoert dorthin, wo die Wahl zwischen den Quellen
+                // stattfindet — an die Reiterleiste, eine Ampel je Quelle (subdlSourceTabs). Der
+                // Klartext unter dem Namen (hint) sagt weiter, WAS fehlt.
                 // F-M699 (Betreiberbefund 22.11.2026: „es ist komisch dass subdl subdl hintereinander
                 // steht. Fuer tvst und mst genauso"): der Schluessel steht NICHT mehr neben dem Namen —
                 // "SubDL subdl" sagte dasselbe zweimal. Er bleibt als Titel am Namen erreichbar, weil man
@@ -2694,9 +2683,13 @@ workers.forEach(function (w) {
                     btn.textContent = eintrag.tabName || eintrag.displayName || eintrag.key;
                     btn.title = eintrag.displayName || eintrag.key;
                     var an = subdlSourceTabState(list, eintrag.key);
-                    var punkt = subdlSourceEl('span', 'subdl-source-tab-dot ' + (an ? 'on' : 'off'), an ? '●' : '○');
-                    punkt.title = an ? 'on' : 'off';
-                    btn.appendChild(punkt);
+                    // Die Ampel steht am Reiter, nicht im Kartenkopf (Betreiberbefund 25.11.2026:
+                    // "3x on/off ist ein bisschen viel auf einer seite"). Gruen gefuellt = die Quelle
+                    // nimmt teil, hohler grauer Ring = sie nimmt nicht teil; der Tooltip nennt den Grund.
+                    var lampe = subdlSourceEl('span', 'subdl-source-tab-lamp ' + (an ? 'on' : 'off'), '');
+                    lampe.title = an ? 'on - this source takes part'
+                                     : 'off - this source is not configured or both directions are closed';
+                    btn.appendChild(lampe);
                     btn.addEventListener('click', (function (k) {
                         return function () { subdlSourceTab(k); };
                     })(eintrag.key));

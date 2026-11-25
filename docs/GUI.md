@@ -86,10 +86,7 @@ never its value, and `VisibleWhen` shows a field only while another field holds 
 | `tvsubtitles` | `baseUrl` (URL) | the site demands no access data |
 | `moviesubtitles` | `baseUrl` (URL) | the access field fell out — it was empty from the start |
 
-A source that cannot take part reads **`off`** — in the card head and as a hollow dot on its tab (F-M744).
-The word comes from the endpoint's own answer (`participates`), so a source without its access data, or one
-whose directions are both closed, never looks like a running one; the hint under the name says what is
-missing. The state is grey, not red — red stays reserved for destructive and failing states (F-M228).
+A source that cannot take part shows a **dead lamp** on its tab — one lamp per source, filled green when it takes part, hollow grey when not (F-M744). The state belongs where the choice between sources is made; no card repeats it as a word. The answer comes from the endpoint's own `participates`, so a source without its access data, or one whose directions are both closed, never looks like a running one, and the hint under the name says what is missing. Grey marks the state, not red (F-M228).
 
 The three cards stand behind **one tab per source**, not stacked one below the other (F-M743). Each tab carries the source's abbreviation — `SubDL`, `tvst`, `mst` (F-M746) — and the full name in its tooltip and in the card head. Exactly one card is visible; the first tab is open when the page is drawn. The strip
 carries the source name and a dot when the source is configured, so one glance says which sources run at

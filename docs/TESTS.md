@@ -467,7 +467,7 @@ Without a hash **and** without a path row it stays with the honest result: the n
 
 **T405:** The 'Required' marker in the headings keeps its accent blue (F-M228), in `gui-structure`. **1 check**. `.subdl-required` has its own CSS rule with `color: #00a4dc`, and at least three headings carry the class. The rule had gone missing while the source cards were built, and without it the span falls back to the heading's text colour — the marker read as just another word.
 
-**T406:** A source that cannot take part reads `off` (F-M744), in `gui-structure`. **3 checks**. The card head carries the word from the endpoint's `participates` (never from a second check of the page), the tab's dot switches between `on` and `off` with the same answer, and the `off` colour is grey — red stays reserved for destructive and failing states (F-M228).
+**T406:** A source that cannot take part shows a dead lamp on its tab (F-M744), in `gui-structure`. **3 checks**. The lamp hangs on the tab strip — one per source — and no card carries a state word any more. It reads the endpoint's `participates`, never a second check of the page. Its colour is green when the source takes part and a hollow grey ring when it does not; red stays reserved for destructive and failing states (F-M228).
 
 **T407:** A tab carries an abbreviation of its source (F-M746), in `gui-structure`. **2 checks**. The tab button takes `tabName`, falling back to the display name and then the key. The full name stays in its tooltip. The abbreviation arrives through the source endpoint on its own carrier (`TabName` / `Tab` in the capabilities), so the page holds no list of names of its own and the row labels of F-M731 stay untouched.
 
