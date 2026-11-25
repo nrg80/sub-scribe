@@ -15,13 +15,15 @@ not a coincidence (F-M671).*
 - [4. Keys and identifiers](#4-keys-and-identifiers)
 - [5. The membership table](#5-the-membership-table)
 - [6. The source level](#6-the-source-level)
-- [7. Verdicts, refusals and evidence](#7-verdicts-refusals-and-evidence)
-- [8. The mark matrix](#8-the-mark-matrix)
-- [9. Caches](#9-caches)
-- [10. Who writes what](#10-who-writes-what)
-- [11. Takeover and migration](#11-takeover-and-migration)
-- [12. What the plugin database never holds](#12-what-the-plugin-database-never-holds)
-- [13. The checks](#13-the-checks)
+- [7. Adding another source](#7-adding-another-source)
+- [8. Verdicts, refusals and evidence](#8-verdicts-refusals-and-evidence)
+- [9. The mark matrix](#9-the-mark-matrix)
+- [10. Caches](#10-caches)
+- [11. Who writes what](#11-who-writes-what)
+- [12. Migration — how the ascent runs](#12-migration-how-the-ascent-runs)
+- [13. A file from another version, and the empty case](#13-a-file-from-another-version-and-the-empty-case)
+- [14. What the plugin database never holds](#14-what-the-plugin-database-never-holds)
+- [15. The checks](#15-the-checks)
 
 ## 1. What it is
 
@@ -119,7 +121,29 @@ Everything that belongs to **one** source lives in its own table, never in a col
 - `source_matrix` is the mark matrix: one row per (media, source, kind, language), carrying the
   verdict, the signature and the time.
 
-## 7. Verdicts, refusals and evidence
+## 7. Adding another source
+
+**A source is a value, never a schema object.** That is the whole rule, and it is what makes a third
+source possible (F-M668, F-M669): there is no table per source, no column per source, and nothing in
+the model knows a source by name.
+
+What a new source brings, and where it appears without any schema change:
+
+- its **settings file of its own** and its entry in the catalogue — both outside the database
+  (F-M683);
+- rows in **`source_matrix`** as soon as it has marks: one row per (media, source, kind, language), and
+  for a track also per **position** — `file` and `pack` carry no position (F-M669);
+- rows in **`upload`** when it answers a submission, with the refusal triple when it refuses;
+- rows in **`reference`** for its own identifiers: the download identifier, our upload identifier, the
+  item identifier (F-M672);
+- rows in **`badapple`** when a download from it turned out bad — with the foreign identifier and the
+  member inside the pack (F-M679).
+
+**The test of the model:** if attaching a source ever needs a migration or a schema version bump, the
+model is wrong and the new column is the defect. A source that is withdrawn keeps its rows — they are
+history — but nothing reads them any more, and its marks are never read as another source's.
+
+## 8. Verdicts, refusals and evidence
 
 - A **verdict** about a pair is a fact of the row that carries the subtitle — `Status`, `Reason`,
   `StatusAt` on `track` or `sidecar`.
@@ -131,45 +155,78 @@ Everything that belongs to **one** source lives in its own table, never in a col
 - **Evidence beats a refusal and a refusal beats evidence**: a success clears the refusal, a refusal
   clears the success — the two live in the same row and exclude each other.
 
-## 8. The mark matrix
+## 9. The mark matrix
 
 `source_matrix` is the one place the marks of all sources stand side by side (F-M667, F-M668). One row
 per media, source, kind and language — no per-source table, no per-source column. Its `Fingerprint`
 and the refusal triple give the matrix the same memory the `upload` table has for a single submission,
 and the matrix is adopted once at the first start (F-M667).
 
-## 9. Caches
+## 10. Caches
 
 `tmdb_answers` and `aired_seasons` are answers we already paid for: the title question and the aired
 count of a season. They are caches in the strict sense — deletable without losing a decision — and
 they exist so a run does not ask the same question twice.
 
-## 10. Who writes what
+## 11. Who writes what
 
 The pipeline writes; an engine never does (see `CONTRACTS.md` §7 for the boundary and the full list).
 The short form: the seeder writes `file` and `sidecar` observations, a download writes `track`,
 `sidecar` and `reference`, an upload writes `upload` and `source_matrix`, the database refresh
 reconciles and removes, and the reporting keeps the counters in their single status row (F-M207).
 
-## 11. Takeover and migration
+## 12. Migration — how the ascent runs
 
-- **The ascent runs in ONE transaction** after a timestamped backup of the file next to it: the old
-  plugin database is read, the current tables are filled, the old tables and columns are dropped.
-  There is no half-migrated state to resume from.
+**The version stands in one row.** `meta` with the identifier `db` carries `SchemaVersion`; this build
+writes **24**. Every start compares that marker with what the build understands, and there are exactly
+four cases:
+
+- **no marker** (a file that did not exist) → the file is initialised at the current version and one
+  Normal line says so;
+- **marker older than this build** → the ascent runs, then the marker is raised; records of another
+  schema version are **ignored, not rewritten**;
+- **marker newer than this build** → **writing is disabled for the whole session**, with an error that
+  says so and asks the operator to update. An older build never damages a newer file;
+- **marker unreadable** → the check logs a warning and lets the plugin start. A broken compatibility
+  check must not keep the plugin from running.
+
+**The ascent itself** (F-M668, F-M670):
+
+1. **A timestamped copy of the file is taken first** — it is the only place material survives that
+   cannot be placed (see below).
+2. **Everything is read before the transaction**, and the write happens inside **one** transaction:
+   there is no half-migrated state to resume from.
+3. **The condition is the stock, not the marker.** As long as any legacy wide mark column, the old
+   `source_marks` table or a legacy `SubdlId` column stands anywhere, there is something to take over.
+   When all of them are gone the run does nothing — it is idempotent, so an aborted ascent is repeated
+   at the next start instead of being remembered as finished.
+4. **The ascent only narrows.** Wide columns become rows of the matrix; nothing is invented, and no
+   value is guessed into a row.
+5. **Rows without an anchor** — no media hash, no owner row — cannot be placed in the current model.
+   They live on **in the backup only**, and that is said openly rather than patched into a row
+   (F-M670).
+
+**Tables that a later build adds** are created on a file that predates them, once, on the first start
+of the new build (the caches are the example) — a missing table is not an ascent, it is a creation.
+
+## 13. A file from another version, and the empty case
+
+- **Downgrade.** A file written by a newer build is read-only for this session. The log carries an
+  error naming both numbers; no row is written and no table is touched.
 - **A build without a takeover path creates an empty plugin database** and reads the predecessor
-  neither whole nor in part (F-M639) — a deliberate trade: an empty database is honest, a half-read
-  one is not.
-- **The file itself lives in the plugin data folder**, next to the configuration; the backups stay in
-  the files area with their timestamp in the name.
+  neither whole nor in part (F-M639). That is a deliberate trade: an empty database is honest, a
+  half-read one is not.
+- **Backups** carry their timestamp in the name and live in the files area; a migration never deletes
+  the copy it took.
 
-## 12. What the plugin database never holds
+## 14. What the plugin database never holds
 
 - **No credentials.** A source's access data lives in its own settings file, never in a row.
 - **No media, no subtitle bytes.** Only their hashes, their names and their places.
 - **No library inventory.** The Jellyfin item identifier is a pointer, not a copy of the library.
 - **No statistics of a dry run.** A dry run creates nothing and decides nothing (F-M247).
 
-## 13. The checks
+## 15. The checks
 
 The suites that hold this shape: `storex` (the tables and their keys), `statefile` (the file and its
 takeover), `coverage` (what a reader may conclude from the rows), `matrix` (`source_matrix`) and
