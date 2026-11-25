@@ -28,6 +28,9 @@ import sys
 import tempfile
 
 DOC = os.path.join("docs", "REQUIREMENTS.md")
+# The test catalogue moved out of the specification (404 entries in one chapter made it unreadable),
+# so the per-test check counts are read from there. read_claims() takes both files and merges.
+TESTS = os.path.join("docs", "TESTS.md")
 COUNTS = os.path.join("scripts", "tests", "counts.json")
 DOTNET = os.environ.get("DOTNET_HOST", "/opt/data/.dotnet/dotnet")
 TOTAL_RE = re.compile(r"^(?P<name>[\w\-]+):\s*(?P<n>\d+)\s+(?:checks?|Prüfungen)", re.M)
@@ -97,6 +100,9 @@ def main():
         return 1
 
     claims = read_claims(doc)
+    tests_doc = os.path.join(repo, TESTS)
+    if os.path.exists(tests_doc):
+        claims.update(read_claims(tests_doc))
     book = json.load(open(counts_path, encoding="utf-8"))
     bound = book.get("tests", {})
     suites = book.get("suites", {})

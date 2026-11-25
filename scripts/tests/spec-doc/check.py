@@ -82,7 +82,9 @@ ID = r"F-M\d+[a-z]?\d*"
 RE_DEF_LINE = re.compile(r"^\*\*(?P<id>" + ID + r")\b(?P<rest>[^\n]*?)(?::\*\*|\*\*|—[^\n]*\*\*)")
 # An "ID-looking" line that is NOT a definition — the guard-on-the-guard set.
 RE_ID_LINE = re.compile(r"^\*\*(?P<id>" + ID + r")\b")
-RE_TEST_DEF = re.compile(r"^\*\*T(?P<t>\d+)\b(?P<rest>[^\n]*?):\*\*")
+# BUGFIX: `\b` after the digits never matched a letter suffix, so `**T254b:**` was invisible and the
+# count reported 403 where the document holds 404 entries. The suffix is part of the number.
+RE_TEST_DEF = re.compile(r"^\*\*T(?P<t>\d+)[a-z]?(?P<rest>[^\n]*?):\*\*")
 RE_TEST_REF = re.compile(r"\bT(?P<t>\d+)\b")
 RE_TOC = re.compile(r"^\s*- \[(?P<num>\d+(?:\.\d+)*)[^\]]*\]\(#[^)]*\) — (?P<n>\d+) requirements?", re.M)
 RE_HEADING = re.compile(r"^(?P<hashes>#{2,3}) (?P<num>\d+(?:\.\d+)*)\.? .+$", re.M)
@@ -155,6 +157,15 @@ def main():
     with open(path, encoding="utf-8") as fh:
         text = fh.read()
 
+    # The test catalogue is its own document (docs/TESTS.md): 404 entries in one chapter made
+    # REQUIREMENTS.md unreadable. Checks 3 and 4 therefore read the numbers from BOTH files — the
+    # requirement side still cites T-numbers, so the union is what "defined" means here.
+    tests_path = os.path.join(os.path.dirname(path), "TESTS.md")
+    test_text = ""
+    if os.path.exists(tests_path):
+        with open(tests_path, encoding="utf-8") as fh:
+            test_text = fh.read()
+
     defs = definitions(text)
     defs_by_id = {}
     for _, i in defs:
@@ -184,7 +195,7 @@ def main():
 
     # ---- 3. Test numbering is gapless ----
     test_defs = []
-    for i, line in enumerate(text.splitlines()):
+    for i, line in enumerate((text + "\n" + test_text).splitlines()):
         m = RE_TEST_DEF.match(line)
         if m:
             test_defs.append((i, int(m.group("t"))))

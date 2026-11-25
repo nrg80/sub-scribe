@@ -2,7 +2,7 @@
 
 **Owner: the seam.** How another source is attached, in detail: the catalogue, the marks, the order. The checklist and its pitfalls stand normatively in §21 of `REQUIREMENTS.md`, the boundary in `CONTRACTS.md`.
 
-As of 15.11.2026. Applies to `Jellyfin.Plugin.SubdlSync/Api/Endpoints/` (F-M483, F-M484).
+Applies to the endpoints of the client (F-M483, F-M484).
 
 **The order:** „2 download endpoints and 2 upload endpoints, and leave the rest of the plugin
 as it is."
@@ -26,7 +26,7 @@ So there are four endpoints, one per source and direction:
 - [„Uploaded" per source (F-M490)](#uploaded-per-source-f-m490)
 - [No re-up, per source (F-M489)](#no-re-up-per-source-f-m489)
 - [Upload: both endpoints one after the other (F-M495)](#upload-both-endpoints-one-after-the-other-f-m495)
-- [The next step (not part of this cut)](#the-next-step-not-part-of-this-cut)
+- [What comes after this paper](#what-comes-after-this-paper)
 
 ## The seam
 
@@ -208,7 +208,7 @@ is skipped with `cross-source` or `already-uploaded:<Quelle>`. An error at A doe
 (priority always wins). Afterwards **both** fields carry their mark, as far as the respective source took
 it — before it was exactly one.
 
-## The next step (not part of this cut)
+## What comes after this paper
 
 Setting `Wired = true` for tvsubtitles means: the pipelines call the catalog instead of the SubDL client.
 That is the wiring into the run — deliberately not done yet, because the order was „leave the rest

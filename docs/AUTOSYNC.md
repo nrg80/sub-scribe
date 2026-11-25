@@ -253,5 +253,5 @@ What pins the rules above, by suite:
 - `culture` — the culture-invariant numbers (§12).
 
 And the tests that state a single rule in one line: **T111** the sign, **T114** the staircase,
-**T121(a)** off-audio cues excluded, **T131** the repetition with the QA retry limit, **T148** the
-Auto-Sync row, **T149** the numbers with a point, **T199** the dry run against the queue.
+**T121(a)** off-audio cues excluded, **T131** the repetition with the QA retry limit. Then **T148** the
+Auto-Sync row, **T149** the numbers with a point, and **T199** the dry run against the queue.

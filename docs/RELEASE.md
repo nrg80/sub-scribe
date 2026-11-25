@@ -92,9 +92,9 @@ job runs `release.sh`, and the script pushes only the branch it runs on.
 
 **`main` was absent for part of 03.10.2026** — deleted after it had served exactly one release,
 `12.1.12.169`, and restored the same day for `12.1.12.175`. It came back by re-creating it at the tip it
-had (`a12b8b4d`, a docs-only commit) and merging `develop` into it, **not** by pointing it at `develop`:
-a fast-forward carries `develop`'s `manifest.json` along and a stable-looking branch then serves the
-prerelease URL, which is the one mistake this document exists to prevent.
+had (`a12b8b4d`, a docs-only commit) and merging `develop` into it, **not** by pointing it at
+`develop`. A fast-forward carries `develop`'s `manifest.json` along, and a stable-looking branch then
+serves the prerelease URL — the one mistake this document exists to prevent.
 
 The same applies to a **docs-only change that has to appear on `main`**: `git branch -f main develop`
 carries `develop`'s `manifest.json` with it, so `main` silently starts serving the prerelease again.
@@ -140,14 +140,14 @@ Versions older than the current one are installable from their release page only
 
 `scripts/deploy-jf-test.sh <version> <zip>` stops the test Jellyfin, removes every other
 `Sub Scribe_*` folder (one GUID — two copies would both load), unpacks the ZIP, writes `meta.json`
-and starts the instance again. The order is mandatory: replacing the DLL while Jellyfin runs leaves the
-process holding a file that no longer matches the loaded assembly, and .NET compiles methods lazily, so
-a method first reached during SHUTDOWN is read off disk then and the runtime dies with
+and starts the instance again. The order is mandatory. Replacing the DLL while Jellyfin runs leaves
+the process holding a file that no longer matches the loaded assembly, and .NET compiles methods
+lazily. A method first reached during SHUTDOWN is then read off disk and the runtime dies with
 `BadImageFormatException: Bad IL range`.
 
 **The package is verified before anything is removed**, and the extraction is verified after it: a
 deploy that cannot unpack must not leave an install holding nothing but the logo while reporting
-success. Both failure modes are real and were measured on 08.10.2026 — `unzip` is not on this host's
+success. Both failure modes are real — `unzip` is not on this host's
 PATH, so the extraction failed silently, the old version had already been deleted, and Jellyfin
 answered 503 on a deploy that printed no error. The script now falls back to Python's `zipfile` and
 aborts with `extract failed — no DLL in <path>` if the assembly is still missing. **A negative control
@@ -161,5 +161,5 @@ newly loaded plugin. Bump all three together.
 
 **The readiness line of the script can end on `HTTP 000` while the instance is fine.** The loop breaks
 on the first 200 and then re-probes once more; a slow start makes that second probe time out. Verify
-with your own call — measured 08.10.2026: the script printed `bereit nach ~3s` with `HTTP 000`, and the
+with your own call: the script printed `bereit nach ~3s` with `HTTP 000`, and the
 same endpoint answered 200 eight seconds later.

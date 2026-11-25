@@ -89,7 +89,7 @@ Save.
 
 Uploads the subtitle tracks embedded in your media files — enable it under **Dashboard → Plugins →
 Sub Scribe → Upload → Upload enabled**. Both endpoints are tried in turn, in the configured source
-order: a source that is switched off, not configured, already holds the subtitle, or is not allowed to
+order. A source that is switched off, not configured, already holding the subtitle, or not allowed to
 take it (a downloaded subtitle never travels to the other source) is skipped, and the next one still
 runs. Quality gates and duplicate protection apply here exactly as on the download side.
 
@@ -114,5 +114,7 @@ Do not release by tagging and pushing alone: a release must carry exactly one as
 ## Documentation
 
 - Functional specification and acceptance criteria: [docs/REQUIREMENTS.md](docs/REQUIREMENTS.md)
+- The test catalogue, one entry per test: [docs/TESTS.md](docs/TESTS.md)
+- The settings page as the operator meets it: [docs/GUI.md](docs/GUI.md)
 - How the two subtitle sources work together (marks, completion, parallel download and upload): [docs/MULTI-SOURCE.md](docs/MULTI-SOURCE.md)
 - Release process: [docs/RELEASE.md](docs/RELEASE.md)
