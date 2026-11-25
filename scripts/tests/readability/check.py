@@ -90,6 +90,11 @@ def blocks(lines: list[str]) -> list[tuple[int, int, str, str]]:
             flush(i - 1)
             out.append((i, i, "bullet", stripped))
             continue
+        if re.match(r"^\*\*(?:F-M|T\d|NF-|A-)", stripped):
+            # A definition entry is read on its own, like a bullet — not merged with its neighbours.
+            flush(i - 1)
+            out.append((i, i, "entry", stripped))
+            continue
         if stripped.startswith(("*Derived", "**Owner:", "*Paper:")):
             flush(i - 1)
             out.append((i, i, "header", stripped))
@@ -124,11 +129,11 @@ def measure(path: Path) -> dict:
         for s in sentences(text):
             total += 1
             sw = words(s)
-            if sw > SENTENCE_WORDS and kind in ("prose", "bullet", "header"):
+            if sw > SENTENCE_WORDS and kind in ("prose", "bullet", "header", "entry"):
                 long_sentences.append((first, last, sw, s.strip()))
         if kind == "prose" and w > PARAGRAPH_WORDS:
             long_paragraphs.append((first, last, w))
-        if kind in ("bullet", "row") and w > LIST_WORDS:
+        if kind in ("bullet", "row", "entry") and w > LIST_WORDS:
             long_lists.append((first, last, w))
     return {
         "path": path,
