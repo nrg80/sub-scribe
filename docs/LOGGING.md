@@ -23,9 +23,10 @@ rule they are cited with their `F-M` tag. The words are those of `TERMS.md`.*
   - [3.10 The event code stands at the end, exactly one](#310-the-event-code-stands-at-the-end-exactly-one)
   - [3.11 No broken characters](#311-no-broken-characters)
   - [3.12 The lower case of existing keywords stays](#312-the-lower-case-of-existing-keywords-stays)
-- [4. The run report](#4-the-run-report)
-- [5. The check list](#5-the-check-list)
-- [6. What the standard never does](#6-what-the-standard-never-does)
+- [4. The levels — what belongs where](#4-the-levels-what-belongs-where)
+- [5. The run report](#5-the-run-report)
+- [6. The check list](#6-the-check-list)
+- [7. What the standard never does](#7-what-the-standard-never-does)
 
 ## 1. What it is
 
@@ -96,6 +97,7 @@ Every summary names the number and the distribution, not an evaluation.
 
 - A **success** needs a Normal line. An error that logs does not replace it.
 - A line that at Normal level names only the position („item 429/1417"), belongs on Debug.
+- **Which line belongs on which level is a policy, not a taste question:** chapter 4.
 
 ### 3.6 No cancellation without a subject
 
@@ -148,7 +150,68 @@ for the fault in the wrong place.
 `upload:`, `download:`, `season pack:`, `LAUF`, `TAKT` are grown markers on which filters and tests
 hang. New lines follow 3.2, old markers are not renamed without the tests coming along.
 
-## 4. The run report
+## 4. The levels — what belongs where
+
+The plugin's own log mode is the only authority: everything is written at the normal level and the
+detail is gated inside the log helper — the per-item level from Verbose upward, the detail level from
+Debug upward (F-M224). `Normal` stays lifecycle and summary. Warnings and errors are **never** gated,
+and **no plugin line is written at Trace**.
+
+**One question per level, in this order:**
+
+- **Normal — must the operator know it without being asked?** Run lifecycle, abort reasons, task
+  summaries (F-M225), and one line per event that changed something.
+- **Verbose — does someone asking „where exactly?" need it?** The per-item work: the reason a single
+  item was skipped, a verdict's reason, the per-track detail.
+- **Debug — is it only for us while diagnosing?** Internals and diagnostics (F-M225): resolved tool
+  paths, the reschedule budget, seed pre-check timestamps, database statements, the decoder call, the
+  timing, and every progress counter.
+
+**What stands at Normal**
+
+- `RUN START` and `RUN END` — the lifecycle of the run, with all counters including the zeros.
+- One line per **success**: an item that was uploaded, downloaded, saved, packed, aligned.
+- Every **abort or cancellation** with its subject, and every refusal that ends a hunt.
+- The **source summaries** and the statistics block of a run, and `POSTPROCESS` armed or not armed.
+- The dry-run line — a dry run does the same work and reports it, but contributes nothing to the
+  statistics (F-M247).
+- **Warnings and errors**, always, whatever the log mode is.
+
+**What belongs at Verbose**
+
+- The **reason** of a single verdict or a single skip (duplicate, duplicate-HI, language missing,
+  no film identifier, refusal cause).
+- The per-track detail of a rewrite or an alignment.
+- One line per title where the Normal line only carries the count.
+
+**What belongs at Debug**
+
+- The **position** in a list („item 429/1417") and any other progress counter.
+- Timing, durations, the cost of a step.
+- What the plugin resolved or computed: tool path, decoder arguments, database statements, cache hits.
+- Anything needed to reproduce a defect but not to decide anything.
+
+**What may never stand at Normal**
+
+- A diagnostic: a resolved path, a budget, a timestamp of a pre-check.
+- A progress counter or a per-case repetition (rule 3.8).
+- An intention or a promise (rule 3.9).
+- Anything a statistic depends on — the counters are written by the statistics writer from the run
+  summaries, never read out of a log line (F-M225), so a `Normal` run counts exactly like a `Debug`
+  run.
+
+**Two rules that hold the assignment together**
+
+- **One gate per message.** A call site picks the lowest level that must carry its message and calls
+  the one matching gate; `Normal < Verbose < Debug` is cumulative, so a second call would print the
+  same message twice (F-M245).
+- **The marker matches the gate.** `[N]`, `[V]`, `[D]` are written as text at the normal level
+  (F-M226), so a line whose marker disagrees with its gate is a defect that a reader sees.
+
+**Changing a level is a change of the contract between us and the reader** — and it needs the test
+that pins it down, in the same commit (chapter 6).
+
+## 5. The run report
 
 Goal: **at most ten Normal lines per run and direction**, from which the run can be retold in words.
 Everything else is Verbose.
@@ -173,7 +236,7 @@ Rules for this scaffold:
   states that would otherwise look the same.
 - A cancelled run writes the same scaffold, `RUN END` with `cancelled` and what it still managed.
 
-## 5. The check list
+## 6. The check list
 
 Before every release, for every new line:
 
@@ -189,7 +252,7 @@ Before every release, for every new line:
 Whoever changes a line adds the test that pins it down (`scripts/tests/`), otherwise the next cleanup
 round will be rid of the old line again.
 
-## 6. What the standard never does
+## 7. What the standard never does
 
 - **It never lets statistics depend on a log line** (F-M225, F-M247): a dry run contributes nothing,
   and no counter is read out of a message.
