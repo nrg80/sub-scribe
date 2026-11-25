@@ -64,39 +64,6 @@
                         </div>
                         <div id="RandomScheduleInfo" style="margin-top:-0.4em; font-size:0.85em; opacity:0.8;"></div>
 
-                        <h3>Status</h3>
-                        <div id="ScribeQuotaBox" style="margin-bottom:1em;"></div>
-                        <div id="ScribeStatusBox" style="display:flex;flex-direction:column;margin-bottom:1em;">
-                            <div class="subdl-status-row" id="TmdbApiStatus">
-                                <span class="subdl-light"></span>
-                                <span class="subdl-label">TMDb API</span>
-                                <span class="subdl-msg">—</span>
-                            </div>
-                            <div class="subdl-status-row" id="SubdlLoginStatus">
-                                <span class="subdl-light"></span>
-                                <span class="subdl-label">SubDL Login</span>
-                                <span class="subdl-msg">—</span>
-                            </div>
-                            <div class="subdl-status-row" id="ScribeApiStatus">
-                                <span class="subdl-light"></span>
-                                <span class="subdl-label">SubDL API</span>
-                                <span class="subdl-msg">—</span>
-                            </div>
-                            <div class="subdl-status-row" id="TvstStatus">
-                                <span class="subdl-light"></span>
-                                <span class="subdl-label">tvsubtitles.net</span>
-                                <span class="subdl-msg">—</span>
-                            </div>
-                            <div class="subdl-status-row" id="MstStatus">
-                                <span class="subdl-light"></span>
-                                <span class="subdl-label">moviesubtitles.org</span>
-                                <span class="subdl-msg">—</span>
-                            </div>
-                            <h4 style="margin-top:0.8em;margin-bottom:0.3em;">Library directories</h4>
-                            <div id="ScribeDirStatusList">
-                                <div class="fieldDescription">Loading…</div>
-                            </div>
-                        </div>
 
                         <!-- F-M497: der TMDb-Schluessel ist die EINZIGE Pflicht — ohne ihn startet keine
                              Richtung, und die Seite sagt das ausdruecklich. -->
@@ -183,6 +150,44 @@
                              allowance, this line describes our own wait, and mixing the two made a
                              partly-used allowance read as a problem (user decision 03.10.2026). -->
                         <div class="fieldDescription" id="ScribeLocalDeferLine" style="margin-top:0.5em;"></div>
+
+                        <!-- Betreiberanweisung 25.11.2026, woertlich: "Status den gesamten block bitte unter
+                             workers verschieben" — der Statusblock steht deshalb unter der Worker-Liste,
+                             der Auffrischknopf bleibt der letzte Block des Reiters. -->
+
+                        <h3>Status</h3>
+                        <div id="ScribeQuotaBox" style="margin-bottom:1em;"></div>
+                        <div id="ScribeStatusBox" style="display:flex;flex-direction:column;margin-bottom:1em;">
+                            <div class="subdl-status-row" id="TmdbApiStatus">
+                                <span class="subdl-light"></span>
+                                <span class="subdl-label">TMDb API</span>
+                                <span class="subdl-msg">—</span>
+                            </div>
+                            <div class="subdl-status-row" id="SubdlLoginStatus">
+                                <span class="subdl-light"></span>
+                                <span class="subdl-label">SubDL Login</span>
+                                <span class="subdl-msg">—</span>
+                            </div>
+                            <div class="subdl-status-row" id="ScribeApiStatus">
+                                <span class="subdl-light"></span>
+                                <span class="subdl-label">SubDL API</span>
+                                <span class="subdl-msg">—</span>
+                            </div>
+                            <div class="subdl-status-row" id="TvstStatus">
+                                <span class="subdl-light"></span>
+                                <span class="subdl-label">tvsubtitles.net</span>
+                                <span class="subdl-msg">—</span>
+                            </div>
+                            <div class="subdl-status-row" id="MstStatus">
+                                <span class="subdl-light"></span>
+                                <span class="subdl-label">moviesubtitles.org</span>
+                                <span class="subdl-msg">—</span>
+                            </div>
+                            <h4 style="margin-top:0.8em;margin-bottom:0.3em;">Library directories</h4>
+                            <div id="ScribeDirStatusList">
+                                <div class="fieldDescription">Loading…</div>
+                            </div>
+                        </div>
 
                         <!-- One refresh for EVERY live readout (user order 30.09.2026: "es reicht wenn er
                              unter General tab sitzt woanders laufen keine live daten rein"). It sits at

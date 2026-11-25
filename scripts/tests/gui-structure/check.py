@@ -2714,6 +2714,16 @@ def main():
     # stehen in der Reihenfolge, in der ein Nutzer sie braucht: erst der Schlüssel, ohne den nichts
     # laeuft (TMDb), dann die Konten, dann die Erreichbarkeit der beiden Webseiten. Die Reihenfolge
     # steht im HTML; die Skripte greifen ueber die Ids zu und sind davon unabhaengig.
+    check("F-M749: the Status block stands under the Workers list",
+          page_src.find('<h3>Status</h3>') > page_src.find('id="WorkerRunList"')
+          and page_src.find('id="ScribeStatusBox"') > page_src.find('id="WorkerRunList"')
+          and page_src.find('id="ScribeLocalDeferLine"') < page_src.find('<h3>Status</h3>'),
+          "status heading after the worker list, deferral line above it")
+    check("F-M749: the refresh control stays the last block of the tab, below the Status block",
+          page_src.find('id="RefreshSubdlStatus"') > page_src.find('id="ScribeDirStatusList"')
+          and page_src.find('id="ScribeDirStatusList"') > page_src.find('id="ScribeStatusBox"'),
+          "refresh button after the status block")
+
     box = page_src.find('id="ScribeStatusBox"')
     reihenfolge = [page_src.find('id="%s"' % i, box) for i in
                    ('TmdbApiStatus', 'SubdlLoginStatus', 'ScribeApiStatus', 'TvstStatus', 'MstStatus')]

@@ -141,6 +141,8 @@ number when it moves to another chapter, and a number is never reused.
 
 **T412:** The eye in the page (F-M748), in `gui-structure`. **3 checks**. The eye asks on pointer down and gives the value back on release; a late answer after the release shows nothing. It sits inside the field at the right edge and the field keeps its width. Both API keys carry it, a secret the eye is showing does not count as a change, and the eye stands only where a secret is stored.
 
+**T413:** The place of the Status block (F-M749), in `gui-structure`. **2 checks**. The Status heading and its lights stand below the Worker list, with the deferral line still directly under that list. The refresh control stays the last block of the tab, now below the Status block.
+
 **T176:** The report of an observed defect — wording without justification, category per finding, name of the affected file in both tracks, sender line with version and account name. Report in the same run, deferral instead of discarding, locked candidate after the report, switch and its position as the second-to-last entry (F-M450). **4 checks on the file naming.**
 
 **T177:** What a file on disk proves — the reserved original block (51–99) closes no pair, an aligned `01` does, a deleted `01` opens it again, an unnumbered name still counts, and the slot reader reads what the writer writes (F-M452). **12 checks.**

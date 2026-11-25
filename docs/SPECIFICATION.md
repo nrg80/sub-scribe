@@ -39,7 +39,7 @@ states the rule, its constants, its ground and its test.**
 - [10. Scheduler, Quota and Timing](#10-scheduler-quota-and-timing) — 24 requirements
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
-- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 24 requirements
+- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 25 requirements
 - [14. Data Model and Persistence](#14-data-model-and-persistence) — 92 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 61 requirements
 - [16. Non-Goals](#16-non-goals)
@@ -2009,7 +2009,7 @@ When no file exists yet, only the plugin's own fields are written; the document 
 
 **F-M270:** **ONE page-wide "Refresh status" button at the END of the General tab reloads every live readout at once.**
 
-**Rule:** the button sits INSIDE the general tab pack, directly below the Workers list, and writes one timestamp line directly above itself. It refreshes five readouts in one click: the API/search quota AND the download quota (both in `#ScribeQuotaBox`), the SubDL/TMDb lights AND the library read/write rows, the statistics counters, and the Workers list. Implementation: the refresh control.
+**Rule:** the button sits INSIDE the general tab pack, at its very end below the Status block (F-M749), and writes one timestamp line directly above itself. It refreshes five readouts in one click: the API/search quota AND the download quota (both in `#ScribeQuotaBox`), the SubDL/TMDb lights AND the library read/write rows, the statistics counters, and the Workers list. Implementation: the refresh control.
 
 **It is not a form action:** it must NOT sit next to Save, and no tab may carry a second refresh button. Nothing live exists on the Expert/Upload/Download tabs, so the General tab is the only correct home.
 
@@ -2079,6 +2079,8 @@ The page shows the **effective** state: an empty field is displayed as ticked (t
 **F-M747 [U]:** **Reporting is a switch of the source, not of the download section.** Each source card carries the tick that decides whether broken subtitles of that source are reported back to it; the card of a source without a report route carries none. Concept decision: the old switch in the download section said the same thing for every source at once, which is wrong for a source that has no report route, and it hid the decision away from the card it belongs to. Its stored value survives as the fallback for a source file that predates the field, so nothing that was switched off comes back on. Checked in `reporting`.
 
 **F-M748 [U]:** **A secret field carries an eye that shows the stored value for as long as it is pressed.** Operator request: while the button is held the field shows the value instead of the dots, and on release the dots are back. Concept decision: the page never receives a secret with the list, and that rule stays. The value comes over a route of its own instead: one field per call, and only for a field the source declares as secret; anything else is refused. Every call is logged with source and field, never with the value. The eye stands on the two API keys and on the password; the address of the SubDL card stays a plain text field and carries none. A value that is currently shown counts as unchanged, so pressing the eye and saving does not send the secret back. Checked in `sources` and `gui-structure`.
+
+**F-M749 [G]:** **The Status block stands under the Workers list.** Concept decision: the run readout comes first and the reachability readout follows it, so the general tab reports what the plugin did before it reports whether the sources answer. The block keeps its content unchanged — quota bars, the five lights, the library directory rows — and the refresh control stays the last block of the tab, now below the Status block. The deferral line keeps its place directly under the Workers list (F-M288). Checked in `gui-structure`.
 
 ## 14. Data Model and Persistence
 
