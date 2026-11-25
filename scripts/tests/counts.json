@@ -1045,7 +1045,7 @@
     },
     "T412": {
       "suite": "gui-structure",
-      "checks": 2
+      "checks": 3
     }
   }
 }

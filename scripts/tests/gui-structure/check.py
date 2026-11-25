@@ -2221,16 +2221,23 @@ def main():
     # statt ... einblendet für die Dauer die man draufdrückt?"): der Wert kommt auf Druck, geht beim
     # Loslassen wieder weg, und ein gezeigtes Geheimnis zaehlt nicht als Aenderung.
     check("F-M748: the eye shows the stored secret while pressed and gives it back on release",
-          "data-source-eye" in page_src
-          and "/secret/' + encodeURIComponent(field.key)" in page_src
+          "subdlAugeVerbinden(auge, input, function () {" in page_src
           and "auge.addEventListener('pointerdown'" in page_src
-          and "auge.addEventListener('pointerup', verbergen);" in page_src
+          and "auge.addEventListener('pointerup', zu);" in page_src
+          and "auge.addEventListener('blur', zu);" in page_src
+          and "if (!gedrueckt || !res || !res.value) { return; }" in page_src
           and "input.value = '';" in page_src
-          and "if (!gedrueckt || !res || !res.value) { return; }" in page_src)
-    check("F-M748: a secret the eye is showing is not sent as a change, and the eye only stands on a stored secret",
-          "if (ctrl.getAttribute('data-shown-secret') === 'true') { continue; }" in page_src
+          and "function subdlAugeZeichnen(auge) {" in page_src)
+    check("F-M748: the eye sits inside the field, at the right edge, and the field keeps its width",
+          ".subdl-secret-wrap { position: relative; }" in page_src
+          and ".subdl-secret-wrap input { padding-right: 34px; }" in page_src
+          and "position: absolute; top: 50%; right: 4px; transform: translateY(-50%);" in page_src
+          and "huelle.className = 'subdl-secret-wrap';" in page_src)
+    check("F-M748: both api keys carry the eye, and a shown secret is not sent as a change",
+          "id=\"TmdbApiKeyEye\"" in page_src
+          and "document.getElementById('TmdbApiKeyEye')" in page_src
           and "if (field.gesetzt) {" in page_src
-          and "input.placeholder = field.gesetzt ? '\u2022\u2022\u2022\u2022\u2022\u2022\u2022\u2022' : '';" in page_src)
+          and "if (ctrl.getAttribute('data-shown-secret') === 'true') { continue; }" in page_src)
     # F-M708 (Betreiberbefund 25.11.2026: "die ampel auf den slides geht nicht mit aus"): der Reiter
     # trug seinen Punkt weiter auf "on", weil die Leiste nach dem Speichern nicht neu gezeichnet wurde.
     check("F-M708: the lamp on the tab strip is redrawn from the same answer, and the open tab stays open",

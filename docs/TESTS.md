@@ -139,7 +139,7 @@ number when it moves to another chapter, and a number is never reused.
 
 **T411:** The eye on a secret field (F-M748), in `sources`. **4 checks**. The stored value of a secret field comes out on demand, an unknown field and an ordinary field are both refused, and one route of its own serves the value while the list keeps carrying nothing. The log names source and field, never the value.
 
-**T412:** The eye in the page (F-M748), in `gui-structure`. **2 checks**. The eye asks on pointer down and gives the value back on release; a late answer after the release shows nothing. A secret the eye is showing does not count as a change, and the eye stands only where a secret is stored.
+**T412:** The eye in the page (F-M748), in `gui-structure`. **3 checks**. The eye asks on pointer down and gives the value back on release; a late answer after the release shows nothing. It sits inside the field at the right edge and the field keeps its width. Both API keys carry it, a secret the eye is showing does not count as a change, and the eye stands only where a secret is stored.
 
 **T176:** The report of an observed defect — wording without justification, category per finding, name of the affected file in both tracks, sender line with version and account name. Report in the same run, deferral instead of discarding, locked candidate after the report, switch and its position as the second-to-last entry (F-M450). **4 checks on the file naming.**
 

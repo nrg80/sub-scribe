@@ -150,6 +150,8 @@ public sealed class SubdlEngine : ISourceEngine
         // die ein Mensch bei SubDL einträgt. Bis hierher stand hier „Account"; die Seite sagte damit
         // nicht, was hineingehört (nämlich die E-Mail-Adresse des Kontos). Der Schlüssel in der Datei
         // bleibt `account` — er ist der stabile Name, an dem der Bestand hängt.
+        // F-M748 (Betreiberbefund 25.11.2026: "2 api keys ein pw zur zeit"): Geheimnisse sind die zwei
+        // Schluessel und das Passwort — die Adresse bleibt gewoehnlicher Text und traegt kein Auge.
         new(FieldAccount, "Email", SourceFieldKind.Text,
             Help: "Login credentials at subdl.com.",
             HelpUrl: "https://subdl.com", HelpLink: "subdl.com",

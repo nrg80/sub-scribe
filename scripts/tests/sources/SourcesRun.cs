@@ -581,13 +581,14 @@ internal static class Program
                 "F-M695: moviesubtitles fuehrt kein Feld Access mehr — die Seite verlangt keinen Zugang",
                 "Felder: " + string.Join(", ", MsubEngine.Declared.Select(f => f.Key)));
 
-            // F-M694: API key, Email, Password — und das Passwort kommt auch AN.
+            // F-M694/F-M748: API key, Email, Password — so, wie der Betreiber sie nennt. Geheimnisse sind
+            // die beiden Schluessel und das Passwort; die Adresse bleibt gewoehnlicher Text.
             var zugang = SubdlEngine.Declared.Where(f => f.Key is "apiKey" or "account" or "password").ToList();
             Check(zugang.Count == 3
                   && zugang[0].Kind == SourceFieldKind.Secret
                   && zugang[1].Kind == SourceFieldKind.Text && zugang[1].Label == "Email"
                   && zugang[2].Kind == SourceFieldKind.Secret && zugang[2].Label == "Password",
-                "F-M694: die Karte fuehrt API key, Email und Password — so, wie der Betreiber sie nennt",
+                "F-M694/F-M748: die Karte fuehrt API key, Email und Password — zwei Schluessel und ein Passwort als Geheimnis",
                 string.Join(" | ", zugang.Select(f => f.Key + "/" + f.Label + "/" + f.Kind)));
 
             // -------------------------------------------------------------------------------------

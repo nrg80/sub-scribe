@@ -103,7 +103,12 @@
                         <h3>TMDb (<span class="subdl-required">Required</span>)</h3>
                         <div class="inputContainer">
                             <label class="inputLabel inputLabelUnfocused" for="TmdbApiKey">TMDb API key (v3)</label>
-                            <input id="TmdbApiKey" name="TmdbApiKey" type="password" is="emby-input" autocomplete="new-password" required />
+                            <!-- F-M748: das Auge sitzt rechts IM Feld; die Breite des Feldes bleibt, wie sie
+                                 ohne Auge waere. -->
+                            <div class="subdl-secret-wrap">
+                                <input id="TmdbApiKey" name="TmdbApiKey" type="password" is="emby-input" autocomplete="new-password" required />
+                                <button type="button" id="TmdbApiKeyEye" class="subdl-eye" title="Hold to show the stored value"></button>
+                            </div>
                             <div class="fieldDescription">Required — the only mandatory key. Resolves IMDb / TMDb ids for upload and download. Free key: <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org/settings/api</a>.</div>
                         </div>
 
@@ -756,8 +761,16 @@
         .subdl-source-tab-lamp.off { background: transparent; box-shadow: inset 0 0 0 1px #767676; }
             /* F-M748: die Zeile eines Geheimfelds traegt rechts ein Auge — es zeigt den abgelegten Wert,
                solange gedrueckt wird, und gibt ihn beim Loslassen wieder her. */
-            .subdl-source-secret { display: flex; align-items: center; gap: 6px; }
-            .subdl-eye { flex: 0 0 auto; min-width: 44px; padding: 2px 8px; line-height: 1.4; cursor: pointer; }
+            .subdl-secret-wrap { position: relative; }
+            .subdl-secret-wrap input { padding-right: 34px; }
+            .subdl-eye {
+                position: absolute; top: 50%; right: 4px; transform: translateY(-50%);
+                width: 26px; height: 26px; padding: 0; border: 0; background: transparent;
+                color: #9aa0a6; cursor: pointer; border-radius: 4px;
+                display: flex; align-items: center; justify-content: center;
+            }
+            .subdl-eye:hover { color: #f0f0f0; background: rgba(255, 255, 255, 0.09); }
+            .subdl-eye.shown { color: #f0f0f0; }
         .subdl-source-pane { display: none; }
         .subdl-source-pane.active { display: block; }
         /* F-M688: eine Karte je Quelle. Der Rahmen trennt die Quellen, weil je KARTE gespeichert
@@ -1947,6 +1960,73 @@ workers.forEach(function (w) {
             // DOM-Knoten, nie aus einer Zeichenkette: das Wort `helpLink` wird im Text gesucht und
             // durch einen Anker ersetzt, alles andere bleibt Text. Steht das Wort nicht im Text,
             // bleibt es beim reinen Text.
+            // F-M748: das Auge am Geheimfeld. Es sitzt rechts IM Feld, die Breite des Feldes bleibt
+            // dieselbe (das Feld bekommt nur rechts Luft). Gedrueckt zeigt es den Wert, losgelassen sind
+            // die Punkte wieder da. Wo der Wert nicht im Feld steht (ein abgelegtes Geheimnis), holt es
+            // ihn ueber einen eigenen Weg; wo er schon dasteht (TMDb-Schluessel), schaltet es nur um.
+            function subdlAugeZeichnen(auge) {
+                var ns = 'http://www.w3.org/2000/svg';
+                var bild = document.createElementNS(ns, 'svg');
+                bild.setAttribute('viewBox', '0 0 24 24');
+                bild.setAttribute('width', '17');
+                bild.setAttribute('height', '17');
+                bild.setAttribute('fill', 'none');
+                bild.setAttribute('stroke', 'currentColor');
+                bild.setAttribute('stroke-width', '1.7');
+                bild.setAttribute('stroke-linecap', 'round');
+                var lid = document.createElementNS(ns, 'path');
+                lid.setAttribute('d', 'M1.8 12S5.6 5.4 12 5.4 22.2 12 22.2 12 18.4 18.6 12 18.6 1.8 12 1.8 12z');
+                var pupille = document.createElementNS(ns, 'circle');
+                pupille.setAttribute('cx', '12');
+                pupille.setAttribute('cy', '12');
+                pupille.setAttribute('r', '3.1');
+                bild.appendChild(lid);
+                bild.appendChild(pupille);
+                auge.appendChild(bild);
+            }
+
+            function subdlAugeVerbinden(auge, input, holen) {
+                var gedrueckt = false;
+                auge.addEventListener('pointerdown', function (ev) {
+                    ev.preventDefault();
+                    gedrueckt = true;
+                    auge.classList.add('shown');
+                    if (input.value !== '') { input.type = 'text'; return; }
+                    if (!holen) { return; }
+                    holen().then(function (res) {
+                        // Wer waehrend der Antwort schon losgelassen hat, bekommt nichts zu sehen.
+                        if (!gedrueckt || !res || !res.value) { return; }
+                        input.value = res.value;
+                        input.type = 'text';
+                        input.setAttribute('data-shown-secret', 'true');
+                    }).catch(function () { });
+                });
+                var zu = function () {
+                    gedrueckt = false;
+                    auge.classList.remove('shown');
+                    if (input.getAttribute('data-shown-secret') === 'true') {
+                        input.value = '';
+                        input.removeAttribute('data-shown-secret');
+                    }
+                    input.type = 'password';
+                };
+                auge.addEventListener('pointerup', zu);
+                auge.addEventListener('pointerleave', zu);
+                auge.addEventListener('pointercancel', zu);
+                auge.addEventListener('blur', zu);
+            }
+
+            // F-M748: das Auge sitzt auch am TMDb-Schluessel — dem zweiten der beiden Schluessel. Dort steht
+            // der Wert im Feld (es ist ein Passwortfeld), also schaltet das Auge nur um; ein eigener Weg
+            // waere hier ein Umweg.
+            (function () {
+                var tmdb = document.getElementById('TmdbApiKey');
+                var auge = document.getElementById('TmdbApiKeyEye');
+                if (!tmdb || !auge) { return; }
+                subdlAugeZeichnen(auge);
+                subdlAugeVerbinden(auge, tmdb, null);
+            }());
+
             function subdlSourceHelp(feld) {
                 var div = document.createElement('div');
                 div.className = 'fieldDescription';
@@ -2241,44 +2321,25 @@ workers.forEach(function (w) {
                     // eingetippter Wert wird nur sichtbar geschaltet, dafuer braucht es keine Anfrage.
                     if (field.gesetzt) {
                         boxWrap.classList.add('subdl-source-secret');
-                        input.style.flex = '1 1 auto';
-                        var gedrueckt = false;
+                        // Das Auge sitzt am FELD, nicht am Kasten: der Hilfetext steht mit im Kasten und
+                        // haette das Zeichen sonst in die Mitte zwischen Feld und Text geschoben.
+                        var huelle = document.createElement('div');
+                        huelle.className = 'subdl-secret-wrap';
+                        boxWrap.replaceChild(huelle, input);
+                        huelle.appendChild(input);
                         var auge = document.createElement('button');
                         auge.type = 'button';
-                        auge.className = 'subdl-eye raised emby-button';
+                        auge.className = 'subdl-eye';
                         auge.setAttribute('data-source-eye', field.key);
                         auge.title = 'Hold to show the stored value';
-                        auge.textContent = '\u{1F441}';
-                        auge.addEventListener('pointerdown', function (ev) {
-                            ev.preventDefault();
-                            gedrueckt = true;
-                            if (input.value !== '') { input.type = 'text'; return; }
+                        subdlAugeZeichnen(auge);
+                        subdlAugeVerbinden(auge, input, function () {
                             var url = ApiClient.getUrl('Plugins/SubdlSync/Sources/' + encodeURIComponent(entry.key)
                                 + '/secret/' + encodeURIComponent(field.key));
-                            fetch(url, { headers: { 'Accept': 'application/json' } })
-                                .then(function (r) { return r.ok ? r.json() : null; })
-                                .then(function (res) {
-                                    // Wer waehrend der Antwort schon losgelassen hat, bekommt nichts zu sehen.
-                                    if (!gedrueckt || !res || !res.value) { return; }
-                                    input.value = res.value;
-                                    input.type = 'text';
-                                    input.setAttribute('data-shown-secret', 'true');
-                                })
-                                .catch(function () { });
+                            return fetch(url, { headers: { 'Accept': 'application/json' } })
+                                .then(function (r) { return r.ok ? r.json() : null; });
                         });
-                        var verbergen = function () {
-                            gedrueckt = false;
-                            if (input.getAttribute('data-shown-secret') === 'true') {
-                                input.value = '';
-                                input.removeAttribute('data-shown-secret');
-                            }
-                            input.type = 'password';
-                        };
-                        auge.addEventListener('pointerup', verbergen);
-                        auge.addEventListener('pointerleave', verbergen);
-                        auge.addEventListener('pointercancel', verbergen);
-                        auge.addEventListener('blur', verbergen);
-                        boxWrap.appendChild(auge);
+                        huelle.appendChild(auge);
                     }
                 } else {
                     // Ein Geheimnis bekommt KEIN data-value — der Wert steht damit nirgends im DOM.

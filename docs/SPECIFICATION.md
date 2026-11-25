@@ -3,7 +3,7 @@
 **Owner: the rules.** This is the master document: every other paper is derived from it and cites its `F-M` tags. The contract boundaries stand in `CONTRACTS.md`, the vocabulary in `TERMS.md`.
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.53.
+**Status:** Implementation — v12.3.8.54.
 
 **A rule stands here with its ground: the decision behind it in one sentence, under `Concept decision`, and the
 check that proves it. The detailed measurement archive — what was measured, which run showed it, what happened —
@@ -2078,7 +2078,7 @@ The page shows the **effective** state: an empty field is displayed as ticked (t
 
 **F-M747 [U]:** **Reporting is a switch of the source, not of the download section.** Each source card carries the tick that decides whether broken subtitles of that source are reported back to it; the card of a source without a report route carries none. Concept decision: the old switch in the download section said the same thing for every source at once, which is wrong for a source that has no report route, and it hid the decision away from the card it belongs to. Its stored value survives as the fallback for a source file that predates the field, so nothing that was switched off comes back on. Checked in `reporting`.
 
-**F-M748 [U]:** **A secret field carries an eye that shows the stored value for as long as it is pressed.** Operator request: while the button is held the field shows the value instead of the dots, and on release the dots are back. Concept decision: the page never receives a secret with the list, and that rule stays. The value comes over a route of its own instead: one field per call, and only for a field the source declares as secret; anything else is refused. Every call is logged with source and field, never with the value. A value that is currently shown counts as unchanged, so pressing the eye and saving does not send the secret back. Checked in `sources` and `gui-structure`.
+**F-M748 [U]:** **A secret field carries an eye that shows the stored value for as long as it is pressed.** Operator request: while the button is held the field shows the value instead of the dots, and on release the dots are back. Concept decision: the page never receives a secret with the list, and that rule stays. The value comes over a route of its own instead: one field per call, and only for a field the source declares as secret; anything else is refused. Every call is logged with source and field, never with the value. The eye stands on the two API keys and on the password; the address of the SubDL card stays a plain text field and carries none. A value that is currently shown counts as unchanged, so pressing the eye and saving does not send the secret back. Checked in `sources` and `gui-structure`.
 
 ## 14. Data Model and Persistence
 
