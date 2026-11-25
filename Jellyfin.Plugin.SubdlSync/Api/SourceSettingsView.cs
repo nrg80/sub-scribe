@@ -250,6 +250,19 @@ public static class SourceSettingsView
         }
 
         SourceSettingsFile.Save(dataDir, key, schema, merged);
+
+        // F-M750: was geschrieben wurde, sagt die Zeile selbst — Quelle, Feld, alt -> neu.
+        foreach (string feldKey in geschrieben)
+        {
+            SourceField feld = schema.First(f => string.Equals(f.Key, feldKey, StringComparison.Ordinal));
+            Configuration.SettingsChangeLog.SourceField(
+                logger,
+                key,
+                feld,
+                current.Stored.TryGetValue(feldKey, out string? vorher) ? vorher : null,
+                merged[feldKey]);
+        }
+
         return new SourceSaveResult(true, null, Array.Empty<string>(), geschrieben, Entry(registry, engine, dataDir));
     }
 

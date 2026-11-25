@@ -926,6 +926,83 @@ internal static class Program
                 "F-M683 (C): ein leeres Geheimfeld bedeutet „unverändert lassen\" — der abgelegte Wert bleibt",
                 "gesetzt=" + nachLeerem.Has(SubdlEngine.FieldApiKey));
 
+            // ---- F-M750: jede geschriebene Einstellung nennt sich selbst ----------------------------
+            // Betreiberwunsch 25.11.2026: „Evtl sollte das ins debug. Welche konfi wann geändert wird".
+            var schreibLog = new Rec();
+            var mitProtokoll = Jellyfin.Plugin.SubScribe.Api.SourceSettingsView.Save(
+                registry, tmp, SubdlEngine.SourceKey,
+                new Dictionary<string, string?>
+                {
+                    ["account"] = "konto-noch-neuer",
+                    ["preferSeasonZip"] = "false",
+                    [SubdlEngine.FieldApiKey] = PruefSchluessel,
+                },
+                schreibLog);
+            var zeilen = schreibLog.Lines.Select(l => l.Text).ToList();
+            var kontZeilen = zeilen.Count(z => z.Contains("setting written", StringComparison.Ordinal)
+                                                && z.Contains("/account", StringComparison.Ordinal));
+            Check(mitProtokoll.Ok
+                  && schreibLog.Lines.All(l => l.Level == Microsoft.Extensions.Logging.LogLevel.Debug)
+                  && kontZeilen == 1
+                  && zeilen.All(z => !z.Contains("preferSeasonZip", StringComparison.Ordinal))
+                  && zeilen.All(z => z.StartsWith("[D] ", StringComparison.Ordinal))
+                  && zeilen.All(z => !z.Contains("konto-neu", StringComparison.Ordinal)),
+                "F-M750 (A): eine Schreibung protokolliert genau die geänderten Felder, auf Debug, mit alt -> neu — "
+                + "der Wert eines Textfelds steht NICHT in der Zeile",
+                zeilen.Count + " Zeile(n): " + string.Join(" | ", zeilen));
+
+            var configVorher = new Jellyfin.Plugin.SubScribe.Configuration.PluginConfiguration();
+            var configNachher = new Jellyfin.Plugin.SubScribe.Configuration.PluginConfiguration
+            {
+                UploadEnabled = !configVorher.UploadEnabled,
+                TmdbApiKey = "geheim-abc-123",
+                Password = "kennwort-xyz",
+            };
+            var configLog = new Rec();
+            Jellyfin.Plugin.SubScribe.Configuration.SettingsChangeLog.PluginSettings(configLog, configVorher, configNachher);
+            var configZeilen = configLog.Lines.Select(l => l.Text).ToList();
+            Check(configLog.Lines.All(l => l.Level == Microsoft.Extensions.Logging.LogLevel.Debug)
+                  && configZeilen.Any(z => z.Contains("UploadEnabled", StringComparison.Ordinal)
+                                           && z.Contains("->", StringComparison.Ordinal))
+                  && configZeilen.Any(z => z.Contains("TmdbApiKey", StringComparison.Ordinal)
+                                           && z.Contains("gesetzt", StringComparison.Ordinal))
+                  && configZeilen.All(z => !z.Contains("geheim-abc-123", StringComparison.Ordinal))
+                  && configZeilen.All(z => !z.Contains("kennwort-xyz", StringComparison.Ordinal))
+                  && configZeilen.All(z => !z.Contains("chars", StringComparison.Ordinal)),
+                "F-M750/F-M751 (B): eine geschriebene Plugin-Einstellung nennt jede geänderte Eigenschaft mit alt -> neu — "
+                + "Zeichenketten nur als gesetzt/leer, ohne Wert und ohne Länge",
+                configZeilen.Count + " Zeile(n): " + string.Join(" | ", configZeilen.Take(3)));
+
+            var configZweit = new Jellyfin.Plugin.SubScribe.Configuration.PluginConfiguration
+            {
+                UploadEnabled = configNachher.UploadEnabled,
+                TmdbApiKey = "geheim-abc-456",
+                Password = configNachher.Password,
+            };
+            var austauschLog = new Rec();
+            Jellyfin.Plugin.SubScribe.Configuration.SettingsChangeLog.PluginSettings(austauschLog, configNachher, configZweit);
+            var austauschZeilen = austauschLog.Lines.Select(l => l.Text).ToList();
+            Check(austauschZeilen.Count == 1
+                  && austauschZeilen[0].Contains("TmdbApiKey", StringComparison.Ordinal)
+                  && austauschZeilen[0].Contains("gesetzt -> gesetzt (neu)", StringComparison.Ordinal)
+                  && austauschZeilen.All(z => !z.Contains("geheim-abc-456", StringComparison.Ordinal)),
+                "F-M751 (D): ein ausgetauschter Schlüssel liest sich als \"gesetzt -> gesetzt (neu)\" — "
+                + "der neue Wert steht nicht in der Zeile",
+                austauschZeilen.Count + " Zeile(n): " + string.Join(" | ", austauschZeilen));
+
+            string pluginQuelle = File.ReadAllText(Path.Combine(plugin, "Plugin.cs"));
+            Check(pluginQuelle.Contains("public override void UpdateConfiguration(BasePluginConfiguration configuration)", StringComparison.Ordinal)
+                  && pluginQuelle.Contains("SettingsChangeLog.PluginSettings(", StringComparison.Ordinal)
+                  && pluginQuelle.Contains("base.UpdateConfiguration(configuration);", StringComparison.Ordinal),
+                "F-M750 (C): der Weg, den die Seite beim Speichern wirklich nimmt, hängt am Haken — "
+                + "UpdateConfiguration vergleicht vorher/nachher",
+                pluginQuelle.Contains("UpdateConfiguration") ? "Haken vorhanden" : "Haken fehlt");
+
+            // Der Prüfstand dieser Datei erwartet weiter das Konto aus Abschnitt C — zurückstellen.
+            Jellyfin.Plugin.SubScribe.Api.SourceSettingsView.Save(
+                registry, tmp, SubdlEngine.SourceKey,
+                new Dictionary<string, string?> { ["account"] = "konto-neu" });
+
             var unbekannt = Jellyfin.Plugin.SubScribe.Api.SourceSettingsView.Save(
                 registry, tmp, SubdlEngine.SourceKey,
                 new Dictionary<string, string?> { ["erfunden"] = "x" });

@@ -534,6 +534,20 @@ public class Plugin : BasePlugin<Configuration.PluginConfiguration>, IHasWebPage
     }
 
     /// <inheritdoc />
+    /// <summary>
+    /// F-M750: jede geschriebene Einstellung nennt sich selbst. Der Betreiber fragte am 25.11.2026
+    /// „Evtl sollte das ins debug. Welche konfi wann geändert wird" — der Zeitpunkt steht im
+    /// Zeitstempel der Zeile, der Rest in ihrem Text.
+    /// </summary>
+    /// <param name="configuration">Der neue Stand, den Jellyfin schreiben will.</param>
+    public override void UpdateConfiguration(BasePluginConfiguration configuration)
+    {
+        Configuration.PluginConfiguration? vorher = Configuration;
+        base.UpdateConfiguration(configuration);
+        Jellyfin.Plugin.SubScribe.Configuration.SettingsChangeLog.PluginSettings(
+            _loggerFactory?.CreateLogger("Sub Scribe-Settings"), vorher, Configuration);
+    }
+
     public override string Name => "Sub Scribe";
 
     /// <inheritdoc />

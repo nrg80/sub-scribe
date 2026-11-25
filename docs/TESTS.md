@@ -143,6 +143,8 @@ number when it moves to another chapter, and a number is never reused.
 
 **T413:** The place of the Status block (F-M749), in `gui-structure`. **2 checks**. The Status heading and its lights stand below the Worker list, with the deferral line still directly under that list. The refresh control stays the last block of the tab, now below the Status block.
 
+**T414:** The self-naming settings line (F-M750/F-M751), in `sources`. **4 checks**. A write logs exactly the changed fields, on the debug level, with old → new, and the value of a text field stays out of the line. A written plugin setting names every changed property, character strings only as `gesetzt`/`leer` — no value, no length. A replaced secret reads as `gesetzt -> gesetzt (neu)`. The path the page actually takes carries the hook: the plugin configuration write compares before and after.
+
 **T176:** The report of an observed defect — wording without justification, category per finding, name of the affected file in both tracks, sender line with version and account name. Report in the same run, deferral instead of discarding, locked candidate after the report, switch and its position as the second-to-last entry (F-M450). **4 checks on the file naming.**
 
 **T177:** What a file on disk proves — the reserved original block (51–99) closes no pair, an aligned `01` does, a deleted `01` opens it again, an unnumbered name still counts, and the slot reader reads what the writer writes (F-M452). **12 checks.**
@@ -931,7 +933,7 @@ Plus **six** checks of the one input normalization (F-M736): it folds, trims and
 
 **T139:** A version that meets a leftover document plugin database does NOT import it and does NOT delete it.
 
-**The same harness then drives the three paths the operator reaches for once an import has landed: DATABASE REFRESH, RESET and RESTORE, because the plugin database suite covers them against a SEEDED plugin database, and a seeded plugin database is not what an import leaves behind.**
+**The same harness then drives the three paths the operator reaches for once an import has landed: DATABASE REFRESH, RESET and RESTORE. The plugin database suite covers them against a SEEDED plugin database, and a seeded plugin database is not what an import leaves behind.**
 
 Every section works on its OWN COPY of the imported file. The refresh prunes rows and the reset deletes them, so a shared directory would let one section's housekeeping decide whether the next has anything to assert, and a suite whose green depends on the order of its own sections proves nothing. The REFRESH half needs no Jellyfin host. The harness drives it through the same entry points the task calls (each tracker's dead-item prune, the oshash and loose subtitle sweeps), with a fixture the harness owns so both directions are provable. A DEAD item loses its search stamp, its retry budget and its burned candidate, while a LIVE item keeps all three **with its value**.
 
