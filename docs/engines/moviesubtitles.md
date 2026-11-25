@@ -14,7 +14,17 @@ what it does *not* have: no season packs, no report path, no quota.
 - **Account-ledger contract — no.** No account is read, so it is absent from that list (F-M729).
 - **Inquiry contract — yes.** One light: the address itself (F-M730). It answers no quota.
 
-## 3. Capabilities
+## 3. The account ledger
+
+**This source does not answer it, and it does not say "I cannot".** It keeps no account we can read,
+so it is absent from the ledger list (F-M729) — the difference matters: an absent source is never
+asked, while a source that answered "cannot" would have to be remembered as a refusal.
+
+What follows from that: nothing here can be listed, nothing can be withdrawn, and no state of our
+own submissions is known from this side. Whether a filing of ours still exists is a question only the
+account's own record can answer, and this source has no such record.
+
+## 4. Capabilities
 
 - upload — yes
 - report — **no**
@@ -24,13 +34,13 @@ what it does *not* have: no season packs, no report path, no quota.
 - hearing impaired — **no**
 - short name — `moviesubtitles`: no short name is set, so the key stands in (F-M731)
 
-## 4. Languages
+## 5. Languages
 
 **Supported languages — a deliberately short closed list.** The mapping is small on purpose: only
 what the site actually carries is accepted. A language outside it is a **language refusal** decided
 before anything is sent (F-M735); nothing is uploaded in its place.
 
-## 5. How we talk to it
+## 6. How we talk to it
 
 - A film record is resolved first: the site's own film identifier, derived from the film's identifiers
   and year. Without it there is nothing to ask.
@@ -39,13 +49,13 @@ before anything is sent (F-M735); nothing is uploaded in its place.
 - An upload answers with an HTTP status. When the status is a success the site's own id of our filing
   may still be unreadable; the answer text is passed through unchanged rather than invented (F-M685).
 
-## 6. What it costs and what it limits
+## 7. What it costs and what it limits
 
 There is no allowance to read and no quota to report — the cost is page reads, one per film. Cut films
 (a film split into several parts) are recognised on the site's side and handled as their own case
 instead of being mistaken for a broken entry.
 
-## 7. Where it fails and how we answer
+## 8. Where it fails and how we answer
 
 - **No film id** — the leading film record is missing or unreadable (`not-found`): the candidate is
   skipped with that reason and the run keeps going with the other sources (F-M507).
@@ -57,7 +67,7 @@ instead of being mistaken for a broken entry.
 - **Upload accepted, id unknown** — accepted with an unknown identifier: the answer text is passed
   through and no id is invented.
 
-## 8. The boundary
+## 9. The boundary
 
 No plugin database, no identifier shape of ours, no row of our storage; the engine receives
 connection, archive cache, logger and settings from outside and writes nothing itself (F-M682). The
@@ -65,7 +75,7 @@ pipeline names it nowhere — the capabilities say what it can do, and the answe
 with evidence. Its film resolution uses the media identifiers the pipeline hands in, never a lookup
 into our store.
 
-## 9. What it cannot do
+## 10. What it cannot do
 
 - No season packs: a series never reaches this source, and asking for a pack there is refused with a
   reason instead of being attempted.

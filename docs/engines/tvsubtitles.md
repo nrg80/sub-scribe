@@ -16,7 +16,17 @@ one.
   list rather than answering "cannot" (F-M729).
 - **Inquiry contract — yes.** One light: the address itself (F-M730). It answers no quota.
 
-## 3. Capabilities
+## 3. The account ledger
+
+**This source does not answer it, and it does not say "I cannot".** It keeps no account we can read,
+so it is absent from the ledger list (F-M729) — the difference matters: an absent source is never
+asked, while a source that answered "cannot" would have to be remembered as a refusal.
+
+What follows from that: nothing here can be listed, nothing can be withdrawn, and no state of our
+own submissions is known from this side. Whether a filing of ours still exists is a question only the
+account's own record can answer, and this source has no such record.
+
+## 4. Capabilities
 
 - upload — yes
 - report — yes, behind the `Report` switch
@@ -27,7 +37,7 @@ one.
 - hearing impaired — yes
 - short name — `tvst`
 
-## 4. Languages
+## 5. Languages
 
 **Supported languages — a closed enumeration.** The mapping holds **24 site codes in 29 entries**;
 five ISO identifiers (`el`, `cs`, `zh`, `ja`, `uk`) point at the same site codes as their aliases, so
@@ -37,7 +47,7 @@ which is the whole point of the closed statement (F-M735). A missing code is nev
 the site's form falls back to its first entry, and a fallback would publish the file under the wrong
 language.
 
-## 5. How we talk to it
+## 6. How we talk to it
 
 The path is the path of the site itself (F-M480):
 
@@ -51,13 +61,13 @@ There is no API: `/api*`, `/xmlrpc.php` and the API host answer nothing, and `/r
 episode data. A search therefore costs several page reads, and the series list is fetched once per run
 and kept — an empty answer is not kept, so a glitch cannot poison the rest of the run.
 
-## 6. What it costs and what it limits
+## 7. What it costs and what it limits
 
 There is no allowance to read and no quota to report — the cost is page reads. The run takes the
 series list once and then reads per episode; a season pack is built by us and offered as one
 container, which the site accepts the same way it accepts a single file.
 
-## 7. Where it fails and how we answer
+## 8. Where it fails and how we answer
 
 - **Series not known** — the title is created first (F-M734); until it exists, the send answers "not
   askable" and sends nothing, so repeating the run cannot produce a second upload.
@@ -67,7 +77,7 @@ container, which the site accepts the same way it accepts a single file.
   for the other source.
 - **Entry broken** — the report job is available (F-M685).
 
-## 8. The boundary
+## 9. The boundary
 
 No plugin database, no identifier shape of ours, no row of our storage; the engine receives connection,
 archive cache, logger and settings from outside and writes nothing itself (F-M682). The pipeline does
@@ -75,7 +85,7 @@ not name it — it reads the short name `tvst` as a data value (F-M731) and asks
 carries a language instead of consulting a table in the client (F-M735). What comes back is a proposal
 with evidence, and the pipeline decides what enters the store.
 
-## 9. What it cannot do
+## 10. What it cannot do
 
 - It has no API, so there is no machine-readable allowance and no bulk path: every answer is a page.
 - It cannot answer an account question: there is no account-ledger contract here.

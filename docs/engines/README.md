@@ -15,14 +15,17 @@ skeleton so they can be read side by side:
    allowance model is.
 2. **Which contracts it answers** — job contract (search, fetch, send, report), account-ledger
    contract, inquiry contract.
-3. **Capabilities** — upload, report, season packs, title creation, quota, hearing impaired, short
+3. **The account ledger** — the account's own record: the two jobs, the two handles of a published
+   submission, the coarser state, and the four outcomes of withdrawing. A source without an account is
+   absent from it rather than answering "I cannot".
+4. **Capabilities** — upload, report, season packs, title creation, quota, hearing impaired, short
    name.
-4. **Languages** — the language mapping and the statement about supported languages.
-5. **How we talk to it** — the paths and what each answer carries.
-6. **What it costs and what it limits** — allowance and throttling, and what happens at the limit.
-7. **Where it fails and how we answer** — the known failure shapes, each with our reaction.
-8. **The boundary** — what this engine never does.
-9. **What it cannot do** — the open points.
+5. **Languages** — the language mapping and the statement about supported languages.
+6. **How we talk to it** — the paths and what each answer carries.
+7. **What it costs and what it limits** — allowance and throttling, and what happens at the limit.
+8. **Where it fails and how we answer** — the known failure shapes, each with our reaction.
+9. **The boundary** — what this engine never does.
+10. **What it cannot do** — the open points.
 
 ## The rule these papers follow
 
