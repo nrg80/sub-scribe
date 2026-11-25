@@ -79,7 +79,7 @@ public sealed class TvstEngine : ISourceEngine
         new(FieldPacksEnabled, "Packs", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
             Help: null),
         new(FieldReportEnabled, "Report", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
-            Help: null),
+            Help: "Sends a report for a broken subtitle of this source. Default: on."),
 
         // F-M693 (Betreiberansage 22.11.2026: „Seadon zip toggle also for tvst"): Stufe 1 der Suche ist
         // die Staffel-ZIP — EIN Abruf für die ganze Staffel statt einer je Folge. Der Schalter sagt, ob

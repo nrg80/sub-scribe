@@ -142,7 +142,7 @@ public sealed class SubdlEngine : ISourceEngine
         new(FieldPacksEnabled, "Packs", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
             Help: null),
         new(FieldReportEnabled, "Report", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
-            Help: null),
+            Help: "Sends a report for a broken subtitle of this source. Default: on."),
         new(FieldApiKey, "API key", SourceFieldKind.Secret, Default: string.Empty, Required: true,
             Help: "Free API key after registration at subdl.com.",
             HelpUrl: "https://subdl.com", HelpLink: "subdl.com"),

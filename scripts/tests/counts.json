@@ -1034,6 +1034,10 @@
     "T409": {
       "suite": "reporting",
       "checks": 10
+    },
+    "T410": {
+      "suite": "reporting",
+      "checks": 10
     }
   }
 }

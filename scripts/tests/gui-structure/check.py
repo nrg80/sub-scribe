@@ -2401,8 +2401,12 @@ def main():
           page_src.count('>SubDL only</span>') == 0,
           "%d Abzeichen (erwartet 3: Tageslimit x2 und AI — Melde-, Pack-, Cache- und HI-Schalter tragen keins)"
           % page_src.count('>SubDL only</span>'))
-    check("F-M533: the report switch is named without a source",
-          "<span>Report broken subtitles</span>" in page_src)
+    # F-M747: der Melde-Schalter steht seit dem 25.11.2026 in der Karte der Quelle, nicht mehr im
+    # Download-Abschnitt — die Seite traegt den alten Schalter nicht mehr, das Etikett sitzt am Feld.
+    check("F-M747: the page carries no global report switch — the tick sits in the source card",
+          "ReportBrokenSubtitles" not in page_src
+          and "FieldReportEnabled, \"Report\"" in _subdl_src
+          and "FieldReportEnabled, \"Report\"" in read_source("Sources", "Tvst", "TvstEngine.cs"))
 
     # F-M660: die Staffel-Urteile der Pack-Phase sind ein eigener Speicher und muessen im Dropdown
     # waehlbar sein — sonst bleibt eine Staffel gesperrt, obwohl die Spur laengst frei ist.

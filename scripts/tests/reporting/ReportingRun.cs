@@ -265,30 +265,20 @@ internal static class ReportingRun
               && pipeline.Contains("bool genuineEmpty", StringComparison.Ordinal),
             "only a 200 that carried nothing may be reported as a broken upload");
 
-        // --- 4. the switch ----------------------------------------------------
+        // --- 4. the switch lives on the card now (F-M747) ---------------------
         string config = Read(plugin, "Configuration/PluginConfiguration.cs");
         Check(Regex.IsMatch(config, @"public\s+bool\s+ReportBrokenSubtitles\s*\{\s*get;\s*set;\s*\}\s*=\s*true\s*;"),
-            "the switch exists and is on by default");
+            "F-M747: the old value survives as the fallback for a source file that says nothing, on by default");
 
         string page = Read(plugin, "Configuration/configPage.html");
-        int switchAt = page.IndexOf("id=\"ReportBrokenSubtitles\"", StringComparison.Ordinal);
-        int aiAt = page.IndexOf("id=\"AllowAiTranslatedSubs\"", StringComparison.Ordinal);
-        int runtimeAt = page.IndexOf("Runtime tolerance (seconds)", StringComparison.Ordinal);
-        Check(switchAt > 0, "the page carries the switch");
-        Check(switchAt > aiAt, "the switch sits below the AI filter");
-        Check(runtimeAt > switchAt, "the switch sits above the runtime tolerance field, which stays last");
-        string between = runtimeAt > switchAt ? page[switchAt..runtimeAt] : string.Empty;
-        Check(Regex.Matches(between, "id=\"").Count == 1,
-            "the switch is the second-to-last control — only the runtime tolerance field follows");
-        // F-M533: der Schalter meldet an BEIDE Quellen (SubDL und tvst), deshalb nennt das Etikett
-        // keine Quelle mehr — ein "to SubDL" waere nach der Ausweitung schlicht falsch.
-        Check(page.Contains("Report broken subtitles", StringComparison.Ordinal),
-            "the label names what it does");
-        Check(!page.Contains("Report broken subtitles to SubDL", StringComparison.Ordinal),
-            "the label names no single source any more");
-        Check(page.Contains("config.ReportBrokenSubtitles = document.querySelector('#ReportBrokenSubtitles').checked", StringComparison.Ordinal)
-              && page.Contains("document.querySelector('#ReportBrokenSubtitles').checked = config.ReportBrokenSubtitles !== false", StringComparison.Ordinal),
-            "the switch is loaded and saved with the page");
+        Check(page.IndexOf("Runtime tolerance (seconds)", StringComparison.Ordinal) > 0
+              && page.IndexOf("AllowAiTranslatedSubs", StringComparison.Ordinal) < 0,
+            "F-M747: the runtime field stays, and no global report switch is left on the page");
+        Check(Read(plugin, "Sources/Subdl/SubdlEngine.cs").Contains("FieldReportEnabled, \"Report\"", StringComparison.Ordinal)
+              && Read(plugin, "Sources/Tvst/TvstEngine.cs").Contains("FieldReportEnabled, \"Report\"", StringComparison.Ordinal),
+            "F-M747: both sources with a report route declare the tick in their own card");
+        Check(!Read(plugin, "Sources/Msub/MsubEngine.cs").Contains("reportEnabled", StringComparison.OrdinalIgnoreCase),
+            "F-M747: the source without a report route carries no tick");
 
         string summaryLine = Regex.Match(pipeline, @"{Reported} reported \(\{ReportsDeferred\} deferred\)").Value;
         Check(summaryLine.Length > 0, "the run summary names reports and deferrals");
@@ -421,6 +411,59 @@ internal static class ReportingRun
               && Read(plugin, "Pipeline/DownloadPipeline.cs")
                   .Contains("(tolerance ±{toleranceSec}s)", StringComparison.Ordinal),
             "F-M43: the gate asks the window and the verdict names the window that was applied");
+
+        // F-M747 (operator decision 25.11.2026: "Report subtitles in downloads kann eigentlich komplett durch
+        // die tickbox in den source fenstern ersetzt werden"): the card decides, the old switch only survives as
+        // the fallback for a source file that says nothing. The behaviour is asked on the real switches, not
+        // read off the source text.
+        string meldeOrdner = Path.Combine(Path.GetTempPath(), "sub-scribe-report-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(meldeOrdner);
+        Func<string?> vorherMeldeOrdner = Jellyfin.Plugin.SubScribe.Sources.SourceSwitches.DataFolder;
+        Jellyfin.Plugin.SubScribe.Sources.SourceSwitches.DataFolder = () => meldeOrdner;
+        try
+        {
+            var alteWahl = new Jellyfin.Plugin.SubScribe.Configuration.PluginConfiguration
+            {
+                ReportBrokenSubtitles = false
+            };
+            Check(!Jellyfin.Plugin.SubScribe.Sources.SourceSwitches.ReportsBroken(
+                      Jellyfin.Plugin.SubScribe.Configuration.SubtitleProvider.Subdl, alteWahl),
+                "F-M747: a source file that says nothing falls back to the old switch — off stays off");
+
+            alteWahl.ReportBrokenSubtitles = true;
+            Check(Jellyfin.Plugin.SubScribe.Sources.SourceSwitches.ReportsBroken(
+                      Jellyfin.Plugin.SubScribe.Configuration.SubtitleProvider.Subdl, alteWahl),
+                "F-M747: with no file and the old switch on, the source reports");
+
+            Directory.CreateDirectory(Jellyfin.Plugin.SubScribe.Sources.SourceSettingsFile.DirIn(meldeOrdner));
+            File.WriteAllText(
+                Jellyfin.Plugin.SubScribe.Sources.SourceSettingsFile.PathIn(
+                    meldeOrdner, Jellyfin.Plugin.SubScribe.Sources.Subdl.SubdlEngine.SourceKey),
+                "{\"schema\":1,\"key\":\"subdl\",\"reportEnabled\":\"false\"}");
+            Check(!Jellyfin.Plugin.SubScribe.Sources.SourceSwitches.ReportsBroken(
+                      Jellyfin.Plugin.SubScribe.Configuration.SubtitleProvider.Subdl, alteWahl),
+                "F-M747: the card wins — a tick set to off in the source file silences that source");
+            Check(!Jellyfin.Plugin.SubScribe.Sources.SourceSwitches.ReportsBroken("subdl", alteWahl)
+                  && Jellyfin.Plugin.SubScribe.Sources.SourceSwitches.ReportsBroken("tvsubtitles", alteWahl),
+                "F-M747: the row's own key is enough — one source switched off does not silence the others");
+        }
+        finally
+        {
+            Jellyfin.Plugin.SubScribe.Sources.SourceSwitches.DataFolder = vorherMeldeOrdner;
+            try
+            {
+                Directory.Delete(meldeOrdner, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+        }
+
+        Check(!Read(plugin, "Pipeline/DownloadPipeline.cs").Contains("_config.ReportBrokenSubtitles", StringComparison.Ordinal)
+              && Read(plugin, "Pipeline/DownloadPipeline.cs").Split("SourceSwitches.ReportsBroken").Length - 1 >= 6,
+            "F-M747: the pipeline never asks the global switch and asks the source at every filing site");
+        Check(!Read(plugin, "Configuration/configPage.html").Contains("ReportBrokenSubtitles", StringComparison.Ordinal),
+            "F-M747: the download section carries no report switch any more — the card is the only place");
 
         Console.WriteLine(Failures.Count == 0
             ? $"reporting: {_checks} checks, all green."

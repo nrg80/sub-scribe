@@ -101,6 +101,26 @@ public static class SourceSwitches
             ? null
             : SourceSettingsFile.ReadFlag(DataFolder(), providerKey, fieldKey);
 
+    /// <summary>
+    /// F-M747: ob diese Quelle eine Meldung bekommen darf. Die Datei der Quelle antwortet; sagt sie
+    /// nichts (Bestand von vor F-M693), gilt der alte Schalter aus der Konfiguration.
+    /// </summary>
+    /// <param name="provider">Die Quelle.</param>
+    /// <param name="config">Die Konfiguration mit dem Alt-Wert.</param>
+    /// <returns>True, wenn diese Quelle melden darf.</returns>
+    public static bool ReportsBroken(SubtitleProvider provider, PluginConfiguration config)
+        => Report(provider) ?? config.ReportBrokenSubtitles;
+
+    /// <summary>
+    /// F-M747: dasselbe für einen Quellenschlüssel, wie ihn eine Zeile im Store führt (<c>subdl</c>,
+    /// <c>tvsubtitles</c>, …). Ein leerer Schlüssel fällt auf den Alt-Wert zurück.
+    /// </summary>
+    /// <param name="providerKey">Der Quellenschlüssel.</param>
+    /// <param name="config">Die Konfiguration mit dem Alt-Wert.</param>
+    /// <returns>True, wenn diese Quelle melden darf.</returns>
+    public static bool ReportsBroken(string? providerKey, PluginConfiguration config)
+        => Flag(providerKey ?? string.Empty, ReportField) ?? config.ReportBrokenSubtitles;
+
     private static bool? Read(SubtitleProvider provider, string fieldKey)
     {
         if (!PluginConfiguration.HasProvider(provider))

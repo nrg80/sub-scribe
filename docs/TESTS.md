@@ -13,7 +13,7 @@ stands in §19 of `SPECIFICATION.md`, and the binding of a test to its suite in 
 
 - [1. Tests of the seeder (§2)](#1-tests-of-the-seeder-2) — 5 tests
 - [2. Tests of the upload pipeline (§3)](#2-tests-of-the-upload-pipeline-3) — 28 tests
-- [3. Tests of the download pipeline (§4)](#3-tests-of-the-download-pipeline-4) — 35 tests
+- [3. Tests of the download pipeline (§4)](#3-tests-of-the-download-pipeline-4) — 36 tests
 - [4. Tests of upload postprocessing (§5)](#4-tests-of-upload-postprocessing-5) — 7 tests
 - [5. Tests of the database refresh (§6)](#5-tests-of-the-database-refresh-6) — 5 tests
 - [6. Tests of the rules shared by both directions (§8)](#6-tests-of-the-rules-shared-by-both-directions-8) — 2 tests
@@ -134,6 +134,8 @@ number when it moves to another chapter, and a number is never reused.
 **T175:** The account filter of the download search — account identifier, no mis-grab on foreign uploaders, exclusion before the ranking and the switch including its label (F-M449).
 
 **T409:** The runtime window (F-M43), in `reporting`. **10 checks**. The floor is 7 min for a film and 4 min for an episode, and the shipped setting is the film floor. The share of 12 % takes over where it is larger than the floor and never tightens it; the episode floor never exceeds the configured film floor. The two reported cases of the run (88 % and 91 % of their film) sit inside the window, a genuinely cut subtitle is still rejected, and a missing runtime with a switched-off check passes everything. The gate asks the window with the item's own kind, and the verdict names the window that was applied.
+
+**T410:** Where the report switch lives (F-M747), in `reporting`. **10 checks**. A source file that says nothing falls back to the old value, and a source file with the tick set to off silences that source while the others keep reporting. The pipeline never asks the global switch and asks the source at every filing site, the download section carries no report switch, both sources with a report route declare the tick in their card, and the source without one carries none.
 
 **T176:** The report of an observed defect — wording without justification, category per finding, name of the affected file in both tracks, sender line with version and account name. Report in the same run, deferral instead of discarding, locked candidate after the report, switch and its position as the second-to-last entry (F-M450). **4 checks on the file naming.**
 
