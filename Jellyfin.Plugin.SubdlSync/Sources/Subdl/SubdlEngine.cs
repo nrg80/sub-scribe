@@ -144,13 +144,15 @@ public sealed class SubdlEngine : ISourceEngine
         new(FieldReportEnabled, "Report", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
             Help: null),
         new(FieldApiKey, "API key", SourceFieldKind.Secret, Default: string.Empty, Required: true,
-            Help: "Free key, created in your account panel and documented at subdl.com/api-doc."),
+            Help: "Free API key after registration at subdl.com.",
+            HelpUrl: "https://subdl.com", HelpLink: "subdl.com"),
         // F-M694 (Betreiberansage 22.11.2026: „Subdl... Api key, email, password."): die drei Zugänge,
         // die ein Mensch bei SubDL einträgt. Bis hierher stand hier „Account"; die Seite sagte damit
         // nicht, was hineingehört (nämlich die E-Mail-Adresse des Kontos). Der Schlüssel in der Datei
         // bleibt `account` — er ist der stabile Name, an dem der Bestand hängt.
         new(FieldAccount, "Email", SourceFieldKind.Text,
-            Help: null,
+            Help: "Login credentials at subdl.com.",
+            HelpUrl: "https://subdl.com", HelpLink: "subdl.com",
             VisibleWhen: new SourceFieldVisibility(FieldApiKey, "set")),
         new(FieldPassword, "Password", SourceFieldKind.Secret,
             Help: null,
@@ -159,15 +161,16 @@ public sealed class SubdlEngine : ISourceEngine
         // needed … Url is fixed, no gui need"). Sie steht als Konstante im Client dieses Builds; eine
         // Einstellung dafür wäre eine Frage, die niemand beantworten muss.
         new(FieldPreferSeasonZip, "Prefer season ZIPs", SourceFieldKind.Switch, Default: "true",
-            Help: null),
+            Help: "Takes the season pack instead of single episodes."),
         // F-M711: die drei frueheren "SubDL only"-Einstellungen der Weboberflaeche. Die Vorgaben sind
         // genau die Alt-Werte der Konfiguration (on/on/off) — der Nachtrag aendert kein Verhalten.
         new(FieldUploadContinueAfterLimit, "Continue after limit (upload)", SourceFieldKind.Switch,
-            Default: "true", Help: null),
+            Default: "true", Help: "Waits for the daily quota reset, then carries on."),
         new(FieldDownloadContinueAfterLimit, "Continue after limit (download)", SourceFieldKind.Switch,
-            Default: "true", Help: null),
+            Default: "true", Help: "Waits for the daily quota reset, then carries on."),
         new(FieldAllowAiTranslatedSubs, "Allow AI translated subs", SourceFieldKind.Switch,
-            Default: "false", Help: null),
+            Default: "false",
+            Help: "Accepts machine-translated subs of the SubDL AI account."),
     };
 
     private readonly ScribeApiClient _client;

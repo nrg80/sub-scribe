@@ -21,7 +21,7 @@ stands in §19 of `SPECIFICATION.md`, and the binding of a test to its suite in 
 - [8. Tests of the scheduler, the quota and the timing (§10)](#8-tests-of-the-scheduler-the-quota-and-the-timing-10) — 17 tests
 - [9. Tests of the content registry and identity (§11)](#9-tests-of-the-content-registry-and-identity-11) — 11 tests
 - [10. Tests of the library scope and the skip filters (§12)](#10-tests-of-the-library-scope-and-the-skip-filters-12) — 3 tests
-- [11. Tests of the configuration and the settings page (§13)](#11-tests-of-the-configuration-and-the-settings-page-13) — 33 tests
+- [11. Tests of the configuration and the settings page (§13)](#11-tests-of-the-configuration-and-the-settings-page-13) — 34 tests
 - [12. Tests of the data model and persistence (§14)](#12-tests-of-the-data-model-and-persistence-14) — 75 tests
 - [13. Tests of logging, status and transparency (§15)](#13-tests-of-logging-status-and-transparency-15) — 19 tests
 - [14. Tests of the test discipline itself (§19)](#14-tests-of-the-test-discipline-itself-19) — 34 tests
@@ -471,6 +471,8 @@ Without a hash **and** without a path row it stays with the honest result: the n
 
 **T407:** A tab carries an abbreviation of its source (F-M746), in `gui-structure`. **3 checks**. The tab button takes `tabName`, falling back to the display name and then the key. The full name stays in its tooltip. The abbreviation arrives through the source endpoint on its own carrier (`TabName` / `Tab` in the capabilities). The read path carries it through the response mapper as well; without that line the tab falls back to the full name silently, which is exactly what happened the first time. The page holds no list of names of its own, and the row labels of F-M731 stay untouched.
 
+**T408:** A help line with an address (F-M745), in `gui-structure`. **3 checks**. The line is built by the helper that replaces its link word with an anchor made of document nodes. The field mapper carries address and link word through; without those two lines the text stays unlinked, the same silent fallback as in F-M746. The source names address and link word, and the page sets no HTML from it.
+
 ## 12. Tests of the data model and persistence (§14)
 
 **T17:** Two streams of the same language keep independent verdicts (F-M197)
@@ -639,7 +641,7 @@ The three old SubDL fields (`Username`, `Password`, `ApiKey`) have disappeared f
 
 **T364:** Without a stored list the order shows the old setting (F-M701), in `gui-structure`. **1 check**: both preassignments (`tvsubtitles,moviesubtitles,subdl` and `subdl,tvsubtitles,moviesubtitles`) stand in the page, and the fallback is bound to `if (!liste)`.
 
-**T365:** What a card says about a field (F-M702, F-M745). **2 checks** in `sources`: a help text is one line (no line break) and no help text is longer than 80 characters. The ban on help texts was lifted by the operator: "too much talk" meant short, not silent. The check therefore guards the limit instead of the silence. Everything else of F-M702 — no placeholder, no `set` line, the light as the summary — is checked where it stood.
+**T365:** What a card says about a field (F-M702, F-M745). **4 checks** in `sources`. A help text is one line, with no line break. No help text is longer than 80 characters. An address travels only as a pair of link word and address, and that address is `https`, with its link word standing verbatim in the line. The ban on help texts was lifted by the operator: "too much talk" meant short, not silent. The check therefore guards the limit instead of the silence. Everything else of F-M702 — no placeholder, no `set` line, the light as the summary — is checked where it stood.
 
 **T366:** The order stands under Endpoints (F-M703), in `gui-structure`. **1 check**: the block `SourceOrderBlock` lies in the section between the heading `Endpoints` and `Media files`, **before** `SourceCards`, and no longer in the General tab.
 

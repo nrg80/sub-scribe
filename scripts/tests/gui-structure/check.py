@@ -1952,6 +1952,30 @@ def main():
           and "public string Tab =>" in kontrakt,
           "F-M746: eigener Traeger TabName/Tab, nicht der Kurzname der Zeile (F-M731)")
 
+    # ---- F-M745 (Betreiberansage 25.11.2026: "Beschreibung api key anpassen (Free API key after registration
+    # under Subdl.com << link wie bei tmdb"): ein Hilfetext darf eine Adresse als Link tragen. Gebaut wird der
+    # Anker aus DOM-Knoten — der Text kommt als Textknoten, nie als Markup aus der Quelle.
+    check("F-M745: a help line may carry its address as a link, built from DOM nodes",
+          "function subdlSourceHelp(feld)" in page_src_f497
+          and "div.appendChild(document.createTextNode(text.slice(0, at)));" in page_src_f497
+          and "a.rel = 'noopener';" in page_src_f497
+          and "if (field.help) { wrap.appendChild(subdlSourceHelp(field)); }" in page_src_f497
+          and "if (field.help) { selWrap.appendChild(subdlSourceHelp(field)); }" in page_src_f497
+          and "if (field.help) { boxWrap.appendChild(subdlSourceHelp(field)); }" in page_src_f497,
+          "F-M745: der Hilfetext wird ueber den Helfer gebaut, das Linkwort ersetzt — kein Markup aus der Quelle")
+    check("F-M745: the mapper carries the address and its link word through",
+          "helpUrl: subdlSourceWert(feld, 'helpUrl')," in page_src_f497
+          and "helpLink: subdlSourceWert(feld, 'helpLink')," in page_src_f497,
+          "F-M745: ohne diese zwei Zeilen im Feld-Mapper bleibt der Text ohne Link (Falle aus F-M746)")
+    engine_src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.abspath(__file__))))), "Jellyfin.Plugin.SubdlSync/Sources/Subdl/SubdlEngine.cs"),
+        encoding="utf-8").read()
+    check("F-M745: the source names address and link word, the page builds the anchor",
+          'HelpUrl: "https://subdl.com", HelpLink: "subdl.com"' in engine_src
+          and "innerHTML" not in page_src_f497[page_src_f497.find("function subdlSourceHelp(feld)"):
+                                               page_src_f497.find("function subdlSourceEl(")],
+          "F-M745: kein Markup aus der Quelle - die Seite baut den Anker aus Knoten")
+
     # ---- F-M744 (Betreiberwunsch 25.11.2026: "Wenn irgendein endpoint nicht konfiguriert ist, keine
     # Zugangsdaten fuer subdl zb, soll er als off angezeigt werden"; Betreiberbefund am selben Tag:
     # "3x on/off ist ein bisschen viel auf einer seite. Vorschlag: als Ampel aus der tabauswahl raus"):

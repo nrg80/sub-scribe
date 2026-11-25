@@ -539,6 +539,30 @@ internal static class Program
                         + mitText.Max(t => t.Text!.Length) + " Zeichen")
                     : string.Join(" | ", zuLang.Select(t => t.Quelle + "/" + t.Feld + " = " + t.Text!.Length + " Zeichen")));
 
+            // F-M745 (Betreiberansage 25.11.2026: „Beschreibung api key anpassen (Free API key after
+            // registration under Subdl.com << link wie bei tmdb"): ein Hinweis darf eine Adresse als Link
+            // tragen. Die Quelle liefert dafür KEIN Markup, sondern Adresse und das Wort, das im Text zum
+            // Link wird — der Text bleibt damit derselbe Satz und die Seite baut den Anker.
+            var mitAdresse = registry.Engines
+                .SelectMany(e => e.Fields.Select(f => (Quelle: e.Capabilities.Key, Feld: f.Key, f.Help, f.HelpUrl, f.HelpLink)))
+                .Where(t => !string.IsNullOrWhiteSpace(t.HelpUrl) || !string.IsNullOrWhiteSpace(t.HelpLink))
+                .ToList();
+            var halbe = mitAdresse
+                .Where(t => string.IsNullOrWhiteSpace(t.HelpUrl) || string.IsNullOrWhiteSpace(t.HelpLink))
+                .ToList();
+            Check(halbe.Count == 0,
+                "F-M745: eine Adresse kommt nur als Paar - Linkwort UND Adresse, nie einzeln",
+                halbe.Count == 0 ? mitAdresse.Count + " Felder mit Adresse" : string.Join(" | ",
+                    halbe.Select(t => t.Quelle + "/" + t.Feld)));
+            var kaputt = mitAdresse
+                .Where(t => !t.HelpUrl!.StartsWith("https://", StringComparison.Ordinal)
+                            || !(t.Help ?? string.Empty).Contains(t.HelpLink!, StringComparison.Ordinal))
+                .ToList();
+            Check(kaputt.Count == 0,
+                "F-M745: die Adresse ist https, und ihr Linkwort steht woertlich im Hilfetext",
+                kaputt.Count == 0 ? string.Join(", ", mitAdresse.Select(t => t.Quelle + "/" + t.Feld + " -> " + t.HelpLink))
+                    : string.Join(" | ", kaputt.Select(t => t.Quelle + "/" + t.Feld)));
+
             // F-M696: die Art der Quelle steht als Variable in den Faehigkeiten — nicht als Name.
             var arten = registry.Engines.ToDictionary(
                 e => e.Capabilities.Key,

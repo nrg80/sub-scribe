@@ -80,6 +80,11 @@ public sealed record SourceFieldVisibility(string Field, string Value);
 /// <param name="Max">Obere Grenze bei <see cref="SourceFieldKind.Number"/>.</param>
 /// <param name="Options">Die Möglichkeiten bei <see cref="SourceFieldKind.Choice"/>.</param>
 /// <param name="VisibleWhen">Nur zeigen, wenn ein anderes Feld einen bestimmten Wert hat — oder null.</param>
+/// <param name="HelpUrl">
+/// F-M745: die Adresse, die der Hilfetext als Link tragen darf — oder null. Die Engine liefert
+/// weiterhin keinen Markup; sie nennt nur Adresse und das Wort, das im Text zum Link wird.
+/// </param>
+/// <param name="HelpLink">Das Wort im Hilfetext, das als Link erscheint (leer = kein Link).</param>
 /// <param name="Group">
 /// F-M693: wohin das Feld gehört, wenn es nicht als Zeile untereinander steht. <c>badges</c> ist die
 /// Reihe ganz oben auf der Karte: die vier Möglichkeiten einer Quelle — Upload, Download, Packs,
@@ -97,7 +102,9 @@ public sealed record SourceField(
     double? Max = null,
     IReadOnlyList<string>? Options = null,
     SourceFieldVisibility? VisibleWhen = null,
-    string? Group = null)
+    string? Group = null,
+    string? HelpUrl = null,
+    string? HelpLink = null)
 {
     /// <summary>F-M693: der Name der Gruppe für die Reihe der Möglichkeiten oben auf der Karte.</summary>
     public const string Badges = "badges";

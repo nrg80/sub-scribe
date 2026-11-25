@@ -1948,6 +1948,29 @@ workers.forEach(function (w) {
                 return el;
             }
 
+            // F-M745: ein Hilfetext darf eine Adresse als Link tragen. Gebaut wird der Text aus
+            // DOM-Knoten, nie aus einer Zeichenkette: das Wort `helpLink` wird im Text gesucht und
+            // durch einen Anker ersetzt, alles andere bleibt Text. Steht das Wort nicht im Text,
+            // bleibt es beim reinen Text.
+            function subdlSourceHelp(feld) {
+                var div = document.createElement('div');
+                div.className = 'fieldDescription';
+                var text = feld.help === undefined || feld.help === null ? '' : String(feld.help);
+                var link = feld.helpLink ? String(feld.helpLink) : '';
+                var href = feld.helpUrl ? String(feld.helpUrl) : '';
+                var at = (href && link) ? text.indexOf(link) : -1;
+                if (at < 0) { div.textContent = text; return div; }
+                div.appendChild(document.createTextNode(text.slice(0, at)));
+                var a = document.createElement('a');
+                a.href = href;
+                a.target = '_blank';
+                a.rel = 'noopener';
+                a.textContent = link;
+                div.appendChild(a);
+                div.appendChild(document.createTextNode(text.slice(at + link.length)));
+                return div;
+            }
+
             function subdlSourceEl(tag, cls, text) {
                 var el = document.createElement(tag);
                 if (cls) { el.className = cls; }
@@ -1981,6 +2004,10 @@ workers.forEach(function (w) {
                     kind: subdlSourceWert(feld, 'kind'),
                     required: subdlSourceWert(feld, 'required') === true,
                     help: subdlSourceWert(feld, 'help'),
+                    // F-M745: eine Adresse im Hilfetext — der Mapper muss sie durchreichen, sonst
+                    // bleibt der Text ohne Link stehen (dieselbe Falle wie bei tabName in F-M746).
+                    helpUrl: subdlSourceWert(feld, 'helpUrl'),
+                    helpLink: subdlSourceWert(feld, 'helpLink'),
                     'default': subdlSourceWert(feld, 'default'),
                     value: subdlSourceWert(feld, 'value'),
                     gesetzt: subdlSourceWert(feld, 'gesetzt') === true,
@@ -2125,7 +2152,7 @@ workers.forEach(function (w) {
                     }
                     label.appendChild(text);
                     wrap.appendChild(label);
-                    if (field.help) { wrap.appendChild(subdlSourceEl('div', 'fieldDescription', field.help)); }
+                    if (field.help) { wrap.appendChild(subdlSourceHelp(field)); }
                     row.appendChild(wrap);
                     row.setAttribute('data-value', String(field.value) === 'true' ? 'true' : 'false');
                     return row;
@@ -2147,7 +2174,7 @@ workers.forEach(function (w) {
                     select.name = field.key;
                     select.className = 'emby-select-withcolor emby-select';
                     selWrap.appendChild(select);
-                    if (field.help) { selWrap.appendChild(subdlSourceEl('div', 'fieldDescription', field.help)); }
+                    if (field.help) { selWrap.appendChild(subdlSourceHelp(field)); }
                     row.appendChild(selWrap);
                     // Die Moeglichkeiten kommen mit dem Feld; eingetragen werden sie nach dem
                     // Einhaengen (subdlSourceApplyValues), damit sie ein Aufbau des Steuerelements
@@ -2217,7 +2244,7 @@ workers.forEach(function (w) {
                         field.value === null || field.value === undefined ? '' : String(field.value));
                 }
 
-                if (field.help) { boxWrap.appendChild(subdlSourceEl('div', 'fieldDescription', field.help)); }
+                if (field.help) { boxWrap.appendChild(subdlSourceHelp(field)); }
                 row.appendChild(boxWrap);
                 return row;
             }

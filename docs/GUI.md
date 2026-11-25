@@ -120,6 +120,14 @@ hand-typed copy.
 - **One state, one word** — the page uses the same word as the log and the statistics, with no synonym
   and no second spelling (`LOGGING.md`, rule 3.7).
 - A switch or button names the act it performs, not the thing it touches (F-M385).
+- **A help line may carry one address as a link** (F-M745). The source names the address and the word of the
+  line that becomes the link; the page builds the anchor from document nodes, so no markup crosses the source
+  boundary. The line keeps its 80 characters — the address counts as its visible word, not as the URL. The
+  access fields point at the provider: the API key line names registration, the email line the login
+  credentials, the password field stays without one.
+- **One line per switch, no reason.** `Waits for the daily quota reset, then carries on.` stands on both
+  continue switches, `Takes the season pack instead of single episodes.` on the pack switch, and the
+  machine-translation switch names the account it concerns.
 
 ## 8. The plugin database on the page
 
@@ -145,6 +153,6 @@ else touches the file from the GUI.
 ## 10. The checks
 
 The suite `scripts/tests/gui-structure` holds the page's shape: it reads the built page and fails when a
-section, a field, a label or the required marker drifts. 32 of its cases are bound to their own test
+section, a field, a label or the required marker drifts. 35 of its cases are bound to their own test
 entries in `docs/TESTS.md` (`gui-structure`), and the binding of a test to its suite stands in
 `scripts/tests/counts.json`.
