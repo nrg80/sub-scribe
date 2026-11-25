@@ -32,7 +32,7 @@ account's own record can answer, and this source has no such record.
 
 - upload — yes
 - report — yes, behind the `Report` switch
-- season packs — yes, behind the `Packs` switch and `Prefer season ZIPs`
+- season packs — yes, behind the `Packs` switch and `Prefer season pack`
 - title creation — **yes**: the engine looks up a series the site does not know and creates it there,
   and the answer says whether the identifier is readable (F-M734)
 - quota — no

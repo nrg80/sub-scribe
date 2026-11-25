@@ -49,7 +49,7 @@ somebody else rejected it. It passes the source's text through as the source wro
 
 - upload — yes
 - report — yes, behind the `Report` switch
-- season packs — yes, behind the `Packs` switch and `Prefer season ZIPs`
+- season packs — yes, behind the `Packs` switch and `Prefer season pack`
 - title creation — **no** (F-M734 applies to the two page-based sources, not to this one)
 - quota — **yes**, the only source that answers it
 - hearing impaired — yes

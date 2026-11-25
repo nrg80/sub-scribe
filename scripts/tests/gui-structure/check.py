@@ -2007,11 +2007,33 @@ def main():
     check("F-M497: the TMDb block stands BEFORE the sources section, and only TMDb is bound to the form",
           page_src_f497.index('<h3>TMDb (') < page_src_f497.index('<h3>Endpoints</h3>')
           and page_src_f497.index('id="TmdbApiKey"') < page_src_f497.index('id="SourceCards"')
-          and "document.querySelector('#TmdbApiKey').value = config.TmdbApiKey || '';" in page_src_f497
+          and "subdlTmdbAbgelegt = String(config.TmdbApiKey || '');" in page_src_f497
+          and ".value = config.TmdbApiKey" not in page_src_f497
           and "config.TmdbApiKey = tmdbKey;" in page_src_f497
           and "document.querySelector('#Username')" not in page_src_f497
           and "config.Username" not in page_src_f497,
           "F-M497: TMDb zuerst, die Quellen danach — die Quellenfelder laufen nicht mehr ueber die Formular-IDs")
+
+    # ---- F-M753 (Betreiberanweisung 25.11.2026: "Bitte auf das subdl muster vereinheitlichen"): der
+    # TMDb-Schluessel verhaelt sich wie jedes Geheimnis einer Quellenkarte — kein Wert im Feld, dasselbe
+    # Punktmuster, Auge nur bei abgelegtem Wert, leeres Feld heisst unveraendert.
+    check("F-M753: the TMDb field never carries the stored key — it is held beside the field",
+          ".value = config.TmdbApiKey" not in page_src_f497
+          and "subdlTmdbAbgelegt = String(config.TmdbApiKey || '');" in page_src_f497,
+          "kein Wert im Feld, Ablage daneben")
+    check("F-M753: the field shows the same dot pattern as a source card",
+          page_src_f497.count("'••••••••'") >= 2
+          and "subdlTmdbFeld.placeholder = subdlTmdbAbgelegt ? '••••••••' : '';" in page_src_f497
+          and "input.placeholder = field.gesetzt ? '••••••••' : '';" in page_src_f497,
+          "Karte und TMDb tragen dasselbe Muster")
+    check("F-M753: an empty field means unchanged, exactly as in a source card",
+          "var tmdbKey = tmdbGetippt || subdlTmdbAbgelegt;" in page_src_f497
+          and "required" not in page_src_f497[page_src_f497.index('id="TmdbApiKey"'):page_src_f497.index('id="TmdbApiKey"') + 200],
+          "leer = unveraendert, kein HTML-Pflichtfeld mehr")
+    check("F-M753: the eye appears only while a key is stored, and takes the shown value back",
+          "auge.style.display = subdlTmdbAbgelegt ? '' : 'none';" in page_src_f497
+          and "return Promise.resolve(subdlTmdbAbgelegt ? { value: subdlTmdbAbgelegt } : null);" in page_src_f497,
+          "Auge nur bei abgelegtem Wert")
 
     failed = [r for r in results if not r[1]]
     for name, ok, detail in results:

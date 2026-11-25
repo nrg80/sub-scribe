@@ -1058,6 +1058,14 @@
     "T415": {
       "suite": "gui-structure",
       "checks": 2
+    },
+    "T416": {
+      "suite": "gui-structure",
+      "checks": 4
+    },
+    "T417": {
+      "suite": "sources",
+      "checks": 2
     }
   }
 }

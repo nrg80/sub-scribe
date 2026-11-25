@@ -84,8 +84,11 @@ public sealed class TvstEngine : ISourceEngine
         // F-M693 (Betreiberansage 22.11.2026: „Seadon zip toggle also for tvst"): Stufe 1 der Suche ist
         // die Staffel-ZIP — EIN Abruf für die ganze Staffel statt einer je Folge. Der Schalter sagt, ob
         // dieser Weg zuerst gegangen wird; aus heißt: nur der Einzelweg der Folgenseite.
-        new(FieldPreferSeasonZip, "Prefer season ZIPs", SourceFieldKind.Switch, Default: "true",
-            Help: null),
+        // Betreiberanweisung 25.11.2026: "Die gui Beschreibung zu prefer season zips bitte auch zum
+        // tvst fenster. Und wording in beiden zu prefer season pack aendern" — gleicher Name, gleiche
+        // Zeile Hilfe wie auf der SubDL-Karte (F-M745: hoechstens 80 Zeichen).
+        new(FieldPreferSeasonZip, "Prefer season pack", SourceFieldKind.Switch, Default: "true",
+            Help: "Takes the season pack instead of single episodes."),
         // F-M692: die Adresse ist kein Feld mehr — sie steht fest im Client dieses Builds.
     };
 

@@ -147,6 +147,10 @@ number when it moves to another chapter, and a number is never reused.
 
 **T415:** The interval above the files (F-M752), in `gui-structure`. **2 checks**. The refetch interval stands after the source cards and directly before the media files heading. The interval is named exactly once, and the schedule line sits under it, inside the same block.
 
+**T416:** The TMDb key under the card pattern (F-M753), in `gui-structure`. **4 checks**. The stored key is held beside the field, never inside it. The field carries the same dot pattern as a source card. An empty field means unchanged, and the input is no longer a required HTML field. The eye appears only while a key is stored and takes the shown value back.
+
+**T417:** One name for the season-pack switch (F-M754), in `sources`. **2 checks**. The switch reads `Prefer season pack` on both cards and carries the same help line, which stays within 80 characters. The stored key remains `preferSeasonZip`, so no stored value is orphaned.
+
 **T176:** The report of an observed defect — wording without justification, category per finding, name of the affected file in both tracks, sender line with version and account name. Report in the same run, deferral instead of discarding, locked candidate after the report, switch and its position as the second-to-last entry (F-M450). **4 checks on the file naming.**
 
 **T177:** What a file on disk proves — the reserved original block (51–99) closes no pair, an aligned `01` does, a deleted `01` opens it again, an unnumbered name still counts, and the slot reader reads what the writer writes (F-M452). **12 checks.**

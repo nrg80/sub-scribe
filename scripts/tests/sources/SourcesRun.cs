@@ -926,6 +926,23 @@ internal static class Program
                 "F-M683 (C): ein leeres Geheimfeld bedeutet „unverändert lassen\" — der abgelegte Wert bleibt",
                 "gesetzt=" + nachLeerem.Has(SubdlEngine.FieldApiKey));
 
+            // ---- F-M754: derselbe Schalter, derselbe Name, dieselbe Zeile Hilfe --------------------
+            // Betreiberanweisung 25.11.2026: "Die gui Beschreibung zu prefer season zips bitte auch zum
+            // tvst fenster. Und wording in beiden zu prefer season pack aendern".
+            var subdlPack = SubdlEngine.Declared.First(f => f.Key == SubdlEngine.FieldPreferSeasonZip);
+            var tvstPack = TvstEngine.Declared.First(f => f.Key == TvstEngine.FieldPreferSeasonZip);
+            Check(string.Equals(subdlPack.Label, "Prefer season pack", StringComparison.Ordinal)
+                  && string.Equals(tvstPack.Label, "Prefer season pack", StringComparison.Ordinal)
+                  && string.Equals(subdlPack.Help, tvstPack.Help, StringComparison.Ordinal)
+                  && !string.IsNullOrWhiteSpace(tvstPack.Help)
+                  && tvstPack.Help!.Length <= 80,
+                "F-M754: der Staffelpack-Schalter heisst auf beiden Karten \"Prefer season pack\" und traegt dieselbe Zeile Hilfe",
+                "subdl=\"" + subdlPack.Label + "\" tvst=\"" + tvstPack.Label + "\" help=" + (tvstPack.Help?.Length.ToString() ?? "0") + " Zeichen");
+            Check(string.Equals(subdlPack.Key, "preferSeasonZip", StringComparison.Ordinal)
+                  && string.Equals(tvstPack.Key, "preferSeasonZip", StringComparison.Ordinal),
+                "F-M754: der Schluessel in der Datei bleibt preferSeasonZip — nur das Etikett aendert sich",
+                subdlPack.Key + " / " + tvstPack.Key);
+
             // ---- F-M750: jede geschriebene Einstellung nennt sich selbst ----------------------------
             // Betreiberwunsch 25.11.2026: „Evtl sollte das ins debug. Welche konfi wann geändert wird".
             var schreibLog = new Rec();

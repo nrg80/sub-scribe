@@ -39,7 +39,7 @@ states the rule, its constants, its ground and its test.**
 - [10. Scheduler, Quota and Timing](#10-scheduler-quota-and-timing) — 24 requirements
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
-- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 28 requirements
+- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 30 requirements
 - [14. Data Model and Persistence](#14-data-model-and-persistence) — 92 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 61 requirements
 - [16. Non-Goals](#16-non-goals)
@@ -2088,6 +2088,20 @@ The page shows the **effective** state: an empty field is displayed as ticked (t
 
 **F-M752 [G]:** **The refetch interval stands directly above the media files block.** Concept decision: the General tab is read from the run outward — libraries, target languages, the TMDb key, the endpoint order and the source cards, then the interval, then the work on the files. The field stays inside the page form and its save path is untouched, and the schedule line that names the next run travels with it. Checked in `gui-structure`.
 
+**F-M753 [G]:** **The TMDb key field follows the pattern of a source card's secret field.** Concept decision: the
+stored key is never written into the field, so the field cannot show one dot per character while a source card
+shows a fixed pattern. The field carries the same eight-dot placeholder. The eye stands on it only while a
+key is stored, and it takes the shown value back on release. An empty field means *leave the stored key
+alone* — the same rule that governs a secret in a card. The field is therefore no longer a required HTML
+input; the page keeps the requirement and refuses to save while neither a stored nor a typed key exists.
+Checked in `gui-structure`.
+
+**F-M754 [G]:** **The season-pack switch carries one name and one help line on every card that offers it.** Concept
+decision: the switch reads `Prefer season pack` on the SubDL card and on the tvsubtitles card alike. Both carry the
+sentence `Takes the season pack instead of single episodes.` A switch that means the same thing says the same thing —
+and the help line is the one a field may carry, at most 80 characters (F-M745). The key in the settings file stays
+`preferSeasonZip`; renaming it would orphan every stored value for a word nobody reads. Checked in `sources`.
+
 ## 14. Data Model and Persistence
 
 **F-M38 [B1]:** **Persistent state split by the kind of thing described** (section 14). Embedded tracks live under their video file, keyed by media hash + stream position; loose subtitles are keyed by normalized content hash; the file's own record carries path, IDs, season/episode and the derived language aggregate. The **hearing-impaired flag belongs to each subtitle datum**, never to the file (F-M282), and **completeness is derived rather than stored** (F-M283) — so the file record carries no download mark and no HI aggregate. Both pipelines read and write the same plugin database.
@@ -2579,7 +2593,7 @@ Three consequences: (1) **No two-value box any more.** The setting `DownloadOrde
 
 **F-M702 [D]:** **A card says only what a field is — nothing else.** Concept decision: a card says only what a field is — no help text, no placeholder, no set line, no request-per-season note on the 2 pack switches; the light answers whether a secret is stored. Thereby the last stage of the descriptions falls away, which F-M697 had still shortened to a few words. What holds: **no field of a card carries a help text**, and all engines declare `Help: null`. **Superseded by F-M745:** that sentence is lifted — any field may carry ONE line of at most 80 characters. The rest of this rule stands: no placeholder, no `set` line, no request-per-season note, and the light as the summary.
 
-The value of a secret still never leaves the plugin (F-M683); on saving only a really typed value goes along, an empty field leaves the stored one standing. On the card there therefore remain: name, light, four switches, the field labels (`API key`, `Email`, `Password`, `Prefer season ZIPs`) with `Required` on the required field, and `Save`.
+The value of a secret still never leaves the plugin (F-M683); on saving only a really typed value goes along, an empty field leaves the stored one standing. On the card there therefore remain: name, light, four switches, the field labels (`API key`, `Email`, `Password`, `Prefer season pack`) with `Required` on the required field, and `Save`.
 
 **F-M703 [D]:** **The order stands directly beneath the heading „Endpoints", before the cards.** Concept decision: the source order stands directly beneath the Endpoints heading, before the cards. The block had wandered to the General tab with F-M698. It does not belong there, because it orders the sources and not the run. Now it sits in the section **Endpoints** immediately after the heading and **before** the cards — one row per source with name, kind (F-M696) and two arrows, stored in `SourceOrderList` (F-M698), pre-filled from `DownloadOrder` as long as nothing is stored (F-M701). On the General tab it no longer stands.
 

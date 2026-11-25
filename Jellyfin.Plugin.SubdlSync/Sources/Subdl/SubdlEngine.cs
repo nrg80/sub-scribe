@@ -162,7 +162,9 @@ public sealed class SubdlEngine : ISourceEngine
         // F-M692: die Adresse ist KEIN Feld mehr (Betreiberansage 22.11.2026: „Well address is not
         // needed … Url is fixed, no gui need"). Sie steht als Konstante im Client dieses Builds; eine
         // Einstellung dafür wäre eine Frage, die niemand beantworten muss.
-        new(FieldPreferSeasonZip, "Prefer season ZIPs", SourceFieldKind.Switch, Default: "true",
+        // Betreiberanweisung 25.11.2026: "Und wording in beiden zu prefer season pack aendern" — der
+        // Schalter heisst ueberall gleich; der Schluessel in der Datei bleibt preferSeasonZip.
+        new(FieldPreferSeasonZip, "Prefer season pack", SourceFieldKind.Switch, Default: "true",
             Help: "Takes the season pack instead of single episodes."),
         // F-M711: die drei frueheren "SubDL only"-Einstellungen der Weboberflaeche. Die Vorgaben sind
         // genau die Alt-Werte der Konfiguration (on/on/off) — der Nachtrag aendert kein Verhalten.
