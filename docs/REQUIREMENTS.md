@@ -3,10 +3,10 @@
 **Version:** 2.143
 **Status:** Implementation — v12.3.8.44.
 
-**Die Begründungen (warum eine Regel gilt, Messungen, Vorfälle) stehen nicht hier, sondern lokal in der Methodik-Ablage, nach Kapiteln sortiert und mit der Requirement-Nummer
-markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test — sonst nichts.**
+**The reasoning behind a rule — why it holds, what was measured, what happened — does not live here. It
+lives locally in the method archive, sorted by chapter and marked with the requirement number. This document states the rule, its constants, its ground and its test — nothing else.**
 
-**Zählkonvention der Contents-Zähler.** Ein Abschnittszähler ist die **Anzahl der Definitionszeilen in seinem Block, Unterüberschriften eingeschlossen, zurückgezogene Einträge eingeschlossen** — ein schlichter Zählwert, der keine Aussage darüber trifft, was in Kraft ist. Ein Abschnittszähler, der seine Unterabschnitte ausnimmt, ist nicht die Konvention. Geprüft von T115.
+**Counting convention of the contents counters.** A section counter is the **number of definition lines in its block, sub-headings included, retired entries included** — a plain count that says nothing about what is in force. A section counter that excludes its sub-sections is not the convention. Checked by T115.
 
 ## Contents
 
@@ -17,6 +17,7 @@ markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test
  - [3.2 Dry Run — Upload](#32-dry-run-upload) — 3 requirements
  - [3.3 Season Packs — Upload](#33-season-packs-upload) — Querschnitt, zitiert F-M379–F-M448 und F-M475, F-M476
  - [3.4 Upload completion criteria](#34-upload-completion-criteria) — 26 requirements (F-M557–F-M563, F-M571–F-M577, F-M580–F-M592)
+ - [3.5 Der ffmpeg-Griff — ein Durchlauf, eine Zählweise, ein Exit-Code](#35-der-ffmpeg-griff-ein-durchlauf-eine-zhlweise-ein-exit-code) — cross-cutting
 - [4. Download Pipeline](#4-download-pipeline) — 93 requirements
  - [4.1 Quality Gates — Download](#41-quality-gates-download) — 32 requirements
  - [4.2 Dry Run — Download](#42-dry-run-download) — 1 requirement
@@ -36,13 +37,16 @@ markiert. Dieses Dokument nennt die Regel, die Konstante, den Grund und den Test
 - [14. Data Model and Persistence](#14-data-model-and-persistence) — 88 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 51 requirements
 - [16. Non-Goals](#16-non-goals)
-- [17. Non-Functional Requirements](#17-non-functional-requirements)
-- [18. Acceptance Criteria](#18-acceptance-criteria)
-- [19. Test Library](#19-test-library)
-- [21. Adding another endpoint — checklist and pitfalls](#21-adding-another-endpoint--checklist-and-pitfalls) — 1 requirement (F-M564) + Checkliste
+- [17. Non-Functional Requirements](#17-non-functional-requirements) — 9 non-functional entries
+- [18. Acceptance Criteria](#18-acceptance-criteria) — 7 acceptance entries
+- [19. Test Library](#19-test-library) — 40 requirements
+- [21. Adding another endpoint — checklist and pitfalls](#21-adding-another-endpoint-checklist-and-pitfalls) — 1 requirement (F-M564) + checklist
+ - [21.1 Die Schritte](#211-die-schritte) — checklist
+ - [21.2 Was dabei schiefgeht (gemessen)](#212-was-dabei-schiefgeht-gemessen) — pitfalls
+ - [21.3 Was tabu bleibt](#213-was-tabu-bleibt) — taboos
 
-- [22. Subtitle Sources — one contract](#22-subtitle-sources--one-contract) — 45 requirements
-- [20. References](#20-references)
+- [22. Subtitle Sources — one contract](#22-subtitle-sources-one-contract) — 45 requirements
+- [20. References](#20-references) — 4 requirements
 
 ## 1. Objective and Scope
 
@@ -3361,6 +3365,8 @@ ergibt eine Quelle, die stumm nicht läuft.
 - **Der Produktname im Log und in der GUI** — der ist „Sub Scribe"; der Projektname ist Geschichte.
 
 ## 22. Subtitle Sources — one contract
+
+**Where the boundary runs between the contracts — which contract answers which question, and what none of them may do — is stated in `docs/CONTRACTS.md`.** This chapter states the rules themselves; that document states the separation, cites the tags below instead of repeating them, and adds the allocation table. Wiring a further source: §21.
 
 Dieses Kapitel regelt, wie eine Untertitelquelle angebunden wird. Die Regeln der beiden Richtungen stehen in Kapitel 3 und 4, der gespeicherte Bestand in Kapitel 14.
 

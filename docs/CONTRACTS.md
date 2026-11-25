@@ -51,6 +51,7 @@ Four words carry the whole document, so they are pinned once:
 - **Every source may fulfil one, two or all three of them.** The job contract is mandatory, the other
   two are voluntary. Whoever does not fulfil them is absent from the respective list — there is no
   empty obligatory answer.
+- **The rules themselves live in `docs/REQUIREMENTS.md`** — §22 for one contract per source, §§3 and 4 for the two directions, §10 for quota and timing. This document states where the boundary runs; it cites the tags instead of repeating the rules.
 - **The contracts are independent of each other.** No contract presupposes another; no task is
   answered across a foreign contract.
 
