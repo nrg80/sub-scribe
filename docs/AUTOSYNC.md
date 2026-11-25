@@ -9,7 +9,7 @@ lists what the code actually refuses. The words are those of `TERMS.md`.*
 - [1. What it is](#1-what-it-is)
 - [2. Which track the audio comes from](#2-which-track-the-audio-comes-from)
 - [3. What is measured](#3-what-is-measured)
-- [4. Which cues may vote — the speech rule](#4-which-cues-may-vote--the-speech-rule)
+- [4. Which cues may vote — the speech rule](#4-which-cues-may-vote-the-speech-rule)
 - [5. The fit](#5-the-fit)
 - [6. When a correction counts as proven](#6-when-a-correction-counts-as-proven)
 - [7. Gap and order rules between cues](#7-gap-and-order-rules-between-cues)
