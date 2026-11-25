@@ -30,8 +30,8 @@ namespace Jellyfin.Plugin.SubScribe.Qa;
 /// </summary>
 public static class RuntimeWindow
 {
-    /// <summary>Share of the item runtime that is always allowed (F-M43).</summary>
-    public const double Share = 0.12;
+    /// <summary>Share of the item runtime that applies where it is larger than the floor (F-M43), in percent.</summary>
+    public const int DefaultSharePercent = 12;
 
     /// <summary>Floor for a feature film in seconds: 7 minutes (F-M43).</summary>
     public const int FilmFloorSeconds = 420;
@@ -46,8 +46,9 @@ public static class RuntimeWindow
     /// <param name="floorSec">Configured film floor in seconds (0 or less = check off).</param>
     /// <param name="runtimeSec">Item runtime in seconds.</param>
     /// <param name="episode">True for an episode, false for a film.</param>
+    /// <param name="sharePercent">Share of the runtime in percent (0 = the floor alone).</param>
     /// <returns>Effective window in seconds.</returns>
-    public static long ToleranceSeconds(int floorSec, long runtimeSec, bool episode)
+    public static long ToleranceSeconds(int floorSec, long runtimeSec, bool episode, int sharePercent)
     {
         if (floorSec <= 0)
         {
@@ -56,7 +57,9 @@ public static class RuntimeWindow
 
         // An episode gets the smaller floor, but never more than the operator allowed for films.
         long floor = episode ? Math.Min(EpisodeFloorSeconds, floorSec) : floorSec;
-        long share = runtimeSec <= 0 ? 0 : (long)Math.Round(runtimeSec * Share, MidpointRounding.AwayFromZero);
+        long share = runtimeSec <= 0 || sharePercent <= 0
+            ? 0
+            : (long)Math.Round(runtimeSec * sharePercent / 100.0, MidpointRounding.AwayFromZero);
         return Math.Max(floor, share);
     }
 
@@ -68,10 +71,11 @@ public static class RuntimeWindow
     /// <param name="runtimeSec">Item runtime in seconds.</param>
     /// <param name="floorSec">Configured film floor in seconds (0 or less = check off).</param>
     /// <param name="episode">True for an episode, false for a film.</param>
+    /// <param name="sharePercent">Share of the runtime in percent (0 = the floor alone).</param>
     /// <returns>True when the span is inside the window.</returns>
-    public static bool Covers(long spanSec, long runtimeSec, int floorSec, bool episode)
+    public static bool Covers(long spanSec, long runtimeSec, int floorSec, bool episode, int sharePercent)
     {
-        long tolerance = ToleranceSeconds(floorSec, runtimeSec, episode);
+        long tolerance = ToleranceSeconds(floorSec, runtimeSec, episode, sharePercent);
         if (tolerance <= 0 || runtimeSec <= 0)
         {
             return true;

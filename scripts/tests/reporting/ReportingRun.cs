@@ -389,25 +389,36 @@ internal static class ReportingRun
               && new Jellyfin.Plugin.SubScribe.Configuration.PluginConfiguration().DownloadRuntimeToleranceSec
                  == Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.FilmFloorSeconds,
             "F-M43: 7 minutes for a film, 4 minutes for an episode, and the shipped setting IS the film floor");
-        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(420, 5414, false) == 650,
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(420, 5414, false, 12) == 650,
             "F-M43: 12 % of a 90-minute film is larger than the 7-minute floor, so the window grows");
-        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(420, 1320, true) == 240,
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(420, 1320, true, 12) == 240,
             "F-M43: a 22-minute episode keeps its own 4-minute floor — the share is smaller than the floor there");
-        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(420, 2700, true) == 324,
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(420, 2700, true, 12) == 324,
             "F-M43: a 45-minute episode is judged by the share (12 %), because it exceeds the 4-minute floor");
-        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(180, 1320, true) == 180,
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(180, 1320, true, 12) == 180,
             "F-M43: the episode floor never exceeds the configured film floor — an operator below 4 min stays below");
-        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(4772, 5414, 420, false),
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(4772, 5414, 420, false, 12),
             "F-M43: the reported 88 % subtitle (span 4772s of 5414s) now sits inside the window");
-        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(6074, 6682, 420, false),
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(6074, 6682, 420, false, 12),
             "F-M43: the reported 91 % subtitle (span 6074s of 6682s) now sits inside the window");
-        Check(!Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 6600, 420, false),
+        Check(!Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 6600, 420, false, 12),
             "F-M43: a genuinely cut subtitle (span 3600s short) is still rejected — the window is no free pass");
-        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 0, 420, false)
-              && Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 6600, 0, true),
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 0, 420, false, 12)
+              && Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 6600, 0, true, 12),
             "F-M43: no runtime metadata and a switched-off check pass everything, as before");
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(420, 5414, false, 0) == 420
+              && Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(420, 5414, false, 20) == 1083,
+            "F-M43: the share is a setting — 0 leaves the floor alone, 20 % widens the window to a fifth of the runtime");
+        Check(new Jellyfin.Plugin.SubScribe.Configuration.PluginConfiguration().DownloadRuntimeToleranceSharePercent
+                  == Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.DefaultSharePercent
+              && Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.DefaultSharePercent == 12
+              && Read(plugin, "Pipeline/DownloadPipeline.cs")
+                  .Contains("_config.DownloadRuntimeToleranceSharePercent", StringComparison.Ordinal)
+              && Read(plugin, "Configuration/configPage.html")
+                  .Contains("id=\"DownloadRuntimeToleranceSharePercent\"", StringComparison.Ordinal),
+            "F-M43: the share ships as 12 %, the page carries the field and the gate passes it to the window");
         Check(Read(plugin, "Pipeline/DownloadPipeline.cs")
-                  .Contains("Qa.RuntimeWindow.ToleranceSeconds(floorSec, runtimeSec, episode)", StringComparison.Ordinal)
+                  .Contains("Qa.RuntimeWindow.ToleranceSeconds(floorSec, runtimeSec, episode, sharePercent)", StringComparison.Ordinal)
               && Read(plugin, "Pipeline/DownloadPipeline.cs")
                   .Contains("(tolerance ±{toleranceSec}s)", StringComparison.Ordinal),
             "F-M43: the gate asks the window and the verdict names the window that was applied");

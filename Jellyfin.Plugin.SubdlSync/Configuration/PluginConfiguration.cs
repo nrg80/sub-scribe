@@ -455,8 +455,11 @@ public class PluginConfiguration : BasePluginConfiguration
     /// <summary>Gets or sets a value indicating whether missing subs are downloaded even if embedded streams exist (F-M41). Default false: only items without the language.</summary>
     public bool DownloadOnlyMissing { get; set; } = true;
 
-    /// <summary>Gets or sets the runtime tolerance in seconds for post-download validation (F-M43 Stufe 2). 0 = disabled. Default 600s to cover intro skip and credits end (subtitles often start late and end before the credits).</summary>
+    /// <summary>Gets or sets the floor of the runtime window in seconds (F-M43 Stufe 2). 0 disables the check. The floor is 7 minutes for a film (this setting) and 4 minutes for an episode.</summary>
     public int DownloadRuntimeToleranceSec { get; set; } = Qa.RuntimeWindow.FilmFloorSeconds;
+
+    /// <summary>Gets or sets the share of the runtime that the window grows by (F-M43 Stufe 2), in percent. It applies where it is larger than the floor; 0 leaves the floor alone. Default 12.</summary>
+    public int DownloadRuntimeToleranceSharePercent { get; set; } = Qa.RuntimeWindow.DefaultSharePercent;
 
     /// <summary>Gets or sets a value indicating whether the hearing-impaired (SDH) variant is additionally downloaded when available (F-M42b). Default off: regular subs only.</summary>
     public bool DownloadHearingImpaired { get; set; }

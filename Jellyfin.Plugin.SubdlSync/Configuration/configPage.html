@@ -570,7 +570,13 @@
                         <div class="inputContainer">
                             <label class="inputLabel inputLabelUnfocused" for="DownloadRuntimeToleranceSec">Runtime tolerance (seconds)</label>
                             <input id="DownloadRuntimeToleranceSec" name="DownloadRuntimeToleranceSec" type="number" is="emby-input" min="0" max="1800" />
-                            <div class="fieldDescription">Episodes 4 min, films 7 min, then 12 % of the runtime. 0 = off.</div>
+                            <div class="fieldDescription">Episodes 4 min, films 7 min. 0 = off.</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="DownloadRuntimeToleranceSharePercent">Runtime tolerance share (%)</label>
+                            <input id="DownloadRuntimeToleranceSharePercent" name="DownloadRuntimeToleranceSharePercent" type="number" is="emby-input" min="0" max="50" />
+                            <div class="fieldDescription">Applies where larger than the floor. 0 = floor only.</div>
                         </div>
 
 
@@ -1124,6 +1130,7 @@
                         document.querySelector('#DownloadOnlyMissing').checked = config.DownloadOnlyMissing;
                         document.querySelector('#DownloadHearingImpaired').checked = config.DownloadHearingImpaired;
                         document.querySelector('#DownloadRuntimeToleranceSec').value = config.DownloadRuntimeToleranceSec;
+                        document.querySelector('#DownloadRuntimeToleranceSharePercent').value = config.DownloadRuntimeToleranceSharePercent;
                         document.querySelector('#AllocateMissingLanguageCodes').checked = config.AllocateMissingLanguageCodes;
                         document.querySelector('#QaDownloadMinCues').checked = config.QaDownloadMinCues;
                         document.querySelector('#QaDownloadVerifyLanguage').checked = config.QaDownloadVerifyLanguage;
@@ -1810,7 +1817,8 @@ workers.forEach(function (w) {
                         config.DownloadLanguages = document.querySelector('#DownloadLanguagesDisplay').value;
                         config.DownloadOnlyMissing = document.querySelector('#DownloadOnlyMissing').checked;
                         config.DownloadHearingImpaired = document.querySelector('#DownloadHearingImpaired').checked;
-                        config.DownloadRuntimeToleranceSec = (function () { var v = parseInt(document.querySelector('#DownloadRuntimeToleranceSec').value, 10); return isNaN(v) ? 600 : v; })();
+                        config.DownloadRuntimeToleranceSec = (function () { var v = parseInt(document.querySelector('#DownloadRuntimeToleranceSec').value, 10); return isNaN(v) ? 420 : v; })();
+                        config.DownloadRuntimeToleranceSharePercent = (function () { var v = parseInt(document.querySelector('#DownloadRuntimeToleranceSharePercent').value, 10); return isNaN(v) ? 12 : v; })();
                         config.AllocateMissingLanguageCodes = document.querySelector('#AllocateMissingLanguageCodes').checked;
                         config.QaDownloadMinCues = document.querySelector('#QaDownloadMinCues').checked;
                         config.QaDownloadVerifyLanguage = document.querySelector('#QaDownloadVerifyLanguage').checked;
