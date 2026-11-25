@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.48",
-        "changelog": "v12.3.8.48: the tabs of the endpoints show the short names SubDL, tvst and mst.",
+        "version": "12.3.8.59",
+        "changelog": "v12.3.8.59: the TMDb help line is one sentence, the address as the link word.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.48/Jellyfin.Plugin.SubdlSync_12.3.8.48.zip",
-        "checksum": "77f07522092bd82bf587930718035a31",
-        "timestamp": "2026-11-25T07:46:02Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.59-dev/Jellyfin.Plugin.SubdlSync_12.3.8.59.zip",
+        "checksum": "858242d5e543f7035902d405939df646",
+        "timestamp": "2026-11-25T13:15:49Z"
       }
     ]
   }

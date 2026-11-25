@@ -13,7 +13,7 @@ stands in §19 of `SPECIFICATION.md`, and the binding of a test to its suite in 
 
 - [1. Tests of the seeder (§2)](#1-tests-of-the-seeder-2) — 5 tests
 - [2. Tests of the upload pipeline (§3)](#2-tests-of-the-upload-pipeline-3) — 28 tests
-- [3. Tests of the download pipeline (§4)](#3-tests-of-the-download-pipeline-4) — 34 tests
+- [3. Tests of the download pipeline (§4)](#3-tests-of-the-download-pipeline-4) — 38 tests
 - [4. Tests of upload postprocessing (§5)](#4-tests-of-upload-postprocessing-5) — 7 tests
 - [5. Tests of the database refresh (§6)](#5-tests-of-the-database-refresh-6) — 5 tests
 - [6. Tests of the rules shared by both directions (§8)](#6-tests-of-the-rules-shared-by-both-directions-8) — 2 tests
@@ -21,7 +21,7 @@ stands in §19 of `SPECIFICATION.md`, and the binding of a test to its suite in 
 - [8. Tests of the scheduler, the quota and the timing (§10)](#8-tests-of-the-scheduler-the-quota-and-the-timing-10) — 17 tests
 - [9. Tests of the content registry and identity (§11)](#9-tests-of-the-content-registry-and-identity-11) — 11 tests
 - [10. Tests of the library scope and the skip filters (§12)](#10-tests-of-the-library-scope-and-the-skip-filters-12) — 3 tests
-- [11. Tests of the configuration and the settings page (§13)](#11-tests-of-the-configuration-and-the-settings-page-13) — 33 tests
+- [11. Tests of the configuration and the settings page (§13)](#11-tests-of-the-configuration-and-the-settings-page-13) — 34 tests
 - [12. Tests of the data model and persistence (§14)](#12-tests-of-the-data-model-and-persistence-14) — 75 tests
 - [13. Tests of logging, status and transparency (§15)](#13-tests-of-logging-status-and-transparency-15) — 19 tests
 - [14. Tests of the test discipline itself (§19)](#14-tests-of-the-test-discipline-itself-19) — 34 tests
@@ -132,6 +132,26 @@ number when it moves to another chapter, and a number is never reused.
 **T128:** The reserved block is exactly **90–99**: the reservation test is true at 90 and 99 and false at 89 and 1. The target-name search runs **downwards**: 99 first, then 98. It returns **null** when all ten are taken, never a name that would overwrite. The target name for corrected files never hands out a reserved slot: with slots 1–89 taken it returns slot 1 (`<base>.<lang>.01.srt`, F-M316) so the caller's own existence check refuses the move.
 
 **T175:** The account filter of the download search — account identifier, no mis-grab on foreign uploaders, exclusion before the ranking and the switch including its label (F-M449).
+
+**T409:** The runtime window (F-M43), in `reporting`. **12 checks**. The tolerance is a share of the runtime with a fixed floor under it: 7 min for a film, 4 min for an episode, and neither floor is a configuration value. The share is the only setting: 0 leaves the floor alone, 20 % widens the window to a fifth of the runtime. The two reported cases of the run (88 % and 91 % of their film) sit inside the window, a genuinely cut subtitle is still rejected, and a missing runtime passes everything. The page carries the share and no field to type a floor in, and the verdict names the window applied.
+
+**T410:** Where the report switch lives (F-M747), in `reporting`. **10 checks**. A source file that says nothing falls back to the old value, and a source file with the tick set to off silences that source while the others keep reporting. The pipeline never asks the global switch and asks the source at every filing site, the download section carries no report switch, both sources with a report route declare the tick in their card, and the source without one carries none.
+
+**T411:** The eye on a secret field (F-M748), in `sources`. **4 checks**. The stored value of a secret field comes out on demand, an unknown field and an ordinary field are both refused, and one route of its own serves the value while the list keeps carrying nothing. The log names source and field, never the value.
+
+**T412:** The eye in the page (F-M748), in `gui-structure`. **3 checks**. The eye asks on pointer down and gives the value back on release; a late answer after the release shows nothing. It sits inside the field at the right edge and the field keeps its width. Both API keys carry it, a secret the eye is showing does not count as a change, and the eye stands only where a secret is stored.
+
+**T413:** The place of the Status block (F-M749), in `gui-structure`. **2 checks**. The Status heading and its lights stand below the Worker list, with the deferral line still directly under that list. The refresh control stays the last block of the tab, now below the Status block.
+
+**T414:** The self-naming settings line (F-M750/F-M751), in `sources`. **4 checks**. A write logs exactly the changed fields, on the debug level, with old → new, and the value of a text field stays out of the line. A written plugin setting names every changed property, character strings only as `gesetzt`/`leer` — no value, no length. A replaced secret reads as `gesetzt -> gesetzt (neu)`. The path the page actually takes carries the hook: the plugin configuration write compares before and after.
+
+**T415:** The interval above the files (F-M752), in `gui-structure`. **2 checks**. The refetch interval stands after the source cards and directly before the media files heading. The interval is named exactly once, and the schedule line sits under it, inside the same block.
+
+**T416:** The TMDb key under the card pattern (F-M753), in `gui-structure`. **4 checks**. The stored key is held beside the field, never inside it. The field carries the same dot pattern as a source card. An empty field means unchanged, and the input is no longer a required HTML field. The eye appears only while a key is stored and takes the shown value back.
+
+**T417:** One name for the season-pack switch (F-M754), in `sources`. **2 checks**. The switch reads `Prefer season pack` on both cards and carries the same help line, which stays within 80 characters. The stored key remains `preferSeasonZip`, so no stored value is orphaned.
+
+**T418:** The one-line TMDb help (F-M755), in `gui-structure`. **1 check**. The line says how to get a free key, names the address as the link word, and stays within 80 characters.
 
 **T176:** The report of an observed defect — wording without justification, category per finding, name of the affected file in both tracks, sender line with version and account name. Report in the same run, deferral instead of discarding, locked candidate after the report, switch and its position as the second-to-last entry (F-M450). **4 checks on the file naming.**
 
@@ -471,6 +491,8 @@ Without a hash **and** without a path row it stays with the honest result: the n
 
 **T407:** A tab carries an abbreviation of its source (F-M746), in `gui-structure`. **3 checks**. The tab button takes `tabName`, falling back to the display name and then the key. The full name stays in its tooltip. The abbreviation arrives through the source endpoint on its own carrier (`TabName` / `Tab` in the capabilities). The read path carries it through the response mapper as well; without that line the tab falls back to the full name silently, which is exactly what happened the first time. The page holds no list of names of its own, and the row labels of F-M731 stay untouched.
 
+**T408:** A help line with an address (F-M745), in `gui-structure`. **3 checks**. The line is built by the helper that replaces its link word with an anchor made of document nodes. The field mapper carries address and link word through; without those two lines the text stays unlinked, the same silent fallback as in F-M746. The source names address and link word, and the page sets no HTML from it.
+
 ## 12. Tests of the data model and persistence (§14)
 
 **T17:** Two streams of the same language keep independent verdicts (F-M197)
@@ -639,7 +661,7 @@ The three old SubDL fields (`Username`, `Password`, `ApiKey`) have disappeared f
 
 **T364:** Without a stored list the order shows the old setting (F-M701), in `gui-structure`. **1 check**: both preassignments (`tvsubtitles,moviesubtitles,subdl` and `subdl,tvsubtitles,moviesubtitles`) stand in the page, and the fallback is bound to `if (!liste)`.
 
-**T365:** What a card says about a field (F-M702, F-M745). **2 checks** in `sources`: a help text is one line (no line break) and no help text is longer than 80 characters. The ban on help texts was lifted by the operator: "too much talk" meant short, not silent. The check therefore guards the limit instead of the silence. Everything else of F-M702 — no placeholder, no `set` line, the light as the summary — is checked where it stood.
+**T365:** What a card says about a field (F-M702, F-M745). **4 checks** in `sources`. A help text is one line, with no line break. No help text is longer than 80 characters. An address travels only as a pair of link word and address, and that address is `https`, with its link word standing verbatim in the line. The ban on help texts was lifted by the operator: "too much talk" meant short, not silent. The check therefore guards the limit instead of the silence. Everything else of F-M702 — no placeholder, no `set` line, the light as the summary — is checked where it stood.
 
 **T366:** The order stands under Endpoints (F-M703), in `gui-structure`. **1 check**: the block `SourceOrderBlock` lies in the section between the heading `Endpoints` and `Media files`, **before** `SourceCards`, and no longer in the General tab.
 
@@ -653,7 +675,7 @@ The three old SubDL fields (`Username`, `Password`, `ApiKey`) have disappeared f
 
 **T371:** Endpoint order without media kind, light centred (F-M707), in `gui-structure`. **2 checks**: the heading reads `Endpoint order`, a row no longer builds a `subdl-order-tag`, and the light stands via `flex: 0 0 3.2em; text-align: center` in its column. Check F-M704 (c) moves along: it demanded the kind in the row.
 
-**T372:** Feedback and light (F-M708), in `gui-structure`. **2 checks**: the message builds `<Beschriftung> on|off` and chooses `fail` with ✖ on switching off, and the light of the order reads `participates` and is redrawn after saving.
+**T372:** Feedback and light (F-M708), in `gui-structure`. **3 checks**: the message builds `<Beschriftung> on|off` and chooses `fail` with ✖ on switching off, the light of the order reads `participates` and is redrawn after saving, and the lamp on the tab strip is redrawn from the same answer while the open tab stays open.
 
 **T373:** Every switch has an effect (F-M709), in `sources`. **9 checks**: with all switches on, three sources and both pack sources run in the slot; `downloadEnabled=false` really switches moviesubtitles.org **and** tvsubtitles.net off without dragging the other source along. `packsEnabled=false` takes SubDL out of the slot and names it as the reason; `reportEnabled=false` takes the report path; `uploadEnabled=false` switches the tvst upload off.
 
@@ -919,7 +941,7 @@ Plus **six** checks of the one input normalization (F-M736): it folds, trims and
 
 **T139:** A version that meets a leftover document plugin database does NOT import it and does NOT delete it.
 
-**The same harness then drives the three paths the operator reaches for once an import has landed: DATABASE REFRESH, RESET and RESTORE, because the plugin database suite covers them against a SEEDED plugin database, and a seeded plugin database is not what an import leaves behind.**
+**The same harness then drives the three paths the operator reaches for once an import has landed: DATABASE REFRESH, RESET and RESTORE. The plugin database suite covers them against a SEEDED plugin database, and a seeded plugin database is not what an import leaves behind.**
 
 Every section works on its OWN COPY of the imported file. The refresh prunes rows and the reset deletes them, so a shared directory would let one section's housekeeping decide whether the next has anything to assert, and a suite whose green depends on the order of its own sections proves nothing. The REFRESH half needs no Jellyfin host. The harness drives it through the same entry points the task calls (each tracker's dead-item prune, the oshash and loose subtitle sweeps), with a fixture the harness owns so both directions are provable. A DEAD item loses its search stamp, its retry budget and its burned candidate, while a LIVE item keeps all three **with its value**.
 

@@ -51,60 +51,22 @@
                         </div>
                         <div class="fieldDescription">Languages to download. Empty = download off.</div>
 
-                        <h3>Refetch interval</h3>
-                        <div class="selectContainer">
-                            <label class="selectLabel" for="RefetchInterval">Refetch interval</label>
-                            <select is="emby-select" id="RefetchInterval" name="RefetchInterval" class="emby-select-withcolor emby-select">
-                                <option value="Manual">Manual</option>
-                                <option value="Daily">Daily</option>
-                                <option value="Weekly">Weekly</option>
-                                <option value="Monthly">Monthly</option>
-                            </select>
-                            <div class="fieldDescription">Refetch interval for download and upload.</div>
-                        </div>
-                        <div id="RandomScheduleInfo" style="margin-top:-0.4em; font-size:0.85em; opacity:0.8;"></div>
-
-                        <h3>Status</h3>
-                        <div id="ScribeQuotaBox" style="margin-bottom:1em;"></div>
-                        <div id="ScribeStatusBox" style="display:flex;flex-direction:column;margin-bottom:1em;">
-                            <div class="subdl-status-row" id="TmdbApiStatus">
-                                <span class="subdl-light"></span>
-                                <span class="subdl-label">TMDb API</span>
-                                <span class="subdl-msg">—</span>
-                            </div>
-                            <div class="subdl-status-row" id="SubdlLoginStatus">
-                                <span class="subdl-light"></span>
-                                <span class="subdl-label">SubDL Login</span>
-                                <span class="subdl-msg">—</span>
-                            </div>
-                            <div class="subdl-status-row" id="ScribeApiStatus">
-                                <span class="subdl-light"></span>
-                                <span class="subdl-label">SubDL API</span>
-                                <span class="subdl-msg">—</span>
-                            </div>
-                            <div class="subdl-status-row" id="TvstStatus">
-                                <span class="subdl-light"></span>
-                                <span class="subdl-label">tvsubtitles.net</span>
-                                <span class="subdl-msg">—</span>
-                            </div>
-                            <div class="subdl-status-row" id="MstStatus">
-                                <span class="subdl-light"></span>
-                                <span class="subdl-label">moviesubtitles.org</span>
-                                <span class="subdl-msg">—</span>
-                            </div>
-                            <h4 style="margin-top:0.8em;margin-bottom:0.3em;">Library directories</h4>
-                            <div id="ScribeDirStatusList">
-                                <div class="fieldDescription">Loading…</div>
-                            </div>
-                        </div>
-
                         <!-- F-M497: der TMDb-Schluessel ist die EINZIGE Pflicht — ohne ihn startet keine
                              Richtung, und die Seite sagt das ausdruecklich. -->
                         <h3>TMDb (<span class="subdl-required">Required</span>)</h3>
                         <div class="inputContainer">
                             <label class="inputLabel inputLabelUnfocused" for="TmdbApiKey">TMDb API key (v3)</label>
-                            <input id="TmdbApiKey" name="TmdbApiKey" type="password" is="emby-input" autocomplete="new-password" required />
-                            <div class="fieldDescription">Required — the only mandatory key. Resolves IMDb / TMDb ids for upload and download. Free key: <a href="https://www.themoviedb.org/settings/api" target="_blank" rel="noopener">themoviedb.org/settings/api</a>.</div>
+                            <!-- F-M748: das Auge sitzt rechts IM Feld; die Breite des Feldes bleibt, wie sie
+                                 ohne Auge waere. F-M753: der abgelegte Schluessel steht NICHT im Feld —
+                                 das Feld traegt dasselbe Punktmuster wie eine Karte der Quellen. -->
+                            <div class="subdl-secret-wrap">
+                                <input id="TmdbApiKey" name="TmdbApiKey" type="password" is="emby-input" autocomplete="new-password" />
+                                <button type="button" id="TmdbApiKeyEye" class="subdl-eye" title="Hold to show the stored value"></button>
+                            </div>
+                            <!-- Betreiberanweisung 25.11.2026, woertlich: "Gui Beschreibung tmdb api ist noch zuviel: Free API key
+                                 after registration at at themoviedb.org. mit moviedvorg als link" — eine Zeile,
+                                 die Adresse als Linkwort (F-M745). -->
+                            <div class="fieldDescription">Free API key after registration at <a href="https://www.themoviedb.org/" target="_blank" rel="noopener">themoviedb.org</a>.</div>
                         </div>
 
                         <!-- F-M688 (Betreiber-Entscheidung 22.11.2026, woertlich: "Die uebergeordneten
@@ -134,6 +96,22 @@
 
                         <div id="SourceTabs" class="subdl-source-tabs" role="tablist"></div>
                         <div id="SourceCards"></div>
+
+                        <!-- Betreiberanweisung 25.11.2026, woertlich: "Refetch interval bitte vor den media
+                             files block einsortieren" — der Takt steht damit direkt ueber der Dateiarbeit,
+                             nicht mehr zwischen Zielsprachen und TMDb. -->
+                        <h3>Refetch interval</h3>
+                        <div class="selectContainer">
+                            <label class="selectLabel" for="RefetchInterval">Refetch interval</label>
+                            <select is="emby-select" id="RefetchInterval" name="RefetchInterval" class="emby-select-withcolor emby-select">
+                                <option value="Manual">Manual</option>
+                                <option value="Daily">Daily</option>
+                                <option value="Weekly">Weekly</option>
+                                <option value="Monthly">Monthly</option>
+                            </select>
+                            <div class="fieldDescription">Refetch interval for download and upload.</div>
+                        </div>
+                        <div id="RandomScheduleInfo" style="margin-top:-0.4em; font-size:0.85em; opacity:0.8;"></div>
 
                         <h3>Media files</h3>
                         <div class="checkboxContainer checkboxContainer-withDescription">
@@ -178,6 +156,44 @@
                              allowance, this line describes our own wait, and mixing the two made a
                              partly-used allowance read as a problem (user decision 03.10.2026). -->
                         <div class="fieldDescription" id="ScribeLocalDeferLine" style="margin-top:0.5em;"></div>
+
+                        <!-- Betreiberanweisung 25.11.2026, woertlich: "Status den gesamten block bitte unter
+                             workers verschieben" — der Statusblock steht deshalb unter der Worker-Liste,
+                             der Auffrischknopf bleibt der letzte Block des Reiters. -->
+
+                        <h3>Status</h3>
+                        <div id="ScribeQuotaBox" style="margin-bottom:1em;"></div>
+                        <div id="ScribeStatusBox" style="display:flex;flex-direction:column;margin-bottom:1em;">
+                            <div class="subdl-status-row" id="TmdbApiStatus">
+                                <span class="subdl-light"></span>
+                                <span class="subdl-label">TMDb API</span>
+                                <span class="subdl-msg">—</span>
+                            </div>
+                            <div class="subdl-status-row" id="SubdlLoginStatus">
+                                <span class="subdl-light"></span>
+                                <span class="subdl-label">SubDL Login</span>
+                                <span class="subdl-msg">—</span>
+                            </div>
+                            <div class="subdl-status-row" id="ScribeApiStatus">
+                                <span class="subdl-light"></span>
+                                <span class="subdl-label">SubDL API</span>
+                                <span class="subdl-msg">—</span>
+                            </div>
+                            <div class="subdl-status-row" id="TvstStatus">
+                                <span class="subdl-light"></span>
+                                <span class="subdl-label">tvsubtitles.net</span>
+                                <span class="subdl-msg">—</span>
+                            </div>
+                            <div class="subdl-status-row" id="MstStatus">
+                                <span class="subdl-light"></span>
+                                <span class="subdl-label">moviesubtitles.org</span>
+                                <span class="subdl-msg">—</span>
+                            </div>
+                            <h4 style="margin-top:0.8em;margin-bottom:0.3em;">Library directories</h4>
+                            <div id="ScribeDirStatusList">
+                                <div class="fieldDescription">Loading…</div>
+                            </div>
+                        </div>
 
                         <!-- One refresh for EVERY live readout (user order 30.09.2026: "es reicht wenn er
                              unter General tab sitzt woanders laufen keine live daten rein"). It sits at
@@ -566,18 +582,11 @@
 
                         
 
-                        <div class="checkboxContainer checkboxContainer-withDescription">
-                            <label class="emby-checkbox-label">
-                                <input id="ReportBrokenSubtitles" name="ReportBrokenSubtitles" type="checkbox" is="emby-checkbox" />
-                                <span>Report broken subtitles</span>
-                            </label>
-                            <div class="fieldDescription">Default: on.</div>
-                        </div>
 
                         <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="DownloadRuntimeToleranceSec">Runtime tolerance (seconds)</label>
-                            <input id="DownloadRuntimeToleranceSec" name="DownloadRuntimeToleranceSec" type="number" is="emby-input" min="0" max="1800" />
-                            <div class="fieldDescription">Max. cue span vs. runtime in seconds. 0 = off. Default: 600.</div>
+                            <label class="inputLabel inputLabelUnfocused" for="DownloadRuntimeToleranceSharePercent">Runtime tolerance share (%)</label>
+                            <input id="DownloadRuntimeToleranceSharePercent" name="DownloadRuntimeToleranceSharePercent" type="number" is="emby-input" min="0" max="50" />
+                            <div class="fieldDescription">Floor is fixed: 7 min films, 4 min episodes. 0 = floor only.</div>
                         </div>
 
 
@@ -761,6 +770,20 @@
         .subdl-source-tab.active { background: #00a4dc; color: #fff; }
         .subdl-source-tab-lamp { display: inline-block; width: 9px; height: 9px; border-radius: 50%; margin-left: 6px; vertical-align: middle; background: #107c10; }
         .subdl-source-tab-lamp.off { background: transparent; box-shadow: inset 0 0 0 1px #767676; }
+            /* F-M748: die Zeile eines Geheimfelds traegt rechts ein Auge — es zeigt den abgelegten Wert,
+               solange gedrueckt wird, und gibt ihn beim Loslassen wieder her. */
+            /* F-M748: die Huelle richtet das Feld aus (flex), sonst zaehlt die Zeilenhoehe des Textes mit
+               und das Auge sitzt beim TMDb-Feld 10 px zu hoch (Betreiberbefund 25.11.2026). */
+            .subdl-secret-wrap { position: relative; display: flex; align-items: center; }
+            .subdl-secret-wrap input { padding-right: 34px; }
+            .subdl-eye {
+                position: absolute; top: 50%; right: 4px; transform: translateY(-50%);
+                width: 26px; height: 26px; padding: 0; border: 0; background: transparent;
+                color: #9aa0a6; cursor: pointer; border-radius: 4px;
+                display: flex; align-items: center; justify-content: center;
+            }
+            .subdl-eye:hover { color: #f0f0f0; background: rgba(255, 255, 255, 0.09); }
+            .subdl-eye.shown { color: #f0f0f0; }
         .subdl-source-pane { display: none; }
         .subdl-source-pane.active { display: block; }
         /* F-M688: eine Karte je Quelle. Der Rahmen trennt die Quellen, weil je KARTE gespeichert
@@ -913,6 +936,11 @@
 
             var SUBDL_LANG_PICKED = []; // Click order = saved order (no visual numbering anymore)
 
+            // F-M753 (Betreiberanweisung 25.11.2026: "Bitte auf das subdl muster vereinheitlichen"): der
+            // abgelegte TMDb-Schluessel steht nur hier im Speicher der Seite, nicht im Feld. Das Feld
+            // zeigt bei abgelegtem Wert dasselbe Punktmuster wie die Karten der Quellen (F-M706).
+            var subdlTmdbAbgelegt = '';
+
             function subdlGetSelectedLangs() {
                 return SUBDL_LANG_PICKED.slice();
             }
@@ -1056,7 +1084,13 @@
                     // NICHT mehr gelesen — ihr Wert steht in sources/subdl.json und kommt mit der
                     // Karte der Quelle (subdlLoadSources); diese Seite schreibt die alten Felder
                     // auch nicht mehr (kein zweiter Ort fuer denselben Wert).
-                    document.querySelector('#TmdbApiKey').value = config.TmdbApiKey || '';
+                    subdlTmdbAbgelegt = String(config.TmdbApiKey || '');
+                    var subdlTmdbFeld = document.querySelector('#TmdbApiKey');
+                    if (subdlTmdbFeld) {
+                        subdlTmdbFeld.value = '';
+                        subdlTmdbFeld.placeholder = subdlTmdbAbgelegt ? '••••••••' : '';
+                    }
+                    subdlTmdbAugeStand();
                         subdlLoadQuota();
                         subdlStartQuotaPoll();
                         document.querySelector('#UploadsPerHour').value = config.UploadsPerHour;
@@ -1130,13 +1164,12 @@
                         document.querySelector('#DownloadLanguagesDisplay').value = (config.DownloadLanguages || '');
                         document.querySelector('#DownloadOnlyMissing').checked = config.DownloadOnlyMissing;
                         document.querySelector('#DownloadHearingImpaired').checked = config.DownloadHearingImpaired;
-                        document.querySelector('#DownloadRuntimeToleranceSec').value = config.DownloadRuntimeToleranceSec;
+                        document.querySelector('#DownloadRuntimeToleranceSharePercent').value = config.DownloadRuntimeToleranceSharePercent;
                         document.querySelector('#AllocateMissingLanguageCodes').checked = config.AllocateMissingLanguageCodes;
                         document.querySelector('#QaDownloadMinCues').checked = config.QaDownloadMinCues;
                         document.querySelector('#QaDownloadVerifyLanguage').checked = config.QaDownloadVerifyLanguage;
                         document.querySelector('#QaDownloadAutoSync').checked = config.QaDownloadAutoSync !== false;
                         document.querySelector('#RefreshLibraryAfterDownload').checked = config.RefreshLibraryAfterDownload !== false;
-                        document.querySelector('#ReportBrokenSubtitles').checked = config.ReportBrokenSubtitles !== false;
                         document.querySelector('#DownloadScoreWeightGroup').value = config.DownloadScoreWeightGroup;
                         document.querySelector('#DownloadScoreWeightToken').value = config.DownloadScoreWeightToken;
                         document.querySelector('#DownloadScoreWeightDownload').value = config.DownloadScoreWeightDownload;
@@ -1769,7 +1802,11 @@ workers.forEach(function (w) {
                         // TMDb key is REQUIRED: id resolution is TMDB-authoritative, and series
                         // are skipped without it. Refuse to save an empty key rather than
                         // silently degrading the pipeline.
-                        var tmdbKey = String(document.querySelector('#TmdbApiKey').value || '').trim();
+                        // F-M753: ein leeres Feld heisst "unveraendert lassen" — genau wie in einer Karte
+                        // der Quellen. Erst wenn jemand tippt, ist der Wert ein neuer.
+                        var tmdbFeldJetzt = document.querySelector('#TmdbApiKey');
+                        var tmdbGetippt = String((tmdbFeldJetzt && tmdbFeldJetzt.value) || '').trim();
+                        var tmdbKey = tmdbGetippt || subdlTmdbAbgelegt;
                         if (!tmdbKey) {
                             try { Dashboard.hideLoadingMsg(); } catch (err) { /* non-fatal */ }
                             subdlNotify('TMDb API key is required to properly resolve IMDb / TMDb ids for upload and download.');
@@ -1781,6 +1818,16 @@ workers.forEach(function (w) {
                         // mitgeschrieben — die Karte der Quelle speichert sie ueber
                         // POST Plugins/SubdlSync/Sources/subdl. Ein Wert, ein Ort.
                         config.TmdbApiKey = tmdbKey;
+                        // F-M753: nach dem Speichern gilt der neue Wert als der abgelegte, und das Feld
+                        // faellt auf das Punktmuster zurueck — der getippte Wert bleibt nicht stehen.
+                        subdlTmdbAbgelegt = tmdbKey;
+                        var tmdbNachSave = document.querySelector('#TmdbApiKey');
+                        if (tmdbNachSave) {
+                            tmdbNachSave.value = '';
+                            tmdbNachSave.type = 'password';
+                            tmdbNachSave.placeholder = subdlTmdbAbgelegt ? '••••••••' : '';
+                        }
+                        subdlTmdbAugeStand();
                         var uph = parseInt(document.querySelector('#UploadsPerHour').value) || 450;
                         config.DownloadQaRetryLimit = (function () { var v = parseInt(document.querySelector('#DownloadQaRetryLimit').value, 10); return isNaN(v) ? 3 : Math.min(20, Math.max(0, v)); })();
                         config.ArrivalDebounceMinutes = (function () { var v = parseInt(document.querySelector('#ArrivalDebounceMinutes').value, 10); return isNaN(v) ? 2 : Math.min(120, Math.max(1, v)); })();                                                config.RefetchInterval = document.querySelector('#RefetchInterval').value;
@@ -1818,13 +1865,12 @@ workers.forEach(function (w) {
                         config.DownloadLanguages = document.querySelector('#DownloadLanguagesDisplay').value;
                         config.DownloadOnlyMissing = document.querySelector('#DownloadOnlyMissing').checked;
                         config.DownloadHearingImpaired = document.querySelector('#DownloadHearingImpaired').checked;
-                        config.DownloadRuntimeToleranceSec = (function () { var v = parseInt(document.querySelector('#DownloadRuntimeToleranceSec').value, 10); return isNaN(v) ? 600 : v; })();
+                        config.DownloadRuntimeToleranceSharePercent = (function () { var v = parseInt(document.querySelector('#DownloadRuntimeToleranceSharePercent').value, 10); return isNaN(v) ? 12 : v; })();
                         config.AllocateMissingLanguageCodes = document.querySelector('#AllocateMissingLanguageCodes').checked;
                         config.QaDownloadMinCues = document.querySelector('#QaDownloadMinCues').checked;
                         config.QaDownloadVerifyLanguage = document.querySelector('#QaDownloadVerifyLanguage').checked;
                         config.QaDownloadAutoSync = document.querySelector('#QaDownloadAutoSync').checked;
                         config.RefreshLibraryAfterDownload = document.querySelector('#RefreshLibraryAfterDownload').checked;
-                        config.ReportBrokenSubtitles = document.querySelector('#ReportBrokenSubtitles').checked;
                         config.DownloadScoreWeightGroup = parseInt(document.querySelector('#DownloadScoreWeightGroup').value) || 1000;
                         config.DownloadScoreWeightToken = parseInt(document.querySelector('#DownloadScoreWeightToken').value) || 10;
                         config.DownloadScoreWeightDownload = parseInt(document.querySelector('#DownloadScoreWeightDownload').value, 10); if (isNaN(config.DownloadScoreWeightDownload)) { config.DownloadScoreWeightDownload = 1; }
@@ -1948,6 +1994,105 @@ workers.forEach(function (w) {
                 return el;
             }
 
+            // F-M745: ein Hilfetext darf eine Adresse als Link tragen. Gebaut wird der Text aus
+            // DOM-Knoten, nie aus einer Zeichenkette: das Wort `helpLink` wird im Text gesucht und
+            // durch einen Anker ersetzt, alles andere bleibt Text. Steht das Wort nicht im Text,
+            // bleibt es beim reinen Text.
+            // F-M748: das Auge am Geheimfeld. Es sitzt rechts IM Feld, die Breite des Feldes bleibt
+            // dieselbe (das Feld bekommt nur rechts Luft). Gedrueckt zeigt es den Wert, losgelassen sind
+            // die Punkte wieder da. Wo der Wert nicht im Feld steht (ein abgelegtes Geheimnis), holt es
+            // ihn ueber einen eigenen Weg; wo er schon dasteht (TMDb-Schluessel), schaltet es nur um.
+            function subdlAugeZeichnen(auge) {
+                var ns = 'http://www.w3.org/2000/svg';
+                var bild = document.createElementNS(ns, 'svg');
+                bild.setAttribute('viewBox', '0 0 24 24');
+                bild.setAttribute('width', '17');
+                bild.setAttribute('height', '17');
+                bild.setAttribute('fill', 'none');
+                bild.setAttribute('stroke', 'currentColor');
+                bild.setAttribute('stroke-width', '1.7');
+                bild.setAttribute('stroke-linecap', 'round');
+                var lid = document.createElementNS(ns, 'path');
+                lid.setAttribute('d', 'M1.8 12S5.6 5.4 12 5.4 22.2 12 22.2 12 18.4 18.6 12 18.6 1.8 12 1.8 12z');
+                var pupille = document.createElementNS(ns, 'circle');
+                pupille.setAttribute('cx', '12');
+                pupille.setAttribute('cy', '12');
+                pupille.setAttribute('r', '3.1');
+                bild.appendChild(lid);
+                bild.appendChild(pupille);
+                auge.appendChild(bild);
+            }
+
+            function subdlAugeVerbinden(auge, input, holen) {
+                var gedrueckt = false;
+                auge.addEventListener('pointerdown', function (ev) {
+                    ev.preventDefault();
+                    gedrueckt = true;
+                    auge.classList.add('shown');
+                    if (input.value !== '') { input.type = 'text'; return; }
+                    if (!holen) { return; }
+                    holen().then(function (res) {
+                        // Wer waehrend der Antwort schon losgelassen hat, bekommt nichts zu sehen.
+                        if (!gedrueckt || !res || !res.value) { return; }
+                        input.value = res.value;
+                        input.type = 'text';
+                        input.setAttribute('data-shown-secret', 'true');
+                    }).catch(function () { });
+                });
+                var zu = function () {
+                    gedrueckt = false;
+                    auge.classList.remove('shown');
+                    if (input.getAttribute('data-shown-secret') === 'true') {
+                        input.value = '';
+                        input.removeAttribute('data-shown-secret');
+                    }
+                    input.type = 'password';
+                };
+                auge.addEventListener('pointerup', zu);
+                auge.addEventListener('pointerleave', zu);
+                auge.addEventListener('pointercancel', zu);
+                auge.addEventListener('blur', zu);
+            }
+
+            // F-M748/F-M753: das Auge sitzt am TMDb-Schluessel wie an jedem Geheimfeld einer Karte. Es
+            // erscheint nur, wenn ein Schluessel abgelegt ist, und zeigt ihn fuer die Dauer des Drucks —
+            // danach nimmt es ihn wieder aus dem Feld, sodass dort das Punktmuster bleibt.
+            function subdlTmdbAugeStand() {
+                var auge = document.getElementById('TmdbApiKeyEye');
+                if (!auge) { return; }
+                auge.style.display = subdlTmdbAbgelegt ? '' : 'none';
+            }
+
+            (function () {
+                var tmdb = document.getElementById('TmdbApiKey');
+                var auge = document.getElementById('TmdbApiKeyEye');
+                if (!tmdb || !auge) { return; }
+                subdlAugeZeichnen(auge);
+                subdlAugeVerbinden(auge, tmdb, function () {
+                    return Promise.resolve(subdlTmdbAbgelegt ? { value: subdlTmdbAbgelegt } : null);
+                });
+                subdlTmdbAugeStand();
+            }());
+
+            function subdlSourceHelp(feld) {
+                var div = document.createElement('div');
+                div.className = 'fieldDescription';
+                var text = feld.help === undefined || feld.help === null ? '' : String(feld.help);
+                var link = feld.helpLink ? String(feld.helpLink) : '';
+                var href = feld.helpUrl ? String(feld.helpUrl) : '';
+                var at = (href && link) ? text.indexOf(link) : -1;
+                if (at < 0) { div.textContent = text; return div; }
+                div.appendChild(document.createTextNode(text.slice(0, at)));
+                var a = document.createElement('a');
+                a.href = href;
+                a.target = '_blank';
+                a.rel = 'noopener';
+                a.textContent = link;
+                div.appendChild(a);
+                div.appendChild(document.createTextNode(text.slice(at + link.length)));
+                return div;
+            }
+
             function subdlSourceEl(tag, cls, text) {
                 var el = document.createElement(tag);
                 if (cls) { el.className = cls; }
@@ -1981,6 +2126,10 @@ workers.forEach(function (w) {
                     kind: subdlSourceWert(feld, 'kind'),
                     required: subdlSourceWert(feld, 'required') === true,
                     help: subdlSourceWert(feld, 'help'),
+                    // F-M745: eine Adresse im Hilfetext — der Mapper muss sie durchreichen, sonst
+                    // bleibt der Text ohne Link stehen (dieselbe Falle wie bei tabName in F-M746).
+                    helpUrl: subdlSourceWert(feld, 'helpUrl'),
+                    helpLink: subdlSourceWert(feld, 'helpLink'),
                     'default': subdlSourceWert(feld, 'default'),
                     value: subdlSourceWert(feld, 'value'),
                     gesetzt: subdlSourceWert(feld, 'gesetzt') === true,
@@ -2125,7 +2274,7 @@ workers.forEach(function (w) {
                     }
                     label.appendChild(text);
                     wrap.appendChild(label);
-                    if (field.help) { wrap.appendChild(subdlSourceEl('div', 'fieldDescription', field.help)); }
+                    if (field.help) { wrap.appendChild(subdlSourceHelp(field)); }
                     row.appendChild(wrap);
                     row.setAttribute('data-value', String(field.value) === 'true' ? 'true' : 'false');
                     return row;
@@ -2147,7 +2296,7 @@ workers.forEach(function (w) {
                     select.name = field.key;
                     select.className = 'emby-select-withcolor emby-select';
                     selWrap.appendChild(select);
-                    if (field.help) { selWrap.appendChild(subdlSourceEl('div', 'fieldDescription', field.help)); }
+                    if (field.help) { selWrap.appendChild(subdlSourceHelp(field)); }
                     row.appendChild(selWrap);
                     // Die Moeglichkeiten kommen mit dem Feld; eingetragen werden sie nach dem
                     // Einhaengen (subdlSourceApplyValues), damit sie ein Aufbau des Steuerelements
@@ -2211,13 +2360,41 @@ workers.forEach(function (w) {
                     // aus, ohne ein Wort und ohne den Wert. F-M702 hatte den Platzhalter samt "set"
                     // entfernt; das Wort bleibt weg, die Punkte kommen zurueck.
                     input.placeholder = field.gesetzt ? '••••••••' : '';
+
+                    // F-M748 (Betreiberwunsch 25.11.2026: "Können wir noch so ein auge machen das das
+                    // passwort den api key statt ... einblendet für die Dauer die man draufdrückt?"):
+                    // Das Auge holt den ABGELEGTEN Wert eigens aus der Datei — die Seite hat ihn sonst
+                    // nirgends — und nimmt ihn beim Loslassen sofort wieder aus dem Feld. Ein bereits
+                    // eingetippter Wert wird nur sichtbar geschaltet, dafuer braucht es keine Anfrage.
+                    if (field.gesetzt) {
+                        boxWrap.classList.add('subdl-source-secret');
+                        // Das Auge sitzt am FELD, nicht am Kasten: der Hilfetext steht mit im Kasten und
+                        // haette das Zeichen sonst in die Mitte zwischen Feld und Text geschoben.
+                        var huelle = document.createElement('div');
+                        huelle.className = 'subdl-secret-wrap';
+                        boxWrap.replaceChild(huelle, input);
+                        huelle.appendChild(input);
+                        var auge = document.createElement('button');
+                        auge.type = 'button';
+                        auge.className = 'subdl-eye';
+                        auge.setAttribute('data-source-eye', field.key);
+                        auge.title = 'Hold to show the stored value';
+                        subdlAugeZeichnen(auge);
+                        subdlAugeVerbinden(auge, input, function () {
+                            var url = ApiClient.getUrl('Plugins/SubdlSync/Sources/' + encodeURIComponent(entry.key)
+                                + '/secret/' + encodeURIComponent(field.key));
+                            return fetch(url, { headers: { 'Accept': 'application/json' } })
+                                .then(function (r) { return r.ok ? r.json() : null; });
+                        });
+                        huelle.appendChild(auge);
+                    }
                 } else {
                     // Ein Geheimnis bekommt KEIN data-value — der Wert steht damit nirgends im DOM.
                     row.setAttribute('data-value',
                         field.value === null || field.value === undefined ? '' : String(field.value));
                 }
 
-                if (field.help) { boxWrap.appendChild(subdlSourceEl('div', 'fieldDescription', field.help)); }
+                if (field.help) { boxWrap.appendChild(subdlSourceHelp(field)); }
                 row.appendChild(boxWrap);
                 return row;
             }
@@ -2407,8 +2584,10 @@ workers.forEach(function (w) {
                     var name = row.getAttribute('data-source-field-label') || key;
                     if (kind === 'switch') { wert = !!ctrl.checked; }
                     else if (kind === 'secret') {
-                        // Ein Geheimnis geht nur mit, wenn wirklich etwas getippt wurde.
+                        // Ein Geheimnis geht nur mit, wenn wirklich etwas getippt wurde. Ein Wert, den
+                        // gerade das Auge zeigt (F-M748), ist der ABGELEGTE — er ist keine Aenderung.
                         if (ctrl.value === '') { continue; }
+                        if (ctrl.getAttribute('data-shown-secret') === 'true') { continue; }
                         wert = ctrl.value;
                     } else { wert = ctrl.value; }
 
@@ -2477,6 +2656,9 @@ workers.forEach(function (w) {
                                 if (liste[q].key === key) { liste[q] = ant.quelle; }
                             }
                             subdlOrderDraw(window.__subdlQuellen);
+                            // F-M708: dieselbe Antwort traegt auch die Reiter — die Ampel am Reiter
+                            // muss mit demselben Klick ausgehen wie die Ampel der Reihenfolge.
+                            subdlSourceTabs(liste, key);
                         }
                     }
                     // F-M706 (Betreiberbefund 22.11.2026: "Wenn ich in den sources was austicke … als
@@ -2664,9 +2846,18 @@ workers.forEach(function (w) {
                 }
             }
 
-            function subdlSourceTabs(list) {
+            function subdlSourceTabs(list, keepKey) {
                 var strip = document.getElementById('SourceTabs');
                 if (!strip) { return; }
+                // F-M708 (Betreiberbefund 25.11.2026: "die ampel auf den slides geht nicht mit aus"):
+                // die Reiterleiste wurde nach dem Speichern nicht neu gezeichnet, also blieb die Ampel
+                // am Reiter auf "on", waehrend die Reihenfolge oben schon "off" zeigte. Welcher Reiter
+                // offen ist, bleibt dabei offen — ein Neuezeichnen darf nicht auf den ersten zurueckspringen.
+                var offen = keepKey || '';
+                if (!offen) {
+                    var aktivBtn = strip.querySelector('.subdl-source-tab.active');
+                    offen = aktivBtn ? aktivBtn.getAttribute('data-source-tab') : '';
+                }
                 strip.innerHTML = '';
                 var keys = [];
                 for (var i = 0; i < (list || []).length; i++) {
@@ -2699,7 +2890,7 @@ workers.forEach(function (w) {
                     strip.appendChild(btn);
                 }
                 strip.style.display = keys.length > 1 ? '' : 'none';
-                if (keys.length) { subdlSourceTab(keys[0]); }
+                if (keys.length) { subdlSourceTab(keys.indexOf(offen) >= 0 ? offen : keys[0]); }
             }
 
             function subdlLoadSources() {

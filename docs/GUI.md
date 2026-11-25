@@ -51,7 +51,10 @@ with where the value comes from (F-M222):
   it as a secret field and marks it required in its own schema (F-M222, F-M497, F-M688). Its short
   description says where the key comes from: a free key from the account panel, documented at
   `subdl.com/api-doc` (F-M745 — a field may carry one line of at most 80 characters).
-- **The TMDb API key** (F-M203).
+- **The TMDb API key** (F-M203). Its help line reads `Free API key after registration at themoviedb.org.` and
+  carries the address as the link word (F-M755). The field behaves like any secret field of a source card
+  (F-M753). The stored key is never written into it, it shows the same dot pattern, and an empty field means
+  *leave it as it is*.
 - **The target languages** (F-M42).
 
 The marker reads `Libraries (opt-in, Required)` and `TMDb (Required)`. It is rendered in the accent
@@ -82,7 +85,7 @@ never its value, and `VisibleWhen` shows a field only while another field holds 
 
 | Source | Fields | Note |
 |---|---|---|
-| `subdl` | `apiKey` (secret, required), `account` (text, visible while a key is stored), `baseUrl` (URL), `preferSeasonZip` (switch, on) | the account is the login the key belongs to |
+| `subdl` | `apiKey` (secret, required), `account` (text, visible while a key is stored), `baseUrl` (URL), `preferSeasonZip` (switch *Prefer season pack*, on, help line as on every card — F-M754) | the account is the login the key belongs to |
 | `tvsubtitles` | `baseUrl` (URL) | the site demands no access data |
 | `moviesubtitles` | `baseUrl` (URL) | the access field fell out — it was empty from the start |
 
@@ -120,6 +123,14 @@ hand-typed copy.
 - **One state, one word** — the page uses the same word as the log and the statistics, with no synonym
   and no second spelling (`LOGGING.md`, rule 3.7).
 - A switch or button names the act it performs, not the thing it touches (F-M385).
+- **A help line may carry one address as a link** (F-M745). The source names the address and the word of the
+  line that becomes the link; the page builds the anchor from document nodes, so no markup crosses the source
+  boundary. The line keeps its 80 characters — the address counts as its visible word, not as the URL. The
+  access fields point at the provider: the API key line names registration, the email line the login
+  credentials, the password field stays without one.
+- **One line per switch, no reason.** `Waits for the daily quota reset, then carries on.` stands on both
+  continue switches, `Takes the season pack instead of single episodes.` on the pack switch, and the
+  machine-translation switch names the account it concerns.
 
 ## 8. The plugin database on the page
 
@@ -135,7 +146,7 @@ else touches the file from the GUI.
 
 ## 9. What the page never shows
 
-- **No credential value.** A secret field shows that it is set, never what it holds.
+- **No credential value in the list.** A secret field shows that it is set, never what it holds. The eye inside it, at the right edge, asks for the stored value one field at a time and holds it only as long as the button is pressed; the field keeps its width (F-M748). Both API keys and the password carry it.
 - **No measurement and no path of the operator** on the settings page (F-M299).
 - **No second place for the same setting** — a setting that exists in two controls is a defect, not a
   convenience (F-M479).
@@ -145,6 +156,6 @@ else touches the file from the GUI.
 ## 10. The checks
 
 The suite `scripts/tests/gui-structure` holds the page's shape: it reads the built page and fails when a
-section, a field, a label or the required marker drifts. 32 of its cases are bound to their own test
+section, a field, a label or the required marker drifts. 35 of its cases are bound to their own test
 entries in `docs/TESTS.md` (`gui-structure`), and the binding of a test to its suite stands in
 `scripts/tests/counts.json`.

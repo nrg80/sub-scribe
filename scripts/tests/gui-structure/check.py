@@ -1882,10 +1882,22 @@ def main():
           "Required for SubDL only" not in subdl_block
           and 'id="SourceCards"' in subdl_block
           and 'subdl-required">Required</span>' in tmdb_block
-          and "the only mandatory key" in tmdb_block
+          and "Free API key after registration at" in tmdb_block
           and 'id="TmdbApiKey"' in tmdb_block
           and re.search(r"new\(FieldApiKey,.*?Required: true", subdl_engine_src) is not None,
           "F-M497: TMDb ist Pflicht; die Quelle erklaert ihr Pflichtfeld selbst (apiKey, Required: true)")
+
+    # ---- F-M755 (Betreiberanweisung 25.11.2026: "Gui Beschreibung tmdb api ist noch zuviel: Free API key
+    # after registration at at themoviedb.org. mit moviedvorg als link"): die Zeile sagt nur noch, wie man
+    # einen kostenlosen Schluessel bekommt, und die Adresse ist das Linkwort (F-M745: eine Zeile, <= 80 Zeichen).
+    tmdb_hilfe = re.search(r'<div class="fieldDescription">(.*?)</div>', tmdb_block, re.S)
+    tmdb_text = re.sub(r'<[^>]+>', '', tmdb_hilfe.group(1)).strip() if tmdb_hilfe else ""
+    check("F-M755: the TMDb help line says how to get a free key, and the address is the link word",
+          tmdb_text.startswith("Free API key after registration at themoviedb.org.")
+          and len(tmdb_text) <= 80
+          and 'href="https://www.themoviedb.org/"' in tmdb_hilfe.group(1)
+          and ">themoviedb.org</a>" in tmdb_hilfe.group(1),
+          "Text: %r (%d Zeichen)" % (tmdb_text, len(tmdb_text)))
 
     # ---- F-M228 (Betreiberbefund 25.11.2026: „previously the required in the headlines was in gui
     # style blue"): die Pflichtmarke in den drei Ueberschriften traegt die Akzentfarbe. Der Befund war
@@ -1918,8 +1930,10 @@ def main():
           and "card.classList.add('subdl-source-pane');" in page_src_f497
           and page_src_f497.count("subdl-source-pane") >= 4,
           "F-M743: die sichtbare Karte braucht eine Regel UND einen Inline-Wert; versteckte bleiben im DOM")
-    check("F-M743: the first tab is open when the page is drawn",
-          "if (keys.length) { subdlSourceTab(keys[0]); }" in page_src_f497,
+    # F-M743, seit F-M708: beim Zeichnen ist der erste Reiter offen; beim Neuezeichnen nach dem Speichern
+    # bleibt der offene Reiter offen (sonst springt die Seite beim Schalten zurueck).
+    check("F-M743: the first tab is open when the page is drawn, and a redraw keeps the open one",
+          "subdlSourceTab(keys.indexOf(offen) >= 0 ? offen : keys[0]);" in page_src_f497,
           "F-M743: ohne diesen Aufruf steht die Seite mit drei versteckten Karten da")
     check("F-M743: the source tabs carry their own class, so the direction tabs do not clear them",
           "btn.className = 'subdl-source-tab raised emby-button';" in page_src_f497
@@ -1952,6 +1966,30 @@ def main():
           and "public string Tab =>" in kontrakt,
           "F-M746: eigener Traeger TabName/Tab, nicht der Kurzname der Zeile (F-M731)")
 
+    # ---- F-M745 (Betreiberansage 25.11.2026: "Beschreibung api key anpassen (Free API key after registration
+    # under Subdl.com << link wie bei tmdb"): ein Hilfetext darf eine Adresse als Link tragen. Gebaut wird der
+    # Anker aus DOM-Knoten — der Text kommt als Textknoten, nie als Markup aus der Quelle.
+    check("F-M745: a help line may carry its address as a link, built from DOM nodes",
+          "function subdlSourceHelp(feld)" in page_src_f497
+          and "div.appendChild(document.createTextNode(text.slice(0, at)));" in page_src_f497
+          and "a.rel = 'noopener';" in page_src_f497
+          and "if (field.help) { wrap.appendChild(subdlSourceHelp(field)); }" in page_src_f497
+          and "if (field.help) { selWrap.appendChild(subdlSourceHelp(field)); }" in page_src_f497
+          and "if (field.help) { boxWrap.appendChild(subdlSourceHelp(field)); }" in page_src_f497,
+          "F-M745: der Hilfetext wird ueber den Helfer gebaut, das Linkwort ersetzt — kein Markup aus der Quelle")
+    check("F-M745: the mapper carries the address and its link word through",
+          "helpUrl: subdlSourceWert(feld, 'helpUrl')," in page_src_f497
+          and "helpLink: subdlSourceWert(feld, 'helpLink')," in page_src_f497,
+          "F-M745: ohne diese zwei Zeilen im Feld-Mapper bleibt der Text ohne Link (Falle aus F-M746)")
+    engine_src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.dirname(os.path.abspath(__file__))))), "Jellyfin.Plugin.SubdlSync/Sources/Subdl/SubdlEngine.cs"),
+        encoding="utf-8").read()
+    check("F-M745: the source names address and link word, the page builds the anchor",
+          'HelpUrl: "https://subdl.com", HelpLink: "subdl.com"' in engine_src
+          and "innerHTML" not in page_src_f497[page_src_f497.find("function subdlSourceHelp(feld)"):
+                                               page_src_f497.find("function subdlSourceEl(")],
+          "F-M745: kein Markup aus der Quelle - die Seite baut den Anker aus Knoten")
+
     # ---- F-M744 (Betreiberwunsch 25.11.2026: "Wenn irgendein endpoint nicht konfiguriert ist, keine
     # Zugangsdaten fuer subdl zb, soll er als off angezeigt werden"; Betreiberbefund am selben Tag:
     # "3x on/off ist ein bisschen viel auf einer seite. Vorschlag: als Ampel aus der tabauswahl raus"):
@@ -1981,11 +2019,33 @@ def main():
     check("F-M497: the TMDb block stands BEFORE the sources section, and only TMDb is bound to the form",
           page_src_f497.index('<h3>TMDb (') < page_src_f497.index('<h3>Endpoints</h3>')
           and page_src_f497.index('id="TmdbApiKey"') < page_src_f497.index('id="SourceCards"')
-          and "document.querySelector('#TmdbApiKey').value = config.TmdbApiKey || '';" in page_src_f497
+          and "subdlTmdbAbgelegt = String(config.TmdbApiKey || '');" in page_src_f497
+          and ".value = config.TmdbApiKey" not in page_src_f497
           and "config.TmdbApiKey = tmdbKey;" in page_src_f497
           and "document.querySelector('#Username')" not in page_src_f497
           and "config.Username" not in page_src_f497,
           "F-M497: TMDb zuerst, die Quellen danach — die Quellenfelder laufen nicht mehr ueber die Formular-IDs")
+
+    # ---- F-M753 (Betreiberanweisung 25.11.2026: "Bitte auf das subdl muster vereinheitlichen"): der
+    # TMDb-Schluessel verhaelt sich wie jedes Geheimnis einer Quellenkarte — kein Wert im Feld, dasselbe
+    # Punktmuster, Auge nur bei abgelegtem Wert, leeres Feld heisst unveraendert.
+    check("F-M753: the TMDb field never carries the stored key — it is held beside the field",
+          ".value = config.TmdbApiKey" not in page_src_f497
+          and "subdlTmdbAbgelegt = String(config.TmdbApiKey || '');" in page_src_f497,
+          "kein Wert im Feld, Ablage daneben")
+    check("F-M753: the field shows the same dot pattern as a source card",
+          page_src_f497.count("'••••••••'") >= 2
+          and "subdlTmdbFeld.placeholder = subdlTmdbAbgelegt ? '••••••••' : '';" in page_src_f497
+          and "input.placeholder = field.gesetzt ? '••••••••' : '';" in page_src_f497,
+          "Karte und TMDb tragen dasselbe Muster")
+    check("F-M753: an empty field means unchanged, exactly as in a source card",
+          "var tmdbKey = tmdbGetippt || subdlTmdbAbgelegt;" in page_src_f497
+          and "required" not in page_src_f497[page_src_f497.index('id="TmdbApiKey"'):page_src_f497.index('id="TmdbApiKey"') + 200],
+          "leer = unveraendert, kein HTML-Pflichtfeld mehr")
+    check("F-M753: the eye appears only while a key is stored, and takes the shown value back",
+          "auge.style.display = subdlTmdbAbgelegt ? '' : 'none';" in page_src_f497
+          and "return Promise.resolve(subdlTmdbAbgelegt ? { value: subdlTmdbAbgelegt } : null);" in page_src_f497,
+          "Auge nur bei abgelegtem Wert")
 
     failed = [r for r in results if not r[1]]
     for name, ok, detail in results:
@@ -2191,6 +2251,33 @@ def main():
           and "(aus ? '\u2716 ' : '\u2714 ')" in page_src
           and "subdlSourceResult(key, aus ? 'fail' : 'ok'" in page_src,
           "Download off, rot mit Kreuz")
+    # F-M748 (Betreiberwunsch 25.11.2026: "Können wir noch so ein auge machen das das passwort den api key
+    # statt ... einblendet für die Dauer die man draufdrückt?"): der Wert kommt auf Druck, geht beim
+    # Loslassen wieder weg, und ein gezeigtes Geheimnis zaehlt nicht als Aenderung.
+    check("F-M748: the eye shows the stored secret while pressed and gives it back on release",
+          "subdlAugeVerbinden(auge, input, function () {" in page_src
+          and "auge.addEventListener('pointerdown'" in page_src
+          and "auge.addEventListener('pointerup', zu);" in page_src
+          and "auge.addEventListener('blur', zu);" in page_src
+          and "if (!gedrueckt || !res || !res.value) { return; }" in page_src
+          and "input.value = '';" in page_src
+          and "function subdlAugeZeichnen(auge) {" in page_src)
+    check("F-M748: the eye sits inside the field, at the right edge, and the field keeps its width",
+          ".subdl-secret-wrap { position: relative; display: flex; align-items: center; }" in page_src
+          and ".subdl-secret-wrap input { padding-right: 34px; }" in page_src
+          and "position: absolute; top: 50%; right: 4px; transform: translateY(-50%);" in page_src
+          and "huelle.className = 'subdl-secret-wrap';" in page_src)
+    check("F-M748: both api keys carry the eye, and a shown secret is not sent as a change",
+          "id=\"TmdbApiKeyEye\"" in page_src
+          and "document.getElementById('TmdbApiKeyEye')" in page_src
+          and "if (field.gesetzt) {" in page_src
+          and "if (ctrl.getAttribute('data-shown-secret') === 'true') { continue; }" in page_src)
+    # F-M708 (Betreiberbefund 25.11.2026: "die ampel auf den slides geht nicht mit aus"): der Reiter
+    # trug seinen Punkt weiter auf "on", weil die Leiste nach dem Speichern nicht neu gezeichnet wurde.
+    check("F-M708: the lamp on the tab strip is redrawn from the same answer, and the open tab stays open",
+          "subdlSourceTabs(liste, key);" in page_src
+          and "strip.querySelector('.subdl-source-tab.active')" in page_src
+          and "subdlSourceTab(keys.indexOf(offen) >= 0 ? offen : keys[0]);" in page_src)
     check("F-M708: the order lamp follows participation, not completeness of the file",
           "quelle.participates ? 'on' : 'off'" in page_src
           and "subdlSourceWert(eintrag, 'participates') === true" in page_src
@@ -2377,8 +2464,12 @@ def main():
           page_src.count('>SubDL only</span>') == 0,
           "%d Abzeichen (erwartet 3: Tageslimit x2 und AI — Melde-, Pack-, Cache- und HI-Schalter tragen keins)"
           % page_src.count('>SubDL only</span>'))
-    check("F-M533: the report switch is named without a source",
-          "<span>Report broken subtitles</span>" in page_src)
+    # F-M747: der Melde-Schalter steht seit dem 25.11.2026 in der Karte der Quelle, nicht mehr im
+    # Download-Abschnitt — die Seite traegt den alten Schalter nicht mehr, das Etikett sitzt am Feld.
+    check("F-M747: the page carries no global report switch — the tick sits in the source card",
+          "ReportBrokenSubtitles" not in page_src
+          and "FieldReportEnabled, \"Report\"" in _subdl_src
+          and "FieldReportEnabled, \"Report\"" in read_source("Sources", "Tvst", "TvstEngine.cs"))
 
     # F-M660: die Staffel-Urteile der Pack-Phase sind ein eigener Speicher und muessen im Dropdown
     # waehlbar sein — sonst bleibt eine Staffel gesperrt, obwohl die Spur laengst frei ist.
@@ -2657,6 +2748,30 @@ def main():
     # stehen in der Reihenfolge, in der ein Nutzer sie braucht: erst der Schlüssel, ohne den nichts
     # laeuft (TMDb), dann die Konten, dann die Erreichbarkeit der beiden Webseiten. Die Reihenfolge
     # steht im HTML; die Skripte greifen ueber die Ids zu und sind davon unabhaengig.
+    check("F-M749: the Status block stands under the Workers list",
+          page_src.find('<h3>Status</h3>') > page_src.find('id="WorkerRunList"')
+          and page_src.find('id="ScribeStatusBox"') > page_src.find('id="WorkerRunList"')
+          and page_src.find('id="ScribeLocalDeferLine"') < page_src.find('<h3>Status</h3>'),
+          "status heading after the worker list, deferral line above it")
+    check("F-M749: the refresh control stays the last block of the tab, below the Status block",
+          page_src.find('id="RefreshSubdlStatus"') > page_src.find('id="ScribeDirStatusList"')
+          and page_src.find('id="ScribeDirStatusList"') > page_src.find('id="ScribeStatusBox"'),
+          "refresh button after the status block")
+
+    # F-M752 (Betreiberanweisung 25.11.2026, woertlich: "Refetch interval bitte vor den media files
+    # block einsortieren. Gui general"): der Takt steht direkt ueber der Dateiarbeit — nach den
+    # Quellen, vor "Media files". Das Feld bleibt im selben Formular, die Speicherstelle ist unberuehrt.
+    check("F-M752: the Refetch interval block stands directly before the Media files block",
+          page_src.find('id="RefetchInterval"') > 0
+          and page_src.find('id="RefetchInterval"') < page_src.find('<h3>Media files</h3>')
+          and page_src.find('<h3>Refetch interval</h3>') > page_src.find('id="SourceCards"'),
+          "Takt nach den Quellen, vor den Media files")
+    check("F-M752: the interval is named once and the schedule line travels with it",
+          page_src.count('id="RefetchInterval"') == 1
+          and page_src.find('id="RandomScheduleInfo"') > page_src.find('<h3>Refetch interval</h3>')
+          and page_src.find('id="RandomScheduleInfo"') < page_src.find('<h3>Media files</h3>'),
+          "ein Feld, Zeile darunter, beide im selben Block")
+
     box = page_src.find('id="ScribeStatusBox"')
     reihenfolge = [page_src.find('id="%s"' % i, box) for i in
                    ('TmdbApiStatus', 'SubdlLoginStatus', 'ScribeApiStatus', 'TvstStatus', 'MstStatus')]

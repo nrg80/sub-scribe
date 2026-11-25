@@ -539,6 +539,30 @@ internal static class Program
                         + mitText.Max(t => t.Text!.Length) + " Zeichen")
                     : string.Join(" | ", zuLang.Select(t => t.Quelle + "/" + t.Feld + " = " + t.Text!.Length + " Zeichen")));
 
+            // F-M745 (Betreiberansage 25.11.2026: „Beschreibung api key anpassen (Free API key after
+            // registration under Subdl.com << link wie bei tmdb"): ein Hinweis darf eine Adresse als Link
+            // tragen. Die Quelle liefert dafür KEIN Markup, sondern Adresse und das Wort, das im Text zum
+            // Link wird — der Text bleibt damit derselbe Satz und die Seite baut den Anker.
+            var mitAdresse = registry.Engines
+                .SelectMany(e => e.Fields.Select(f => (Quelle: e.Capabilities.Key, Feld: f.Key, f.Help, f.HelpUrl, f.HelpLink)))
+                .Where(t => !string.IsNullOrWhiteSpace(t.HelpUrl) || !string.IsNullOrWhiteSpace(t.HelpLink))
+                .ToList();
+            var halbe = mitAdresse
+                .Where(t => string.IsNullOrWhiteSpace(t.HelpUrl) || string.IsNullOrWhiteSpace(t.HelpLink))
+                .ToList();
+            Check(halbe.Count == 0,
+                "F-M745: eine Adresse kommt nur als Paar - Linkwort UND Adresse, nie einzeln",
+                halbe.Count == 0 ? mitAdresse.Count + " Felder mit Adresse" : string.Join(" | ",
+                    halbe.Select(t => t.Quelle + "/" + t.Feld)));
+            var kaputt = mitAdresse
+                .Where(t => !t.HelpUrl!.StartsWith("https://", StringComparison.Ordinal)
+                            || !(t.Help ?? string.Empty).Contains(t.HelpLink!, StringComparison.Ordinal))
+                .ToList();
+            Check(kaputt.Count == 0,
+                "F-M745: die Adresse ist https, und ihr Linkwort steht woertlich im Hilfetext",
+                kaputt.Count == 0 ? string.Join(", ", mitAdresse.Select(t => t.Quelle + "/" + t.Feld + " -> " + t.HelpLink))
+                    : string.Join(" | ", kaputt.Select(t => t.Quelle + "/" + t.Feld)));
+
             // F-M696: die Art der Quelle steht als Variable in den Faehigkeiten — nicht als Name.
             var arten = registry.Engines.ToDictionary(
                 e => e.Capabilities.Key,
@@ -557,13 +581,14 @@ internal static class Program
                 "F-M695: moviesubtitles fuehrt kein Feld Access mehr — die Seite verlangt keinen Zugang",
                 "Felder: " + string.Join(", ", MsubEngine.Declared.Select(f => f.Key)));
 
-            // F-M694: API key, Email, Password — und das Passwort kommt auch AN.
+            // F-M694/F-M748: API key, Email, Password — so, wie der Betreiber sie nennt. Geheimnisse sind
+            // die beiden Schluessel und das Passwort; die Adresse bleibt gewoehnlicher Text.
             var zugang = SubdlEngine.Declared.Where(f => f.Key is "apiKey" or "account" or "password").ToList();
             Check(zugang.Count == 3
                   && zugang[0].Kind == SourceFieldKind.Secret
                   && zugang[1].Kind == SourceFieldKind.Text && zugang[1].Label == "Email"
                   && zugang[2].Kind == SourceFieldKind.Secret && zugang[2].Label == "Password",
-                "F-M694: die Karte fuehrt API key, Email und Password — so, wie der Betreiber sie nennt",
+                "F-M694/F-M748: die Karte fuehrt API key, Email und Password — zwei Schluessel und ein Passwort als Geheimnis",
                 string.Join(" | ", zugang.Select(f => f.Key + "/" + f.Label + "/" + f.Kind)));
 
             // -------------------------------------------------------------------------------------
@@ -900,6 +925,101 @@ internal static class Program
                   && string.Equals(nachLeerem.Secret(SubdlEngine.FieldApiKey), PruefSchluessel, StringComparison.Ordinal),
                 "F-M683 (C): ein leeres Geheimfeld bedeutet „unverändert lassen\" — der abgelegte Wert bleibt",
                 "gesetzt=" + nachLeerem.Has(SubdlEngine.FieldApiKey));
+
+            // ---- F-M754: derselbe Schalter, derselbe Name, dieselbe Zeile Hilfe --------------------
+            // Betreiberanweisung 25.11.2026: "Die gui Beschreibung zu prefer season zips bitte auch zum
+            // tvst fenster. Und wording in beiden zu prefer season pack aendern".
+            var subdlPack = SubdlEngine.Declared.First(f => f.Key == SubdlEngine.FieldPreferSeasonZip);
+            var tvstPack = TvstEngine.Declared.First(f => f.Key == TvstEngine.FieldPreferSeasonZip);
+            Check(string.Equals(subdlPack.Label, "Prefer season pack", StringComparison.Ordinal)
+                  && string.Equals(tvstPack.Label, "Prefer season pack", StringComparison.Ordinal)
+                  && string.Equals(subdlPack.Help, tvstPack.Help, StringComparison.Ordinal)
+                  && !string.IsNullOrWhiteSpace(tvstPack.Help)
+                  && tvstPack.Help!.Length <= 80,
+                "F-M754: der Staffelpack-Schalter heisst auf beiden Karten \"Prefer season pack\" und traegt dieselbe Zeile Hilfe",
+                "subdl=\"" + subdlPack.Label + "\" tvst=\"" + tvstPack.Label + "\" help=" + (tvstPack.Help?.Length.ToString() ?? "0") + " Zeichen");
+            Check(string.Equals(subdlPack.Key, "preferSeasonZip", StringComparison.Ordinal)
+                  && string.Equals(tvstPack.Key, "preferSeasonZip", StringComparison.Ordinal),
+                "F-M754: der Schluessel in der Datei bleibt preferSeasonZip — nur das Etikett aendert sich",
+                subdlPack.Key + " / " + tvstPack.Key);
+
+            // ---- F-M750: jede geschriebene Einstellung nennt sich selbst ----------------------------
+            // Betreiberwunsch 25.11.2026: „Evtl sollte das ins debug. Welche konfi wann geändert wird".
+            var schreibLog = new Rec();
+            var mitProtokoll = Jellyfin.Plugin.SubScribe.Api.SourceSettingsView.Save(
+                registry, tmp, SubdlEngine.SourceKey,
+                new Dictionary<string, string?>
+                {
+                    ["account"] = "konto-noch-neuer",
+                    ["preferSeasonZip"] = "false",
+                    [SubdlEngine.FieldApiKey] = PruefSchluessel,
+                },
+                schreibLog,
+                LogLevelMode.Debug);
+            var zeilen = schreibLog.Lines.Select(l => l.Text).ToList();
+            var kontZeilen = zeilen.Count(z => z.Contains("setting written", StringComparison.Ordinal)
+                                                && z.Contains("/account", StringComparison.Ordinal));
+            Check(mitProtokoll.Ok
+                  && schreibLog.Lines.All(l => l.Level == Microsoft.Extensions.Logging.LogLevel.Information)
+                  && kontZeilen == 1
+                  && zeilen.All(z => !z.Contains("preferSeasonZip", StringComparison.Ordinal))
+                  && zeilen.All(z => z.StartsWith("[D] ", StringComparison.Ordinal))
+                  && zeilen.All(z => !z.Contains("konto-neu", StringComparison.Ordinal)),
+                "F-M750 (A): eine Schreibung protokolliert genau die geänderten Felder, auf Debug, mit alt -> neu — "
+                + "der Wert eines Textfelds steht NICHT in der Zeile",
+                zeilen.Count + " Zeile(n): " + string.Join(" | ", zeilen));
+
+            var configVorher = new Jellyfin.Plugin.SubScribe.Configuration.PluginConfiguration();
+            var configNachher = new Jellyfin.Plugin.SubScribe.Configuration.PluginConfiguration
+            {
+                UploadEnabled = !configVorher.UploadEnabled,
+                TmdbApiKey = "geheim-abc-123",
+                Password = "kennwort-xyz",
+            };
+            var configLog = new Rec();
+            Jellyfin.Plugin.SubScribe.Configuration.SettingsChangeLog.PluginSettings(configLog, configVorher, configNachher, LogLevelMode.Debug);
+            var configZeilen = configLog.Lines.Select(l => l.Text).ToList();
+            Check(configLog.Lines.All(l => l.Level == Microsoft.Extensions.Logging.LogLevel.Information)
+                  && configZeilen.Any(z => z.Contains("UploadEnabled", StringComparison.Ordinal)
+                                           && z.Contains("->", StringComparison.Ordinal))
+                  && configZeilen.Any(z => z.Contains("TmdbApiKey", StringComparison.Ordinal)
+                                           && z.Contains("gesetzt", StringComparison.Ordinal))
+                  && configZeilen.All(z => !z.Contains("geheim-abc-123", StringComparison.Ordinal))
+                  && configZeilen.All(z => !z.Contains("kennwort-xyz", StringComparison.Ordinal))
+                  && configZeilen.All(z => !z.Contains("chars", StringComparison.Ordinal)),
+                "F-M750/F-M751 (B): eine geschriebene Plugin-Einstellung nennt jede geänderte Eigenschaft mit alt -> neu — "
+                + "Zeichenketten nur als gesetzt/leer, ohne Wert und ohne Länge",
+                configZeilen.Count + " Zeile(n): " + string.Join(" | ", configZeilen.Take(3)));
+
+            var configZweit = new Jellyfin.Plugin.SubScribe.Configuration.PluginConfiguration
+            {
+                UploadEnabled = configNachher.UploadEnabled,
+                TmdbApiKey = "geheim-abc-456",
+                Password = configNachher.Password,
+            };
+            var austauschLog = new Rec();
+            Jellyfin.Plugin.SubScribe.Configuration.SettingsChangeLog.PluginSettings(austauschLog, configNachher, configZweit, LogLevelMode.Debug);
+            var austauschZeilen = austauschLog.Lines.Select(l => l.Text).ToList();
+            Check(austauschZeilen.Count == 1
+                  && austauschZeilen[0].Contains("TmdbApiKey", StringComparison.Ordinal)
+                  && austauschZeilen[0].Contains("gesetzt -> gesetzt (neu)", StringComparison.Ordinal)
+                  && austauschZeilen.All(z => !z.Contains("geheim-abc-456", StringComparison.Ordinal)),
+                "F-M751 (D): ein ausgetauschter Schlüssel liest sich als \"gesetzt -> gesetzt (neu)\" — "
+                + "der neue Wert steht nicht in der Zeile",
+                austauschZeilen.Count + " Zeile(n): " + string.Join(" | ", austauschZeilen));
+
+            string pluginQuelle = File.ReadAllText(Path.Combine(plugin, "Plugin.cs"));
+            Check(pluginQuelle.Contains("public override void UpdateConfiguration(BasePluginConfiguration configuration)", StringComparison.Ordinal)
+                  && pluginQuelle.Contains("SettingsChangeLog.PluginSettings(", StringComparison.Ordinal)
+                  && pluginQuelle.Contains("base.UpdateConfiguration(configuration);", StringComparison.Ordinal),
+                "F-M750 (C): der Weg, den die Seite beim Speichern wirklich nimmt, hängt am Haken — "
+                + "UpdateConfiguration vergleicht vorher/nachher",
+                pluginQuelle.Contains("UpdateConfiguration") ? "Haken vorhanden" : "Haken fehlt");
+
+            // Der Prüfstand dieser Datei erwartet weiter das Konto aus Abschnitt C — zurückstellen.
+            Jellyfin.Plugin.SubScribe.Api.SourceSettingsView.Save(
+                registry, tmp, SubdlEngine.SourceKey,
+                new Dictionary<string, string?> { ["account"] = "konto-neu" });
 
             var unbekannt = Jellyfin.Plugin.SubScribe.Api.SourceSettingsView.Save(
                 registry, tmp, SubdlEngine.SourceKey,
@@ -1377,6 +1497,19 @@ internal static class Program
         Console.WriteLine();
         Console.WriteLine("(l) F-M734: die Titel-Anlage steht im Sende-Auftrag");
         TitelAnlage(root, plugin);
+
+        // -----------------------------------------------------------------------------------------
+        // (n) F-M748: das Auge am Geheimfeld.
+        //
+        //     Betreiberwunsch 25.11.2026: „Können wir noch so ein auge machen das das passwort den api
+        //     key statt ... einblendet für die Dauer die man draufdrückt?" Der Wert eines Geheimfelds
+        //     verlaesst das Plugin nur noch auf ausdrueckliches Verlangen — ueber einen eigenen Weg, nur
+        //     fuer ein echtes Geheimfeld. Gemessen wird genau das: der Wert kommt, ein unbekanntes Feld
+        //     und ein gewoehnliches Feld werden abgewiesen, und die Liste traegt weiter nichts.
+        // -----------------------------------------------------------------------------------------
+        Console.WriteLine();
+        Console.WriteLine("(n) F-M748: das Auge am Geheimfeld");
+        Auge(plugin);
 
         // -----------------------------------------------------------------------------------------
         // (m) F-M735: die Sprachauskunft der Quelle.
@@ -3196,6 +3329,64 @@ internal static class Program
             clientTreffer.Count == 0
                 ? "0 Treffer in " + ablauf.Count + " Datei(en)"
                 : string.Join(", ", clientTreffer));
+    }
+
+    /// <summary>
+    /// F-M748: der abgelegte Wert eines Geheimfelds kommt auf Verlangen heraus — und nur dann, nur fuer
+    /// ein echtes Geheimfeld. Der eigene Weg nennt im Log Quelle und Feld, nie den Wert.
+    /// </summary>
+    /// <param name="plugin">Der Wurzelordner des Plugins im Repo.</param>
+    private static void Auge(string plugin)
+    {
+        string ordner = Path.Combine(Path.GetTempPath(), "sub-scribe-auge-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(ordner);
+        try
+        {
+            var config = new PluginConfiguration();
+            var registry = SourceRegistry.Build(
+                new SourceEngineContext(new HttpClient(), NullLogger.Instance, TimeProvider.System),
+                config);
+            var engine = registry.ByKey(SubdlEngine.SourceKey)!;
+            QuelleSchreiben(ordner, SubdlEngine.SourceKey, SubdlEngine.Declared, new Dictionary<string, string>
+            {
+                [SubdlEngine.FieldApiKey] = "geheim-123",
+                [SubdlEngine.FieldAccount] = "jemand@example.org",
+            });
+
+            (string? wert, string? fehler) = SourceSettingsView.RevealSecret(engine, ordner, SubdlEngine.FieldApiKey);
+            Check(wert == "geheim-123" && fehler is null,
+                "F-M748: der abgelegte Wert eines Geheimfelds kommt auf Verlangen heraus",
+                wert ?? fehler);
+
+            (string? unbekannt, string? grund) = SourceSettingsView.RevealSecret(engine, ordner, "gibtesnicht");
+            Check(unbekannt is null && !string.IsNullOrEmpty(grund),
+                "F-M748: ein unbekanntes Feld wird abgewiesen",
+                grund);
+
+            (string? offen, string? grundZwei) =
+                SourceSettingsView.RevealSecret(engine, ordner, SubdlEngine.FieldUploadEnabled);
+            Check(offen is null && (grundZwei?.Contains("not a secret", StringComparison.Ordinal) ?? false),
+                "F-M748: ein gewoehnliches Feld wird abgewiesen — der Weg ist kein allgemeines Lesetor",
+                grundZwei);
+
+            string controller = File.ReadAllText(Path.Combine(plugin, "Api", "SourceSettingsController.cs"));
+            string sicht = File.ReadAllText(Path.Combine(plugin, "Api", "SourceSettingsView.cs"));
+            Check(controller.Contains("[HttpGet(\"Sources/{key}/secret/{field}\")]", StringComparison.Ordinal)
+                  && controller.Contains("secret shown for the length of one press: {Source}/{Field}", StringComparison.Ordinal)
+                  && sicht.Contains("feld.IsSecret ? null : settings.Text(feld.Key)", StringComparison.Ordinal),
+                "F-M748: ein eigener Weg liefert den Wert, das Log nennt Quelle und Feld — die Liste traegt weiter nichts",
+                "Route + Logvorlage + Maskierung in der Liste");
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(ordner, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+        }
     }
 
     /// <summary>F-M693: eine Quelldatei mit genau diesen Feldern schreiben (Pruefstand).</summary>

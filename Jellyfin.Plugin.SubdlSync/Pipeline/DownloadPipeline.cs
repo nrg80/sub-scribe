@@ -2293,11 +2293,12 @@ public sealed class DownloadPipeline : IDisposable
                     // refused here without another fetch. Since 349 a defect is filed in the run that
                     // observed it, so this path normally finds nothing to do — it stays for the rows
                     // that were remembered while the switch was off.
-                    if (_config.ReportBrokenSubtitles)
+                    if (Sources.SourceSwitches.ReportsBroken(MainSearchSource, _config))
                     {
                         foreach (var row in _qaFails.GetRows(item.Id.ToString(), lang))
                         {
-                            if (row.ReportedAt != null
+                            if (!Sources.SourceSwitches.ReportsBroken(row.Source, _config)
+                                || row.ReportedAt != null
                                 || string.IsNullOrWhiteSpace(row.NId)
                                 || !string.Equals(row.Kind, "qa", StringComparison.Ordinal)
                                 || !qaKnownRejected.Contains(row.SourceId, StringComparer.Ordinal))
@@ -2741,7 +2742,7 @@ public sealed class DownloadPipeline : IDisposable
                                 string? hiFinding = hiBytes == null
                                     ? null // F-M456: nothing delivered, nothing measured — not a finding
                                     : BrokenSubtitleReports.FindingFromGateFailure(hiRejectReason);
-                                if (_config.ReportBrokenSubtitles
+                                if (Sources.SourceSwitches.ReportsBroken(hi.Provider, _config)
                                     && hiFinding != null
                                     && !string.IsNullOrEmpty(hi.SubdlId))
                                 {
@@ -3223,7 +3224,7 @@ public sealed class DownloadPipeline : IDisposable
                         // — a measured verdict does not improve by the episode being served by another
                         // upload. Same shape as the SDH filing (F-M460), and the ReportedUtc mark keeps
                         // the run-end pass from filing it twice.
-                        if (_config.ReportBrokenSubtitles)
+                        if (Sources.SourceSwitches.ReportsBroken(cand.Provider, _config))
                         {
                             _qaFails.RecordSkippedCandidates(
                                 item.Id.ToString(), lang, new[] { cand.SubdlId },
@@ -3809,11 +3810,12 @@ public sealed class DownloadPipeline : IDisposable
                     // run's flush, instead of waiting for a second sighting that would only confirm
                     // what was already counted. (Only "no bytes returned" still waits, because there
                     // a provider hiccup is plausible.)
-                    if (_config.ReportBrokenSubtitles)
+                    if (Sources.SourceSwitches.ReportsBroken(MainSearchSource, _config))
                     {
                         foreach (var row in _qaFails.GetRows(item.Id.ToString(), lang))
                         {
-                            if (row.ReportedAt == null
+                            if (Sources.SourceSwitches.ReportsBroken(row.Source, _config)
+                                && row.ReportedAt == null
                                 && string.Equals(row.Kind, "qa", StringComparison.Ordinal)
                                 && qaRejectedReleases.Contains(row.SourceId, StringComparer.Ordinal))
                             {
@@ -4090,7 +4092,7 @@ public sealed class DownloadPipeline : IDisposable
             // Engine das ist. Kein Namensvergleich, sondern eine Aussage über die Herkunft der Nummer.
             foreach (var meldung in _api.TakeFormatReports())
             {
-                if (!_config.ReportBrokenSubtitles)
+                if (!Sources.SourceSwitches.ReportsBroken(MainSearchSource, _config))
                 {
                     break;
                 }
@@ -5335,10 +5337,11 @@ public sealed class DownloadPipeline : IDisposable
     private bool RuntimeMatches(BaseItem item, byte[] srtBytes, string? language, out string? reason)
     {
         reason = null;
-        int toleranceSec = _config.DownloadRuntimeToleranceSec;
-        if (toleranceSec <= 0 || (item.RunTimeTicks ?? 0) <= 0)
+        bool episode = item is Episode;
+        int floorSec = Qa.RuntimeWindow.FloorFor(episode);
+        if ((item.RunTimeTicks ?? 0) <= 0)
         {
-            return true; // check disabled or no runtime metadata
+            return true; // no runtime metadata
         }
 
         string content = DecodeSrt(srtBytes, language);
@@ -5363,7 +5366,12 @@ public sealed class DownloadPipeline : IDisposable
 
         long spanSec = (lastEnd - firstStart) / 1000;
         long runtimeSec = (item.RunTimeTicks ?? 0) / TimeSpan.TicksPerSecond;
-        if (Math.Abs(spanSec - runtimeSec) > toleranceSec)
+
+        // F-M43: the window is a floor plus a share of the runtime, never the floor alone — a long
+        // film carries long credits, and a subtitle that stops with the dialogue is complete.
+        int sharePercent = _config.DownloadRuntimeToleranceSharePercent;
+        long toleranceSec = Qa.RuntimeWindow.ToleranceSeconds(floorSec, runtimeSec, sharePercent);
+        if (!Qa.RuntimeWindow.Covers(spanSec, runtimeSec, floorSec, sharePercent))
         {
             reason = $"span {spanSec}s vs runtime {runtimeSec}s (tolerance ±{toleranceSec}s)";
             return false;
@@ -5506,7 +5514,7 @@ public sealed class DownloadPipeline : IDisposable
         // that observed it — a measured gate verdict as much as an answer that carried nothing.
         // ReportedUtc is what keeps a filing from happening twice; the wait was never a safety net,
         // it only delayed a diagnosis that was already made.
-        if (!_config.ReportBrokenSubtitles)
+        if (!Sources.SourceSwitches.ReportsBroken(cand.Provider, _config))
         {
             return;
         }

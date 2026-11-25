@@ -197,8 +197,8 @@ and ending `.srt` or `.zip`. Anything else is a refusal with **one** line and **
 run is decided by the caller, never read from the configuration: it builds the same body, byte for
 byte, and puts nothing on the wire (F-M508).
 
-**The quality from the release name reaches the form as a rip value of this site once, in the
-endpoint and before the form** (F-M511): `web` → `WEB`, `1080p BluRay x264` → `BluRay`, `WEB-DL` →
+**The quality from the release name reaches the form as a rip value of this site, once, in the
+endpoint and before the form** (F-M511). The mapping reads: `web` → `WEB`, `1080p BluRay x264` → `BluRay`, `WEB-DL` →
 `WEB-DL`, `HDTV` → empty (this site does not know it), `x265` → empty (no codec fallback), empty →
 empty. The mappings stay separate from tvsubtitles.net: this page keeps `WEB-DL` where the series
 page writes `WEB` (F-M506, F-M511).

@@ -265,30 +265,20 @@ internal static class ReportingRun
               && pipeline.Contains("bool genuineEmpty", StringComparison.Ordinal),
             "only a 200 that carried nothing may be reported as a broken upload");
 
-        // --- 4. the switch ----------------------------------------------------
+        // --- 4. the switch lives on the card now (F-M747) ---------------------
         string config = Read(plugin, "Configuration/PluginConfiguration.cs");
         Check(Regex.IsMatch(config, @"public\s+bool\s+ReportBrokenSubtitles\s*\{\s*get;\s*set;\s*\}\s*=\s*true\s*;"),
-            "the switch exists and is on by default");
+            "F-M747: the old value survives as the fallback for a source file that says nothing, on by default");
 
         string page = Read(plugin, "Configuration/configPage.html");
-        int switchAt = page.IndexOf("id=\"ReportBrokenSubtitles\"", StringComparison.Ordinal);
-        int aiAt = page.IndexOf("id=\"AllowAiTranslatedSubs\"", StringComparison.Ordinal);
-        int runtimeAt = page.IndexOf("Runtime tolerance (seconds)", StringComparison.Ordinal);
-        Check(switchAt > 0, "the page carries the switch");
-        Check(switchAt > aiAt, "the switch sits below the AI filter");
-        Check(runtimeAt > switchAt, "the switch sits above the runtime tolerance field, which stays last");
-        string between = runtimeAt > switchAt ? page[switchAt..runtimeAt] : string.Empty;
-        Check(Regex.Matches(between, "id=\"").Count == 1,
-            "the switch is the second-to-last control — only the runtime tolerance field follows");
-        // F-M533: der Schalter meldet an BEIDE Quellen (SubDL und tvst), deshalb nennt das Etikett
-        // keine Quelle mehr — ein "to SubDL" waere nach der Ausweitung schlicht falsch.
-        Check(page.Contains("Report broken subtitles", StringComparison.Ordinal),
-            "the label names what it does");
-        Check(!page.Contains("Report broken subtitles to SubDL", StringComparison.Ordinal),
-            "the label names no single source any more");
-        Check(page.Contains("config.ReportBrokenSubtitles = document.querySelector('#ReportBrokenSubtitles').checked", StringComparison.Ordinal)
-              && page.Contains("document.querySelector('#ReportBrokenSubtitles').checked = config.ReportBrokenSubtitles !== false", StringComparison.Ordinal),
-            "the switch is loaded and saved with the page");
+        Check(page.IndexOf("Runtime tolerance share (%)", StringComparison.Ordinal) > 0
+              && page.IndexOf("AllowAiTranslatedSubs", StringComparison.Ordinal) < 0,
+            "F-M747: the runtime field stays, and no global report switch is left on the page");
+        Check(Read(plugin, "Sources/Subdl/SubdlEngine.cs").Contains("FieldReportEnabled, \"Report\"", StringComparison.Ordinal)
+              && Read(plugin, "Sources/Tvst/TvstEngine.cs").Contains("FieldReportEnabled, \"Report\"", StringComparison.Ordinal),
+            "F-M747: both sources with a report route declare the tick in their own card");
+        Check(!Read(plugin, "Sources/Msub/MsubEngine.cs").Contains("reportEnabled", StringComparison.OrdinalIgnoreCase),
+            "F-M747: the source without a report route carries no tick");
 
         string summaryLine = Regex.Match(pipeline, @"{Reported} reported \(\{ReportsDeferred\} deferred\)").Value;
         Check(summaryLine.Length > 0, "the run summary names reports and deferrals");
@@ -388,6 +378,102 @@ internal static class ReportingRun
         int abhaengen = berichtQuelle.IndexOf("_api.DebugTrace -= OnApiTrace", StringComparison.Ordinal);
         Check(flusch > 0 && abhaengen > 0 && flusch < abhaengen,
             "F-M535: reports are filed while the API trace is still attached");
+
+        // F-M43 (operator decision 25.11.2026: "C", then "7 min floor", then "nur noch in prozent mit
+        // Floor fuer serie und movie", then "Den floor bitte fix, nicht einstellbar. Nur die prozente
+        // einstellbar"): the window is a SHARE of the runtime with a FIXED floor under it. The two
+        // measured cases below are the REAL ones from the run of that morning — both were reported to
+        // SubDL under the fixed 600 s window, both carry 88 % and 91 % of their film.
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.FilmFloorSeconds == 420
+              && Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.EpisodeFloorSeconds == 240
+              && Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.FloorFor(false) == 420
+              && Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.FloorFor(true) == 240,
+            "F-M43: the floors are fixed — 7 minutes for a film, 4 minutes for an episode, one call, no setting");
+        Check(typeof(Jellyfin.Plugin.SubScribe.Configuration.PluginConfiguration).GetProperty("DownloadRuntimeToleranceSec") is null
+              && typeof(Jellyfin.Plugin.SubScribe.Configuration.PluginConfiguration).GetProperty("DownloadRuntimeToleranceEpisodeSec") is null
+              && new Jellyfin.Plugin.SubScribe.Configuration.PluginConfiguration().DownloadRuntimeToleranceSharePercent == 12,
+            "F-M43: the share is the ONLY setting — neither floor is a configuration value any more");
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(420, 5414, 12) == 650,
+            "F-M43: 12 % of a 90-minute film is larger than the 7-minute floor, so the window grows");
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(240, 1320, 12) == 240,
+            "F-M43: a 22-minute episode keeps its 4-minute floor — the share is smaller than the floor there");
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(240, 2700, 12) == 324,
+            "F-M43: a 45-minute episode is judged by the share (12 %), because it exceeds the 4-minute floor");
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(4772, 5414, 420, 12),
+            "F-M43: the reported 88 % subtitle (span 4772s of 5414s) now sits inside the window");
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(6074, 6682, 420, 12),
+            "F-M43: the reported 91 % subtitle (span 6074s of 6682s) now sits inside the window");
+        Check(!Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 6600, 420, 12),
+            "F-M43: a genuinely cut subtitle (span 3600s short) is still rejected — the window is no free pass");
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 0, 420, 12),
+            "F-M43: no runtime metadata passes everything, as before");
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(420, 5414, 0) == 420
+              && Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(420, 5414, 20) == 1083,
+            "F-M43: the share is the knob — 0 leaves the floor alone, 20 % widens the window to a fifth of the runtime");
+        Check(Read(plugin, "Pipeline/DownloadPipeline.cs")
+                  .Contains("Qa.RuntimeWindow.FloorFor(episode)", StringComparison.Ordinal)
+              && Read(plugin, "Pipeline/DownloadPipeline.cs")
+                  .Contains("Qa.RuntimeWindow.ToleranceSeconds(floorSec, runtimeSec, sharePercent)", StringComparison.Ordinal)
+              && Read(plugin, "Pipeline/DownloadPipeline.cs")
+                  .Contains("(tolerance ±{toleranceSec}s)", StringComparison.Ordinal),
+            "F-M43: the gate takes the fixed floor by item kind, asks the window, and the verdict names the window applied");
+        Check(Read(plugin, "Configuration/configPage.html").Contains("id=\"DownloadRuntimeToleranceSharePercent\"", StringComparison.Ordinal)
+              && !Read(plugin, "Configuration/configPage.html").Contains("DownloadRuntimeToleranceSec", StringComparison.Ordinal)
+              && !Read(plugin, "Configuration/configPage.html").Contains("DownloadRuntimeToleranceEpisodeSec", StringComparison.Ordinal),
+            "F-M43: the page carries the share and nothing else — no floor to type in");
+
+        // F-M747 (operator decision 25.11.2026: "Report subtitles in downloads kann eigentlich komplett durch
+        // die tickbox in den source fenstern ersetzt werden"): the card decides, the old switch only survives as
+        // the fallback for a source file that says nothing. The behaviour is asked on the real switches, not
+        // read off the source text.
+        string meldeOrdner = Path.Combine(Path.GetTempPath(), "sub-scribe-report-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(meldeOrdner);
+        Func<string?> vorherMeldeOrdner = Jellyfin.Plugin.SubScribe.Sources.SourceSwitches.DataFolder;
+        Jellyfin.Plugin.SubScribe.Sources.SourceSwitches.DataFolder = () => meldeOrdner;
+        try
+        {
+            var alteWahl = new Jellyfin.Plugin.SubScribe.Configuration.PluginConfiguration
+            {
+                ReportBrokenSubtitles = false
+            };
+            Check(!Jellyfin.Plugin.SubScribe.Sources.SourceSwitches.ReportsBroken(
+                      Jellyfin.Plugin.SubScribe.Configuration.SubtitleProvider.Subdl, alteWahl),
+                "F-M747: a source file that says nothing falls back to the old switch — off stays off");
+
+            alteWahl.ReportBrokenSubtitles = true;
+            Check(Jellyfin.Plugin.SubScribe.Sources.SourceSwitches.ReportsBroken(
+                      Jellyfin.Plugin.SubScribe.Configuration.SubtitleProvider.Subdl, alteWahl),
+                "F-M747: with no file and the old switch on, the source reports");
+
+            Directory.CreateDirectory(Jellyfin.Plugin.SubScribe.Sources.SourceSettingsFile.DirIn(meldeOrdner));
+            File.WriteAllText(
+                Jellyfin.Plugin.SubScribe.Sources.SourceSettingsFile.PathIn(
+                    meldeOrdner, Jellyfin.Plugin.SubScribe.Sources.Subdl.SubdlEngine.SourceKey),
+                "{\"schema\":1,\"key\":\"subdl\",\"reportEnabled\":\"false\"}");
+            Check(!Jellyfin.Plugin.SubScribe.Sources.SourceSwitches.ReportsBroken(
+                      Jellyfin.Plugin.SubScribe.Configuration.SubtitleProvider.Subdl, alteWahl),
+                "F-M747: the card wins — a tick set to off in the source file silences that source");
+            Check(!Jellyfin.Plugin.SubScribe.Sources.SourceSwitches.ReportsBroken("subdl", alteWahl)
+                  && Jellyfin.Plugin.SubScribe.Sources.SourceSwitches.ReportsBroken("tvsubtitles", alteWahl),
+                "F-M747: the row's own key is enough — one source switched off does not silence the others");
+        }
+        finally
+        {
+            Jellyfin.Plugin.SubScribe.Sources.SourceSwitches.DataFolder = vorherMeldeOrdner;
+            try
+            {
+                Directory.Delete(meldeOrdner, recursive: true);
+            }
+            catch (IOException)
+            {
+            }
+        }
+
+        Check(!Read(plugin, "Pipeline/DownloadPipeline.cs").Contains("_config.ReportBrokenSubtitles", StringComparison.Ordinal)
+              && Read(plugin, "Pipeline/DownloadPipeline.cs").Split("SourceSwitches.ReportsBroken").Length - 1 >= 6,
+            "F-M747: the pipeline never asks the global switch and asks the source at every filing site");
+        Check(!Read(plugin, "Configuration/configPage.html").Contains("ReportBrokenSubtitles", StringComparison.Ordinal),
+            "F-M747: the download section carries no report switch any more — the card is the only place");
 
         Console.WriteLine(Failures.Count == 0
             ? $"reporting: {_checks} checks, all green."

@@ -51,7 +51,11 @@ public static class TvstMetadataChecks
         }
 
         string version = typeof(TvstMetadataChecks).Assembly.GetName().Version?.ToString() ?? string.Empty;
-        bool melden = Jellyfin.Plugin.SubScribe.Plugin.Instance?.Configuration.ReportBrokenSubtitles == true;
+        Jellyfin.Plugin.SubScribe.Configuration.PluginConfiguration? konfiguration =
+            Jellyfin.Plugin.SubScribe.Plugin.Instance?.Configuration;
+        bool melden = konfiguration != null
+            && Jellyfin.Plugin.SubScribe.Sources.SourceSwitches.ReportsBroken(
+                Jellyfin.Plugin.SubScribe.Configuration.SubtitleProvider.TvSubtitles, konfiguration);
 
         foreach (var f in findings)
         {

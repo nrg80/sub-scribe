@@ -14,6 +14,7 @@ using System.IO;
 using System.Linq;
 using Jellyfin.Plugin.SubScribe.Sources;
 using Microsoft.Extensions.Logging;
+using Jellyfin.Plugin.SubScribe.Configuration;
 
 namespace Jellyfin.Plugin.SubScribe.Api;
 
@@ -43,7 +44,9 @@ public sealed record SourceFieldView(
     double? Max,
     IReadOnlyList<string> Options,
     SourceFieldVisibility? VisibleWhen,
-    string? Group);
+    string? Group,
+    string? HelpUrl,
+    string? HelpLink);
 
 /// <summary>F-M683: die Taktgrenzen einer Quelle, wie sie sie selbst nennt.</summary>
 /// <param name="UploadsPerHour">Abgaben je Stunde, 0 wenn die Quelle keine nennt.</param>
@@ -188,7 +191,8 @@ public static class SourceSettingsView
         string? dataDir,
         string key,
         IReadOnlyDictionary<string, string?>? updates,
-        ILogger? logger = null)
+        ILogger? logger = null,
+        LogLevelMode? mode = null)
     {
         ArgumentNullException.ThrowIfNull(registry);
 
@@ -248,7 +252,54 @@ public static class SourceSettingsView
         }
 
         SourceSettingsFile.Save(dataDir, key, schema, merged);
+
+        // F-M750: was geschrieben wurde, sagt die Zeile selbst — Quelle, Feld, alt -> neu.
+        foreach (string feldKey in geschrieben)
+        {
+            SourceField feld = schema.First(f => string.Equals(f.Key, feldKey, StringComparison.Ordinal));
+            Configuration.SettingsChangeLog.SourceField(
+                logger,
+                key,
+                feld,
+                current.Stored.TryGetValue(feldKey, out string? vorher) ? vorher : null,
+                merged[feldKey],
+                mode);
+        }
+
         return new SourceSaveResult(true, null, Array.Empty<string>(), geschrieben, Entry(registry, engine, dataDir));
+    }
+
+    /// <summary>
+    /// F-M748: den gespeicherten Wert EINES Geheimfelds lesen — für die Dauer eines Drucks auf das Auge.
+    /// Nur ein echtes Geheimfeld einer bekannten Quelle geht; alles andere wird abgewiesen, damit dieser
+    /// Weg kein allgemeines Lesetor in die Datei wird. Der Wert steht in keiner Antwort der Liste.
+    /// </summary>
+    /// <param name="engine">Die Quelle.</param>
+    /// <param name="dataDir">Der Datenordner des Plugins.</param>
+    /// <param name="fieldKey">Der Feldschlüssel.</param>
+    /// <returns>Der Wert (null = nichts abgelegt) und der Grund, falls es keinen gibt.</returns>
+    public static (string? Value, string? Error) RevealSecret(ISourceEngine engine, string? dataDir, string? fieldKey)
+    {
+        if (string.IsNullOrWhiteSpace(dataDir))
+        {
+            return (null, "no data folder — nothing to read");
+        }
+
+        SourceField? feld = engine.Fields
+            .FirstOrDefault(f => string.Equals(f.Key, fieldKey, StringComparison.Ordinal));
+        if (feld is null)
+        {
+            return (null, "unknown field '" + (fieldKey ?? string.Empty) + "'");
+        }
+
+        if (!feld.IsSecret)
+        {
+            return (null, "'" + feld.Key + "' is not a secret field — the list already carries its value");
+        }
+
+        SourceSettings settings = SourceSettingsFile.Load(dataDir, engine.Capabilities.Key, engine.Fields);
+        string wert = settings.Text(feld.Key);
+        return wert.Length == 0 ? (null, "nothing stored for '" + feld.Key + "'") : (wert, null);
     }
 
     private static SourceEntryView Entry(SourceRegistry registry, ISourceEngine engine, string? dataDir)
@@ -343,7 +394,9 @@ public static class SourceSettingsView
                 feld.Kind == SourceFieldKind.Number ? feld.Max : null,
                 feld.Kind == SourceFieldKind.Choice ? feld.Options ?? Array.Empty<string>() : Array.Empty<string>(),
                 feld.VisibleWhen,
-                feld.Group);
+                feld.Group,
+                feld.HelpUrl,
+                feld.HelpLink);
         }).ToList();
 
     private static string RelativeFile(string key)
