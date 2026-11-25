@@ -637,7 +637,7 @@ The three old SubDL fields (`Username`, `Password`, `ApiKey`) have disappeared f
 
 **T364:** Without a stored list the order shows the old setting (F-M701), in `gui-structure`. **1 check**: both preassignments (`tvsubtitles,moviesubtitles,subdl` and `subdl,tvsubtitles,moviesubtitles`) stand in the page, and the fallback is bound to `if (!liste)`.
 
-**T365:** A card says only what a field is (F-M702, F-M745). **2 checks** in `sources`: no field carries a help text except the access field, and that one stays one line of at most 120 characters (SubDL's `apiKey` names where the key comes from). The check was one until the operator asked for the SubDL description back; the exception is written as an exception, not as a loosened rule.
+**T365:** What a card says about a field (F-M702, F-M745). **2 checks** in `sources`: a help text is one line (no line break) and no help text is longer than 80 characters. The ban on help texts was lifted by the operator: "too much talk" meant short, not silent. The check therefore guards the limit instead of the silence. Everything else of F-M702 — no placeholder, no `set` line, the light as the summary — is checked where it stood.
 
 **T366:** The order stands under Endpoints (F-M703), in `gui-structure`. **1 check**: the block `SourceOrderBlock` lies in the section between the heading `Endpoints` and `Media files`, **before** `SourceCards`, and no longer in the General tab.
 

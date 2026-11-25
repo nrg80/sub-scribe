@@ -50,7 +50,7 @@ with where the value comes from (F-M222):
 - **The SubDL API key** — it stands in the source card, not in the page's own form: the engine declares
   it as a secret field and marks it required in its own schema (F-M222, F-M497, F-M688). Its short
   description says where the key comes from: a free key from the account panel, documented at
-  `subdl.com/api-doc` (F-M745 — the access field is the one field of a card that may carry such a line).
+  `subdl.com/api-doc` (F-M745 — a field may carry one line of at most 80 characters).
 - **The TMDb API key** (F-M203).
 - **The target languages** (F-M42).
 
