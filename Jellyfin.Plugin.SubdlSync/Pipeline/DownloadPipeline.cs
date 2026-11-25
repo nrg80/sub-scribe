@@ -5337,10 +5337,14 @@ public sealed class DownloadPipeline : IDisposable
     private bool RuntimeMatches(BaseItem item, byte[] srtBytes, string? language, out string? reason)
     {
         reason = null;
-        int floorSec = _config.DownloadRuntimeToleranceSec;
+        bool episode = item is Episode;
+        int floorSec = Qa.RuntimeWindow.FloorFor(
+            episode,
+            _config.DownloadRuntimeToleranceSec,
+            _config.DownloadRuntimeToleranceEpisodeSec);
         if (floorSec <= 0 || (item.RunTimeTicks ?? 0) <= 0)
         {
-            return true; // check disabled or no runtime metadata
+            return true; // check disabled for this kind, or no runtime metadata
         }
 
         string content = DecodeSrt(srtBytes, language);
@@ -5368,10 +5372,9 @@ public sealed class DownloadPipeline : IDisposable
 
         // F-M43: the window is a floor plus a share of the runtime, never the floor alone — a long
         // film carries long credits, and a subtitle that stops with the dialogue is complete.
-        bool episode = item is Episode;
         int sharePercent = _config.DownloadRuntimeToleranceSharePercent;
-        long toleranceSec = Qa.RuntimeWindow.ToleranceSeconds(floorSec, runtimeSec, episode, sharePercent);
-        if (!Qa.RuntimeWindow.Covers(spanSec, runtimeSec, floorSec, episode, sharePercent))
+        long toleranceSec = Qa.RuntimeWindow.ToleranceSeconds(floorSec, runtimeSec, sharePercent);
+        if (!Qa.RuntimeWindow.Covers(spanSec, runtimeSec, floorSec, sharePercent))
         {
             reason = $"span {spanSec}s vs runtime {runtimeSec}s (tolerance ±{toleranceSec}s)";
             return false;

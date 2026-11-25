@@ -271,7 +271,7 @@ internal static class ReportingRun
             "F-M747: the old value survives as the fallback for a source file that says nothing, on by default");
 
         string page = Read(plugin, "Configuration/configPage.html");
-        Check(page.IndexOf("Runtime tolerance (seconds)", StringComparison.Ordinal) > 0
+        Check(page.IndexOf("Runtime floor for films (seconds)", StringComparison.Ordinal) > 0
               && page.IndexOf("AllowAiTranslatedSubs", StringComparison.Ordinal) < 0,
             "F-M747: the runtime field stays, and no global report switch is left on the page");
         Check(Read(plugin, "Sources/Subdl/SubdlEngine.cs").Contains("FieldReportEnabled, \"Report\"", StringComparison.Ordinal)
@@ -379,49 +379,51 @@ internal static class ReportingRun
         Check(flusch > 0 && abhaengen > 0 && flusch < abhaengen,
             "F-M535: reports are filed while the API trace is still attached");
 
-        // F-M43 (operator decision 25.11.2026: "C", then "7 min floor"): the runtime window is a floor
-        // plus a share of the runtime. The two measured cases below are the REAL ones from the run of
+        // F-M43 (operator decision 25.11.2026: "C", then "7 min floor", then "nur noch in prozent mit
+        // Floor fuer serie und movie"): the window is a SHARE of the runtime with a floor under it, and
+        // each kind carries its own floor. The two measured cases below are the REAL ones from the run of
         // that morning — both were reported to SubDL under the fixed 600 s window, both carry 88 % and
-        // 91 % of their film. The floor is 7 minutes, so a short episode is judged less harshly than a
-        // feature film, and the share takes over from about 58 minutes on.
+        // 91 % of their film.
         Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.FilmFloorSeconds == 420
               && Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.EpisodeFloorSeconds == 240
               && new Jellyfin.Plugin.SubScribe.Configuration.PluginConfiguration().DownloadRuntimeToleranceSec
-                 == Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.FilmFloorSeconds,
-            "F-M43: 7 minutes for a film, 4 minutes for an episode, and the shipped setting IS the film floor");
-        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(420, 5414, false, 12) == 650,
+                 == Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.FilmFloorSeconds
+              && new Jellyfin.Plugin.SubScribe.Configuration.PluginConfiguration().DownloadRuntimeToleranceEpisodeSec
+                 == Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.EpisodeFloorSeconds,
+            "F-M43: 7 minutes for a film, 4 minutes for an episode, and the shipped settings ARE those floors");
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.FloorFor(true, 420, 240) == 240
+              && Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.FloorFor(false, 420, 240) == 420
+              && Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.FloorFor(true, 420, 0) == 0,
+            "F-M43: an episode takes the episode floor, a film the film floor, and 0 switches one kind off alone");
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(420, 5414, 12) == 650,
             "F-M43: 12 % of a 90-minute film is larger than the 7-minute floor, so the window grows");
-        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(420, 1320, true, 12) == 240,
-            "F-M43: a 22-minute episode keeps its own 4-minute floor — the share is smaller than the floor there");
-        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(420, 2700, true, 12) == 324,
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(240, 1320, 12) == 240,
+            "F-M43: a 22-minute episode keeps its 4-minute floor — the share is smaller than the floor there");
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(240, 2700, 12) == 324,
             "F-M43: a 45-minute episode is judged by the share (12 %), because it exceeds the 4-minute floor");
-        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(180, 1320, true, 12) == 180,
-            "F-M43: the episode floor never exceeds the configured film floor — an operator below 4 min stays below");
-        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(4772, 5414, 420, false, 12),
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(4772, 5414, 420, 12),
             "F-M43: the reported 88 % subtitle (span 4772s of 5414s) now sits inside the window");
-        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(6074, 6682, 420, false, 12),
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(6074, 6682, 420, 12),
             "F-M43: the reported 91 % subtitle (span 6074s of 6682s) now sits inside the window");
-        Check(!Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 6600, 420, false, 12),
+        Check(!Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 6600, 420, 12),
             "F-M43: a genuinely cut subtitle (span 3600s short) is still rejected — the window is no free pass");
-        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 0, 420, false, 12)
-              && Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 6600, 0, true, 12),
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 0, 420, 12)
+              && Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 6600, 0, 12),
             "F-M43: no runtime metadata and a switched-off check pass everything, as before");
-        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(420, 5414, false, 0) == 420
-              && Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(420, 5414, false, 20) == 1083,
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(420, 5414, 0) == 420
+              && Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(420, 5414, 20) == 1083,
             "F-M43: the share is a setting — 0 leaves the floor alone, 20 % widens the window to a fifth of the runtime");
-        Check(new Jellyfin.Plugin.SubScribe.Configuration.PluginConfiguration().DownloadRuntimeToleranceSharePercent
-                  == Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.DefaultSharePercent
-              && Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.DefaultSharePercent == 12
-              && Read(plugin, "Pipeline/DownloadPipeline.cs")
-                  .Contains("_config.DownloadRuntimeToleranceSharePercent", StringComparison.Ordinal)
-              && Read(plugin, "Configuration/configPage.html")
-                  .Contains("id=\"DownloadRuntimeToleranceSharePercent\"", StringComparison.Ordinal),
-            "F-M43: the share ships as 12 %, the page carries the field and the gate passes it to the window");
         Check(Read(plugin, "Pipeline/DownloadPipeline.cs")
-                  .Contains("Qa.RuntimeWindow.ToleranceSeconds(floorSec, runtimeSec, episode, sharePercent)", StringComparison.Ordinal)
+                  .Contains("Qa.RuntimeWindow.FloorFor(\n            episode,\n            _config.DownloadRuntimeToleranceSec,\n            _config.DownloadRuntimeToleranceEpisodeSec);", StringComparison.Ordinal)
+              && Read(plugin, "Pipeline/DownloadPipeline.cs")
+                  .Contains("Qa.RuntimeWindow.ToleranceSeconds(floorSec, runtimeSec, sharePercent)", StringComparison.Ordinal)
               && Read(plugin, "Pipeline/DownloadPipeline.cs")
                   .Contains("(tolerance ±{toleranceSec}s)", StringComparison.Ordinal),
-            "F-M43: the gate asks the window and the verdict names the window that was applied");
+            "F-M43: the gate picks the floor by item kind, asks the window, and the verdict names the window applied");
+        Check(Read(plugin, "Configuration/configPage.html").Contains("id=\"DownloadRuntimeToleranceSharePercent\"", StringComparison.Ordinal)
+              && Read(plugin, "Configuration/configPage.html").Contains("id=\"DownloadRuntimeToleranceSec\"", StringComparison.Ordinal)
+              && Read(plugin, "Configuration/configPage.html").Contains("id=\"DownloadRuntimeToleranceEpisodeSec\"", StringComparison.Ordinal),
+            "F-M43: the page carries the share and both floors — tolerance in percent with a floor per kind");
 
         // F-M747 (operator decision 25.11.2026: "Report subtitles in downloads kann eigentlich komplett durch
         // die tickbox in den source fenstern ersetzt werden"): the card decides, the old switch only survives as

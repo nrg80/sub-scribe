@@ -568,15 +568,21 @@
 
 
                         <div class="inputContainer">
-                            <label class="inputLabel inputLabelUnfocused" for="DownloadRuntimeToleranceSec">Runtime tolerance (seconds)</label>
-                            <input id="DownloadRuntimeToleranceSec" name="DownloadRuntimeToleranceSec" type="number" is="emby-input" min="0" max="1800" />
-                            <div class="fieldDescription">Episodes 4 min, films 7 min. 0 = off.</div>
-                        </div>
-
-                        <div class="inputContainer">
                             <label class="inputLabel inputLabelUnfocused" for="DownloadRuntimeToleranceSharePercent">Runtime tolerance share (%)</label>
                             <input id="DownloadRuntimeToleranceSharePercent" name="DownloadRuntimeToleranceSharePercent" type="number" is="emby-input" min="0" max="50" />
                             <div class="fieldDescription">Applies where larger than the floor. 0 = floor only.</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="DownloadRuntimeToleranceSec">Runtime floor for films (seconds)</label>
+                            <input id="DownloadRuntimeToleranceSec" name="DownloadRuntimeToleranceSec" type="number" is="emby-input" min="0" max="1800" />
+                            <div class="fieldDescription">Smallest window for a feature film. 0 = off.</div>
+                        </div>
+
+                        <div class="inputContainer">
+                            <label class="inputLabel inputLabelUnfocused" for="DownloadRuntimeToleranceEpisodeSec">Runtime floor for episodes (seconds)</label>
+                            <input id="DownloadRuntimeToleranceEpisodeSec" name="DownloadRuntimeToleranceEpisodeSec" type="number" is="emby-input" min="0" max="1800" />
+                            <div class="fieldDescription">Smallest window for an episode. 0 = off.</div>
                         </div>
 
 
@@ -1130,6 +1136,7 @@
                         document.querySelector('#DownloadOnlyMissing').checked = config.DownloadOnlyMissing;
                         document.querySelector('#DownloadHearingImpaired').checked = config.DownloadHearingImpaired;
                         document.querySelector('#DownloadRuntimeToleranceSec').value = config.DownloadRuntimeToleranceSec;
+                        document.querySelector('#DownloadRuntimeToleranceEpisodeSec').value = config.DownloadRuntimeToleranceEpisodeSec;
                         document.querySelector('#DownloadRuntimeToleranceSharePercent').value = config.DownloadRuntimeToleranceSharePercent;
                         document.querySelector('#AllocateMissingLanguageCodes').checked = config.AllocateMissingLanguageCodes;
                         document.querySelector('#QaDownloadMinCues').checked = config.QaDownloadMinCues;
@@ -1819,6 +1826,7 @@ workers.forEach(function (w) {
                         config.DownloadHearingImpaired = document.querySelector('#DownloadHearingImpaired').checked;
                         config.DownloadRuntimeToleranceSec = (function () { var v = parseInt(document.querySelector('#DownloadRuntimeToleranceSec').value, 10); return isNaN(v) ? 420 : v; })();
                         config.DownloadRuntimeToleranceSharePercent = (function () { var v = parseInt(document.querySelector('#DownloadRuntimeToleranceSharePercent').value, 10); return isNaN(v) ? 12 : v; })();
+                        config.DownloadRuntimeToleranceEpisodeSec = (function () { var v = parseInt(document.querySelector('#DownloadRuntimeToleranceEpisodeSec').value, 10); return isNaN(v) ? 240 : v; })();
                         config.AllocateMissingLanguageCodes = document.querySelector('#AllocateMissingLanguageCodes').checked;
                         config.QaDownloadMinCues = document.querySelector('#QaDownloadMinCues').checked;
                         config.QaDownloadVerifyLanguage = document.querySelector('#QaDownloadVerifyLanguage').checked;

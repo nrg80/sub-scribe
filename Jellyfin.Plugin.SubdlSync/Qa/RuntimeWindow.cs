@@ -15,52 +15,56 @@ namespace Jellyfin.Plugin.SubScribe.Qa;
 /// <summary>
 /// F-M43 stage 2: how far a subtitle's cue span may sit from the item runtime.
 /// <para>
-/// The window is a FLOOR plus a SHARE. The floor depends on what is being matched: an episode gets
-/// 4 minutes, a feature film 7 minutes — an operator who wants another film floor sets it, and `0`
-/// switches the whole check off.
-/// The share is 12 % of the item runtime and applies whenever it is the larger of the two: a long
-/// film carries long credits, and a subtitle that stops when the dialogue stops is complete, not
-/// broken. A fixed window measures the credits of a short film and the credits of a long film with
-/// the same ruler, and so rejects the long one for a gap that is not a defect.
+/// The window is a SHARE of the runtime with a FLOOR under it: twelve percent of a long film is a
+/// wider window than twelve percent of a short episode, and the floor keeps a short item from being
+/// measured with a share that has shrunk to nothing. Each kind carries its own floor — an episode
+/// four minutes, a feature film seven — because a film's credits run longer than an episode's.
 /// </para>
 /// <para>
-/// The share never tightens the floor — an operator who sets 600 s keeps at least 600 s. The check
-/// stays symmetric: a span that runs past the runtime is as suspicious as one that stops early.
+/// The share never tightens the floor. The check stays symmetric: a span that runs past the runtime
+/// is as suspicious as one that stops early. A floor of zero switches the check off for that kind.
 /// </para>
 /// </summary>
 public static class RuntimeWindow
 {
-    /// <summary>Share of the item runtime that applies where it is larger than the floor (F-M43), in percent.</summary>
+    /// <summary>Share of the item runtime that the window grows by (F-M43), in percent.</summary>
     public const int DefaultSharePercent = 12;
 
-    /// <summary>Floor for a feature film in seconds: 7 minutes (F-M43).</summary>
+    /// <summary>Default floor for a feature film in seconds: 7 minutes (F-M43).</summary>
     public const int FilmFloorSeconds = 420;
 
-    /// <summary>Floor for an episode in seconds: 4 minutes (F-M43).</summary>
+    /// <summary>Default floor for an episode in seconds: 4 minutes (F-M43).</summary>
     public const int EpisodeFloorSeconds = 240;
 
     /// <summary>
-    /// The effective window in seconds: the configured floor, or the share of the runtime when that
-    /// is larger.
+    /// The floor that belongs to this item: the episode floor for an episode, the film floor for a
+    /// feature. <c>0</c> means the check is off for that kind.
     /// </summary>
-    /// <param name="floorSec">Configured film floor in seconds (0 or less = check off).</param>
-    /// <param name="runtimeSec">Item runtime in seconds.</param>
     /// <param name="episode">True for an episode, false for a film.</param>
+    /// <param name="filmFloorSec">Configured film floor in seconds.</param>
+    /// <param name="episodeFloorSec">Configured episode floor in seconds.</param>
+    /// <returns>The floor in seconds.</returns>
+    public static int FloorFor(bool episode, int filmFloorSec, int episodeFloorSec)
+        => episode ? episodeFloorSec : filmFloorSec;
+
+    /// <summary>
+    /// The effective window in seconds: the floor, or the share of the runtime when that is larger.
+    /// </summary>
+    /// <param name="floorSec">Floor for this item in seconds (0 or less = check off).</param>
+    /// <param name="runtimeSec">Item runtime in seconds.</param>
     /// <param name="sharePercent">Share of the runtime in percent (0 = the floor alone).</param>
     /// <returns>Effective window in seconds.</returns>
-    public static long ToleranceSeconds(int floorSec, long runtimeSec, bool episode, int sharePercent)
+    public static long ToleranceSeconds(int floorSec, long runtimeSec, int sharePercent)
     {
         if (floorSec <= 0)
         {
             return 0;
         }
 
-        // An episode gets the smaller floor, but never more than the operator allowed for films.
-        long floor = episode ? Math.Min(EpisodeFloorSeconds, floorSec) : floorSec;
         long share = runtimeSec <= 0 || sharePercent <= 0
             ? 0
             : (long)Math.Round(runtimeSec * sharePercent / 100.0, MidpointRounding.AwayFromZero);
-        return Math.Max(floor, share);
+        return Math.Max(floorSec, share);
     }
 
     /// <summary>
@@ -69,13 +73,12 @@ public static class RuntimeWindow
     /// </summary>
     /// <param name="spanSec">Cue span in seconds (last end minus first start).</param>
     /// <param name="runtimeSec">Item runtime in seconds.</param>
-    /// <param name="floorSec">Configured film floor in seconds (0 or less = check off).</param>
-    /// <param name="episode">True for an episode, false for a film.</param>
+    /// <param name="floorSec">Floor for this item in seconds (0 or less = check off).</param>
     /// <param name="sharePercent">Share of the runtime in percent (0 = the floor alone).</param>
     /// <returns>True when the span is inside the window.</returns>
-    public static bool Covers(long spanSec, long runtimeSec, int floorSec, bool episode, int sharePercent)
+    public static bool Covers(long spanSec, long runtimeSec, int floorSec, int sharePercent)
     {
-        long tolerance = ToleranceSeconds(floorSec, runtimeSec, episode, sharePercent);
+        long tolerance = ToleranceSeconds(floorSec, runtimeSec, sharePercent);
         if (tolerance <= 0 || runtimeSec <= 0)
         {
             return true;
