@@ -2,7 +2,7 @@
 
 **Owner: the two-source architecture.** What two sources do to one pair; how a pair is allocated to a slot stands in §8 of `CONTRACTS.md`.
 
-As of 20.11.2026, plugin 12.2.0.14. This sheet pulls together what is
+This sheet pulls together what is
 spread across many numbers in [`REQUIREMENTS.md`](REQUIREMENTS.md): how the sources
 relate to one another, what „done" means, and how download and upload behave
 with several sources. It is the one place where the source question can be read as a whole.
@@ -44,12 +44,10 @@ This is the rule from which everything else follows, and it has been broken seve
 | Status | names open languages per source, not as a sum | F-M570 |
 | Origin | a find is never uploaded — neither back to its own source nor to the other | F-M487 |
 
-**The pack case has been the most expensive one.** Up to 12.2.0.13 the plan read the source-blind sum
-`PacksBySeason()`; a SubDL pack ended the season for tvsubtitles as well. Measured on 20.11.2026:
-**36 seasons with 177 pairs** ended early with „already up as a pack", and tvsubtitles had for
-those seasons **0** packs. Since 12.2.0.14 the plan forms the **intersection** over the sources of the
-slot (`PacksOfAllSlotSources`), and the season line names the sources:
-`all N known pair(s) already up as a pack for subdl, tvsubtitles`.
+**The pack case is the expensive one.** A source-blind sum ended the season for the other source as
+well: a pack from one of them closed the season for both, although the second had no pack at all. The
+plan therefore forms the **intersection** over the sources of the slot, and the season line names the
+sources: `all N known pair(s) already up as a pack for subdl, tvsubtitles`.
 
 The pack key carries the source with it (`<imdb>|S<n>|<lang>|<hi|plain>|<source>`), each source keeps
 its own identifier (F-M642). tvst containers carry **no** identifier, because the site returns
@@ -65,7 +63,7 @@ judged twice. Since 12.2.0.9 the following applies (F-M647):
    containers and both file name forms.
 2. **Send per source, at the same time.** `SendAsync` runs per source, started via `Task.WhenAll`,
    the second source with an **offset of 0–5 %** of the transfer rate (at 400/h up to 0,45 s) instead of a simultaneous start
-   (F-M587). Measured in operation: 270–429 ms offset.
+   (F-M587).
 3. **A failure of one source does not drag the other down** — the result is returned, not
    thrown; per source its own success mark and its own timestamp.
 4. **One line per pair** (F-M648, F-M651), with both sides: `"subdl: already up as a pack; tvst

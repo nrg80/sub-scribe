@@ -1,22 +1,37 @@
-# tvsubtitles.net — protocol and methods
+# tvsubtitles.net — the series source
 
-**Owner: the site.** Paths, tables, peculiarities and methods of tvsubtitles.net; the contract view of the same source stands in `engines/tvsubtitles.md`.
+*Paper: the site's own paths, tables and peculiarities — derived from the rules in `REQUIREMENTS.md`
+and `CONTRACTS.md`, every statement carrying its `F-M` tag. The words are those of `TERMS.md`.*
 
-As of 16.11.2026. Applies to `Jellyfin.Plugin.SubdlSync/Api/TvSubtitlesClient.cs` (F-M480–F-M482, F-M516).
-
-The site has **no API**. Checked on 15.11.2026: `/api*`, `/xmlrpc.php` and `api.tvsubtitles.net`
-answer with 404 or do not resolve; `/rss.xml` exists (RSS 2.0), but it carries no
-episode data. Everything therefore runs through the pages that the site's own navigation offers —
-HTML is read, a form is written.
+**Owner: the site.** Paths, tables, peculiarities and methods of tvsubtitles.net; the contract view of
+the same source stands in `engines/tvsubtitles.md`.
 
 ## Contents
 
-- [The path (download)](#the-path-download)
-- [The path (upload)](#the-path-upload)
-- [Boundaries and open points](#boundaries-and-open-points)
-- [Methods](#methods)
+- [1. What it is](#1-what-it-is)
+- [2. Which media reach it](#2-which-media-reach-it)
+- [3. The path (download)](#3-the-path-download)
+- [4. The path (upload) and creating a series](#4-the-path-upload-and-creating-a-series)
+- [5. Tables — language mapping and supported languages](#5-tables-language-mapping-and-supported-languages)
+- [6. Site peculiarities](#6-site-peculiarities)
+- [7. What is not proven](#7-what-is-not-proven)
+- [8. The boundary](#8-the-boundary)
+- [9. The checks](#9-the-checks)
 
-## The path (download)
+## 1. What it is
+
+A site for **series subtitles**, read and written through its own pages (F-M480–F-M482, F-M516).
+It has **no API**. `/api*`, `/xmlrpc.php` and `api.tvsubtitles.net` answer with 404 or do not resolve.
+`/rss.xml` exists as RSS 2.0, but it carries no episode data. Everything therefore runs through the
+pages the site's own navigation offers: HTML is read, and a form is written.
+
+## 2. Which media reach it
+
+Series only — a film has no page here. The source answers the episode slot, one episode at a time:
+**season packs and the hearing-impaired pool are SubDL's business** (chapter 8). Whether a medium is a
+series at all is decided by the library metadata, not by this site.
+
+## 3. The path (download)
 
 ```
 /search2.php?qs=<name>          Search: /tvshow-<id>.html including the period (F-M516 — soft!)
@@ -32,27 +47,25 @@ HTML is read, a form is written.
 
 **What hurts about this path, and how it is solved:**
 
-- **The language is not in the text.** Only the flag image is reliable
-  `images/flags/<code>.gif`. It must be read **per block** (from one subtitle anchor to the
-  next one), otherwise an entry inherits the flag of the following one and is sorted wrongly.
-  Entries without a flag are skipped: an unknown language cannot be assigned to a
-  target language.
-- **Page ids are not episode numbers**, and the season list runs descending. The number
-  comes from the heading of the episode page (`<h2>The Middle 2x24</h2>`), with fallback to the first
-  `NxM` of the page — the markup has changed once before.
+- **The language is not in the text.** Only the flag image is reliable: `images/flags/<code>.gif`. It
+  must be read **per block**, from one subtitle anchor to the next. Otherwise an entry inherits the
+  flag of the following one and is sorted wrongly. Entries without a flag are skipped, because an
+  unknown language cannot be assigned to a target language.
+- **Page ids are not episode numbers**, and the season list runs descending. The number comes from the
+  heading of the episode page (`<h2>The Middle 2x24</h2>`), with a fallback to the first `NxM` of the
+  page — the markup has changed once before.
 - **The file name is not in the link.** The download page builds it in JavaScript from numbered
-  fragments (`var s1='files/The Middle_2x24'; var s2='_HDTV.FEVER.en.zip';`), which are joined
-  in order.
-- **The download address answers in two forms** (measured 15.11.2026): sometimes with the
-  „one moment" page, sometimes with the **zip directly**. The client decides on the bytes that
-  actually arrived (`PK\x03\x04` = zip, otherwise parse HTML) — not on a Content-Type that the
-  site does not always set.
-- **The bytes are passed on untouched.** The site delivers, per language, UTF-8 next to cp1250,
-  cp1251, cp1253, cp1254 and cp1256. Exactly here, on 15.11.2026, the codepage error arose that
-  made Russian, Greek and Arabic unreadable: `cp1252` practically never fails and swallows
-  everything. Decoding therefore happens in the pipeline, not in the transport.
+  fragments (`var s1='files/The Middle_2x24'; var s2='_HDTV.FEVER.en.zip';`), which are joined in
+  order.
+- **The download address answers in two forms.** Sometimes it sends the „one moment" page, sometimes
+  the **zip directly**. The client decides on the bytes that actually arrived (`PK\x03\x04` = zip,
+  otherwise parse HTML), not on a Content-Type the site does not always set.
+- **The bytes are passed on untouched.** Per language the site delivers UTF-8 next to cp1250, cp1251,
+  cp1253, cp1254 and cp1256. A codepage error made Russian, Greek and Arabic unreadable once, because
+  `cp1252` practically never fails and swallows everything. Decoding therefore happens in the
+  pipeline, not in the transport.
 
-## The path (upload)
+## 4. The path (upload) and creating a series
 
 `POST /add1.php`, `multipart/form-data`, referer `/add.html`. The fields are **verbatim** those of the
 form on `/add.html`:
@@ -63,7 +76,7 @@ form on `/add.html`:
 | `season` | 1–22 |
 | `episode` | 0–100 |
 | `double` | `1` for a double episode (only set when applicable) |
-| `lang` | language code **of the site**, not ISO (see below) |
+| `lang` | language code **of the site**, not ISO (chapter 5) |
 | `rip` | `WEB HDTV HEVC DVDRip DVDSCR BDRip BluRay` or empty |
 | `release` | free text (release group, e.g. `FEVER`) |
 | `hi` | `1` for a hearing-impaired version (only set when applicable) |
@@ -72,29 +85,13 @@ form on `/add.html`:
 | `go` | hidden, `1` |
 | `author` | **is not sent along** — a missing part is the only way not to overwrite a prefill of the site |
 
-Example from the site itself: `Supernatural.S04E09.HDTV.XviD-NoTV.avi` → series Supernatural,
-season 4, episode 9, rip HDTV, release NoTV.
+Example from the site itself: `Supernatural.S04E09.HDTV.XviD-NoTV.avi` → series Supernatural, season 4,
+episode 9, rip HDTV, release NoTV.
 
-**Language codes are the site's:** `en es fr de br ru ua it gr ar hu pl tr nl pt sv da fi ko cn jp
-bg cz ro` — four of them are **not ISO** (`gr`, `cz`, `cn`, `jp`). A code that the selection list
-does not know makes the form fall back to its first entry — the upload then lands as
-English. The client therefore checks against the table and sends no unknown code.
+### Creating a series (F-M516)
 
-**ISO is mapped, and only here (F-M502):** `TvSubtitlesClient.SiteLanguage` pulls an
-incoming code onto the site's code — `el`/`ell`/`gre` → `gr`, `cs`/`ces`/`cze` → `cz`,
-`zh`/`zho`/`chi` → `cn`, `ja`/`jpn` → `jp` (the four deviations in both spellings). To that come the
-ISO 639-2 forms of the remaining site languages (`deu`/`ger` → `de`, `fra`/`fre` → `fr`, `spa` → `es`,
-`pob` → `br`, `ukr` → `ua`, `nld`/`dut` → `nl`, `ron`/`rum` → `ro` …). Case does not
-count, region and script are dropped (`zh-Hans` → `cn`, `ja-JP` → `jp`) — **except** `pt-BR`/`pt_BR`:
-that is Brazilian Portuguese (`br`), while `pt` and `pt-PT` stay at `pt`. Unknown
-means `null` (no guessing) and is rejected with a line. The same bridge is used by the check in
-`BuildUpload`, the field `lang` and the read-back `FindUploadedIdAsync`; the file name keeps its
-ISO3 suffix from the table (`gre`, `cze`, `chi`, `jpn`, `pob`, `rum`). A common table with
-SubDL does **not** exist — SubDL maps in `ScribeApiClient`.
-
-**Creating a new series (F-M516, evidenced on 16.11.2026):** `GET /add-tvshow.php` delivers the form —
-and it sits, like the upload form, in a broken nesting (`<table><form …>`), the
-field names still apply:
+`GET /add-tvshow.php` delivers the form. Like the upload form it sits in a broken nesting
+(`<table><form …>`), but the field names still apply:
 
 ```html
 <form action="/add-tvshow1.php" method="post" enctype="multipart/form-data">
@@ -114,13 +111,12 @@ field names still apply:
 | `go` | hidden | `1` |
 | (submit button) | submit | **no `name`** → no field in the body |
 
-No captcha, no token, no account, no comment field, no external identifier — the name is the
-only key, hence the duplicate-entry protection via the strict name comparison. `enctype` is
-**`multipart/form-data`**; a URL-encoded body would be the same error here that the movie site
-(`add-movie.php`) has just shown, and is therefore not even built.
+There is no captcha, no token, no account, no comment field and no external identifier. The name is the
+only key, hence the duplicate-entry protection by a strict name comparison. `enctype` is
+**`multipart/form-data`**; a URL-encoded body would be the same error the film site has just shown, and
+is therefore not even built.
 
-**What the site answers — measured on a real creation** (`Weissensee`, 2010, 4 seasons,
-16.11.2026):
+**What the site answers.** A creation of `Weissensee` — 2010, 4 seasons — was accepted like this:
 
 ```
 POST /add-tvshow1.php            → HTTP 302, body empty
@@ -129,90 +125,104 @@ GET  /add-tvshow.php?done=yes    → HTTP 200, in the article:
    <div class="subtitle2"><b>TV-Show has been added. Thank you.</b></div>
 ```
 
-- **Success** is the 302 to `?done=yes` (or the sentence, when the caller follows the redirect).
-  `TvSubtitlesClient.ClassifyAddShow` recognises **only** this marker — target URL or text.
+- **Success** is the 302 to `?done=yes`, or the sentence when the caller follows the redirect. The
+  client recognises **only** this marker — target URL or text.
 - **The answer carries no id**, in no form.
-- **„It already exists" and a rejection are NOT evidenced.** A second POST would have either
-  created a duplicate entry (a creation is not deletable on the site) or proven nothing. Therefore
-  the client claims only success; everything else is `unclear` (no marker) or `refused`
+- Neither „it already exists" nor a plain rejection is evidenced (chapter 7). A second POST would
+  either have created a duplicate entry — a creation is not deletable on the site — or proven nothing.
+  The client therefore claims only success; everything else is `unclear` (no marker) or `refused`
   (error status), and the decision falls on the plugin database, not on the wording.
-- **The counter „TV Shows" in the sidebar does not move** (before and after the creation 2768) —
-  reading a creation off the counter is no evidence.
+- **The counter „TV Shows" in the sidebar does not move.** Reading a creation off the counter is no
+  evidence.
 
-**How to get to the series number afterwards:**
+**How the series number is found afterwards:**
 
 | Path | Call | What it says |
 |---|---|---|
 | Search | `GET /search2.php?qs=<name>` | `<a href="/tvshow-4242.html">Weissensee (2010-2026)</a>` — id **and** name |
-| Selection list | `GET /add.html`, `<select name="tvshow">` | `4242` → `Weissensee` (the client: `ShowsAsync`) |
+| Selection list | `GET /add.html`, `<select name="tvshow">` | `4242` → `Weissensee` |
 | All series | `GET /tvshows.html` | rank · `tvshow-<id>-<staffeln>.html` · name · seasons · episodes · subtitles · years |
 
-The search is the shortest path and shows the fresh series immediately — but it is **soft**
-(`Pagan Peak` → *Twin Peaks*, *Peaky Blinders*), so its result runs through the same strict
-comparison as the list, and „no hit" is no proof. The selection field of `/add.html` contained
-the new series immediately afterwards as well (4242) — it is the fallback. `/tvshows.html` carried it
-**not yet** (2.772 lines before and after the creation): this catalogue is not rewritten with every creation
-and cannot serve as evidence. The season count was taken over: `/tvshow-4242.html`
-answers 302 to `tvshow-4242-4.html`, the page is called „… season 4" and links seasons 1–4.
+The search is the shortest path and shows a fresh series immediately — but it is **soft**: `Pagan
+Peak` finds *Twin Peaks* and *Peaky Blinders*. Its result therefore runs through the same strict
+comparison as the list, and „no hit" is no proof. The selection field of `/add.html` carried the new
+series immediately, and it is the fallback. `/tvshows.html` did **not** carry it yet: that catalogue is
+not rewritten with every creation and cannot serve as evidence. The season count is taken over — the
+show page answers 302 to the season page, and that page links seasons 1 to 4.
 
-**It is fixed who creates (F-M501):** the page of the title inquiry (`TvstShowLookup`) — and **only** with the TMDb title, the
-TMDb first-broadcast year and the TMDb season count (limited to 1..22). The number of the series stands
-afterwards in `MediaEntity.TvstShowId` on the same level as `TmdbId`/`ImdbId` and is
-read instead of searched the next time. Creation happens **at most once per medium and run**, and only if the site
-answered cleanly before; never in a dry run. After the creation (F-M516) applies: search the number
-(search, then list) and **store only on a hit**. If the site confirms the creation but the
-series is not in the list, the result is honestly `created-id-unknown` and **nothing** is
-stored. If it does not confirm and the series is there anyway, it was already present
-(`existed`) — the number is stored and a second entry does not arise.
+**It is fixed who creates (F-M501):** the page of the title inquiry, and **only** with the TMDb title,
+the TMDb first-broadcast year and the TMDb season count, limited to 1..22. The number of the series
+stands afterwards on the same level as the other title identifiers and is read instead of searched the
+next time. Creation happens **at most once per medium and run**, and only if the site answered cleanly
+before — never in a dry run. After the creation (F-M516) the number is searched (search, then list) and
+**stored only on a hit**. If the site confirms the creation but the series is not in the list, the
+result is honestly `created-id-unknown` and **nothing** is stored. If it does not confirm and the series
+is there anyway, it was already present (`existed`) — the number is stored and a second entry does not
+arise.
 
-## Boundaries and open points
+## 5. Tables — language mapping and supported languages
 
-- **No quota, no documented throttling.** The site names no limit; the client keeps to
-  the general pause of the plugin (`MinCallPauseSec`) when it is bound in.
-- **No login visible.** `/login.html`, `/upload.html`, `/panel.html` → 404. **Creating series works
-  without an account** (evidenced 16.11.2026: the POST was accepted, the series was there immediately); for the
-  upload it remains unverified: an empty POST answers with HTTP 200 and an empty body, a
-  captcha was not visible.
-- **The client is bound in by now** (F-M485): the two switches really control fetch and upload,
-  and the origin of every find is recorded with the id of the source in the plugin database (F-M486), so that a
-  tvst find is never uploaded to SubDL (F-M487). Boundaries remain: **season packs and the HI pool
-  are SubDL's business**, this source can only do single episodes.
+**The site's codes are:** `en es fr de br ru ua it gr ar hu pl tr nl pt sv da fi ko cn jp bg cz ro`.
+Four of them are **not ISO** (`gr`, `cz`, `cn`, `jp`). A code the selection list does not know makes the
+form fall back to its first entry, and the upload then lands as English. The client therefore checks
+against the table and sends no unknown code.
 
-## Methods
+**ISO is mapped, and only here (F-M502):** an incoming code is pulled onto the site's code — `el`/`ell`/
+`gre` → `gr`, `cs`/`ces`/`cze` → `cz`, `zh`/`zho`/`chi` → `cn`, `ja`/`jpn` → `jp` (the four deviations in
+both spellings). To that come the ISO 639-2 forms of the remaining site languages (`deu`/`ger` → `de`,
+`fra`/`fre` → `fr`, `spa` → `es`, `pob` → `br`, `ukr` → `ua`, `nld`/`dut` → `nl`, `ron`/`rum` → `ro` …).
 
-All parsers are `static` and take HTML as a string — the suite `scripts/tests/tvsubtitles`
-drives them with the pages that the site really delivered on 15.11.2026 (`fixtures/`), not
-with the live site.
+Case does not count, and region and script are dropped (`zh-Hans` → `cn`, `ja-JP` → `jp`) — **except**
+`pt-BR`/`pt_BR`: that is Brazilian Portuguese (`br`), while `pt` and `pt-PT` stay at `pt`. Unknown means
+`null` (no guessing) and is rejected with a line. The same bridge is used by the check before the body is
+built, by the field `lang` and by the read-back. The file name keeps its ISO3 suffix from the table
+(`gre`, `cze`, `chi`, `jpn`, `pob`, `rum`). **A common table with SubDL does not exist** — SubDL maps in
+its own client.
 
-| Method | Purpose |
-|---|---|
-| `ShowsAsync()` | `id → Name` from the selection box of `/add.html` (~2.770 series) |
-| `SearchShowsAsync(query)` / `ParseShowSearch(html)` | site search: `id → Name` (year period cut off) — **soft**, compare the result strictly (F-M516) |
-| `ResolveShow(shows, name)` | id for a name, **compared strictly** (F-M501): upper/lower case, `&` = `and` = `und`, whitespace — otherwise equality. No substring, no similarity measure |
-| `NormalizeShowName(name)` | the comparison key itself (F-M501) — the three equalisations, verifiable |
-| `SeasonsAsync(showId)` | season numbers that have a page |
-| `EpisodePagesAsync(showId, season)` | page ids of a season, without duplicates |
-| `EpisodeLabelAsync(pageId)` | `(season, episode)` from the heading of the episode page |
-| `EntriesAsync(pageId)` | entries: `SubtitleId`, `Language`, `Rip`, `Release`, `Age` |
-| `DownloadAsync(subtitleId)` | `(file name, bytes)` — first `.srt` from the zip |
-| `Comment(tmdbId, imdbId, extra)` | comment line `TMDB … / IMDb … / Sub Scribe <Version>` |
-| `BuildUpload(...)` | check and build the field list; sends nothing |
-| `BuildUploadBody(upload)` | multipart body and boundary, byte-exact |
-| `UploadAsync(upload, dryRun)` | send; **without `dryRun: false` nothing leaves the process** |
-| `BuildAddShow(name, year, seasons)` | the four form fields (`name`, `year_s`, `seasons`, `go`), `seasons` 1–22 (F-M501/F-M516) |
-| `AddShowAsync(addShow, dryRun)` | send (multipart, referer `/add-tvshow.php`); dry run is the default; returns status, `Location`, target URL, text and the **classified** outcome (F-M516) |
-| `ClassifyAddShow(status, location, url, text)` | `created` only on `done=yes`; `refused` on error status; otherwise `unclear` — more is not evidenced (F-M516) |
-| `AddShowConfirmed(html)` | does „TV-Show has been added." stand in the page? (F-M516) |
-| `IsZip(bytes)` | zip or HTML — the site answers in both forms |
+## 6. Site peculiarities
 
-Live probe (read only, not part of the checks):
+- **No quota, no documented throttling.** The site names no limit; the client keeps to the general pause
+  of the plugin when it is bound in.
+- **No login visible.** `/login.html`, `/upload.html` and `/panel.html` answer with 404. Creating a
+  series works without an account; for the upload it remains unverified (chapter 7).
+- **The download address is a page or a file** (chapter 3) — the decision is taken on the bytes.
+- **The catalogue pages lag.** `/tvshows.html` is not rewritten with every creation, and the sidebar
+  counter does not move. Neither is evidence of anything.
+- **The search is soft.** It returns what it thinks is close, so its result must pass the strict
+  comparison.
+- **One episode at a time.** Season packs and the hearing-impaired pool are not offered here.
+
+## 7. What is not proven
+
+- **An upload without an account** is not proven: an empty POST answers with HTTP 200 and an empty
+  body, and no captcha was visible. Nothing beyond that was tried, so nothing beyond that is claimed.
+- **The marker for „it already exists"** is not proven. A creation is not deletable on the site, so the
+  experiment was not run.
+- **A plain rejection** of a creation is not proven either.
+- **A quota** is not proven in either direction — the site names none, and a limit was never reached.
+
+## 8. The boundary
+
+- **The client is bound in** (F-M485): the two switches really control fetch and upload.
+- **The origin of every find is recorded** with the identifier of the source in the plugin database
+  (F-M486), so that a find from this source is never uploaded to SubDL (F-M487).
+- **What this source cannot do stays SubDL's business:** season packs and the hearing-impaired pool.
+  Here there are single episodes only.
+
+## 9. The checks
+
+All parsers are `static` and take HTML as a string. The suite `scripts/tests/tvsubtitles` drives them
+with the pages the site really delivered, from `fixtures/` — not with the live site. **139 checks** run
+there (`tvsubtitles`).
+
+The probe below is read only and not part of the checks:
 
 ```bash
 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 <dotnet>/dotnet run \
   --project scripts/tests/tvsubtitles/tvsubtitles.csproj -c Release -- <repo> --live
 ```
 
-It shows the series list — 2.774 entries in the selection field, including the
-placeholder `0` — and The Middle = 512. Then the result of the site search for „The Middle", seasons
-1–9, 24 episode pages in season 2, page 31911 = 2x24 with 3 entries, and the download of an English
-entry. It **creates nothing** — the creation is expressly not part of the probe.
+It shows the series list — 2.774 entries in the selection field, including the placeholder `0` — and
+The Middle = 512. Then the result of the site search for „The Middle", seasons 1–9, 24 episode pages in
+season 2, page 31911 = 2x24 with 3 entries, and the download of an English entry. It **creates
+nothing** — the creation is expressly not part of the probe.

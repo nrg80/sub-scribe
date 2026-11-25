@@ -147,7 +147,7 @@ lazily. A method first reached during SHUTDOWN is then read off disk and the run
 
 **The package is verified before anything is removed**, and the extraction is verified after it: a
 deploy that cannot unpack must not leave an install holding nothing but the logo while reporting
-success. Both failure modes are real and were measured on 08.10.2026 — `unzip` is not on this host's
+success. Both failure modes are real — `unzip` is not on this host's
 PATH, so the extraction failed silently, the old version had already been deleted, and Jellyfin
 answered 503 on a deploy that printed no error. The script now falls back to Python's `zipfile` and
 aborts with `extract failed — no DLL in <path>` if the assembly is still missing. **A negative control
@@ -161,5 +161,5 @@ newly loaded plugin. Bump all three together.
 
 **The readiness line of the script can end on `HTTP 000` while the instance is fine.** The loop breaks
 on the first 200 and then re-probes once more; a slow start makes that second probe time out. Verify
-with your own call — measured 08.10.2026: the script printed `bereit nach ~3s` with `HTTP 000`, and the
+with your own call: the script printed `bereit nach ~3s` with `HTTP 000`, and the
 same endpoint answered 200 eight seconds later.
