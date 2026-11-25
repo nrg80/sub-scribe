@@ -469,7 +469,7 @@ Without a hash **and** without a path row it stays with the honest result: the n
 
 **T406:** A source that cannot take part shows a dead lamp on its tab (F-M744), in `gui-structure`. **3 checks**. The lamp hangs on the tab strip — one per source — and no card carries a state word any more. It reads the endpoint's `participates`, never a second check of the page. Its colour is green when the source takes part and a hollow grey ring when it does not; red stays reserved for destructive and failing states (F-M228).
 
-**T407:** A tab carries an abbreviation of its source (F-M746), in `gui-structure`. **2 checks**. The tab button takes `tabName`, falling back to the display name and then the key. The full name stays in its tooltip. The abbreviation arrives through the source endpoint on its own carrier (`TabName` / `Tab` in the capabilities), so the page holds no list of names of its own and the row labels of F-M731 stay untouched.
+**T407:** A tab carries an abbreviation of its source (F-M746), in `gui-structure`. **3 checks**. The tab button takes `tabName`, falling back to the display name and then the key. The full name stays in its tooltip. The abbreviation arrives through the source endpoint on its own carrier (`TabName` / `Tab` in the capabilities). The read path carries it through the response mapper as well; without that line the tab falls back to the full name silently, which is exactly what happened the first time. The page holds no list of names of its own, and the row labels of F-M731 stay untouched.
 
 ## 12. Tests of the data model and persistence (§14)
 
