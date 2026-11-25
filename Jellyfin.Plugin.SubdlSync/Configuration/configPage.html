@@ -51,20 +51,6 @@
                         </div>
                         <div class="fieldDescription">Languages to download. Empty = download off.</div>
 
-                        <h3>Refetch interval</h3>
-                        <div class="selectContainer">
-                            <label class="selectLabel" for="RefetchInterval">Refetch interval</label>
-                            <select is="emby-select" id="RefetchInterval" name="RefetchInterval" class="emby-select-withcolor emby-select">
-                                <option value="Manual">Manual</option>
-                                <option value="Daily">Daily</option>
-                                <option value="Weekly">Weekly</option>
-                                <option value="Monthly">Monthly</option>
-                            </select>
-                            <div class="fieldDescription">Refetch interval for download and upload.</div>
-                        </div>
-                        <div id="RandomScheduleInfo" style="margin-top:-0.4em; font-size:0.85em; opacity:0.8;"></div>
-
-
                         <!-- F-M497: der TMDb-Schluessel ist die EINZIGE Pflicht — ohne ihn startet keine
                              Richtung, und die Seite sagt das ausdruecklich. -->
                         <h3>TMDb (<span class="subdl-required">Required</span>)</h3>
@@ -106,6 +92,22 @@
 
                         <div id="SourceTabs" class="subdl-source-tabs" role="tablist"></div>
                         <div id="SourceCards"></div>
+
+                        <!-- Betreiberanweisung 25.11.2026, woertlich: "Refetch interval bitte vor den media
+                             files block einsortieren" — der Takt steht damit direkt ueber der Dateiarbeit,
+                             nicht mehr zwischen Zielsprachen und TMDb. -->
+                        <h3>Refetch interval</h3>
+                        <div class="selectContainer">
+                            <label class="selectLabel" for="RefetchInterval">Refetch interval</label>
+                            <select is="emby-select" id="RefetchInterval" name="RefetchInterval" class="emby-select-withcolor emby-select">
+                                <option value="Manual">Manual</option>
+                                <option value="Daily">Daily</option>
+                                <option value="Weekly">Weekly</option>
+                                <option value="Monthly">Monthly</option>
+                            </select>
+                            <div class="fieldDescription">Refetch interval for download and upload.</div>
+                        </div>
+                        <div id="RandomScheduleInfo" style="margin-top:-0.4em; font-size:0.85em; opacity:0.8;"></div>
 
                         <h3>Media files</h3>
                         <div class="checkboxContainer checkboxContainer-withDescription">

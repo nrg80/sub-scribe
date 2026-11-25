@@ -2724,6 +2724,20 @@ def main():
           and page_src.find('id="ScribeDirStatusList"') > page_src.find('id="ScribeStatusBox"'),
           "refresh button after the status block")
 
+    # F-M752 (Betreiberanweisung 25.11.2026, woertlich: "Refetch interval bitte vor den media files
+    # block einsortieren. Gui general"): der Takt steht direkt ueber der Dateiarbeit — nach den
+    # Quellen, vor "Media files". Das Feld bleibt im selben Formular, die Speicherstelle ist unberuehrt.
+    check("F-M752: the Refetch interval block stands directly before the Media files block",
+          page_src.find('id="RefetchInterval"') > 0
+          and page_src.find('id="RefetchInterval"') < page_src.find('<h3>Media files</h3>')
+          and page_src.find('<h3>Refetch interval</h3>') > page_src.find('id="SourceCards"'),
+          "Takt nach den Quellen, vor den Media files")
+    check("F-M752: the interval is named once and the schedule line travels with it",
+          page_src.count('id="RefetchInterval"') == 1
+          and page_src.find('id="RandomScheduleInfo"') > page_src.find('<h3>Refetch interval</h3>')
+          and page_src.find('id="RandomScheduleInfo"') < page_src.find('<h3>Media files</h3>'),
+          "ein Feld, Zeile darunter, beide im selben Block")
+
     box = page_src.find('id="ScribeStatusBox"')
     reihenfolge = [page_src.find('id="%s"' % i, box) for i in
                    ('TmdbApiStatus', 'SubdlLoginStatus', 'ScribeApiStatus', 'TvstStatus', 'MstStatus')]

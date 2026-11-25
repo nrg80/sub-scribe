@@ -39,7 +39,7 @@ states the rule, its constants, its ground and its test.**
 - [10. Scheduler, Quota and Timing](#10-scheduler-quota-and-timing) — 24 requirements
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
-- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 27 requirements
+- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 28 requirements
 - [14. Data Model and Persistence](#14-data-model-and-persistence) — 92 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 61 requirements
 - [16. Non-Goals](#16-non-goals)
@@ -2085,6 +2085,8 @@ The page shows the **effective** state: an empty field is displayed as ticked (t
 **F-M750 [U]:** **A written setting names itself in the log — which file, which field, which value before and after.** Concept decision: the line is a detail line — written at information with the `[D]` marker, so the server level never has to be raised, and shown while the plugin's own mode is `Debug`. It stands one per changed field, and an unchanged field stays silent so that a save with nothing to change costs no line. The value appears only for switches, numbers and selections; free text and secrets are reported as `gesetzt (<n> chars)` or `leer`, because a log line is no place for an address or a key (F-M683). Both write paths are covered: the card of a source, which writes one settings file, and the settings page, which writes the plugin configuration. Reason: two lines 32 seconds apart reported opposite states of the upload direction, and nothing in the log could decide whether a switch had been misread or just saved. Checked in `sources`.
 
 **F-M751 [U]:** **No password and no API key reaches the log, not even on the debug level.** Concept decision: a settings line names switches, numbers and selections with their value, and every character string only as `gesetzt` or `leer` — no length, no excerpt, no beginning. That covers passwords, API keys, addresses and library names alike, because a log line is read by more eyes than the settings page. A replaced key still reads as a change: `gesetzt -> gesetzt (neu)`, so a swapped secret never looks like nothing happened. Checked in `sources`.
+
+**F-M752 [G]:** **The refetch interval stands directly above the media files block.** Concept decision: the General tab is read from the run outward — libraries, target languages, the TMDb key, the endpoint order and the source cards, then the interval, then the work on the files. The field stays inside the page form and its save path is untouched, and the schedule line that names the next run travels with it. Checked in `gui-structure`.
 
 ## 14. Data Model and Persistence
 
