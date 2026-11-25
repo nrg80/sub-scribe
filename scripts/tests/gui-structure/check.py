@@ -1882,10 +1882,41 @@ def main():
           "Required for SubDL only" not in subdl_block
           and 'id="SourceCards"' in subdl_block
           and 'subdl-required">Required</span>' in tmdb_block
-          and "the one mandatory key" in tmdb_block
+          and "the only mandatory key" in tmdb_block
           and 'id="TmdbApiKey"' in tmdb_block
           and re.search(r"new\(FieldApiKey,.*?Required: true", subdl_engine_src) is not None,
           "F-M497: TMDb ist Pflicht; die Quelle erklaert ihr Pflichtfeld selbst (apiKey, Required: true)")
+
+    # ---- F-M228 (Betreiberbefund 25.11.2026: „previously the required in the headlines was in gui
+    # style blue"): die Pflichtmarke in den drei Ueberschriften traegt die Akzentfarbe. Der Befund war
+    # eine Regression: die Klasse stand im Markup, ihre CSS-Regel war beim Karten-Umbau verloren
+    # gegangen, und ohne Regel faellt ein span auf die Textfarbe der Ueberschrift zurueck.
+    check("F-M228: the 'Required' marker in the headings is styled in the accent blue",
+          ".subdl-required { color: #00a4dc" in page_src_f497
+          and page_src_f497.count('class="subdl-required"') >= 3,
+          "F-M228: die Marke in den Ueberschriften braucht ihre eigene CSS-Regel")
+
+    # ---- F-M743 (Betreiberwunsch 25.11.2026: „for the endpoint configuration maybe we can introduce
+    # slides on the page to cycle through sources instead of putting them below of each other"): die
+    # Quellen stehen als Reiter, nicht als Stapel. Geprueft wird die Mechanik, nicht die Optik: eine
+    # Leiste, ein Knopf je Karte, genau eine sichtbare Karte, und die Karten bleiben im DOM.
+    check("F-M743: the source cards sit behind a tab strip, one per source",
+          'id="SourceTabs"' in page_src_f497
+          and "function subdlSourceTabs(" in page_src_f497
+          and "function subdlSourceTab(" in page_src_f497
+          and "subdlSourceTabs(list);" in page_src_f497,
+          "F-M743: eine Reiterleiste je Quelle im Abschnitt Endpoints")
+    check("F-M743: switching a tab hides the other cards but keeps them in the document",
+          "card.className = 'subdl-source-card subdl-source-pane';" in page_src_f497
+          and "cards[i].style.display = on ? '' : 'none';" in page_src_f497
+          and ".subdl-source-pane { display: none; }" in page_src_f497,
+          "F-M743: versteckte Karten bleiben im DOM, damit Werte und Speichern je Karte weiterlaufen")
+    check("F-M743: the source tabs carry their own class, so the direction tabs do not clear them",
+          "btn.className = 'subdl-source-tab raised emby-button';" in page_src_f497
+          and '.subdl-source-tab.active' in page_src_f497
+          and "subdl-tab-btn" not in page_src_f497[page_src_f497.find("function subdlSourceTabs("):
+                                            page_src_f497.find("function subdlLoadSources(")],
+          "F-M743: eigene Klasse fuer die Quellenreiter (subdlShowTab fasst .subdl-tab-btn an)")
 
     # ---- F-M497 (Nachtrag des Nutzers: „Tmdb confi dann auch vor subdl konfi in der gui"): die
     # Pflicht steht VOR der optionalen Quelle — wer die Seite liest, sieht zuerst, was er haben MUSS.

@@ -47,13 +47,17 @@ with where the value comes from (F-M222):
 - **Libraries** — the opt-in list of Jellyfin libraries (F-M213). It is opt-in *and* required: nothing is
   processed until a library is picked, and the description says so in one line —
   `Libraries to work in. Empty = no run.` (F-M230).
-- **The SubDL account** — the login first, then the API key, in the order the operator needs them
-  (F-M222).
+- **The SubDL API key** — it stands in the source card, not in the page's own form: the engine declares
+  it as a secret field and marks it required in its own schema (F-M222, F-M497, F-M688). Its short
+  description says where the key comes from: a free key from the account panel, documented at
+  `subdl.com/api-doc`.
 - **The TMDb API key** (F-M203).
 - **The target languages** (F-M42).
 
-The marker reads `Libraries (opt-in, Required)` and `SubDL Account (Required)` and is rendered in the
-accent colour `#00a4dc`, without extra spacing (F-M222, F-M228). **Red is reserved** for destructive and
+The marker reads `Libraries (opt-in, Required)` and `TMDb (Required)`. It is rendered in the accent
+colour `#00a4dc`, without extra spacing (F-M222, F-M228). The same blue applies to the marker inside a
+heading: it is the same statement, only larger, and without its own style rule a heading marker falls
+back to the heading's text colour and reads as just another word. **Red is reserved** for destructive and
 failing states — a required marker in red would compete with a real warning (F-M228). Links use the same
 accent blue as the rest of the page (F-M229).
 
@@ -82,6 +86,12 @@ never its value, and `VisibleWhen` shows a field only while another field holds 
 | `tvsubtitles` | `baseUrl` (URL) | the site demands no access data |
 | `moviesubtitles` | `baseUrl` (URL) | the access field fell out — it was empty from the start |
 
+The three cards stand behind **one tab per source**, not stacked one below the other (F-M743). The strip
+carries the source name and a dot when the source is configured, so one glance says which sources run at
+all. Switching hides the other cards but keeps them in the document. A card's values, its `VisibleWhen`,
+its own `Save` and its result line keep working. The endpoint order stands directly under the `Endpoints`
+heading, above the strip (F-M698, F-M703).
+
 The values live in **one file per source**, beside the plugin data — not in the page and not in the
 plugin database (§22). The addresses come from the constants of the clients, never from a second
 hand-typed copy.
@@ -103,8 +113,8 @@ hand-typed copy.
 
 ## 7. Colour and wording
 
-- The accent colour `#00a4dc` marks required fields and links; grey `#767676` marks `dry` and `cancel`;
-  red is for destructive and failing states only (F-M228, F-M229, F-M409).
+- The accent colour `#00a4dc` marks required fields, the marker in a heading and links; grey `#767676`
+  marks `dry` and `cancel`; red is for destructive and failing states only (F-M228, F-M229, F-M409).
 - **One state, one word** — the page uses the same word as the log and the statistics, with no synonym
   and no second spelling (`LOGGING.md`, rule 3.7).
 - A switch or button names the act it performs, not the thing it touches (F-M385).

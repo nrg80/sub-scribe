@@ -1010,6 +1010,14 @@
     "T165": {
       "suite": "langcorrect",
       "checks": 19
+    },
+    "T404": {
+      "suite": "gui-structure",
+      "checks": 3
+    },
+    "T405": {
+      "suite": "gui-structure",
+      "checks": 1
     }
   }
 }

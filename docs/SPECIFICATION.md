@@ -39,7 +39,7 @@ states the rule, its constants, its ground and its test.**
 - [10. Scheduler, Quota and Timing](#10-scheduler-quota-and-timing) — 24 requirements
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
-- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 18 requirements
+- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 19 requirements
 - [14. Data Model and Persistence](#14-data-model-and-persistence) — 92 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 61 requirements
 - [16. Non-Goals](#16-non-goals)
@@ -2036,7 +2036,7 @@ Libraries is opt-in AND required: nothing is processed until a library is picked
 **F-M299:** **An intro block under a section heading describes what the section does — measurements never appear on the settings page.** Measurements, episode counts, before/after figures, accuracy figures and shares are **spec and commit material**, not UI text. **Budget: 300 rendered characters** per intro. The same holds for a description block under a checkbox: it states what the switch does and its default, and a diagnostic figure such as a failure share belongs in the log line that measures it.
 **F-M229:** **Links in the settings page use the same accent blue as the rest of the page.** Jellyfin's stylesheet ships only `a{color:inherit}`, so the links in the field descriptions fell back to the browser default `#0000EE`. Rule: `#SubdlSyncConfigPage a { color: #00a4dc; }` — exactly one blue, no separate hover shade. Scope: link colour only; the destructive red and the status colours are untouched.
 
-**F-M228:** **The settings page marks required fields in the accent colour `#00a4dc`, without extra spacing.** Red is reserved for destructive and failed states, so a red marker made a mandatory field look like a fault. The inline variant carries no margin of its own. Scope: the four markers and their two style rules.
+**F-M228:** **The settings page marks required fields in the accent colour `#00a4dc`, without extra spacing.** Red is reserved for destructive and failed states, so a red marker made a mandatory field look like a fault. The inline variant carries no margin of its own. Scope: the markers in the three headings and the inline variant, each with its own style rule.
 
 **F-M36 [B2]:** Both lists maintainable on the config page (one pattern per line, textarea), defaults pre-filled (`incomplete`, `sample`, `trailer`, `partial`, `downloading`).
 
@@ -2065,6 +2065,8 @@ The page shows the **effective** state: an empty field is displayed as ticked (t
 **F-M478 [D]:** **A switch without a built-in source is visible, switched off and says why.** tvsubtitles.net has its two switches on the page, but neither a fetch nor an upload in the code. `HasProvider(TvSubtitles)` is false, both directions are off regardless of the stored value, and under the switch stands the reason (`MissingProviderReason`) in the same wording that the worker note also uses. The field is switched off (`disabled`) and is written to `false` on save, so that an old value never remains standing as an invitation. The rule is the same as with F-M366: a control that does nothing is worse than none, because it claims a choice. Checked by T202. **Continued by F-M485:** the second source is wired in — `HasProvider(TvSubtitles)` has been true since, the two fields are operable, and the switches act per direction (the source part of this entry no longer holds). **Continued by F-M503:** the default of the two tvst directions is download **on**, upload **off**. Checked by T225.
 
 **F-M479 [P]:** **The four switches stand in the tab of their direction, not in a provider tab of their own.** Download switches in the download tab, upload switches in the upload tab, one row per source with the source name in the label (`Download enabled — SubDL`). A provider tab would have separated the direction from its switching and forced the path "first here, then there"; the direction is the question the user has.
+
+**F-M743 [U]:** **The sources stand as tabs, not as a stack: one tab per source, one card visible at a time.** Concept decision: the endpoint cards are cycled through, because three stacked cards pushed the media-file block off the first screen and made the page scroll before the operator had seen anything. The tab strip carries the source name and a dot when the source is configured, so one glance says which sources run at all. Switching hides the other cards but keeps them in the document: values, `visibleWhen`, the per-card `Save` and the result line all keep working on the hidden card, and nothing is written that the operator did not ask for. The endpoint order (F-M698) keeps standing directly under the `Endpoints` heading, above the strip. Checked by T404.
 
 ## 14. Data Model and Persistence
 
