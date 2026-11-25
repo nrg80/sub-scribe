@@ -21,7 +21,7 @@ stands in §19 of `SPECIFICATION.md`, and the binding of a test to its suite in 
 - [8. Tests of the scheduler, the quota and the timing (§10)](#8-tests-of-the-scheduler-the-quota-and-the-timing-10) — 17 tests
 - [9. Tests of the content registry and identity (§11)](#9-tests-of-the-content-registry-and-identity-11) — 11 tests
 - [10. Tests of the library scope and the skip filters (§12)](#10-tests-of-the-library-scope-and-the-skip-filters-12) — 3 tests
-- [11. Tests of the configuration and the settings page (§13)](#11-tests-of-the-configuration-and-the-settings-page-13) — 29 tests
+- [11. Tests of the configuration and the settings page (§13)](#11-tests-of-the-configuration-and-the-settings-page-13) — 33 tests
 - [12. Tests of the data model and persistence (§14)](#12-tests-of-the-data-model-and-persistence-14) — 75 tests
 - [13. Tests of logging, status and transparency (§15)](#13-tests-of-logging-status-and-transparency-15) — 19 tests
 - [14. Tests of the test discipline itself (§19)](#14-tests-of-the-test-discipline-itself-19) — 34 tests
@@ -463,6 +463,14 @@ Without a hash **and** without a path row it stays with the honest result: the n
 
 **T327:** Every plugin database helps itself (F-M617): self-help in all five stores. **1 check** in `endpoints`.
 
+**T404:** The source cards sit behind a tab strip (F-M743), in `gui-structure`. **4 checks**. The strip `#SourceTabs` exists, and `subdlSourceTabs` is called after the cards are built. Exactly one card is visible. The `active` card carries a CSS rule that shows it *and* an inline `display`, because a rule alone once kept every card hidden: the tabs were there and no window was. The hidden cards stay in the document, so values, `visibleWhen`, the per-card `Save` and the result line keep working. The first tab opens when the page is drawn. The source tabs carry their own class `subdl-source-tab`, because `subdlShowTab` clears `.subdl-tab-btn` and would otherwise strip their active state.
+
+**T405:** The 'Required' marker in the headings keeps its accent blue (F-M228), in `gui-structure`. **1 check**. `.subdl-required` has its own CSS rule with `color: #00a4dc`, and at least three headings carry the class. The rule had gone missing while the source cards were built, and without it the span falls back to the heading's text colour — the marker read as just another word.
+
+**T406:** A source that cannot take part shows a dead lamp on its tab (F-M744), in `gui-structure`. **3 checks**. The lamp hangs on the tab strip — one per source — and no card carries a state word any more. It reads the endpoint's `participates`, never a second check of the page. Its colour is green when the source takes part and a hollow grey ring when it does not; red stays reserved for destructive and failing states (F-M228).
+
+**T407:** A tab carries an abbreviation of its source (F-M746), in `gui-structure`. **2 checks**. The tab button takes `tabName`, falling back to the display name and then the key. The full name stays in its tooltip. The abbreviation arrives through the source endpoint on its own carrier (`TabName` / `Tab` in the capabilities), so the page holds no list of names of its own and the row labels of F-M731 stay untouched.
+
 ## 12. Tests of the data model and persistence (§14)
 
 **T17:** Two streams of the same language keep independent verdicts (F-M197)
@@ -631,7 +639,7 @@ The three old SubDL fields (`Username`, `Password`, `ApiKey`) have disappeared f
 
 **T364:** Without a stored list the order shows the old setting (F-M701), in `gui-structure`. **1 check**: both preassignments (`tvsubtitles,moviesubtitles,subdl` and `subdl,tvsubtitles,moviesubtitles`) stand in the page, and the fallback is bound to `if (!liste)`.
 
-**T365:** A card says only what a field is (F-M702). **1 check** in `sources`: no engine gives a field a help text (0 descriptions across all three sources).
+**T365:** What a card says about a field (F-M702, F-M745). **2 checks** in `sources`: a help text is one line (no line break) and no help text is longer than 80 characters. The ban on help texts was lifted by the operator: "too much talk" meant short, not silent. The check therefore guards the limit instead of the silence. Everything else of F-M702 — no placeholder, no `set` line, the light as the summary — is checked where it stood.
 
 **T366:** The order stands under Endpoints (F-M703), in `gui-structure`. **1 check**: the block `SourceOrderBlock` lies in the section between the heading `Endpoints` and `Media files`, **before** `SourceCards`, and no longer in the General tab.
 

@@ -518,14 +518,26 @@ internal static class Program
             // („Default: off."). Ein Satz mit Begruendung gehoert in die Doku, nicht auf die Karte.
             // F-M702 (Betreiberansage 22.11.2026: „und das bla blah weglassen … keine weitere Beschreibung"):
             // eine Karte traegt GAR KEINE Beschreibung mehr — nur Beschriftungen und Schalter.
+            // F-M745 (Betreiberantwort 25.11.2026: "80"): ein Feld DARF eine kurze Zeile Hilfe tragen — eine
+            // Zeile, hoechstens 80 Zeichen. Das Verbot aus F-M702 ("und das bla blah weglassen") war als
+            // Verbot gelesen, gemeint war "kurz". Alles andere jener Regel gilt weiter (kein Platzhalter,
+            // keine set/not-set-Zeile, keine Anfrage-pro-Staffel-Notiz).
             var mitText = registry.Engines
                 .SelectMany(e => e.Fields.Select(f => (Quelle: e.Capabilities.Key, Feld: f.Key, Text: f.Help)))
                 .Where(t => !string.IsNullOrWhiteSpace(t.Text))
                 .ToList();
-            Check(mitText.Count == 0,
-                "F-M702: keine Quelle haengt eine Beschreibung an ein Feld — die Karte sagt nur, was das Feld ist",
-                mitText.Count == 0 ? "0 Beschreibungen" : string.Join(" | ",
-                    mitText.Select(t => t.Quelle + "/" + t.Feld + " = " + t.Text)));
+            var mehrzeilig = mitText.Where(t => t.Text!.Contains('\n')).ToList();
+            Check(mehrzeilig.Count == 0,
+                "F-M745: ein Hinweis ist EINE Zeile - kein Text mit Zeilenumbruch",
+                mehrzeilig.Count == 0 ? "0 mehrzeilige" : string.Join(" | ",
+                    mehrzeilig.Select(t => t.Quelle + "/" + t.Feld)));
+            var zuLang = mitText.Where(t => t.Text!.Length > 80).ToList();
+            Check(zuLang.Count == 0,
+                "F-M745: kein Hinweistext ist laenger als 80 Zeichen",
+                zuLang.Count == 0
+                    ? (mitText.Count == 0 ? "0 Hinweise" : mitText.Count + " Hinweise, laengster "
+                        + mitText.Max(t => t.Text!.Length) + " Zeichen")
+                    : string.Join(" | ", zuLang.Select(t => t.Quelle + "/" + t.Feld + " = " + t.Text!.Length + " Zeichen")));
 
             // F-M696: die Art der Quelle steht als Variable in den Faehigkeiten — nicht als Name.
             var arten = registry.Engines.ToDictionary(

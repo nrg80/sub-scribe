@@ -1882,10 +1882,94 @@ def main():
           "Required for SubDL only" not in subdl_block
           and 'id="SourceCards"' in subdl_block
           and 'subdl-required">Required</span>' in tmdb_block
-          and "the one mandatory key" in tmdb_block
+          and "the only mandatory key" in tmdb_block
           and 'id="TmdbApiKey"' in tmdb_block
           and re.search(r"new\(FieldApiKey,.*?Required: true", subdl_engine_src) is not None,
           "F-M497: TMDb ist Pflicht; die Quelle erklaert ihr Pflichtfeld selbst (apiKey, Required: true)")
+
+    # ---- F-M228 (Betreiberbefund 25.11.2026: „previously the required in the headlines was in gui
+    # style blue"): die Pflichtmarke in den drei Ueberschriften traegt die Akzentfarbe. Der Befund war
+    # eine Regression: die Klasse stand im Markup, ihre CSS-Regel war beim Karten-Umbau verloren
+    # gegangen, und ohne Regel faellt ein span auf die Textfarbe der Ueberschrift zurueck.
+    check("F-M228: the 'Required' marker in the headings is styled in the accent blue",
+          ".subdl-required { color: #00a4dc" in page_src_f497
+          and page_src_f497.count('class="subdl-required"') >= 3,
+          "F-M228: die Marke in den Ueberschriften braucht ihre eigene CSS-Regel")
+
+    # ---- F-M743 (Betreiberwunsch 25.11.2026: „for the endpoint configuration maybe we can introduce
+    # slides on the page to cycle through sources instead of putting them below of each other"): die
+    # Quellen stehen als Reiter, nicht als Stapel. Geprueft wird die Mechanik, nicht die Optik: eine
+    # Leiste, ein Knopf je Karte, genau eine sichtbare Karte, und die Karten bleiben im DOM.
+    check("F-M743: the source cards sit behind a tab strip, one per source",
+          'id="SourceTabs"' in page_src_f497
+          and "function subdlSourceTabs(" in page_src_f497
+          and "function subdlSourceTab(" in page_src_f497
+          and "subdlSourceTabs(list);" in page_src_f497,
+          "F-M743: eine Reiterleiste je Quelle im Abschnitt Endpoints")
+    # Der erste Anlauf pruefte Quelltext-Zeichenketten, die den Fehler enthielten: die Karte wurde
+    # versteckt (`.subdl-source-pane { display: none }`), und das Einschalten leerte nur den
+    # Inline-Wert (`style.display = ''`), sodass die Klassenregel weiter versteckte — die Reiter waren
+    # da, die Fenster nicht (Betreiberbefund 25.11.2026: "kein Fenster das es anzeigt oder cyclt").
+    # Die Pruefung haengt jetzt an dem, was die Karte wirklich sichtbar macht.
+    check("F-M743: exactly one card is visible, the others stay in the document",
+          ".subdl-source-pane { display: none; }" in page_src_f497
+          and ".subdl-source-pane.active { display: block; }" in page_src_f497
+          and "cards[i].style.display = on ? 'block' : 'none';" in page_src_f497
+          and "card.classList.add('subdl-source-pane');" in page_src_f497
+          and page_src_f497.count("subdl-source-pane") >= 4,
+          "F-M743: die sichtbare Karte braucht eine Regel UND einen Inline-Wert; versteckte bleiben im DOM")
+    check("F-M743: the first tab is open when the page is drawn",
+          "if (keys.length) { subdlSourceTab(keys[0]); }" in page_src_f497,
+          "F-M743: ohne diesen Aufruf steht die Seite mit drei versteckten Karten da")
+    check("F-M743: the source tabs carry their own class, so the direction tabs do not clear them",
+          "btn.className = 'subdl-source-tab raised emby-button';" in page_src_f497
+          and '.subdl-source-tab.active' in page_src_f497
+          and "subdl-tab-btn" not in page_src_f497[page_src_f497.find("function subdlSourceTabs("):
+                                            page_src_f497.find("function subdlLoadSources(")],
+          "F-M743: eigene Klasse fuer die Quellenreiter (subdlShowTab fasst .subdl-tab-btn an)")
+
+    # ---- F-M746 (Betreiberwunsch 25.11.2026: "Wir koennen fuer die Reiter Abkuerzungen einfuehren SubDL,
+    # tvst, mst"): der Reiter traegt eine Abkuerzung, der Kartenkopf den vollen Namen. Die Abkuerzung ist
+    # NICHT der Kurzname der Zeile — den haelt F-M731 fest (tvst in der Zeile je Paar, sonst unveraendert) —
+    # sondern ein eigener Traeger in den Faehigkeiten der Quelle; die Seite haelt keine Namensliste.
+    view_src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))))), "Jellyfin.Plugin.SubdlSync/Api/SourceSettingsView.cs"),
+        encoding="utf-8").read()
+    kontrakt = open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))))), "Jellyfin.Plugin.SubdlSync/Sources/SourceContract.cs"),
+        encoding="utf-8").read()
+    check("F-M746: the tab carries the source's abbreviation, the card head the full name",
+          "btn.textContent = eintrag.tabName || eintrag.displayName || eintrag.key;" in page_src_f497
+          and "btn.title = eintrag.displayName || eintrag.key;" in page_src_f497,
+          "F-M746: Reiter = Abkuerzung, Tooltip = voller Name")
+    check("F-M746: the abbreviation comes from the source, on its own carrier",
+          "string TabName," in view_src
+          and "engine.Capabilities.Tab," in view_src
+          and "public string TabName { get; init; }" in kontrakt
+          and "public string Tab =>" in kontrakt,
+          "F-M746: eigener Traeger TabName/Tab, nicht der Kurzname der Zeile (F-M731)")
+
+    # ---- F-M744 (Betreiberwunsch 25.11.2026: "Wenn irgendein endpoint nicht konfiguriert ist, keine
+    # Zugangsdaten fuer subdl zb, soll er als off angezeigt werden"; Betreiberbefund am selben Tag:
+    # "3x on/off ist ein bisschen viel auf einer seite. Vorschlag: als Ampel aus der tabauswahl raus"):
+    # der Zustand steht NICHT in jedem Kartenkopf, sondern als Ampel an der Reiterleiste — dort, wo die
+    # Wahl zwischen den Quellen faellt. Das Wort kommt aus der Antwort (participates), nicht aus einer
+    # zweiten Pruefung der Seite.
+    check("F-M744: the state sits as one lamp per tab, not as a word in every card",
+          "subdl-source-tab-lamp ' + (an ? 'on' : 'off')" in page_src_f497
+          and "subdl-source-state" not in page_src_f497,
+          "F-M744: eine Ampel je Reiter; kein on/off-Wort mehr in den Karten")
+    check("F-M744: the lamp reads the endpoint's answer, not a second check of the page",
+          "list[i].participates === true" in page_src_f497
+          and ".subdl-source-tab-lamp.off" in page_src_f497,
+          "F-M744: participates entscheidet, hohler Ring statt Fuellung")
+    check("F-M744: the state colour is green or grey, never red",
+          ".subdl-source-tab-lamp { display: inline-block" in page_src_f497
+          and "background: #107c10" in page_src_f497
+          and "inset 0 0 0 1px #767676" in page_src_f497
+          and "#a4262c" not in page_src_f497[page_src_f497.find(".subdl-source-tab-lamp"):
+                                                 page_src_f497.find(".subdl-source-tab-lamp") + 400],
+          "F-M228: rot bleibt fuer zerstoerende und fehlerhafte Zustaende")
 
     # ---- F-M497 (Nachtrag des Nutzers: „Tmdb confi dann auch vor subdl konfi in der gui"): die
     # Pflicht steht VOR der optionalen Quelle — wer die Seite liest, sieht zuerst, was er haben MUSS.

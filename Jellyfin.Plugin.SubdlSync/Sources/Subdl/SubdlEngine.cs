@@ -144,7 +144,7 @@ public sealed class SubdlEngine : ISourceEngine
         new(FieldReportEnabled, "Report", SourceFieldKind.Switch, Default: "true", Group: SourceField.Badges,
             Help: null),
         new(FieldApiKey, "API key", SourceFieldKind.Secret, Default: string.Empty, Required: true,
-            Help: null),
+            Help: "Free key, created in your account panel and documented at subdl.com/api-doc."),
         // F-M694 (Betreiberansage 22.11.2026: „Subdl... Api key, email, password."): die drei Zugänge,
         // die ein Mensch bei SubDL einträgt. Bis hierher stand hier „Account"; die Seite sagte damit
         // nicht, was hineingehört (nämlich die E-Mail-Adresse des Kontos). Der Schlüssel in der Datei
@@ -227,6 +227,7 @@ public sealed class SubdlEngine : ISourceEngine
         {
             Key = SourceKey,
             DisplayName = "SubDL",
+            TabName = "SubDL",   // F-M746: Beschriftung des Reiters
             CanUpload = true,
             // F-M696: SubDL fuehrt Serien UND Filme.
             ServesSeries = true,

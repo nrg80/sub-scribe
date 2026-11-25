@@ -104,6 +104,11 @@ public sealed record SourceCapabilityView(
 public sealed record SourceEntryView(
     string Key,
     string DisplayName,
+
+    // F-M746 (Betreiberwunsch 25.11.2026: "Wir koennen fuer die Reiter Abkuerzungen einfuehren SubDL, tvst, mst"):
+    // der Reiter traegt die Abkuerzung der Quelle, der Kartenkopf weiter den vollen Namen. Sie kommt aus
+    // den Faehigkeiten der Quelle (SourceCapabilities.Tab), nicht aus einer Liste in der Seite.
+    string TabName,
     bool Configured,
 
     // F-M708 (Betreiberbefund 22.11.2026: "Das on unter change order geht nie off"): die Ampel der
@@ -281,6 +286,7 @@ public static class SourceSettingsView
         return new SourceEntryView(
             key,
             engine.Capabilities.DisplayName,
+            engine.Capabilities.Tab,
             eingerichtet,
             eingerichtet && richtung,
             hinweis,

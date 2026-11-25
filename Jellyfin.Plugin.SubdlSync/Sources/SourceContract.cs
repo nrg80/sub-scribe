@@ -169,10 +169,19 @@ public sealed record SourceCapabilities
     /// </summary>
     public string ShortName { get; init; } = string.Empty;
 
+    // F-M746 (Betreiberwunsch 25.11.2026: "Wir koennen fuer die Reiter Abkuerzungen einfuehren SubDL, tvst, mst"):
+    // Die Reiter-Beschriftung ist NICHT der Kurzname der Zeile. F-M731 haelt fest, dass die Zeile je Paar den
+    // Kurznamen der Quelle traegt und alle uebrigen Zeilen unveraendert bleiben; eine Abkuerzung fuer den Reiter
+    // darf die Zeilen also nicht mitziehen. Darum ein eigener Traeger: leer heisst "nimm den Kurznamen".
+    public string TabName { get; init; } = string.Empty;
+
     /// <summary>
     /// Gets der Kurzname mit Vorgabe: leer heißt „nimm <see cref="Key"/>".
     /// </summary>
     public string Short => string.IsNullOrEmpty(ShortName) ? Key : ShortName;
+
+    /// <summary>Die Beschriftung des Reiters (F-M746); leer heisst: der Kurzname der Zeile.</summary>
+    public string Tab => string.IsNullOrEmpty(TabName) ? Short : TabName;
 
     /// <summary>Gets kann die Quelle eigene Untertitel annehmen?</summary>
     public bool CanUpload { get; init; }
