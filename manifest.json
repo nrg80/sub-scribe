@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.61",
-        "changelog": "v12.3.8.61: the statistics are the last block of the General tab, under the refresh control.",
+        "version": "12.3.8.62",
+        "changelog": "v12.3.8.62: the reset statistics control looks like the refresh control — full width, same grey.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.61-dev/Jellyfin.Plugin.SubdlSync_12.3.8.61.zip",
-        "checksum": "a38476ee9786a8bfc9f6efb437882418",
-        "timestamp": "2026-11-25T20:53:58Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.62-dev/Jellyfin.Plugin.SubdlSync_12.3.8.62.zip",
+        "checksum": "22ae84648d8677d412d6633b75f851f1",
+        "timestamp": "2026-11-25T21:21:42Z"
       }
     ]
   }
