@@ -24,3 +24,8 @@ expected, what happened, and the matching log lines — never a key, a password 
 
 **More.** The project page is <https://github.com/nrg80/sub-scribe>: the README explains the parts in
 order, and `docs/SPECIFICATION.md` in that repository is the full account.
+
+**Where this sheet lives.** It has an address, so a copy of it can always be traced back and stays
+current: <https://raw.githubusercontent.com/nrg80/sub-scribe/main/docs/briefings/short.md>, readable as a
+page at <https://github.com/nrg80/sub-scribe/blob/main/docs/briefings/short.md>. When this text is
+passed on, that address travels with it.
