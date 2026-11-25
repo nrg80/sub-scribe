@@ -5338,13 +5338,10 @@ public sealed class DownloadPipeline : IDisposable
     {
         reason = null;
         bool episode = item is Episode;
-        int floorSec = Qa.RuntimeWindow.FloorFor(
-            episode,
-            _config.DownloadRuntimeToleranceSec,
-            _config.DownloadRuntimeToleranceEpisodeSec);
-        if (floorSec <= 0 || (item.RunTimeTicks ?? 0) <= 0)
+        int floorSec = Qa.RuntimeWindow.FloorFor(episode);
+        if ((item.RunTimeTicks ?? 0) <= 0)
         {
-            return true; // check disabled for this kind, or no runtime metadata
+            return true; // no runtime metadata
         }
 
         string content = DecodeSrt(srtBytes, language);
