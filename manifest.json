@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.47",
-        "changelog": "v12.3.8.47: the state of each source is one lamp on its tab instead of a word in every card.",
+        "version": "12.3.8.48",
+        "changelog": "v12.3.8.48: the tabs of the endpoints show the short names SubDL, tvst and mst.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.47/Jellyfin.Plugin.SubdlSync_12.3.8.47.zip",
-        "checksum": "d53490167501942635717d4fbdfd7a91",
-        "timestamp": "2026-11-25T07:29:28Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.48-dev/Jellyfin.Plugin.SubdlSync_12.3.8.48.zip",
+        "checksum": "2b04150b19a5182273ce64125d321b07",
+        "timestamp": "2026-11-25T07:40:19Z"
       }
     ]
   }

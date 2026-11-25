@@ -1942,6 +1942,9 @@ def main():
           "btn.textContent = eintrag.tabName || eintrag.displayName || eintrag.key;" in page_src_f497
           and "btn.title = eintrag.displayName || eintrag.key;" in page_src_f497,
           "F-M746: Reiter = Abkuerzung, Tooltip = voller Name")
+    check("F-M746: the read path carries the abbreviation through the mapper",
+          "tabName: subdlSourceWert(eintrag, 'tabName')," in page_src_f497,
+          "F-M746: ohne diese Zeile im Mapper faellt der Reiter auf den vollen Namen zurueck")
     check("F-M746: the abbreviation comes from the source, on its own carrier",
           "string TabName," in view_src
           and "engine.Capabilities.Tab," in view_src

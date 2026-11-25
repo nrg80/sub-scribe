@@ -2035,6 +2035,9 @@ workers.forEach(function (w) {
                 return {
                     key: subdlSourceWert(eintrag, 'key'),
                     displayName: subdlSourceWert(eintrag, 'displayName'),
+                    // F-M746: der Endpunkt liefert das Feld, der Mapper muss es durchreichen — sonst
+                    // faellt der Reiter still auf den vollen Namen zurueck (am 25.11.2026 genau so passiert).
+                    tabName: subdlSourceWert(eintrag, 'tabName'),
                     configured: subdlSourceWert(eintrag, 'configured') === true,
                     participates: subdlSourceWert(eintrag, 'participates') === true,
                     hint: subdlSourceWert(eintrag, 'hint'),
