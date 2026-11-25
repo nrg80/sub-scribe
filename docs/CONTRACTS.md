@@ -1,6 +1,6 @@
 # The contracts of the sources — where the boundary runs
 
-**Owner: the boundaries.** The three contracts and the rules that hold them apart; the rules themselves stand in `REQUIREMENTS.md` (§22 with §§3, 4 and 10).
+**Owner: the boundaries.** The three contracts and the rules that hold them apart; the rules themselves stand in `SPECIFICATION.md` (§22 with §§3, 4 and 10).
 
 **The vocabulary is `docs/TERMS.md`; this document uses it without repeating it.**
 
@@ -9,7 +9,7 @@ complements the requirements (F-M682, F-M729 to F-M734) and does not repeat them
 there, the boundary between the contracts lives here.
 
 **Counting convention.** This document defines no `F-M` entries of its own — the rules live in
-`docs/REQUIREMENTS.md`, and this document cites their tags instead of repeating them. Its contents
+`docs/SPECIFICATION.md`, and this document cites their tags instead of repeating them. Its contents
 list therefore carries anchors only, no counters; the per-section counters live where the definitions
 live.
 
@@ -47,7 +47,7 @@ pack, handle, verdict, capability, light, inquiry. Three words are used in this 
 - **Every source may fulfil one, two or all three of them.** The job contract is mandatory, the other
   two are voluntary. Whoever does not fulfil them is absent from the respective list — there is no
   empty obligatory answer.
-- **The rules themselves live in `docs/REQUIREMENTS.md`** — §22 for one contract per source, §§3 and 4 for the two directions, §10 for quota and timing. This document states where the boundary runs; it cites the tags instead of repeating the rules.
+- **The rules themselves live in `docs/SPECIFICATION.md`** — §22 for one contract per source, §§3 and 4 for the two directions, §10 for quota and timing. This document states where the boundary runs; it cites the tags instead of repeating the rules.
 - **The contracts are independent of each other.** No contract presupposes another; no task is
   answered across a foreign contract.
 

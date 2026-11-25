@@ -30,7 +30,7 @@ skeleton so they can be read side by side:
 ## The rule these papers follow
 
 - **They are derived, not sovereign.** Every statement carries its `F-M` tag. The requirements state
-  the rule, `../CONTRACTS.md` states the boundary, `../TERMS.md` states the words — a paper that
+  the rule, `../CONTRACTS.md` states the boundary, `../TERMS.md` states the words. A paper that
   contradicts them is wrong and gets fixed, not defended.
 - **English, in the words of `../TERMS.md`** — pack, season, episode, track, mark, identifier,
   handle, verdict, capability, inquiry, language mapping, supported languages, language refusal.
@@ -38,13 +38,13 @@ skeleton so they can be read side by side:
 ## What never appears in these papers
 
 The papers are published with the repository, so they carry the public surface of a site and our
-behaviour towards it — and nothing that belongs to an operator or an account:
+behaviour towards it, and nothing that belongs to an operator or an account:
 
 - no credentials, no API keys, no access tokens, no cookies, no password;
 - no account name, no e-mail address, no account identifier of any kind;
 - no library data: no film or series titles from the library, no paths, no file names, no counts of
   a library;
-- no metadata dump — no identifiers from an operator's library, no TMDb or IMDb values of it;
+- no metadata dump: no identifiers from an operator's library, no TMDb or IMDb values of it;
 - no operator host, no operator path, no local directory.
 
 **Field names of a source file may be named** (`baseUrl`, `preferSeasonZip`, `apiKey`) because they

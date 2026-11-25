@@ -1,9 +1,9 @@
 # Auto-Sync — moving a subtitle onto its audio
 
-**Owner: the explanation.** The constants, the speech rule for cues, the gap and order rules and the significance rules; the normative rule stands in §4.3 of `REQUIREMENTS.md`.
+**Owner: the explanation.** The constants, the speech rule for cues, the gap and order rules and the significance rules; the normative rule stands in §4.3 of `SPECIFICATION.md`.
 
 *Derived document: every rule carries its `F-M` tag and the constant it is written with. `§4.3` of
-`REQUIREMENTS.md` states the rules normatively; this paper explains them, names the constants and
+`SPECIFICATION.md` states the rules normatively; this paper explains them, names the constants and
 lists what the code actually refuses. The words are those of `TERMS.md`.*
 
 ## Contents

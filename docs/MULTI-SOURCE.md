@@ -3,7 +3,7 @@
 **Owner: the two-source architecture.** What two sources do to one pair; how a pair is allocated to a slot stands in §8 of `CONTRACTS.md`.
 
 This sheet pulls together what is
-spread across many numbers in [`REQUIREMENTS.md`](REQUIREMENTS.md): how the sources
+spread across many numbers in [`SPECIFICATION.md`](SPECIFICATION.md): how the sources
 relate to one another, what „done" means, and how download and upload behave
 with several sources. It is the one place where the source question can be read as a whole.
 
@@ -121,7 +121,7 @@ One run, two stages — the pack phase first, then the single phase (F-M429):
 - An arrival run does not pack; the library belongs to the full run (F-M424). tvst is in the slot only
   when the full run is running **and** its upload switch is on (F-M495).
 
-Measurements from 20.11.2026 as the benchmark: 1.331 video files, 113 complete seasons, 811 pairs in the
+Benchmark measurements: 1.331 video files, 113 complete seasons, 811 pairs in the
 file system, 540 suitable for tvst — of those 397 in seasons that were already fully packed,
 25 sent, 143 open (incomplete seasons or mixed releases). Of the 25, all went to
 tvst, none to SubDL (SubDL rejected every container as `Duplicate upload: identical file already

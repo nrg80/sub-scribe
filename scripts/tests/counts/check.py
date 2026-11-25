@@ -27,7 +27,7 @@ import subprocess
 import sys
 import tempfile
 
-DOC = os.path.join("docs", "REQUIREMENTS.md")
+DOC = os.path.join("docs", "SPECIFICATION.md")
 # The test catalogue moved out of the specification (404 entries in one chapter made it unreadable),
 # so the per-test check counts are read from there. read_claims() takes both files and merges.
 TESTS = os.path.join("docs", "TESTS.md")
