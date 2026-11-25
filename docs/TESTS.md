@@ -133,7 +133,7 @@ number when it moves to another chapter, and a number is never reused.
 
 **T175:** The account filter of the download search — account identifier, no mis-grab on foreign uploaders, exclusion before the ranking and the switch including its label (F-M449).
 
-**T409:** The runtime window (F-M43), in `reporting`. **7 checks**. The window is 12 % of the runtime when that is larger than the configured floor, and never smaller than it. The two reported cases of the run (88 % and 91 % of their film) now sit inside it. A genuinely cut subtitle is still rejected, and a missing runtime with a switched-off check passes everything. The gate asks the window, and the verdict names the one that was applied.
+**T409:** The runtime window (F-M43), in `reporting`. **8 checks**. The floor is 7 minutes, and the shipped setting is that floor. The share of 12 % takes over where it is larger than the floor and never tightens it. the two reported cases of the run (88 % and 91 % of their film) sit inside it, a genuinely cut subtitle is still rejected, and a missing runtime with a switched-off check passes everything. The gate asks the window, and the verdict names the one that was applied.
 
 **T176:** The report of an observed defect — wording without justification, category per finding, name of the affected file in both tracks, sender line with version and account name. Report in the same run, deferral instead of discarding, locked candidate after the report, switch and its position as the second-to-last entry (F-M450). **4 checks on the file naming.**
 

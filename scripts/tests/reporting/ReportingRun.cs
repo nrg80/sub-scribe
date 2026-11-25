@@ -389,20 +389,27 @@ internal static class ReportingRun
         Check(flusch > 0 && abhaengen > 0 && flusch < abhaengen,
             "F-M535: reports are filed while the API trace is still attached");
 
-        // F-M43 (operator decision 25.11.2026: "C"): the runtime window is a floor plus a share of the
-        // runtime. The two cases below are the REAL ones from the run of that morning — both were
-        // reported to SubDL under the fixed 600 s window, both carry 88 % and 91 % of their film.
-        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(600, 5414) == 650,
-            "F-M43: 12 % of a 90-minute runtime is larger than the 600 s floor, so the window grows");
-        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(600, 1200) == 600,
-            "F-M43: the share never tightens the floor — a short item keeps the configured window");
-        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(4772, 5414, 600),
+        // F-M43 (operator decision 25.11.2026: "C", then "7 min floor"): the runtime window is a floor
+        // plus a share of the runtime. The two measured cases below are the REAL ones from the run of
+        // that morning — both were reported to SubDL under the fixed 600 s window, both carry 88 % and
+        // 91 % of their film. The floor is 7 minutes, so a short episode is judged less harshly than a
+        // feature film, and the share takes over from about 58 minutes on.
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.DefaultFloorSeconds == 420
+              && new Jellyfin.Plugin.SubScribe.Configuration.PluginConfiguration().DownloadRuntimeToleranceSec
+                 == Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.DefaultFloorSeconds,
+            "F-M43: the floor is 7 minutes, and the shipped setting IS that floor — no second number to drift");
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(420, 5414) == 650,
+            "F-M43: 12 % of a 90-minute runtime is larger than the 7-minute floor, so the window grows");
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(420, 1320) == 420,
+            "F-M43: the share never tightens the floor — a 22-minute episode keeps the 7-minute window");
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(4772, 5414, 420),
             "F-M43: the reported 88 % subtitle (span 4772s of 5414s) now sits inside the window");
-        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(6074, 6682, 600),
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(6074, 6682, 420),
             "F-M43: the reported 91 % subtitle (span 6074s of 6682s) now sits inside the window");
-        Check(!Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 6600, 600),
+        Check(!Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 6600, 420),
             "F-M43: a genuinely cut subtitle (span 3600s short) is still rejected — the window is no free pass");
-        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 0, 600) && Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 6600, 0),
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 0, 420)
+              && Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 6600, 0),
             "F-M43: no runtime metadata and a switched-off check pass everything, as before");
         Check(Read(plugin, "Pipeline/DownloadPipeline.cs")
                   .Contains("Qa.RuntimeWindow.ToleranceSeconds(floorSec, runtimeSec)", StringComparison.Ordinal)

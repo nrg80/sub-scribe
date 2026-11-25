@@ -15,7 +15,8 @@ namespace Jellyfin.Plugin.SubScribe.Qa;
 /// <summary>
 /// F-M43 stage 2: how far a subtitle's cue span may sit from the item runtime.
 /// <para>
-/// The window is a FLOOR plus a SHARE. The floor is the operator's setting (default 600 s, 0 = off).
+/// The window is a FLOOR plus a SHARE. The floor is the operator's setting (default 420 s = 7 min,
+/// 0 = off).
 /// The share is 12 % of the item runtime and applies whenever it is the larger of the two: a long
 /// film carries long credits, and a subtitle that stops when the dialogue stops is complete, not
 /// broken. A fixed window measures the credits of a short film and the credits of a long film with
@@ -30,6 +31,9 @@ public static class RuntimeWindow
 {
     /// <summary>Share of the item runtime that is always allowed (F-M43).</summary>
     public const double Share = 0.12;
+
+    /// <summary>Default floor in seconds: 7 minutes (F-M43).</summary>
+    public const int DefaultFloorSeconds = 420;
 
     /// <summary>
     /// The effective window in seconds: the configured floor, or the share of the runtime when that
