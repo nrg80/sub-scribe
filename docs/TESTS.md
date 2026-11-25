@@ -155,6 +155,10 @@ number when it moves to another chapter, and a number is never reused.
 
 **T419:** The runtime tolerance field in two lines (F-M756), in `gui-structure`. **1 check**. The first line names the measurement, the second carries the default and the floor, and neither line exceeds 80 characters.
 
+**T420:** The statistics as the last block of the General tab (F-M757), in `gui-structure`. **2 checks**. The
+Statistics block stands below the refresh control, and it is the last block of the tab: after the media
+files, the workers and the status, and before the next tab opens.
+
 **T176:** The report of an observed defect — wording without justification, category per finding, name of the affected file in both tracks, sender line with version and account name. Report in the same run, deferral instead of discarding, locked candidate after the report, switch and its position as the second-to-last entry (F-M450). **4 checks on the file naming.**
 
 **T177:** What a file on disk proves — the reserved original block (51–99) closes no pair, an aligned `01` does, a deleted `01` opens it again, an unnumbered name still counts, and the slot reader reads what the writer writes (F-M452). **12 checks.**

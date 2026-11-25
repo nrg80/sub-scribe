@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.60",
-        "changelog": "v12.3.8.60: the runtime tolerance field says what it measures, then the default and the floor.",
+        "version": "12.3.8.61",
+        "changelog": "v12.3.8.61: the statistics are the last block of the General tab, under the refresh control.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.60/Jellyfin.Plugin.SubdlSync_12.3.8.60.zip",
-        "checksum": "9487673efe619e176d1965f9bef154c9",
-        "timestamp": "2026-11-25T19:15:47Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.61-dev/Jellyfin.Plugin.SubdlSync_12.3.8.61.zip",
+        "checksum": "a38476ee9786a8bfc9f6efb437882418",
+        "timestamp": "2026-11-25T20:53:58Z"
       }
     ]
   }

@@ -1074,6 +1074,12 @@
     "T419": {
       "suite": "gui-structure",
       "checks": 1
+    },
+    "T420": {
+      "suite": "gui-structure",
+      "checks": 2,
+      "requirement": "F-M757",
+      "title": "Statistics ist der letzte Block des General-Reiters, unter dem Auffrischknopf"
     }
   }
 }

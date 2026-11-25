@@ -3,7 +3,7 @@
 **Owner: the rules.** This is the master document: every other paper is derived from it and cites its `F-M` tags. The contract boundaries stand in `CONTRACTS.md`, the vocabulary in `TERMS.md`.
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.60.
+**Status:** Implementation — v12.3.8.61.
 
 **A rule stands here with its ground: the decision behind it in one sentence, under `Concept decision`, and the
 check that proves it. The detailed measurement archive — what was measured, which run showed it, what happened —
@@ -39,7 +39,7 @@ states the rule, its constants, its ground and its test.**
 - [10. Scheduler, Quota and Timing](#10-scheduler-quota-and-timing) — 24 requirements
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
-- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 32 requirements
+- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 33 requirements
 - [14. Data Model and Persistence](#14-data-model-and-persistence) — 92 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 61 requirements
 - [16. Non-Goals](#16-non-goals)
@@ -2080,7 +2080,7 @@ The page shows the **effective** state: an empty field is displayed as ticked (t
 
 **F-M748 [U]:** **A secret field carries an eye that shows the stored value for as long as it is pressed.** Operator request: while the button is held the field shows the value instead of the dots, and on release the dots are back. Concept decision: the page never receives a secret with the list, and that rule stays. The value comes over a route of its own instead: one field per call, and only for a field the source declares as secret; anything else is refused. Every call is logged with source and field, never with the value. The eye stands on the two API keys and on the password; the address of the SubDL card stays a plain text field and carries none. A value that is currently shown counts as unchanged, so pressing the eye and saving does not send the secret back. Checked in `sources` and `gui-structure`.
 
-**F-M749 [G]:** **The Status block stands under the Workers list.** Concept decision: the run readout comes first and the reachability readout follows it, so the general tab reports what the plugin did before it reports whether the sources answer. The block keeps its content unchanged — quota bars, the five lights, the library directory rows — and the refresh control stays the last block of the tab, now below the Status block. The deferral line keeps its place directly under the Workers list (F-M288). Checked in `gui-structure`.
+**F-M749 [G]:** **The Status block stands under the Workers list.** Concept decision: the run readout comes first and the reachability readout follows it, so the general tab reports what the plugin did before it reports whether the sources answer. The block keeps its content unchanged — quota bars, the five lights, the library directory rows — and the refresh control follows the Status block, with the Statistics block below it (F-M757). The deferral line keeps its place directly under the Workers list (F-M288). Checked in `gui-structure`.
 
 **F-M750 [U]:** **A written setting names itself in the log — which file, which field, which value before and after.** Concept decision: the line is a detail line — written at information with the `[D]` marker, so the server level never has to be raised, and shown while the plugin's own mode is `Debug`. It stands one per changed field, and an unchanged field stays silent so that a save with nothing to change costs no line. The value appears only for switches, numbers and selections; free text and secrets are reported as `gesetzt (<n> chars)` or `leer`, because a log line is no place for an address or a key (F-M683). Both write paths are covered: the card of a source, which writes one settings file, and the settings page, which writes the plugin configuration. Reason: two lines 32 seconds apart reported opposite states of the upload direction, and nothing in the log could decide whether a switch had been misread or just saved. Checked in `sources`.
 
@@ -2112,6 +2112,8 @@ the field carries two lines. The first names the measurement — `Allowed drift 
 runtime.` The second carries the setting — `Default 12 %. Floor: 7 min films, 4 min episodes; 0 = floor only.` Two lines
 are the exception this field needs: a percentage whose subject stays unnamed cannot be set well, and the floor is part of
 the rule rather than a reason (F-M745). Checked in `gui-structure`.
+
+**F-M757 [G]:** **The Statistics block is the last block of the General tab.** Concept decision: the counters describe what the refresh control reloads, so the control is the handle and the numbers stand under it. The tab is read from the run outward and ends with the two readouts that report the run: the Status block, the refresh control, and then the statistics with their reset button. The block itself is unchanged, and the counters still belong to the tab that holds every live readout (F-M270). Checked in `gui-structure`.
 
 ## 14. Data Model and Persistence
 

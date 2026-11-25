@@ -122,19 +122,6 @@
                             <div class="fieldDescription">Tags subtitle tracks that carry no language, and names loose subtitle files by language. Default: off.</div>
                         </div>
 
-                        <h3>Statistics</h3>
-                        <!-- F-M308: the counters as a TABLE, filled by subdlRenderStats. The rows are
-                             built in JS (one per counter), so adding a counter means adding a row
-                             there and nothing here. Kept as a div-grid rather than a <table>: the
-                             Workers list beside it uses the same pattern, and an Emby theme that
-                             styles <table> would otherwise restyle one of the two lists. -->
-                        <div id="StatsTable"></div>
-                        <div class="fieldDescription" id="StatsSinceLine" style="margin-bottom:0.5em;">&mdash;</div>
-
-<div style="margin-top:0.5em;">
-                            <button is="emby-button" type="button" class="raised" id="ResetStats">Reset statistics</button>
-                        </div>
-
                         <!-- Workers (F-M265): run status, not a setting — same genre as Statistics, so it
                              lives on the General tab with it. It used to sit OUTSIDE the tab containers
                              (after the download tab closed), and subdlShowTab() only toggles elements
@@ -225,6 +212,23 @@
                             readout in one click. -->
                             <!-- F-M53: manual run buttons and the statistics reset sit on the General tab. -->
                             <button is="emby-button" type="button" class="raised button-submit block emby-button" id="RefreshSubdlStatus" style="display:block;width:100%;box-sizing:border-box;background-color:#424242;border-color:#5a5a5a;color:rgba(255,255,255,0.85);">Refresh status</button>
+                        </div>
+
+                        <!-- F-M757 (Betreiberanweisung 25.11.2026, woertlich: "Statistics in der gui ganz
+                             nach unten in general"): die Statistik ist der LETZTE Block des Reiters, unter
+                             dem Auffrischknopf. Sie beschreibt, was der Auffrischknopf neu holt — beides
+                             gehoert zusammen, und der Knopf bleibt der Griff, die Zahlen stehen darunter. -->
+                        <h3>Statistics</h3>
+                        <!-- F-M308: the counters as a TABLE, filled by subdlRenderStats. The rows are
+                             built in JS (one per counter), so adding a counter means adding a row
+                             there and nothing here. Kept as a div-grid rather than a <table>: the
+                             Workers list above it uses the same pattern, and an Emby theme that
+                             styles <table> would otherwise restyle one of the two lists. -->
+                        <div id="StatsTable"></div>
+                        <div class="fieldDescription" id="StatsSinceLine" style="margin-bottom:0.5em;">&mdash;</div>
+
+                        <div style="margin-top:0.5em;">
+                            <button is="emby-button" type="button" class="raised" id="ResetStats">Reset statistics</button>
                         </div>
 
                     
