@@ -10,7 +10,7 @@
 # See the GNU General Public License for more details.
 name: "Sub Scribe"
 guid: "7d1c5a2e-3f4b-4d6e-9a8b-5c2f8e1d4a9b"
-version: "12.3.8.54"
+version: "12.3.8.55"
 targetAbi: "12.1.0.0"
 framework: "net10.0"
 owner: "nrg80"
@@ -26,6 +26,7 @@ artifacts:
 - "Jellyfin.Plugin.SubdlSync.dll"
 - "LanguageDetection.dll"
 changelog: >
+  v12.3.8.55: the eye is centred on its field, the TMDb field included.
   v12.3.8.54: the eye sits inside the field as a quiet mark, and the email of the SubDL card is a secret too.
   v12.3.8.53: an eye beside a secret field shows the stored value while the button is held.
   v12.3.8.52: the runtime floors are fixed; the share in percent is the only setting of the quality gate.

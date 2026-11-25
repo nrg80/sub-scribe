@@ -761,7 +761,9 @@
         .subdl-source-tab-lamp.off { background: transparent; box-shadow: inset 0 0 0 1px #767676; }
             /* F-M748: die Zeile eines Geheimfelds traegt rechts ein Auge — es zeigt den abgelegten Wert,
                solange gedrueckt wird, und gibt ihn beim Loslassen wieder her. */
-            .subdl-secret-wrap { position: relative; }
+            /* F-M748: die Huelle richtet das Feld aus (flex), sonst zaehlt die Zeilenhoehe des Textes mit
+               und das Auge sitzt beim TMDb-Feld 10 px zu hoch (Betreiberbefund 25.11.2026). */
+            .subdl-secret-wrap { position: relative; display: flex; align-items: center; }
             .subdl-secret-wrap input { padding-right: 34px; }
             .subdl-eye {
                 position: absolute; top: 50%; right: 4px; transform: translateY(-50%);

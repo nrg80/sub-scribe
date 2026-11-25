@@ -2229,7 +2229,7 @@ def main():
           and "input.value = '';" in page_src
           and "function subdlAugeZeichnen(auge) {" in page_src)
     check("F-M748: the eye sits inside the field, at the right edge, and the field keeps its width",
-          ".subdl-secret-wrap { position: relative; }" in page_src
+          ".subdl-secret-wrap { position: relative; display: flex; align-items: center; }" in page_src
           and ".subdl-secret-wrap input { padding-right: 34px; }" in page_src
           and "position: absolute; top: 50%; right: 4px; transform: translateY(-50%);" in page_src
           and "huelle.className = 'subdl-secret-wrap';" in page_src)
