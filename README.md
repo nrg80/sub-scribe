@@ -26,11 +26,11 @@ source's own file:
 **Download** — what gets fetched, when a run happens, and the quality gates a subtitle has to pass
 before it is saved:
 
-![Download settings](docs/images/config-download.png?v=12.3.8.55)
+![Download settings](docs/images/config-download.png?v=12.3.8.59)
 
 **Upload** — off by default; the same shape as the download side, with its own gates:
 
-![Upload settings](docs/images/config-upload.png?v=12.3.8.55)
+![Upload settings](docs/images/config-upload.png?v=12.3.8.59)
 
 ## Requirements
 
