@@ -51,9 +51,10 @@ with where the value comes from (F-M222):
   it as a secret field and marks it required in its own schema (F-M222, F-M497, F-M688). Its short
   description says where the key comes from: a free key from the account panel, documented at
   `subdl.com/api-doc` (F-M745 — a field may carry one line of at most 80 characters).
-- **The TMDb API key** (F-M203). It behaves like any secret field of a source card (F-M753): the stored
-  key is never written into the field, the field shows the same eight-dot pattern, the eye appears only
-  while a key is stored, and an empty field means *leave it as it is*.
+- **The TMDb API key** (F-M203). Its help line reads `Free API key after registration at themoviedb.org.` and
+  carries the address as the link word (F-M755). The field behaves like any secret field of a source card
+  (F-M753). The stored key is never written into it, it shows the same dot pattern, and an empty field means
+  *leave it as it is*.
 - **The target languages** (F-M42).
 
 The marker reads `Libraries (opt-in, Required)` and `TMDb (Required)`. It is rendered in the accent

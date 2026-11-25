@@ -1882,10 +1882,22 @@ def main():
           "Required for SubDL only" not in subdl_block
           and 'id="SourceCards"' in subdl_block
           and 'subdl-required">Required</span>' in tmdb_block
-          and "the only mandatory key" in tmdb_block
+          and "Free API key after registration at" in tmdb_block
           and 'id="TmdbApiKey"' in tmdb_block
           and re.search(r"new\(FieldApiKey,.*?Required: true", subdl_engine_src) is not None,
           "F-M497: TMDb ist Pflicht; die Quelle erklaert ihr Pflichtfeld selbst (apiKey, Required: true)")
+
+    # ---- F-M755 (Betreiberanweisung 25.11.2026: "Gui Beschreibung tmdb api ist noch zuviel: Free API key
+    # after registration at at themoviedb.org. mit moviedvorg als link"): die Zeile sagt nur noch, wie man
+    # einen kostenlosen Schluessel bekommt, und die Adresse ist das Linkwort (F-M745: eine Zeile, <= 80 Zeichen).
+    tmdb_hilfe = re.search(r'<div class="fieldDescription">(.*?)</div>', tmdb_block, re.S)
+    tmdb_text = re.sub(r'<[^>]+>', '', tmdb_hilfe.group(1)).strip() if tmdb_hilfe else ""
+    check("F-M755: the TMDb help line says how to get a free key, and the address is the link word",
+          tmdb_text.startswith("Free API key after registration at themoviedb.org.")
+          and len(tmdb_text) <= 80
+          and 'href="https://www.themoviedb.org/settings/api"' in tmdb_hilfe.group(1)
+          and ">themoviedb.org</a>" in tmdb_hilfe.group(1),
+          "Text: %r (%d Zeichen)" % (tmdb_text, len(tmdb_text)))
 
     # ---- F-M228 (Betreiberbefund 25.11.2026: „previously the required in the headlines was in gui
     # style blue"): die Pflichtmarke in den drei Ueberschriften traegt die Akzentfarbe. Der Befund war

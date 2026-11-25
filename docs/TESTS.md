@@ -151,6 +151,8 @@ number when it moves to another chapter, and a number is never reused.
 
 **T417:** One name for the season-pack switch (F-M754), in `sources`. **2 checks**. The switch reads `Prefer season pack` on both cards and carries the same help line, which stays within 80 characters. The stored key remains `preferSeasonZip`, so no stored value is orphaned.
 
+**T418:** The one-line TMDb help (F-M755), in `gui-structure`. **1 check**. The line says how to get a free key, names the address as the link word, and stays within 80 characters.
+
 **T176:** The report of an observed defect — wording without justification, category per finding, name of the affected file in both tracks, sender line with version and account name. Report in the same run, deferral instead of discarding, locked candidate after the report, switch and its position as the second-to-last entry (F-M450). **4 checks on the file naming.**
 
 **T177:** What a file on disk proves — the reserved original block (51–99) closes no pair, an aligned `01` does, a deleted `01` opens it again, an unnumbered name still counts, and the slot reader reads what the writer writes (F-M452). **12 checks.**
