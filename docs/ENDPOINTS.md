@@ -1,18 +1,18 @@
-# Endpunkte — zwei Quellen, ein Weg
+# Endpoints — two sources, one path
 
-Stand 15.11.2026. Gilt für `Jellyfin.Plugin.SubdlSync/Api/Endpoints/` (F-M483, F-M484).
+As of 15.11.2026. Applies to `Jellyfin.Plugin.SubdlSync/Api/Endpoints/` (F-M483, F-M484).
 
-**Die Bestellung:** „2 download endpoints und 2 upload endpoints einführen und den Rest des Plugins
-gleich lassen."
+**The order:** „2 download endpoints and 2 upload endpoints, and leave the rest of the plugin
+as it is."
 
-Also gibt es vier Endpunkte, je einen pro Quelle und Richtung:
+So there are four endpoints, one per source and direction:
 
-| Richtung | SubDL | tvsubtitles.net |
+| Direction | SubDL | tvsubtitles.net |
 |---|---|---|
-| Download | `ScribeDownloadEndpoint` — **eingebunden** | `TvSubtitlesDownloadEndpoint` — steht, **nicht eingebunden** |
-| Upload | `ScribeUploadEndpoint` — **eingebunden** | `TvSubtitlesUploadEndpoint` — steht, **nicht eingebunden** |
+| Download | `ScribeDownloadEndpoint` — **wired** | `TvSubtitlesDownloadEndpoint` — in place, **not wired** |
+| Upload | `ScribeUploadEndpoint` — **wired** | `TvSubtitlesUploadEndpoint` — in place, **not wired** |
 
-## Die Naht
+## The seam
 
 ```csharp
 public interface IDownloadEndpoint
@@ -31,169 +31,169 @@ public interface IUploadEndpoint
 }
 ```
 
-`SubtitleQuery`, `SubtitleHit`, `SubtitlePayload`, `UploadTicket` und `EndpointAnswer` sind neutral:
-keine SubDL-Felder, keine tvsubtitles-Felder. Was eine Quelle nicht kann, sagt **ihr** Endpunkt mit
-einem Grund — nicht der Aufrufer durch Raten.
+`SubtitleQuery`, `SubtitleHit`, `SubtitlePayload`, `UploadTicket` and `EndpointAnswer` are neutral:
+no SubDL fields, no tvsubtitles fields. What a source cannot do is stated by **its** endpoint with
+a reason — not by the caller through guessing.
 
-**Der Rest des Plugins bleibt, wie er ist.** `DownloadPipeline`, `UploadPipeline`, Store, QA-Tore,
-Scheduler und GUI-Aufbau sind unangetastet; der SubDL-Endpunkt ist eine dünne Übersetzung um genau
-die Aufrufe, die die Pipeline vorher selbst gemacht hat. Die Naht behauptet keine Einbindung, die es
-nicht gibt — siehe `Wired`.
+**The rest of the plugin stays as it is.** `DownloadPipeline`, `UploadPipeline`, the plugin database, QA gates,
+the scheduler and the GUI layout are untouched; the SubDL endpoint is a thin translation around exactly
+the calls the pipeline made itself before. The seam claims no wiring that does not
+exist — see `Wired`.
 
-## Der Katalog
+## The catalog
 
 ```csharp
 var catalog = new SubtitleEndpointCatalog(downloads, uploads);
-catalog.AllDownloads            // alle vier, egal ob geschaltet
-catalog.EnabledDownloads(config) // Schalter AN und Wired
-catalog.Refused(config, SubtitleDirection.Download) // was nicht läuft, mit Grund
+catalog.AllDownloads            // all four, whether switched on or not
+catalog.EnabledDownloads(config) // switch ON and Wired
+catalog.Refused(config, SubtitleDirection.Download) // what does not run, with reason
 ```
 
-`Enabled…` verlangt **beides**: den Schalter aus F-M477 **und** `Wired`. Deshalb bleibt
-tvsubtitles.net auch bei eingeschaltetem Schalter draußen, solange der Lauf ihn nicht aufruft.
+`Enabled…` requires **both**: the switch from F-M477 **and** `Wired`. That is why
+tvsubtitles.net stays out even with the switch on, as long as the run does not call it.
 
-`Refused` liefert den Satz, den auch die Konfigurationsseite unter dem Schalter zeigt — eine Aussage,
-nicht drei. Steht ein Endpunkt auf `Wired = false`, lautet er:
+`Refused` delivers the sentence that the configuration page also shows under the switch — one statement,
+not three. If an endpoint is on `Wired = false`, it reads:
 
-> tvsubtitles.net — Endpunkte stehen (Abruf und Upload), sind aber noch nicht in den Lauf
-> eingebunden: der Schalter hat noch keine Wirkung.
+> tvsubtitles.net — endpoints are in place (fetch and upload), but not yet wired into the run:
+> the switch has no effect yet.
 
-## Was die Endpunkte tun
+## What the endpoints do
 
-**`ScribeDownloadEndpoint`** ruft `SearchSubtitlesAsync` (eine Seite) und `DownloadSubtitleFileAsync`;
-`Map(SubtitleCandidate)` ist eine reine Funktion und wird von der Suite ohne Netz geprüft. SubDL hat
-keine Rip-Zelle — der Treffer erfindet keine, der Rip steht im Release-Namen.
+**`ScribeDownloadEndpoint`** calls `SearchSubtitlesAsync` (one page) and `DownloadSubtitleFileAsync`;
+`Map(SubtitleCandidate)` is a pure function and is checked by the suite without network. SubDL has
+no rip cell — the hit invents none, the rip is in the release name.
 
-**`ScribeUploadEndpoint`** deckt den **Einzelupload**. Er verweigert mit Grund statt halb zu senden:
-Staffelpack (das baut die Pipeline, F-M372), fehlende IMDb-Kennung (`no-imdb`), **Bytes, die nicht
-UTF-8 sind** — SubDL nimmt Text, und ein cp1250-File als UTF-8 zu lesen macht ungarisch kaputt
-(F-M482). Ohne Sitzung kommt eine lesbare Ablehnung, keine Ausnahme.
+**`ScribeUploadEndpoint`** covers the **single upload**. It refuses with a reason instead of sending halfway:
+season pack (the pipeline builds that, F-M372), missing IMDb identifier (`no-imdb`), **bytes that are not
+UTF-8** — SubDL takes text, and reading a cp1250 file as UTF-8 breaks Hungarian
+(F-M482). Without a session a readable rejection comes back, not an exception.
 
-**`TvSubtitlesDownloadEndpoint`** löst die Serie über den **Namen** auf (die Quelle hat keinen
-Id-Index), läuft die Folgenseiten der Staffel ab, bis eine `Staffel x Folge` sagt, und filtert die
-Einträge auf die gewünschte Sprache. Die Sprachbrücke (`SiteLanguage`) ist die einzige Stelle, die
-beide Vokabulare kennt (`de → de`, `pt → pt`, `xx → null`).
+**`TvSubtitlesDownloadEndpoint`** resolves the series via the **name** (the source has no
+id index), walks the episode pages of the season until one says `Staffel x Folge`, and filters the
+entries down to the wanted language. The language mapping (`SiteLanguage`) is the only place that knows
+both vocabularies (`de → de`, `pt → pt`, `xx → null`).
 
-**`TvSubtitlesUploadEndpoint`** baut das Formular (F-M481) und sendet multipart. Trockenlauf ist die
-Vorgabe und wird von außen gesetzt (das `DryRun` des Plugins), nicht intern gelesen — so bleibt der
-Endpunkt prüfbar. Staffelpack, unbekannte Sprache, fehlender Serienname und eine Serie, die die Seite
-nicht führt: je ein Grund, kein Sendeversuch.
+**`TvSubtitlesUploadEndpoint`** builds the form (F-M481) and sends multipart. Dry run is the
+default and is set from outside (the plugin's `DryRun`), not read internally — that keeps the
+endpoint checkable. Season pack, unknown language, missing series name and a series the site does
+not carry: one reason each, no send attempt.
 
-## Prüfungen
+## Checks
 
-Suite `scripts/tests/endpoints` (T204, **28 Prüfungen**, kein Netz):
+Suite `scripts/tests/endpoints` (T204, **28 checks**, no network):
 
 ```bash
 DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 <dotnet>/dotnet run \
   --project scripts/tests/endpoints/endpoints.csproj -c Release -- <repo>
 ```
 
-Sie fährt die tvsubtitles-Seite über einen gefälschten HTTP-Handler gegen die echten Seiten aus
-`scripts/tests/tvsubtitles/fixtures` — von der Serienliste bis zum Zip — und prüft die SubDL-Seite
-über ihre reine Abbildung und ihre Ablehnungen.
+It drives the tvsubtitles side over a faked HTTP handler against the real pages from
+`scripts/tests/tvsubtitles/fixtures` — from the series list to the zip — and checks the SubDL side
+through its pure mapping and its rejections.
 
-## Herkunft im Store und keine Kreuzkontamination (F-M486/F-M487)
+## Origin in the plugin database and no cross-contamination (F-M486/F-M487)
 
-Jeder Untertitel trägt seit Schema 10 zwei Felder im Store (`sidecars` **und** `embeds`):
+Every subtitle has carried two fields in the plugin database since schema 10 (`sidecars` **and** `embeds`):
 
-| Feld | Inhalt |
+| Field | Content |
 |---|---|
-| `Origin` | `subdl` oder `tvsubtitles` |
-| `OriginId` | die **eigene Id der Quelle** — tvsubtitles-Untertitel-Id (z. B. `170678`) oder SubDL-Eintrags-Id |
+| `Origin` | `subdl` or `tvsubtitles` |
+| `OriginId` | the **source's own id** — tvsubtitles subtitle id (e.g. `170678`) or SubDL entry id |
 
-**Ist ein tvst-Fund eindeutig identifizierbar?** Ja. Die Id benennt den Eintrag auf der Seite, der
-Inhalt-Hash benennt den Text, beide zusammen sind eindeutig — die Id wird im Store abgelegt, nicht nur
-im Log. `null` heißt „diese Zeile sagt nichts" (Altzeile, Handkopie, eingebettete Spur) und wird nie
-geraten; ein Schreiber ohne Kenntnis löscht eine vorhandene Angabe nicht.
+**Is a tvst find unambiguously identifiable?** Yes. The id names the entry on the site, the
+content hash names the text, both together are unambiguous — the id is stored in the plugin database, not only
+in the log. `null` means „this row says nothing" (old row, hand copy, embedded track) and is never
+guessed; a writer without knowledge does not delete an existing statement.
 
-**Die Kreuzregel** (`Provenance.MayUploadTo`, eine Stelle, nicht zwei):
+**The cross rule** (`Provenance.MayUploadTo`, one place, not two):
 
-- Herkunft **bekannt** → nur die **eigene** Quelle nimmt den Upload. Ein tvst-Fund geht nie zu SubDL,
-  ein SubDL-Fund nie zu tvst.
-- Herkunft **unbekannt** → jeder Endpunkt erlaubt. Sonst könnte der Betreiber seine eigenen Dateien
-  nicht mehr hochladen.
-- Die Ablehnung landet im Log: `cross-source: subtitle came from tvsubtitles, not uploading it to subdl`.
+- Origin **known** → only the **own** source takes the upload. A tvst find never goes to SubDL,
+  a SubDL find never to tvst.
+- Origin **unknown** → every endpoint allows it. Otherwise the operator could no longer
+  upload their own files.
+- The rejection lands in the log: `cross-source: subtitle came from tvsubtitles, not uploading it to subdl`.
 
-Der Upload liest die Herkunft vor der Endpunktwahl über den Inhalt-Hash (`Registry.GetOrigin`), der
-Download schreibt sie beim Speichern mit (`Provenance.Name(cand.Provider)` plus die Id der Quelle).
+The upload reads the origin before choosing the endpoint, via the content hash (`Registry.GetOrigin`), the
+download writes it along when saving (`Provenance.Name(cand.Provider)` plus the source's id).
 
-## Vier Kennzeichen, je Quelle und Richtung eines (F-M488)
+## Four marks, one per source and direction (F-M488)
 
-| Feld | Wann es gefüllt wird | Woher der Wert kommt |
+| Field | When it is filled | Where the value comes from |
 |---|---|---|
-| `ScribeDownloadId` | Download von SubDL | die SubDL-Eintrags-Id des Treffers |
-| `ScribeUploadId` | Upload zu SubDL | die Id aus der Antwort des Uploads |
-| `TvSubtitlesDownloadId` | Download von tvsubtitles.net | die Untertitel-Id der Seite (z. B. `170678`) |
-| `TvSubtitlesUploadId` | Upload zu tvsubtitles.net | **zurückgelesen** von der Folgenseite; fehlt sie, eine **eigene** Id (`own:…`) |
+| `ScribeDownloadId` | Download from SubDL | the SubDL entry id of the hit |
+| `ScribeUploadId` | Upload to SubDL | the id from the upload's answer |
+| `TvSubtitlesDownloadId` | Download from tvsubtitles.net | the subtitle id of the site (e.g. `170678`) |
+| `TvSubtitlesUploadId` | Upload to tvsubtitles.net | **read back** from the episode page; if missing, an **own** id (`own:…`) |
 
-Für SubDL war nichts Neues nötig — die Id steht schon in der Antwort, sie wird nur zusätzlich in ihr
-eigenes Feld geschrieben. tvsubtitles.net antwortet auf den Upload **ohne** Id, deshalb wird sie
-danach von der Folgenseite gelesen (Sprache und Release müssen passen). **Findet der Rückleser nichts,
-vergibt das Plugin eine eigene Id:** `own:<quelle>:<Zeitstempel>:<8 Hex>`. Das Präfix macht sie
-unverwechselbar mit einer Id der Seite, und der Store kann damit sagen „dieser Upload ist passiert,
-sein Ziel ist unser eigene Kennzeichen" statt „unbekannt". Gesetzt wird nur das Feld der Quelle, die
-den Upload wirklich genommen hat.
+Nothing new was needed for SubDL — the id is already in the answer, it is only additionally written into its
+own field. tvsubtitles.net answers the upload **without** an id, which is why it is read from the episode
+page afterwards (language and release must match). **If the read-back finds nothing,
+the plugin assigns an own id:** `own:<quelle>:<Zeitstempel>:<8 Hex>`. The prefix makes it
+unmistakable against an id of the site, and the plugin database can thereby say „this upload happened,
+its target is our own mark" instead of „unknown". Only the field of the source that
+really took the upload is set.
 
-Schema 11, in `sidecars` **und** `embeds`, per `ALTER TABLE` nachgezogen; geschrieben wird nur, was
-bekannt ist, und ein leerer Wert löscht keine vorhandene Angabe.
+Schema 11, in `sidecars` **and** `embeds`, added by `ALTER TABLE`; only what is known is written, and an
+empty value deletes no existing statement.
 
-## Reihenfolge und Erfolgsbegriff (F-M491, F-M494)
+## Order and notion of success (F-M491, F-M494)
 
-Unter Downloads steht die Reihenfolge: **tvsubtitles.net first** (Default) oder **SubDL first**. Beide
-Endpunkte werden **in dieser Reihenfolge gefragt**, und ihre Kandidaten für dieselbe Sprache werden
-**zusammengeführt** — der zweite Endpunkt bekommt seinen eigenen Versuch, auch wenn der erste Treffer
-geliefert hat, und verdrängt ihn nicht. Die Rangfolge führt mit der Quelle in der eingestellten
-Reihenfolge; dahinter entscheiden wie bisher Pack und Textscore. Der Abbruch „diese Ablehnung kann kein
-anderer Kandidat ändern" gilt **je Quelle**: solange noch ein Kandidat der anderen Quelle unversucht ist,
-läuft die Suche für sie weiter (und zählt ihr Ablehnungsbudget neu). Vor dem Start jedes Endpunkts — Suche,
-Hauptdurchlauf, SDH-Variante, Abruf — wird zusätzlich der Schalter der **eigenen Quelle** geprüft
-(`SourceAllowed`); ein Kandidat einer abgeschalteten Quelle wird übersprungen, nicht der Lauf beendet.
-Rangfolge, Tore, Fit, Ablage und Herkunft sind für beide Reihenfolgen derselbe Code.
+Under Downloads the order is set: **tvsubtitles.net first** (default) or **SubDL first**. Both
+endpoints are **asked in that order**, and their candidates for the same language are
+**merged** — the second endpoint gets its own attempt even if the first delivered a hit,
+and does not displace it. The ranking leads with the source in the configured
+order; behind that, pack and text score decide as before. The abort „no other candidate can change this
+rejection" applies **per source**: as long as a candidate of the other source is untried,
+the search continues for it (and counts its rejection budget anew). Before the start of every endpoint — search,
+main pass, SDH variant, fetch — the switch of the **own source** is additionally checked
+(`SourceAllowed`); a candidate of a switched-off source is skipped, not the run ended.
+Ranking, gates, fit, files area and origin are the same code for both orders.
 
-**Erfolgreich heruntergeladen** heißt bei eingeschaltetem Auto-Sync: die Fassung hat die **Signifikanz
-bestanden** (`alignedForNaming`). Eine behaltene Originalfassung ist **heruntergeladen, nicht erfolgreich**
-(`DownloadedWithoutSignificance`) — die Datei liegt, das Paar bleibt offen (F-M452). Ist Auto-Sync aus,
-gibt es keinen Fit und damit keinen Unterschied: jeder Abruf zählt.
+**Successfully downloaded** means, with Auto-Sync on: the version has **passed
+significance** (`alignedForNaming`). A kept original version is **downloaded, not successful**
+(`DownloadedWithoutSignificance`) — the file is there, the pair stays open (F-M452). With Auto-Sync off
+there is no fit and therefore no difference: every fetch counts.
 
-## „Hochgeladen" je Quelle (F-M490)
+## „Uploaded" per source (F-M490)
 
-Zwei eigene Zeitstempel, `ScribeUploadedAt` und `TvSubtitlesUploadedAt` (Schema 12, in `sidecars` **und**
-`embeds`). Ein Zeitpunkt statt eines Schalters — „hochgeladen" ohne „wann" beantwortet die halbe Frage,
-und eine Zeile kann **beide** Quellen tragen: im März zu SubDL, im November zu tvsubtitles.
+Two own timestamps, `ScribeUploadedAt` and `TvSubtitlesUploadedAt` (schema 12, in `sidecars` **and**
+`embeds`). A point in time instead of a switch — „uploaded" without „when" answers half the question,
+and one row can carry **both** sources: in March to SubDL, in November to tvsubtitles.
 
-Gesetzt wird nur der Zeitstempel der Quelle, die den Upload wirklich genommen hat; ein Zeitstempel wird
-nie mit einem leeren Wert überschrieben. `IsUploadedTo` liest zuerst den Zeitstempel, dann das Kennzeichen
-der Quelle (F-M488) — eine Zeile mit Id, aber ohne Zeitstempel (Schema-11-Altdaten) gilt weiter als
-hochgeladen. F-M489 hängt damit nicht mehr daran, ob eine Id vorhanden war.
+Only the timestamp of the source that really took the upload is set; a timestamp is
+never overwritten with an empty value. `IsUploadedTo` reads the timestamp first, then the source's mark
+(F-M488) — a row with an id but without a timestamp (schema 11 old data) still counts as
+uploaded. F-M489 therefore no longer depends on whether an id was present.
 
-## Kein Reup, je Quelle (F-M489)
+## No re-up, per source (F-M489)
 
-„Schon hochgeladen" wird aus dem **eigenen Kennzeichen der Quelle** gelesen, nicht aus `Status=Uploaded`
-(das heißt nur „irgendwo hochgeladen"). Damit: kein Reup von SubDL auf SubDL, kein Reup von tvst auf tvst —
-und trotzdem blockiert keine Quelle die andere.
+„Already uploaded" is read from the **source's own mark**, not from `Status=Uploaded`
+(that only means „uploaded somewhere"). Hence: no re-up from SubDL to SubDL, no re-up from tvst to tvst —
+and still no source blocks the other.
 
-Die Entscheidung fällt an einer Stelle, `UploadGate.Decide(Schalter, Herkunft, hat-SubDL-ihn, hat-tvst-ihn)`,
-und wird an drei Stellen benutzt: Sammelstufe für eingebettete Spuren, Sammelstufe für lose Dateien, Upload
-selbst. Gründe im Log: `already-uploaded:subdl`, `already-uploaded:tvsubtitles`,
+The decision falls in one place, `UploadGate.Decide(Schalter, Herkunft, hat-SubDL-ihn, hat-tvst-ihn)`,
+and is used in three places: collection step for embedded tracks, collection step for loose subtitles, the upload
+itself. Reasons in the log: `already-uploaded:subdl`, `already-uploaded:tvsubtitles`,
 `already-uploaded:subdl+tvsubtitles`, `cross-source`, `no-upload-source`.
 
-Altzeilen ohne eigenes Kennzeichen gelten für SubDL als hochgeladen, wenn `ScribeId` **und**
-`Status=Uploaded` stehen — sonst ginge nach dem Upgrade jeder alte Upload ein zweites Mal hinaus.
+Old rows without their own mark count as uploaded for SubDL if `ScribeId` **and**
+`Status=Uploaded` are present — otherwise every old upload would go out a second time after the upgrade.
 
-## Upload: beide Endpunkte hintereinander (F-M495)
+## Upload: both endpoints one after the other (F-M495)
 
-Der Upload wählt sein Ziel nicht mehr am Anfang aus, sondern geht eine **Kette**: Quelle A wird versucht,
-danach Quelle B — in der eingestellten Download-Reihenfolge, eine eigene Upload-Reihenfolge gibt es nicht.
-**Vor dem Start jedes Endpunkts** wird dessen Toggle geprüft (`SourceAllowed`); aus heißt: diese Quelle
-überspringen und im Log nennen, nicht die Kette beenden. Die beiden Tore bleiben und entscheiden **je
-Quelle**: „diese Quelle hat ihn schon" über ihre eigenen Id-/Zeitstempel-Felder, und die Herkunft über
-`Provenance.MayUploadTo` — bekannt heißt nur zur eigenen Quelle, unbekannt überallhin; ein verbotenes Ziel
-wird mit `cross-source` bzw. `already-uploaded:<Quelle>` übersprungen. Ein Fehler bei A verhindert B nicht
-(der Priorität geht immer). Danach tragen **beide** Felder ihre Marke, soweit die jeweilige Quelle genommen
-hat — vorher war es genau eines.
+The upload no longer chooses its target at the start, but walks a **chain**: source A is tried,
+then source B — in the configured download order, a separate upload order does not exist.
+**Before the start of every endpoint** its toggle is checked (`SourceAllowed`); off means: skip this source
+and name it in the log, not end the chain. The two gates remain and decide **per
+source**: „this source already has it" via its own id/timestamp fields, and the origin via
+`Provenance.MayUploadTo` — known means only to the own source, unknown means anywhere; a forbidden target
+is skipped with `cross-source` or `already-uploaded:<Quelle>`. An error at A does not prevent B
+(priority always wins). Afterwards **both** fields carry their mark, as far as the respective source took
+it — before it was exactly one.
 
-## Der nächste Schritt (nicht Teil dieses Schnitts)
+## The next step (not part of this cut)
 
-`Wired = true` für tvsubtitles setzen heißt: die Pipelines rufen den Katalog statt des SubDL-Clients.
-Das ist die Einbindung in den Lauf — bewusst noch nicht gemacht, weil die Bestellung „den Rest gleich
-lassen" lautete.
+Setting `Wired = true` for tvsubtitles means: the pipelines call the catalog instead of the SubDL client.
+That is the wiring into the run — deliberately not done yet, because the order was „leave the rest
+as it is."

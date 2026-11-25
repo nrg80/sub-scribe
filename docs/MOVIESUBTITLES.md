@@ -1,198 +1,198 @@
-# moviesubtitles.org — Protokoll und Methoden
+# moviesubtitles.org — protocol and methods
 
-Stand 15.11.2026. Aufgenommen **ausschließlich lesend**: kein POST an `add.php`, `add-movie.php` oder
-`rate.php`, kein Upload, kein Film angelegt, keine Anmeldung versucht. Geschrieben wurde nichts —
-auch die Suche nicht, obwohl sie ihr Formular per POST abschickt und dabei nichts anlegt (geprüft,
-siehe unten). Alles, was trotzdem unsicher bleibt, steht unter
-[Was NICHT belegt ist](#was-nicht-belegt-ist) — nicht als Vermutung getarnt, sondern offen.
+As of 15.11.2026. Recorded **read-only throughout**: no POST to `add.php`, `add-movie.php` or
+`rate.php`, no upload, no film created, no login attempted. Nothing was written —
+not even the search, although it submits its form by POST and creates nothing thereby (checked,
+see below). Everything that stays uncertain anyway is listed under
+[What is NOT proven](#what-is-not-proven) — not disguised as a guess, but open.
 
-Die Seite hat **keine API**: `/api.php`, `/sitemap.xml`, `/rss.xml` antworten mit 302 auf `/`;
-`/admin.php` ist ein Betreiber-Login (ukrainisch, cp1251), kein Nutzerkonto. `/login.php`,
-`/panel.php`, `/upload.php` → 302 auf `/`. Alles läuft über HTML und die Formulare der Seite.
+The site has **no API**: `/api.php`, `/sitemap.xml`, `/rss.xml` answer with 302 to `/`;
+`/admin.php` is an operator login (Ukrainian, cp1251), not a user account. `/login.php`,
+`/panel.php`, `/upload.php` → 302 to `/`. Everything runs over HTML and the forms of the site.
 
-Layout, CSS-Klassen (`left_articles`, `description`, `stat`, `footer`) und Formularsprache sind die
-von tvsubtitles.net, und im Kopf steht der Verweis „TV Show subtitles" auf die Schwester. Es ist
-dieselbe Familie — dieselbe Bauart, andere Daten.
+Layout, CSS classes (`left_articles`, `description`, `stat`, `footer`) and form wording are those
+of tvsubtitles.net, and the header carries the reference „TV Show subtitles" to the sister. It is
+the same family — the same build, different data.
 
-## Zuordnung
+## Assignment
 
-**Die Regel: TMDb entscheidet, welche Quelle gefragt wird — nicht der Dateiname, nicht der
-Ordnername, nicht der Bibliotheksname.**
+**The rule: TMDb decides which source is asked — not the file name, not the
+folder name, not the library name.**
 
-**Und zwar innerhalb EINER Quelle.** Auf oberster Ebene gibt es **zwei** Quellen: SubDL und die
-**tvst-Familie**. Die Familie hat **zwei Adressen** — tvsubtitles.net für Serien, moviesubtitles.org
-für Filme —, und diese Seite ist die Film-Adresse davon. Die Reihenfolge-Einstellung ordnet die
-Familie gegen SubDL („tvst zuerst" / „SubDL zuerst"), nicht die Adressen gegeneinander; sie bleibt
-deshalb zweiwertig, und bei einem Film heißt „tvst zuerst" **moviesubtitles.org zuerst**.
+**And that within ONE source.** At the top level there are **two** sources: SubDL and the
+**tvst family**. The family has **two addresses** — tvsubtitles.net for series, moviesubtitles.org
+for films —, and this site is the film address of it. The order setting ranks the
+family against SubDL („tvst first" / „SubDL first"), not the addresses against each other; it stays
+two-valued for that reason, and for a film „tvst first" means **moviesubtitles.org first**.
 
-| TMDb-Datensatz | Quelle |
+| TMDb record | Source |
 |---|---|
-| `movie` | **moviesubtitles.org** — und nur diese; tvsubtitles.net wird für Filme nicht gefragt |
-| `tv` | **tvsubtitles.net** — und nur diese; moviesubtitles.org wird für Serien nicht gefragt |
-| beides | **SubDL** bleibt für beides zuständig; SubDL unterscheidet nicht |
+| `movie` | **moviesubtitles.org** — and only that one; tvsubtitles.net is not asked for films |
+| `tv` | **tvsubtitles.net** — and only that one; moviesubtitles.org is not asked for series |
+| both | **SubDL** stays responsible for both; SubDL does not distinguish |
 
-Der Grund, warum die Auflösung über TMDb laufen muss und nicht über den Namen: **derselbe Name
-existiert auf beiden Seiten und meint dort verschiedene Werke.** `Dune` ist auf moviesubtitles.org
-der Film von 1984 (`movie-607.html`), im Serienkatalog von tvsubtitles.net die Fernseh-Miniserie von
-2000 (`Dune`, daneben `Children of Dune` und `Dune: Prophecy`). Aus „Dune" allein folgt keine Quelle.
+The reason the resolution has to run through TMDb and not through the name: **the same name
+exists on both sites and means different works there.** `Dune` is on moviesubtitles.org
+the film from 1984 (`movie-607.html`), in the series catalogue of tvsubtitles.net the television miniseries from
+2000 (`Dune`, next to it `Children of Dune` and `Dune: Prophecy`). From „Dune" alone no source follows.
 
-**Woran man auf der Filmseite sicher erkennt, dass ein Treffer ein Film ist** (alles gemessen, nicht
-angenommen):
+**How one can tell for sure on the film page that a hit is a film** (everything measured, not
+assumed):
 
-- **Es gibt keine Serienadressen.** `/tvshow-512.html` und `/episode-31911.html` — die Adressen, die
-  auf tvsubtitles.net eine Serie und eine Folge bezeichnen — antworten hier mit **302 auf `/`**.
-- **Keine Serie steht in der Liste.** `add.php?filter=` liefert 0 Treffer für „game of thrones",
+- **There are no series addresses.** `/tvshow-512.html` and `/episode-31911.html` — the addresses that
+  designate a series and an episode on tvsubtitles.net — answer here with **302 to `/`**.
+- **No series stands in the list.** `add.php?filter=` returns 0 hits for „game of thrones",
   „the office", „the simpsons", „chernobyl", „stranger things", „peaky blinders", „succession",
-  „better call saul", „breaking bad s01". „breaking bad" trifft nur `El Camino: A Breaking Bad
-  Movie (2019)` — einen Film.
-- **Jede Zeile trägt eine vierstellige Jahreszahl und sonst nichts.** Kein Staffel-, kein
-  Folgenfeld, nirgends auf der Seite — auch nicht im Upload-Formular (`tvid`, `lang`, `rip`,
+  „better call saul", „breaking bad s01". „breaking bad" only hits `El Camino: A Breaking Bad
+  Movie (2019)` — a film.
+- **Every row carries a four-digit year and nothing else.** No season field, no
+  episode field, nowhere on the site — not in the upload form either (`tvid`, `lang`, `rip`,
   `release`, `author`, `UFile`…, `comments`).
-- **Die Seite selbst sagt „movie".** `<title>` einer Filmseite endet auf `… movie`, die Überschrift
-  lautet `Download <Titel> (<Jahr>) subtitles`. Auf tvsubtitles.net steht an derselben Stelle
-  `… season 9` bzw. `… episode 2x24` — die beiden Schwesterseiten unterscheiden sich also schon im
-  Seitentitel.
-- **Die Eigenwerbung zählt nicht als Beleg.** „movies and TV films" auf der Startseite meint
-  Fernsehfilme; ein Serienangebot ist daraus nicht ableitbar und wurde auch nicht gefunden.
+- **The site itself says „movie".** The `<title>` of a film page ends in `… movie`, the heading
+  reads `Download <Titel> (<Jahr>) subtitles`. On tvsubtitles.net the same place carries
+  `… season 9` or `… episode 2x24` — so the two sister sites already differ in the
+  page title.
+- **The self-promotion does not count as proof.** „movies and TV films" on the home page means
+  television films; a series offering cannot be derived from it and was not found either.
 
-Was die Seite damit **nicht** leistet: sie sagt nicht, *welcher* Film gemeint ist, wenn Titel und
-Jahr mehrdeutig sind (siehe „Mehrdeutigkeit" unten). Die Film-Id ist eindeutig, der Name nicht.
+What the site does **not** deliver with that: it does not say *which* film is meant when title and
+year are ambiguous (see „Ambiguity" below). The film id is unambiguous, the name is not.
 
-## Der Weg (Download)
+## The path (download)
 
-| Schritt | Adresse | Was daraus kommt |
+| Step | Address | What comes out of it |
 |---|---|---|
-| suchen | `GET /search.php?q=<titel>` | Trefferliste `Titel (Jahr)` → `/movie-<id>.html` — **antwortet mit HTTP 500**, Rumpf trotzdem brauchbar |
-| oder filtern | `GET /add.php?filter=<titel>` | dieselbe Auswahl in der Upload-Sicht: `add.php?tvid=<id>` + Jahr |
-| oder blättern | `GET /movies-<A…Z\|0>.html` | die Filmliste je Anfangsbuchstabe (487–1.395 Filme, eine Seite, keine Blätterung) |
-| Filmseite | `GET /movie-<id>.html` | alle Einträge des Films, nach Sprache in Abschnitte gruppiert |
-| Eintrag | `GET /subtitle-<id>.html` | Rip, Release, `filename:`, Größe, Datum, kompatible Releases, Link `download-<id>.html` |
-| Datei | `GET /download-<id>.html` | **302** → `Location: files/<…>.zip` (relativ) |
-| Bytes | `GET /files/<…>.zip` | `application/zip`, 1–3 `.srt` darin |
+| search | `GET /search.php?q=<titel>` | hit list `Titel (Jahr)` → `/movie-<id>.html` — **answers with HTTP 500**, body still usable |
+| or filter | `GET /add.php?filter=<titel>` | the same selection in the upload view: `add.php?tvid=<id>` + year |
+| or page | `GET /movies-<A…Z\|0>.html` | the film list per initial letter (487–1.395 films, one page, no paging) |
+| film page | `GET /movie-<id>.html` | all entries of the film, grouped into sections by language |
+| entry | `GET /subtitle-<id>.html` | rip, release, `filename:`, size, date, compatible releases, link `download-<id>.html` |
+| file | `GET /download-<id>.html` | **302** → `Location: files/<…>.zip` (relative) |
+| bytes | `GET /files/<…>.zip` | `application/zip`, 1–3 `.srt` inside |
 
-Beispiel, vollständig durchgezogen am 15.11.2026:
+Example, carried through completely on 15.11.2026:
 
 ```
 search.php?q=oppenheimer      →  movie-24811.html      „Oppenheimer (2023)"
 movie-24811.html              →  subtitle-132989.html  „english … (WEB-DL.MA)"
 subtitle-132989.html          →  download-132989.html
 download-132989.html          →  302 files/Oppenheimer_2023.WEB-DL.MA.en.zip
-files/…zip                    →  92.522 B, ein Eintrag: Oppenheimer.WEB-DL.MA.en.srt (246.829 B, UTF-8 mit BOM, CRLF)
+files/…zip                    →  92.522 B, one entry: Oppenheimer.WEB-DL.MA.en.srt (246.829 B, UTF-8 with BOM, CRLF)
 ```
 
-**Was an diesem Weg weh tut, und was daraus folgt:**
+**What hurts on this path, and what follows from it:**
 
-- **`search.php` antwortet mit 500.** Bei allen sieben geprüften Abrufen (fünf Suchbegriffe, GET
-  und POST, mit und ohne Referer), mit und ohne Treffer. Der Rumpf ist trotzdem die richtige
-  Trefferliste; er bricht nur hinter der Filmliste ab — dort, wo die Untertitel-Zweitliste anfängt
-  (`</ul><br><ul style="margin-left:2em">` und dann nichts). Der Statuscode taugt hier also **nicht**
-  als Fehlerzeichen, der Inhalt schon.
-- **Titel stehen invertiert.** Die Seite speichert `Matrix, The (1999)`, `Lord of the Rings: The Two
-  Towers, The (2002)`, `Old Man and the Sea, The (1999)` — 52 von 492 O-Filmen enden auf `, The/A/An`.
-  `filter=The Matrix` liefert deshalb **0 Treffer**, `filter=Matrix, The` genau einen. Ein Auflöser
-  muss beide Formen probieren (oder auf den Kern ohne Artikel ausweichen: `filter=Matrix` → 5
-  Treffer, dann Jahr und Name prüfen).
-- **Der Filter ist reiner Teilstring, irgendwo im Titel.** `filter=LOTR` trifft `Allotria
-  (Allegria)`; `filter=dark` trifft 162 Filme; ein angehängtes Jahr hilft nicht (`Oppenheimer 2023`
-  → 0 Treffer). Groß-/Kleinschreibung zählt nicht (`oppenheimer`, `dune`, `matrix` trafen jeweils).
-  Es gibt **keine** Obergrenze: `filter=the` liefert 6.674 Zeilen in einer Antwort (548 KB).
-- **`tvid` und die Film-Id sind dieselbe Zahl.** `movie-<id>.html`, `add.php?tvid=<id>` und der
-  Rückweg von der Untertitel-Seite (`Back to <Film>` → `movie-<id>.html`) tragen sie; sie ist global
-  und stabil (Oppenheimer 24811, Matrix, The 4, Ocean's Thirteen 239). Es gibt keine zweite
-  Kennung und keine Staffel-/Folgenebene.
-- **Die Download-Adresse antwortet mit 302, nicht mit Bytes.** `Location` ist **relativ**
-  (`files/…zip`) und kann Klammern tragen — gemessen: `files/Matrix_The_1999.ru(2).zip`, weil es den
-  Namen schon gab. Ein Client muss die Adresse auflösen und die Klammern mitnehmen.
-- **Unbekannte Ids sehen wie Erfolg aus.** `download-999999.html` → 302 auf `files/` (leer, kein
-  Dateiname) — das ist die Fehlersignatur. `subtitle-999999.html` → **HTTP 200** mit leerem Titel,
-  leerer Sprache und „size: 9140 kb"; das ist keine Antwort, das ist Müll. Beides muss geprüft
-  werden, bevor daraus ein Eintrag im Store wird.
-- **Das Zip enthält 1 bis 3 Dateien, und `parts` ist nur ein Hinweis.** `parts`=3 (Eintrag 9077)
-  → drei Dateien `Matrix The.DVDRip.KiSS.part1/2/3.en.srt`; `parts`=2 (Eintrag 2058, russisch)
-  → **eine** Datei `Matrix The (1999).ru.srt`. Ein vollständiger Filmuntertitel ist also nicht
-  automatisch „die Datei im Zip": bei mehreren Teilen sind es Segmente, die erst aneinandergehängt
-  einen Film ergeben — und jedes Segment trägt seine eigenen Zeitangaben.
-- **Der Dateiname im Zip folgt keinem festen Muster.** Beide Formen kamen vor:
-  `<Titel>.<Rip>.<Release>.<lang>.srt` (Oppenheimer) und `<Titel> (<Jahr>).<lang>.srt`
-  (Matrix, russisch). Der Name im Zip ist **nicht** identisch mit dem Namen des Zips.
-- **Das Jahr kann doppelt in der Überschrift stehen.** `movie-16856.html` heißt „O Beautiful (2002)
-  (2002)", weil der Titel die Jahreszahl schon enthielt. Wer das Jahr aus der Überschrift liest,
-  nimmt die **letzte** Klammer mit vier Ziffern, nicht „alles in der letzten Klammer".
-- **Ein Film ohne Untertitel ist keine 404.** `movie-6928.html` (Old Man and the Sea, The, 1999)
-  antwortet 200 mit „0 subtitles downloaded  times" — zwei Leerzeichen, wo sonst die Zahl steht.
-  Filme ohne Untertitel sind in der Upload-Liste, aber **nicht** in der Filmliste (492 vs. 487 beim
-  Buchstaben O, 1.407 vs. 1.395 beim A): `movies-<L>.html` zeigt nur Filme mit mindestens einem
-  Eintrag, `add.php?let=<L>` alle.
+- **`search.php` answers with 500.** On all seven checked fetches (five search terms, GET
+  and POST, with and without referer), with and without hits. The body is still the correct
+  hit list; it only breaks off behind the film list — there, where the secondary subtitle list begins
+  (`</ul><br><ul style="margin-left:2em">` and then nothing). The status code is therefore **not**
+  usable here as an error sign, the content is.
+- **Titles stand inverted.** The site stores `Matrix, The (1999)`, `Lord of the Rings: The Two
+  Towers, The (2002)`, `Old Man and the Sea, The (1999)` — 52 of 492 O films end in `, The/A/An`.
+  `filter=The Matrix` therefore returns **0 hits**, `filter=Matrix, The` exactly one. A resolver
+  must try both forms (or fall back to the core without the article: `filter=Matrix` → 5
+  hits, then check year and name).
+- **The filter is a pure substring, anywhere in the title.** `filter=LOTR` hits `Allotria
+  (Allegria)`; `filter=dark` hits 162 films; an appended year does not help (`Oppenheimer 2023`
+  → 0 hits). Case does not count (`oppenheimer`, `dune`, `matrix` each hit).
+  There is **no** upper limit: `filter=the` returns 6.674 rows in one response (548 KB).
+- **`tvid` and the film id are the same number.** `movie-<id>.html`, `add.php?tvid=<id>` and the
+  way back from the subtitle page (`Back to <Film>` → `movie-<id>.html`) carry it; it is global
+  and stable (Oppenheimer 24811, Matrix, The 4, Ocean's Thirteen 239). There is no second
+  identifier and no season/episode level.
+- **The download address answers with 302, not with bytes.** `Location` is **relative**
+  (`files/…zip`) and can carry parentheses — measured: `files/Matrix_The_1999.ru(2).zip`, because the
+  name already existed. A client must resolve the address and take the parentheses along.
+- **Unknown ids look like success.** `download-999999.html` → 302 to `files/` (empty, no
+  file name) — that is the error signature. `subtitle-999999.html` → **HTTP 200** with empty title,
+  empty language and „size: 9140 kb"; that is not an answer, that is junk. Both must be checked
+  before an entry in the plugin database comes out of it.
+- **The zip contains 1 to 3 files, and `parts` is only a hint.** `parts`=3 (entry 9077)
+  → three files `Matrix The.DVDRip.KiSS.part1/2/3.en.srt`; `parts`=2 (entry 2058, Russian)
+  → **one** file `Matrix The (1999).ru.srt`. A complete film subtitle is therefore not
+  automatically „the file in the zip": with several parts they are segments that only joined together
+  make a film — and each segment carries its own timings.
+- **The file name in the zip follows no fixed pattern.** Both forms occurred:
+  `<Titel>.<Rip>.<Release>.<lang>.srt` (Oppenheimer) and `<Titel> (<Jahr>).<lang>.srt`
+  (Matrix, Russian). The name in the zip is **not** identical to the name of the zip.
+- **The year can stand twice in the heading.** `movie-16856.html` is called „O Beautiful (2002)
+  (2002)", because the title already contained the year. Whoever reads the year from the heading
+  takes the **last** bracket with four digits, not „everything in the last bracket".
+- **A film without subtitles is no 404.** `movie-6928.html` (Old Man and the Sea, The, 1999)
+  answers 200 with „0 subtitles downloaded  times" — two spaces where the number otherwise stands.
+  Films without subtitles are in the upload list, but **not** in the film list (492 vs. 487 for
+  the letter O, 1.407 vs. 1.395 for A): `movies-<L>.html` shows only films with at least one
+  entry, `add.php?let=<L>` all of them.
 
-**Mehrdeutigkeit.** Es gibt keine Suche nach Jahr, keinen Wunsch-Id-Parameter und keine
-Disambiguierungsseite. `filter=dune` gibt fünf Filme: drei „Dune"-Verfilmungen (1984, 2021, 2024),
-den Dokumentarfilm `Jodorowsky's Dune` (2013) und `Suna no onna (Woman of the Dunes)` (1964). Die
-Entscheidung fällt also im Client: Kandidaten sammeln, Jahr aus der Zeile neben dem Link
-vergleichen, und wenn zwei Kandidaten dasselbe Jahr tragen, den Titel eng vergleichen (nicht
-ähnlich) und sonst **nicht** raten. Genau die Regel, die der Serienweg schon
-anwendet.
+**Ambiguity.** There is no search by year, no requested-id parameter and no
+disambiguation page. `filter=dune` gives five films: three „Dune" adaptations (1984, 2021, 2024),
+the documentary `Jodorowsky's Dune` (2013) and `Suna no onna (Woman of the Dunes)` (1964). The
+decision therefore falls in the client: collect candidates, compare the year from the row next to the link,
+and when two candidates carry the same year, compare the title narrowly (not
+similarly) and otherwise **not** guess. Exactly the rule that the series path already
+applies.
 
-## Der Weg (Upload)
+## The path (upload)
 
-`GET /add.php?tvid=<id>` zeigt das Formular für genau diesen Film; `POST /add.php`,
-`enctype="multipart/form-data"`, Ziel ist `add.php` (relativ, also `/add.php`). Die Felder sind
-wörtlich die des Formulars:
+`GET /add.php?tvid=<id>` shows the form for exactly this film; `POST /add.php`,
+`enctype="multipart/form-data"`, the target is `add.php` (relative, so `/add.php`). The fields are
+literally those of the form:
 
-| Feld | Typ | Inhalt |
+| Field | Type | Content |
 |---|---|---|
-| `tvid` | hidden | Film-Id; steht schon im Formular (`24811`) |
-| `lang` | select | Sprachkürzel der Seite, 13 Werte (siehe Tabelle) |
-| `rip` | select | `DVDRip BluRay BrRip BDRip HDRip WEB WEBRip WEB-DL` oder leer |
-| `release` | text | Freitext (Release-Gruppe), z. B. `MA`, `YTS`, `KiSS` |
-| `author` | text | Freitext — **Pflicht oder nicht: ungeprüft**, siehe unten |
-| `UFile` | file | Datei 1 |
+| `tvid` | hidden | film id; already stands in the form (`24811`) |
+| `lang` | select | the site's language code, 13 values (see table) |
+| `rip` | select | `DVDRip BluRay BrRip BDRip HDRip WEB WEBRip WEB-DL` or empty |
+| `release` | text | free text (release group), e.g. `MA`, `YTS`, `KiSS` |
+| `author` | text | free text — **mandatory or not: unchecked**, see below |
+| `UFile` | file | file 1 |
 | `UFile2` | file | „only if 2 and more CD" |
 | `UFile3` | file | „only if 3 CD" |
-| `comments` | textarea | Freitext |
+| `comments` | textarea | free text |
 | `go` | hidden | `1` |
 
-**Kein `accept=` an den Dateifeldern, kein `MAX_FILE_SIZE`, kein Token, kein Captcha, kein
-Referer-Zwang erkennbar.** Das Formular ist ein nacktes Multipart-Formular — anders als bei
-tvsubtitles.net fehlt hier sogar das `hi`-Kennzeichen für hörgeschädigte Fassungen.
+**No `accept=` on the file fields, no `MAX_FILE_SIZE`, no token, no captcha, no
+forced referer detectable.** The form is a bare multipart form — unlike
+tvsubtitles.net even the `hi` marker for hearing-impaired versions is missing here.
 
-**Was das Formular über die Annahme verrät: nichts.** Es gibt keinen Hinweis auf erlaubte Endungen,
-keine Größenangabe, keinen Moderationstext. Die drei Dateifelder sind als „CD"-Teile deklariert
-(„only if 2 and more CD") — die Seite denkt also in Teilen, wie die `parts`-Spalte der Einträge
-zeigt. Ob `UFile` allein genügt, ob `.srt` und `.zip` beide gehen und ob `author`/`comments` Pflicht
-sind, lässt sich **nur durch einen echten Upload** klären, und der war für diesen Auftrag
-ausgeschlossen.
+**What the form reveals about acceptance: nothing.** There is no hint about permitted extensions,
+no size specification, no moderation text. The three file fields are declared as „CD" parts
+(„only if 2 and more CD") — the site therefore thinks in parts, as the `parts` column of the entries
+shows. Whether `UFile` alone suffices, whether `.srt` and `.zip` both work and whether `author`/`comments` are
+mandatory can be clarified **only by a real upload**, and that was
+excluded for this task.
 
-**Film neu anlegen:** `GET /add-movie.php` → Formular nach `/add-movie.php` (POST, multipart) mit
-`name`, `year` (`maxlength=4`), `go=1`. **Gebaut seit F-M513** (Etappe 3), **live belegt seit F-M515**
-(16.11.2026): der Client baut genau diese Nutzlast, und er liest die Antwort an zwei belegten
-Markern — siehe den Abschnitt „Live-Beleg 16.11.2026" weiter unten.
-Die Seite warnt selbst: „Before adding new Movie please
-check if it already exist" — das ist ein Hinweis, **kein** technischer Doppeleintrag-Schutz; ob die
-Seite einen zweiten Eintrag mit gleichem Namen und Jahr ablehnt, ist ungeprüft. Derselbe Vorbehalt
-wie bei tvsubtitles.net: erst auflösen, dann anlegen, und nur wenn die Suche sauber geantwortet hat.
+**Create a new film:** `GET /add-movie.php` → form to `/add-movie.php` (POST, multipart) with
+`name`, `year` (`maxlength=4`), `go=1`. **Built since F-M513** (stage 3), **proven live since F-M515**
+(16.11.2026): the client builds exactly this payload, and it reads the answer at two proven
+markers — see the section „Live proof 16.11.2026" further below.
+The site warns itself: „Before adding new Movie please
+check if it already exist" — that is a hint, **no** technical duplicate protection; whether the
+site refuses a second entry with the same name and year is unchecked. The same reservation
+as with tvsubtitles.net: resolve first, then create, and only if the search answered cleanly.
 
-**Wie man die `tvid` eines Jellyfin-Films findet** — belegt am Beispiel „Oppenheimer (2023)":
+**How one finds the `tvid` of a Jellyfin film** — proven on the example „Oppenheimer (2023)":
 
 ```
 GET /add.php?filter=oppenheimer
-  → <li><a href="add.php?tvid=24811"><b>Oppenheimer</b></a> 2023</li>      (genau ein Treffer)
+  → <li><a href="add.php?tvid=24811"><b>Oppenheimer</b></a> 2023</li>      (exactly one hit)
 GET /add.php?tvid=24811
-  → <b>Movie:</b> Oppenheimer (2023)   … Formular
+  → <b>Movie:</b> Oppenheimer (2023)   … form
 ```
 
-Gegenprobe „The Matrix" (1999): `filter=The Matrix` → 0 Treffer; `filter=Matrix` → 5 Treffer, davon
-`Matrix, The (1999)` = `tvid=4`. Der Weg führt also über den **Kern** des Titels und dann über den
-Jahr-Vergleich, nicht über den vollen TMDb-Titel.
+Counter-check „The Matrix" (1999): `filter=The Matrix` → 0 hits; `filter=Matrix` → 5 hits, of which
+`Matrix, The (1999)` = `tvid=4`. The path therefore leads over the **core** of the title and then over the
+year comparison, not over the full TMDb title.
 
-## Tabellen
+## Tables
 
-### Sprache — die 13 Werte von `<select name="lang">`
+### Language — the 13 values of `<select name="lang">`
 
-Wortlaut der Seite, in der Reihenfolge des Formulars. Es sind **genau 13** — die Auswahlliste ist
-kürzer als die von tvsubtitles.net, nicht länger, und sie enthält kein `select`-`multiple`: eine
-Sprache je Upload.
+Wording of the site, in the order of the form. There are **exactly 13** — the selection list is
+shorter than that of tvsubtitles.net, not longer, and it contains no `select`-`multiple`: one
+language per upload.
 
-| Wert | Anzeige | Flagge | Einträge (Site-Statistik) |
+| Value | Display | Flag | Entries (site statistics) |
 |---|---|---|---|
 | `en` | english | `images/flags/en.gif` | 46.909 |
 | `es` | spanish | `es.gif` | 6.982 |
@@ -208,367 +208,367 @@ Sprache je Upload.
 | `pl` | polish | `pl.gif` | 3.320 |
 | `tr` | turkish | `tr.gif` | 7.082 |
 
-**Diese 13 Kürzel stehen in der tvsubtitles-Liste in identischer Schreibweise** (dort sind es 23).
-Die Brücke `TvSubtitlesClient.SiteLanguage` (F-M502) deckt sie damit vollständig ab — auch die
-Abweichungen, die kein ISO sind: `gr` statt `el`, `ua` statt `uk`, `br` für brasilianisches
-Portugiesisch. Was hier fehlt und dort existiert (`nl pt sv da fi ko cn jp bg cz ro`), wird **nicht**
-angeboten; ein Zielcode außerhalb dieser 13 hat auf dieser Seite keine Sprache und darf nicht
-hochgeladen werden. Die Zahl in der letzten Spalte ist die Selbstauskunft der Seite (`add.php`,
-Block „Site statistics"), nicht nachgezählt.
+**These 13 codes stand in the tvsubtitles list in identical spelling** (there it is 23).
+The bridge `TvSubtitlesClient.SiteLanguage` (F-M502) therefore covers them completely — also the
+deviations that are no ISO: `gr` instead of `el`, `ua` instead of `uk`, `br` for Brazilian
+Portuguese. What is missing here and exists there (`nl pt sv da fi ko cn jp bg cz ro`) is **not**
+offered; a target code outside these 13 has no language on this site and must not
+be uploaded. The number in the last column is the site's self-report (`add.php`,
+block „Site statistics"), not counted by us.
 
-Die Abschnittsüberschriften der Filmseite sind die Anzeigenamen derselben Liste, nur mit zwei
-Leerzeichen vor `subtitles:` — `English`, `Portugese(br)` (so geschrieben), `Ukrainian` usw. Sie
-erscheinen **nur für Sprachen, in denen der Film Einträge hat**; `movie-4.html` hat 12 Abschnitte
-(kein Ukrainisch), `movie-239.html` alle 13.
+The section headings of the film page are the display names of the same list, only with two
+spaces before `subtitles:` — `English`, `Portugese(br)` (written like that), `Ukrainian` etc. They
+appear **only for languages in which the film has entries**; `movie-4.html` has 12 sections
+(no Ukrainian), `movie-239.html` all 13.
 
-### Rip — die Werte von `<select name="rip">`
+### Rip — the values of `<select name="rip">`
 
-`(leer)` — im Formular **zweimal**, als erster und als letzter Eintrag —, `DVDRip`, `BluRay`,
-`BrRip`, `BDRip`, `HDRip`, `WEB`, `WEBRip`, `WEB-DL`. Neun Werte, dazu der leere Fall.
+`(leer)` — in the form **twice**, as first and as last entry —, `DVDRip`, `BluRay`,
+`BrRip`, `BDRip`, `HDRip`, `WEB`, `WEBRip`, `WEB-DL`. Nine values, plus the empty case.
 
-**Das ist nicht die Liste von tvsubtitles.net** (`WEB HDTV HEVC DVDRip DVDSCR BDRip BluRay`).
-Gemeinsam sind nur `WEB`, `DVDRip`, `BDRip`, `BluRay`. Eine Rip-Tabelle muss also je Quelle geführt
-werden — `HDRip`, `BrRip`, `WEBRip`, `WEB-DL` gibt es dort nicht, `HDTV`, `HEVC`, `DVDSCR` hier
-nicht. Und: die Auswahlliste ist **nur eine Empfehlung für neue Uploads**. Bestehende Einträge
-tragen daneben freie Werte — auf `movie-4.html` stehen `1080p`, `720p`, `1080p.BlueRay`,
-`720p.BlueRay`, `BrRip`, `BDRip`, `DVDRip` und leer. Wer liest, muss also mit allem rechnen; wer
-schreibt, hält sich an die neun.
+**This is not the list of tvsubtitles.net** (`WEB HDTV HEVC DVDRip DVDSCR BDRip BluRay`).
+Common are only `WEB`, `DVDRip`, `BDRip`, `BluRay`. A rip table must therefore be kept per source
+— `HDRip`, `BrRip`, `WEBRip`, `WEB-DL` do not exist there, `HDTV`, `HEVC`, `DVDSCR` not here.
+And: the selection list is **only a recommendation for new uploads**. Existing entries
+carry free values next to it — on `movie-4.html` stand `1080p`, `720p`, `1080p.BlueRay`,
+`720p.BlueRay`, `BrRip`, `BDRip`, `DVDRip` and empty. Whoever reads must therefore expect everything; whoever
+writes sticks to the nine.
 
-### Staffel/Folge
+### Season/episode
 
-Gibt es nicht. Die Seite kennt **nur** `tvid`. Kein Feld, keine Spalte, keine Adresse.
+There is none. The site knows **only** `tvid`. No field, no column, no address.
 
-### Spalten eines Eintrags auf der Filmseite
+### Columns of an entry on the film page
 
-Je Eintrag (`<div class="subtitle">`): Flagge (`images/flags/<code>.gif`, `alt` = Kürzel), Link
-`/subtitle-<id>.html`, Titel `<Titel> <Jahr> <sprache> subtitles (<Rip>.<Release>)`, Bewertung
-(rot/grün), und eine Tabelle mit Rip, Upload-Datum (`07.08.2024 02:48`), Größe (`90.35 kb`),
-Release, `parts` (1–3), Downloads. **Der Rip steht also als eigene Spalte in der Liste**, das Release
-ebenfalls — aber das Release ist oft leer, während es im Titel in Klammern steht. Verlässlich ist der
-Titel: er trägt `(<Rip>.<Release>)` vollständig, notfalls als `()`.
+Per entry (`<div class="subtitle">`): flag (`images/flags/<code>.gif`, `alt` = code), link
+`/subtitle-<id>.html`, title `<Titel> <Jahr> <sprache> subtitles (<Rip>.<Release>)`, rating
+(red/green), and a table with rip, upload date (`07.08.2024 02:48`), size (`90.35 kb`),
+release, `parts` (1–3), downloads. **The rip therefore stands as its own column in the list**, the release
+as well — but the release is often empty, while it stands in parentheses in the title. Reliable is the
+title: it carries `(<Rip>.<Release>)` completely, if need be as `()`.
 
-**Die Sprache steht dreifach da** — Abschnittsüberschrift, Flagge, Wort im Titel — und in allen 108
-geprüften Einträgen (`movie-4`, `movie-239`, `movie-24811`) stimmten alle drei überein. Anders als
-bei tvsubtitles.net, wo allein die Flagge zählt und die Blockgrenze über die Zuordnung entscheidet,
-gibt es hier also Redundanz zur Kontrolle.
+**The language stands there three times** — section heading, flag, word in the title — and in all 108
+checked entries (`movie-4`, `movie-239`, `movie-24811`) all three agreed. Unlike
+tvsubtitles.net, where the flag alone counts and the block boundary decides the assignment,
+there is therefore redundancy here for cross-checking.
 
-## Seiten-Eigenheiten
+## Site peculiarities
 
-- **Zeichensatz:** `<meta … charset=utf-8>` und der Körper ist auch UTF-8 — **außer** einzelnen
-  Fragmenten in **cp1251**: dem LiveInternet-Zähler (ein `escape("Жж"+…)` im JavaScript) und
-  `/admin.php` (ukrainisch). Der HTTP-Kopf setzt **kein** `charset` (`Content-Type: text/html`).
-  Wer den ganzen Rumpf strikt als UTF-8 dekodiert, scheitert an genau diesen Bytes (Position 10.803
-  auf `subtitle-2058.html`); wer cp1252 nimmt, macht dafür alle Titel kaputt. Die Bytes der
-  Untertitel-Dateien sind davon unberührt: **UTF-8, CRLF** — mit BOM nur bei der neueren Datei
-  (Oppenheimer 2024), ohne BOM bei den drei älteren (Matrix 2007/2008).
-- **Weiterleitungen:** `http://` → 301 → `https://www.`; `moviesubtitles.org` ohne `www` → 301 →
-  `https://www.moviesubtitles.org/`. `/movies.html` ist **kein** Redirect, sondern die Filmliste
-  (569 KB für A) — die frühere Notiz „leitet auf die Startseite um" ließ sich am 15.11.2026 nicht
-  reproduzieren, mit Browser-Kennung kamen 200 und 569.197 Bytes Inhalt. `/tvshow-…`, `/episode-…`,
-  `/login.php`, `/panel.php`, `/upload.php`, `/sitemap.xml`, `/rss.xml`, `/api.php` → 302 auf `/`.
-- **`robots.txt`: HTTP 200, 0 Bytes.** Keine Regel, kein Verbot — und damit auch keine Erlaubnis,
-  mehr zu ziehen als nötig.
-- **Drosselung:** nicht beobachtet, aber auch nicht ausgeschlossen. Sechs Anfragen auf dieselbe
-  Filmseite in Folge: alle 200, 0,57–0,88 s. Die Seite ist langsam und liefert unkomprimiert
-  (eine Buchstabenliste 200–570 KB), das ist der eigentliche Kostenfaktor. Für den Client gilt die
-  allgemeine Pause des Plugins (`MinCallPauseSec`).
-- **Kein Login, kein Konto.** Es gibt nichts anzumelden und folglich auch keine „meine Uploads"-
-  Seite. Was hochgeladen wurde, liest man **von der Filmseite zurück** (`movie-<id>.html`) oder
-  allenfalls auf `/new.html` (letzte Untertitel) — mehr Rücklesemöglichkeit gibt es nicht.
-- **Ohne Browser-Kennung** lieferten Startseite und Filmseite **dieselben Bytes** wie mit
-  (`19401` zu `19401`, `104870` zu `104870`; der einzige Unterschied war ein zweistelliger Zähler
-  tief in einem Skript). Die Seite prüft den `User-Agent` also nicht. Der Auftrag verlangte trotzdem
-  die Browser-Kennung, und die wurde bei jedem Abruf gesendet.
-- **Werbung:** mehrere Fremdskripte (`cognatesyringe.com`, `acint.net`, LiveInternet) mitten im
-  Inhalt. Ein Parser darf sich auf **keine** Position im Dokument verlassen, nur auf Klassen und
-  die Tabellenstruktur.
+- **Character set:** `<meta … charset=utf-8>` and the body is also UTF-8 — **except** individual
+  fragments in **cp1251**: the LiveInternet counter (an `escape("Жж"+…)` in the JavaScript) and
+  `/admin.php` (Ukrainian). The HTTP header sets **no** `charset` (`Content-Type: text/html`).
+  Whoever decodes the whole body strictly as UTF-8 fails on exactly these bytes (position 10.803
+  in `subtitle-2058.html`); whoever takes cp1252 breaks all titles instead. The bytes of the
+  subtitle files are untouched by that: **UTF-8, CRLF** — with BOM only in the newer file
+  (Oppenheimer 2024), without BOM in the three older ones (Matrix 2007/2008).
+- **Redirects:** `http://` → 301 → `https://www.`; `moviesubtitles.org` without `www` → 301 →
+  `https://www.moviesubtitles.org/`. `/movies.html` is **no** redirect, but the film list
+  (569 KB for A) — the earlier note „redirects to the home page" could not be reproduced on 15.11.2026;
+  with a browser user agent came 200 and 569.197 bytes of content. `/tvshow-…`, `/episode-…`,
+  `/login.php`, `/panel.php`, `/upload.php`, `/sitemap.xml`, `/rss.xml`, `/api.php` → 302 to `/`.
+- **`robots.txt`: HTTP 200, 0 bytes.** No rule, no prohibition — and therefore also no permission
+  to pull more than necessary.
+- **Throttling:** not observed, but also not excluded. Six requests to the same
+  film page in a row: all 200, 0,57–0,88 s. The site is slow and delivers uncompressed
+  (a letter list 200–570 KB), that is the actual cost factor. For the client the
+  general pause of the plugin applies (`MinCallPauseSec`).
+- **No login, no account.** There is nothing to log into and consequently also no „my uploads"
+  page. What was uploaded is read **back from the film page** (`movie-<id>.html`) or
+  at most on `/new.html` (latest subtitles) — there is no further read-back option.
+- **Without a browser user agent** the home page and film page delivered **the same bytes** as with
+  (`19401` to `19401`, `104870` to `104870`; the only difference was a two-digit counter
+  deep inside a script). The site therefore does not check the `User-Agent`. The task nevertheless required
+  the browser user agent, and it was sent on every fetch.
+- **Advertising:** several third-party scripts (`cognatesyringe.com`, `acint.net`, LiveInternet) in the middle of the
+  content. A parser may rely on **no** position in the document, only on classes and
+  the table structure.
 
-## Was NICHT belegt ist
+## What is NOT proven
 
-Alles hier ist **ungeprüft**, weil dafür ein Schreibzugriff nötig gewesen wäre — und der war für
-diesen Auftrag ausgeschlossen.
+Everything here is **unchecked**, because a write access would have been necessary for it — and that was
+excluded for this task.
 
-- **Ob `add.php` überhaupt annimmt.** Es gibt keinen Hinweis auf Moderation, keinen Dankestext, kein
-  Captcha — aber auch keinen Beleg, dass ein Upload ohne Anmeldung durchgeht. Bei tvsubtitles.net
-  lautet der Verdacht „nimmt an, moderiert vielleicht"; hier ist noch nicht einmal das geprüft.
-- **Wie die Antwort auf einen Upload aussieht.** Ob HTTP 200 mit Text, ob eine Weiterleitung, ob
-  eine neue Untertitel-Id zurückkommt (bei tvst kommt keine), ob es einen Bestätigungstext wie
-  „Thank you. Your subtitles will be placed on site very soon." gibt — **unbekannt**.
-- **Ob `UFile` allein reicht**, ob `UFile2`/`UFile3` nur bei Mehrteiler-Filmen gefüllt werden dürfen,
-  und ob ein Upload mit drei Dateien als ein Eintrag mit `parts`=3 erscheint. Die Spalte `parts`
-  lässt es vermuten; belegt ist es nicht.
-- **Welche Endungen die Seite nimmt.** Das Formular sagt nichts (kein `accept=`). `.srt` und `.zip`
-  sind bei den *herunterladbaren* Dateien belegt, nicht beim Hochladen.
-- **Ob `author` und `comments` Pflicht sind** und was passiert, wenn sie fehlen. Kein `required`,
-  kein Sternchen — mehr weiß man erst nach einem POST.
-- **Ob der Dateiname des Uploads übernommen wird.** Die Dateien im Zip heißen
-  `<Titel>.<Rip>.<Release>.<lang>.srt` bzw. `<Titel> (<Jahr>).<lang>.srt`, also **serverseitig aus
-  Titel, Rip, Release und Sprache gebaut**. Es sieht so aus, als würde der eigene Dateiname
-  verworfen — bewiesen ist das nicht.
-- **Ob die Seite Doppeleinträge verhindert** (gleicher Film, gleiche Sprache, gleicher Rip, gleiches
-  Release). `add-movie.php` warnt nur vor dem Anlegen eines doppelten *Films*; für Untertitel gibt
-  es keinen sichtbaren Hinweis.
-- **Ob der 500 auf `search.php` dauerhaft ist** oder eine kaputte Installation, die sich mit einem
-  Update ändert. Er war am 15.11.2026 bei jeder Abfrage da.
-- **Wie die Seite auf Umlaute und diakritische Zeichen reagiert** (`Amélie` gegen `Amelie`) — nur
-  Groß-/Kleinschreibung ist als unabhängig belegt, nicht Akzentfaltung.
-- **Ob es ein Rate-Limit über längere Zeit gibt.** Sechs Anfragen sind keine Messung.
+- **Whether `add.php` accepts at all.** There is no hint of moderation, no thank-you text, no
+  captcha — but also no proof that an upload without login goes through. With tvsubtitles.net
+  the suspicion reads „accepts, perhaps moderates"; here not even that is checked.
+- **What the answer to an upload looks like.** Whether HTTP 200 with text, whether a redirect, whether
+  a new subtitle id comes back (with tvst none comes), whether there is a confirmation text like
+  „Thank you. Your subtitles will be placed on site very soon." — **unknown**.
+- **Whether `UFile` alone suffices**, whether `UFile2`/`UFile3` may be filled only for multi-part films,
+  and whether an upload with three files appears as one entry with `parts`=3. The `parts` column
+  suggests it; it is not proven.
+- **Which extensions the site takes.** The form says nothing (no `accept=`). `.srt` and `.zip`
+  are proven for the *downloadable* files, not for uploading.
+- **Whether `author` and `comments` are mandatory** and what happens when they are missing. No `required`,
+  no asterisk — one knows more only after a POST.
+- **Whether the file name of the upload is taken over.** The files in the zip are named
+  `<Titel>.<Rip>.<Release>.<lang>.srt` or `<Titel> (<Jahr>).<lang>.srt`, so **built server-side from
+  title, rip, release and language**. It looks as if the own file name
+  is discarded — that is not proven.
+- **Whether the site prevents duplicate entries** (same film, same language, same rip, same
+  release). `add-movie.php` warns only about creating a duplicate *film*; for subtitles there
+  is no visible hint.
+- **Whether the 500 on `search.php` is permanent** or a broken installation that changes with an
+  update. It was there on 15.11.2026 with every query.
+- **How the site reacts to umlauts and diacritics** (`Amélie` vs `Amelie`) — only
+  case is proven to be independent, not accent folding.
+- **Whether there is a rate limit over a longer time.** Six requests are no measurement.
 
-## Umgesetzt in Etappe 1
+## Implemented in stage 1
 
-**`Jellyfin.Plugin.SubdlSync/Api/MovieSubtitlesClient.cs`** — der Client der dritten Quelle, Bauform wie
-`TvSubtitlesClient`: alle Parser `static` und ohne Netz, dazu die async-Abrufe. Geprüft von der Suite
-**`scripts/tests/moviesubtitles/`** (`MovieSubtitlesRun.cs`, inzwischen 84 Prüfungen gegen die Fixtures in
-`fixtures/`, `--live` liest nur), gebunden als **T228** und beschrieben als **F-M506** in
-`docs/REQUIREMENTS.md`. **Nachtrag F-M510/T232:** dieselbe Suite prüft seither auch den TMDb-Titel-Jahr-
-Vergleich (Klammer-Jahr abgetrennt, nur für den Vergleich) — 9 Prüfungen mehr, zusammen **93**.
+**`Jellyfin.Plugin.SubdlSync/Api/MovieSubtitlesClient.cs`** — the client of the third source, build like
+`TvSubtitlesClient`: all parsers `static` and without network, plus the async fetches. Checked by the suite
+**`scripts/tests/moviesubtitles/`** (`MovieSubtitlesRun.cs`, meanwhile 84 checks against the fixtures in
+`fixtures/`, `--live` only reads), bound as **T228** and described as **F-M506** in
+`docs/REQUIREMENTS.md`. **Addendum F-M510/T232:** the same suite has since also checked the TMDb title-year
+comparison (bracket year split off, only for the comparison) — 9 checks more, **93** in total.
 
-Enthalten sind: die beiden eigenen Tabellen (13 Sprachen, neun Rip-Werte), die Sprachbrücke
-`SiteLanguage` (verweigert, was die 13 nicht kennen — inklusive `pt`/`por`, denn die Seite führt nur die
-brasilianische Fassung), `RipFromQuality` (Quelle vor Codec, **kein** Codec-Rückfall), `ParseMovieList`
-für alle drei Listensichten, `ResolveMovie`/`TitleKey` (Artikel-Inversion, Jahr, kein Raten),
-`ParseMoviePage` (Sprache aus der Flagge), `ParseSubtitlePage`, `ParseDownloadTarget`/`DownloadUrl`,
-`DownloadAsync` (302, Bytes entscheiden, Mehrteiler gekennzeichnet) sowie `BuildUpload`,
-`BuildUploadBody` und `UploadAsync` (Trockenlauf als Vorgabe, `dryRun` kommt vom Aufrufer).
+Included are: the two own tables (13 languages, nine rip values), the language bridge
+`SiteLanguage` (refuses what the 13 do not know — including `pt`/`por`, because the site carries only the
+Brazilian version), `RipFromQuality` (source before codec, **no** codec fallback), `ParseMovieList`
+for all three list views, `ResolveMovie`/`TitleKey` (article inversion, year, no guessing),
+`ParseMoviePage` (language from the flag), `ParseSubtitlePage`, `ParseDownloadTarget`/`DownloadUrl`,
+`DownloadAsync` (302, bytes decide, multi-part marked) as well as `BuildUpload`,
+`BuildUploadBody` and `UploadAsync` (dry run as default, `dryRun` comes from the caller).
 
-**Nicht enthalten und ausdrücklich Etappe 2:** jede Verdrahtung — kein Konfigurationsfeld, keine
-Store-Spalte, kein Endpunkt, kein Eintrag im Quellenkatalog. `BuildAddMovie` und die Anlage kamen erst
-mit F-M513 (Etappe 3). Auf die Seite wurde **nicht schreibend** zugegriffen.
+**Not included and explicitly stage 2:** any wiring — no configuration field, no
+plugin database column, no endpoint, no entry in the source catalogue. `BuildAddMovie` and the creation came only
+with F-M513 (stage 3). The site was **not** accessed in a writing way.
 
-**Zwei Befunde aus dem Bau, die das Protokoll oben präzisieren:**
+**Two findings from the build that sharpen the protocol above:**
 
-- **Das Rip-Auswahlfeld führt acht benannte Werte, nicht neun** — der leere Eintrag steht zweimal
-  (erster und letzter Option), also ergeben sich neun *verschiedene* Werte. Die Tabelle im Client und
-  die Prüfung in der Suite zählen den leeren mit; die Zeile „Neun Werte, dazu der leere Fall" oben
-  zählt ihn doppelt.
-- **`x265` ergibt hier den leeren Rip, nicht `HEVC`.** `HEVC` ist ein Wert von tvsubtitles.net; dieses
-  Auswahlfeld kennt keinen Codec. Die Quelle im selben Namen greift weiter (`BluRay.x265` → `BluRay`),
-  ein Codec allein bleibt leer — die Seite speichert dann keinen Rip, und das ist ein erlaubter Wert.
+- **The rip selection field carries eight named values, not nine** — the empty entry stands twice
+  (first and last option), so nine *different* values result. The table in the client and
+  the check in the suite count the empty one in; the line „Nine values, plus the empty case" above
+  counts it twice.
+- **`x265` yields the empty rip here, not `HEVC`.** `HEVC` is a value of tvsubtitles.net; this
+  selection field knows no codec. The source in the same name still applies (`BluRay.x265` → `BluRay`),
+  a codec alone stays empty — the site then stores no rip, and that is a permitted value.
 
-## Umgesetzt in Etappe 2b — der Upload-Weg (gesperrt)
+## Implemented in stage 2b — the upload path (locked)
 
-**Gebaut ist der ganze Weg, scharf ist er nicht.** Nutzerauflage 15.11.2026: „Bevor wir falsche
-Sprachen hochladen, laden wir nix hoch." Der Weg wird deshalb gebaut, geprüft und **gesperrt**
-ausgeliefert; freigegeben wird er **erst nach belegter Sprachabbildung**.
+**The whole path is built, it is not live.** Operator requirement 15.11.2026: „Before we upload
+wrong languages, we upload nothing." The path is therefore built, checked and shipped **locked**;
+it is released **only after proven language mapping**.
 
-### Was gebaut ist
+### What is built
 
-| Stück | Wo | Was es tut |
+| Piece | Where | What it does |
 |---|---|---|
-| Endpunkt | `Api/Endpoints/MovieSubtitlesEndpoints.cs`, `MovieSubtitlesUploadEndpoint` | `IUploadEndpoint`, `Provider = MovieSubtitles`, `Wired = true`. Nimmt das Ticket, lehnt Staffel/Folge und Staffelpack ab, prüft die Sprache gegen die 13 Kürzel, nimmt `MsubMovieId` aus dem Ticket oder löst über Titel **und** Jahr auf |
-| Nutzlast | `MovieSubtitlesClient.BuildUpload` (schon in Etappe 1) | Felder in der Reihenfolge des Formulars: `tvid lang rip release`, `author` **nur wenn gesetzt**, `UFile` (`UFile2`/`UFile3` nur bei Mehrteiler), `comments`, `go=1`. `release` ist die Release-**Gruppe** aus dem Release-Namen, nie der Dateiname |
-| Rumpf | `MovieSubtitlesClient.BuildUploadBody` | Multipart mit eigenem Boundary; die Bytes der Datei stehen unverändert darin |
-| Senden | `MovieSubtitlesClient.UploadAsync(upload, dryRun)` | Trockenlauf ist der **Vorgabewert**: derselbe Rumpf, kein Byte auf die Leitung |
-| Auflösung | `MsubMovieResolver` (Etappe 2a) | gespeicherte Nummer führt; sonst enge Suche über TMDb-Titel und TMDb-Jahr; die Nummer landet in `MediaEntity.MsubMovieId` |
-| Kette | `Pipeline/UploadPipeline.cs` | **eine** Schleife über die zuständigen Quellen (Serie: tvsubtitles.net, Film: moviesubtitles.org — je neben SubDL), je Quelle eigener Schalter, eigenes Tor, eigener Versand, eigenes Ergebnis, **eigene Marke** und **eigener Zeitstempel**. Die alte Bauform „SubDL, sonst alles andere" ist weg — sie hätte einen Film zur Serien-Adresse geschickt |
-| Tor | `Api/Endpoints/UploadGate.cs` | `Decide(...)` kennt die Film-Adresse (`MovieSubtitles`, `AllowedCount`), `May(provider)` ist die eine Lesestelle der Kette |
-| Store | `Registry/ContentHashRegistry.cs` | `IsUploadedTo`/`IsContentUploadedFor` lesen die Spalten der Film-Adresse, `RecordSkippedContent` schreibt ihren Zeitstempel, `MarkEmbed`/`MarkSidecar` nehmen `moviesubtitlesUploadId`/`moviesubtitlesUploadedAt` |
-| Schalter | `Configuration/PluginConfiguration.cs` | `MovieSubtitlesDownloadEnabled` (null → **an**), `MovieSubtitlesUploadEnabled` (null → **aus**) |
-| GUI | `Configuration/configPage.html` | Die tvst-Familie steht als **eine Quelle mit zwei Adressen**: eine gemeinsame Überschrift, darunter je Seite ein Schalterpaar (Download/Upload). Das Auswahlfeld der Reihenfolge bleibt **zweiwertig** (SubDL zuerst / tvst zuerst) |
+| Endpoint | `Api/Endpoints/MovieSubtitlesEndpoints.cs`, `MovieSubtitlesUploadEndpoint` | `IUploadEndpoint`, `Provider = MovieSubtitles`, `Wired = true`. Takes the ticket, refuses season/episode and season pack, checks the language against the 13 codes, takes `MsubMovieId` from the ticket or resolves over title **and** year |
+| Payload | `MovieSubtitlesClient.BuildUpload` (already in stage 1) | fields in the order of the form: `tvid lang rip release`, `author` **only when set**, `UFile` (`UFile2`/`UFile3` only for multi-part), `comments`, `go=1`. `release` is the release **group** from the release name, never the file name |
+| Body | `MovieSubtitlesClient.BuildUploadBody` | multipart with its own boundary; the bytes of the file stand unchanged in it |
+| Sending | `MovieSubtitlesClient.UploadAsync(upload, dryRun)` | dry run is the **default**: the same body, not a byte on the wire |
+| Resolution | `MsubMovieResolver` (stage 2a) | the stored number leads; otherwise a narrow search over TMDb title and TMDb year; the number lands in `MediaEntity.MsubMovieId` |
+| Chain | `Pipeline/UploadPipeline.cs` | **one** loop over the responsible sources (series: tvsubtitles.net, film: moviesubtitles.org — each next to SubDL), per source its own switch, its own gate, its own sending, its own result, its **own mark** and **own timestamp**. The old build „SubDL, otherwise everything else" is gone — it would have sent a film to the series address |
+| Gate | `Api/Endpoints/UploadGate.cs` | `Decide(...)` knows the film address (`MovieSubtitles`, `AllowedCount`), `May(provider)` is the single read point of the chain |
+| Plugin database | `Registry/ContentHashRegistry.cs` | `IsUploadedTo`/`IsContentUploadedFor` read the columns of the film address, `RecordSkippedContent` writes its timestamp, `MarkEmbed`/`MarkSidecar` take `moviesubtitlesUploadId`/`moviesubtitlesUploadedAt` |
+| Switch | `Configuration/PluginConfiguration.cs` | `MovieSubtitlesDownloadEnabled` (null → **on**), `MovieSubtitlesUploadEnabled` (null → **off**) |
+| GUI | `Configuration/configPage.html` | the tvst family stands as **one source with two addresses**: a shared heading, below it a pair of switches per site (download/upload). The selection field of the order stays **two-valued** (SubDL first / tvst first) |
 
-### Was der Endpunkt bei einer Antwort ohne Id tut
+### What the endpoint does on an answer without an id
 
-Was die Seite bei Annahme sagt, ist **nicht belegt** (siehe den Abschnitt „Was NICHT belegt ist"). Der
-Endpunkt erfindet deshalb weder eine Id noch eine Moderation:
+What the site says on acceptance is **not proven** (see the section „What is NOT proven"). The
+endpoint therefore invents neither an id nor a moderation:
 
-- **HTTP 2xx** → `Ok = true`, `Id = null`, der Text der Antwort geht **unverändert** durch
-  (nur Tags/Whitespace zusammengezogen). Es gilt „**angenommen, Id unbekannt**". Die Kette vergibt
-  daraufhin die eigene Kennung `own:moviesubtitles:<Zeit>:<hex>` (F-M488) — „hochgeladen, Id unbekannt"
-  ist belegbar, „Id 12345" wäre eine Behauptung.
-- **kein 2xx** → `Ok = false`, `Reason = "HTTP <Status>"`, der Text der Seite geht mit. Eine Ablehnung,
-  die wir erfinden, wäre so falsch wie eine Annahme, die wir erfinden.
-- **Trockenlauf** → `Ok = true`, `DryRun = true`, `Id = null`, `Answer = null`, aber `Bytes` = die Größe
-  des Rumpfs, der gesendet **würde**.
+- **HTTP 2xx** → `Ok = true`, `Id = null`, the text of the answer passes **unchanged**
+  (only tags/whitespace collapsed). It counts as „**accepted, id unknown**". The chain then assigns
+  its own identifier `own:moviesubtitles:<Zeit>:<hex>` (F-M488) — „uploaded, id unknown"
+  is provable, „id 12345" would be an assertion.
+- **no 2xx** → `Ok = false`, `Reason = "HTTP <Status>"`, the text of the site goes along. A rejection
+  that we invent would be as wrong as an acceptance that we invent.
+- **dry run** → `Ok = true`, `DryRun = true`, `Id = null`, `Answer = null`, but `Bytes` = the size
+  of the body that **would** be sent.
 
-### Die Sperre
+### The lock
 
-- `MovieSubtitlesUploadEnabled` ist `bool?` und im ungesetzten Fall **aus**; `IsUploadEnabled` liest das
-  als einzige Stelle.
-- Ist der Schalter aus, steht eine Zeile im Lauf: `source moviesubtitles skipped: that source is
-  switched off, nothing sent` (im Trockenlauf: `[SubDL] DRY-RUN … — source moviesubtitles not sent:
-  that source is switched off`). Die Quelle fehlt also nicht still.
-- **Kein POST gegen die Seite, auch nicht als Test.** Der Endpunkt wird ausschließlich gegen Fixtures
-  und einen Zähl-Handler gefahren; angelegt wurde kein Film, angemeldet wurde sich nirgends.
+- `MovieSubtitlesUploadEnabled` is `bool?` and **off** in the unset case; `IsUploadEnabled` reads that
+  as the single place.
+- If the switch is off, a line stands in the run: `source moviesubtitles skipped: that source is
+  switched off, nothing sent` (in the dry run: `[SubDL] DRY-RUN … — source moviesubtitles not sent:
+  that source is switched off`). The source therefore does not go missing silently.
+- **No POST against the site, not even as a test.** The endpoint is exercised exclusively against fixtures
+  and a counting handler; no film was created, no login was made anywhere.
 
-### Was auch jetzt nicht belegt ist
+### What is still not proven now either
 
-Die Sperre bleibt, bis **die Sprachabbildung** gegen die echte Seite belegt ist — nicht nur die
-Tabelle, sondern die Wirkung: dass ein Hochladen mit dem Kürzel der Seite als diese Sprache erscheint.
-**Beleg 16.11.2026:** der Film-Upload (Paddington 2, Film 23716, Eintrag 133347) steht öffentlich auf
-der Seite, mit `Rip WEB` und dem Kommentar `IMDb tt4468740 / Sub Scribe 12.1.12.397` — für EN ist die
-Wirkung damit gezeigt. Die Sperre selbst bleibt der Schalter: er ist im ungesetzten Fall weiter aus.
-Unbelegt bleiben weiterhin: ob `add.php` überhaupt ohne Anmeldung annimmt, wie der Antworttext bei
-Annahme lautet, ob moderiert wird, ob `author`/`comments` Pflicht sind, welche Endungen die Seite
-nimmt, ob der Dateiname übernommen wird und ob Doppeleinträge verhindert werden. **Erst nach belegter
-Sprachabbildung freigeben.**
+The lock stays until **the language mapping** is proven against the real site — not only the
+table, but the effect: that an upload with the site's code appears as that language.
+**Proof 16.11.2026:** the film upload (Paddington 2, film 23716, entry 133347) stands publicly on
+the site, with `Rip WEB` and the comment `IMDb tt4468740 / Sub Scribe 12.1.12.397` — for EN the
+effect is thereby shown. The lock itself remains the switch: it is still off in the unset case.
+Still unproven remain: whether `add.php` accepts at all without login, what the answer text on
+acceptance reads, whether moderation happens, whether `author`/`comments` are mandatory, which extensions the site
+takes, whether the file name is taken over and whether duplicate entries are prevented. **Release only after proven
+language mapping.**
 
-## Umgesetzt in Etappe 3 — Film anlegen (F-M513)
+## Implemented in stage 3 — creating a film (F-M513)
 
-**Nutzerauftrag 16.11.2026 (wörtlich): „Dann einmal mit neu anlegen testen".** Ein Film, den die Seite
-nicht führt, wird beim Upload angelegt und der Untertitel dazu hochgeladen. Gebaut und offline geprüft
-ist der Weg; **ein POST gegen die Seite ist in diesem Auftrag nicht gefallen** — den fährt der
-Live-Test.
+**Operator order 16.11.2026 (verbatim): „Then test once with creating new".** A film that the site
+does not carry is created on upload and the subtitle for it uploaded. Built and checked offline
+is the path; **no POST against the site was made in this task** — the
+live test runs that.
 
-### Was gebaut ist
+### What is built
 
-| Stück | Wo | Was es tut |
+| Piece | Where | What it does |
 |---|---|---|
-| Nutzlast | `MovieSubtitlesClient.BuildAddMovie(name, year)` | Felder `name`, `year`, `go=1` in der Reihenfolge des Formulars; **Prüfung vor dem Senden**: leerer Name oder Jahr außerhalb 1888..laufendes Jahr+3 → `ArgumentException`, keine Anfrage |
-| Rumpf | `MovieSubtitlesClient.BuildAddMovieBody` | multipart mit eigenem Boundary — Trockenlauf und Ernstfall bauen **denselben** Rumpf |
-| Senden + Rücklesen | `MovieSubtitlesClient.AddMovieAsync(payload, dryRun)` | `POST /add-movie.php` (Referer: das Formular); bei 2xx wird die Id **nachgesehen**, nicht geraten |
-| Doppeleintrag-Schutz | `MovieSubtitlesClient.CheckForAddAsync` / `ResolveForAdd` | **eine** Suchrunde (Titel, Titel ohne Artikel, invertierte Form) entscheidet, ob angelegt werden darf |
-| Anlage im Upload-Pfad | `MsubMovieResolver.ResolveOrCreateForMediaAsync` | die einzige Fassung, die anlegen darf; die Download-Fassung (`ResolveForMediaAsync`) legt nie an |
-| Kette | `Pipeline/UploadPipeline.cs` | ruft die anlegende Fassung **nur** im Film-Zweig, also nur bei eingeschaltetem Upload-Schalter der Quelle; der Trockenlauf baut und meldet, sendet nichts |
-| Store | `MsubMovieId` | die neue `tvid` geht **sofort** über dieselbe Methode (`Persist`) hinein wie eine gefundene Nummer |
+| Payload | `MovieSubtitlesClient.BuildAddMovie(name, year)` | fields `name`, `year`, `go=1` in the order of the form; **check before sending**: empty name or year outside 1888..current year+3 → `ArgumentException`, no request |
+| Body | `MovieSubtitlesClient.BuildAddMovieBody` | multipart with its own boundary — dry run and real case build **the same** body |
+| Sending + reading back | `MovieSubtitlesClient.AddMovieAsync(payload, dryRun)` | `POST /add-movie.php` (referer: the form); on 2xx the id is **looked up**, not guessed |
+| Duplicate protection | `MovieSubtitlesClient.CheckForAddAsync` / `ResolveForAdd` | **one** search round (title, title without article, inverted form) decides whether creation is allowed |
+| Creation in the upload path | `MsubMovieResolver.ResolveOrCreateForMediaAsync` | the only version that may create; the download version (`ResolveForMediaAsync`) never creates |
+| Chain | `Pipeline/UploadPipeline.cs` | calls the creating version **only** in the film branch, so only with the source's upload switch on; the dry run builds and reports, sends nothing |
+| Plugin database | `MsubMovieId` | the new `tvid` goes **immediately** in through the same method (`Persist`) as a found number |
 
-**Prüfungen:** die Suite `scripts/tests/moviesubtitles` zählt jetzt **123** — 84 aus Etappe 1, 9 aus
-F-M510 (T232), 5 aus F-M511 (T233), 15 aus F-M513 (T235), 6 aus F-M515 (T237) und **4 aus F-M517
-(T239)**. Sie fährt ausschließlich gegen Fixtures, Zähl-Handler und seit F-M517 einen Wegwerf-Store im
-Temp-Verzeichnis; `--live` liest weiterhin nur.
+**Checks:** the suite `scripts/tests/moviesubtitles` now counts **123** — 84 from stage 1, 9 from
+F-M510 (T232), 5 from F-M511 (T233), 15 from F-M513 (T235), 6 from F-M515 (T237) and **4 from F-M517
+(T239)**. It runs exclusively against fixtures, counting handlers and since F-M517 a throwaway plugin database in the
+temp directory; `--live` still only reads.
 
-### Wie der Doppeleintrag-Schutz entscheidet
+### How the duplicate protection decides
 
-Drei Fälle, und nur diese — geprüft wird **einmal**, vor dem Anlegen:
+Three cases, and only these — checked **once**, before creating:
 
-1. **Titel mit gleichem Jahr vorhanden** (genau eine Zeile) → diese Nummer nehmen, **nichts anlegen**.
-2. **Titel vorhanden, aber anderes Jahr** (oder Jahr unbekannt, oder mehr als eine Zeile) → **nicht**
-   anlegen und **nicht** hochladen; die Logzeile nennt das gefundene Jahr
+1. **Title with the same year present** (exactly one row) → take this number, **create nothing**.
+2. **Title present, but a different year** (or year unknown, or more than one row) → **not**
+   create and **not** upload; the log line names the found year
    (`… die Seite führt den Titel schon — gefundenes Jahr 2019, 1 Treffer; nichts angelegt, kein
-   Upload`). Der Nutzer will keine Doppel — also lieber kein Upload als ein zweiter Eintrag.
-3. **Kein Treffer, aber mindestens eine lesbare Antwort** → anlegen.
+   Upload`). The operator wants no duplicates — so rather no upload than a second entry.
+3. **No hit, but at least one readable answer** → create.
 
-Antwortet die Suche **gar nicht lesbar**, gilt „gibt es nicht" nicht: dann wird ebenfalls nichts
-angelegt (`unclear`). Die Entscheidung (`take`/`refuse`/`create`/`unclear`, gefundenes Jahr,
-Trefferzahl) steht im Ergebnisobjekt, nicht nur im Log.
+If the search answers **not readable at all**, „does not exist" does not apply: then nothing is
+created either (`unclear`). The decision (`take`/`refuse`/`create`/`unclear`, found year,
+hit count) stands in the result object, not only in the log.
 
-### Wie die neue Id gelesen wird — und was „Id nicht lesbar" heißt
+### How the new id is read — and what „id not readable" means
 
-Was die Seite auf den POST **antwortet, ist unbelegt**. Deshalb wird die Antwort nicht gedeutet: nach
-einem 2xx läuft dieselbe enge Suche noch einmal, und die Nummer kommt aus ihrer Trefferliste. Nennt
-die Nachsuche den Film nicht, lautet das Ergebnis **`angelegt, Id nicht lesbar`** — mit dem Text der
-Antwort daneben, ohne Nummer und ohne Upload (ohne `tvid` gibt es kein Formular). Ein HTTP-Fehler ist
-`Ok = false` mit dem Status als Grund. Die Logzeilen:
+What the site **answers to the POST is unproven**. Therefore the answer is not interpreted: after
+a 2xx the same narrow search runs once more, and the number comes from its hit list. If
+the follow-up search does not name the film, the result reads **`angelegt, Id nicht lesbar`** — with the text of the
+answer next to it, without number and without upload (without `tvid` there is no form). An HTTP error is
+`Ok = false` with the status as reason. The log lines:
 
 ```
-[moviesubtitles] 'Paddington in Peru' (2026) neu angelegt — Id 4711
-[moviesubtitles] 'Dune' (2026): die Seite führt den Titel schon — gefundenes Jahr 2021, 1 Treffer; nichts angelegt, kein Upload (F-M513)
-[moviesubtitles] 'X' (2026) wurde angelegt, aber die Nachsuche nannte keine Id — nichts gespeichert, kein Upload (F-M513)
-[moviesubtitles] DRY-RUN: 'X' (2026) würde angelegt — 341 Bytes Formular-Rumpf, nichts gesendet (F-M513)
+[moviesubtitles] 'Paddington in Peru' (2026) newly created — id 4711
+[moviesubtitles] 'Dune' (2026): the site already carries this title — found year 2021, 1 hit; nothing created, no upload (F-M513)
+[moviesubtitles] 'X' (2026) was created, but the follow-up search named no id — nothing stored, no upload (F-M513)
+[moviesubtitles] DRY-RUN: 'X' (2026) would be created — 341 bytes of form body, nothing sent (F-M513)
 ```
 
-### Was weiterhin unbelegt bleibt — und die Annahme im Code
+### What still remains unproven — and the assumption in the code
 
-- **Die Antwort auf `POST /add-movie.php`** — **seit F-M515 belegt** (16.11.2026, siehe den
-  Live-Beleg unten): `Movie has been added. Thank you.` bzw. `This Movie already exist`. Ein dritter
-  Satz (z. B. „Jahr ungültig") ist **nicht** belegt; der Client behandelt ihn deshalb als Ablehnung.
-- **Die Annahme, auf der die Rücklesung steht:** dass die Seite einen angenommenen Film **sofort** und
-  unter **demselben Titel und Jahr** in ihrer Suche führt. **Live widerlegt** (16.11.2026): die Seite
-  legte den Film an und führte ihn nirgends — Suche, Buchstabenliste und `add.php?filter=` blieben
-  leer. Der Client meldet deshalb „angelegt, Id nicht lesbar" und lädt nichts hoch.
-- **Ob die Seite ein Doppel technisch ablehnt** — **belegt**: sie antwortet `This Movie already exist`
-  und legt kein zweites Mal an. Der Satz kommt aber auch für einen Film, den sie sonst nirgends führt.
-- **Ob ein angelegter Film sofort Einträge/Seiten hat** (also `movie-<id>.html` antwortet) — die Seite
-  antwortet auf `movie-26230.html` mit dem Jahr `(1994)` und **leerem Namen**; ob das der angelegte
-  Film ist, ist **nicht titelbelegt**.
+- **The answer to `POST /add-movie.php`** — **proven since F-M515** (16.11.2026, see the
+  live proof below): `Movie has been added. Thank you.` resp. `This Movie already exist`. A third
+  sentence (e.g. „year invalid") is **not** proven; the client therefore treats it as a rejection.
+- **The assumption on which the read-back stands:** that the site carries an accepted film **immediately** and
+  under **the same title and year** in its search. **Disproven live** (16.11.2026): the site
+  created the film and carried it nowhere — search, letter list and `add.php?filter=` stayed
+  empty. The client therefore reports „created, id not readable" and uploads nothing.
+- **Whether the site technically refuses a duplicate** — **proven**: it answers `This Movie already exist`
+  and does not create a second time. But the sentence also comes for a film that it carries nowhere else.
+- **Whether a created film immediately has entries/pages** (so `movie-<id>.html` answers) — the site
+  answers to `movie-26230.html` with the year `(1994)` and an **empty name**; whether that is the created
+  film is **not proven by title**.
 
-## Live-Beleg 16.11.2026 — die Antwort auf `add-movie.php` (F-M515)
+## Live proof 16.11.2026 — the answer to `add-movie.php` (F-M515)
 
-Aufgenommen mit `curl`, Browser-UA, `Referer: /add-movie.php`, kein `-L`. Die Antworten liegen
-unverändert als Fixtures: `add-movie-added.html` (Erfolg), `add-movie-exists.html` (verweigert);
-`add-movie.html` (8399 Bytes) ist das Formular selbst.
+Recorded with `curl`, browser UA, `Referer: /add-movie.php`, no `-L`. The answers lie
+unchanged as fixtures: `add-movie-added.html` (success), `add-movie-exists.html` (refused);
+`add-movie.html` (8399 bytes) is the form itself.
 
-| Fall | Request | Antwort |
+| Case | Request | Answer |
 |---|---|---|
-| Formular | `GET /add-movie.php` | **200, 8399 Bytes**; `<form action="/add-movie.php" method="post" enctype="multipart/form-data">`, Felder `name`, `year` (`maxlength=4`), `go=1`, Submit `Send` |
-| falscher Weg | `POST`, `application/x-www-form-urlencoded`, `go=Add movie` | 200, **dasselbe Formular**, keine Meldung, kein Eintrag — **keine** Anlage |
-| Erfolg | `POST`, multipart, `name=The Little Rascals`, `year=1994`, `go=1` | **200, 8467 Bytes**, `<div class="subtitle2"><b>Movie has been added. Thank you.</b></div>`, **kein `Location`**, keine Id |
-| verweigert | derselbe POST ein zweites Mal | **200, 8459 Bytes**, `<div class="subtitle2"><b>This Movie already exist</b></div>` |
+| Form | `GET /add-movie.php` | **200, 8399 bytes**; `<form action="/add-movie.php" method="post" enctype="multipart/form-data">`, fields `name`, `year` (`maxlength=4`), `go=1`, submit `Send` |
+| wrong path | `POST`, `application/x-www-form-urlencoded`, `go=Add movie` | 200, **the same form**, no message, no entry — **no** creation |
+| success | `POST`, multipart, `name=The Little Rascals`, `year=1994`, `go=1` | **200, 8467 bytes**, `<div class="subtitle2"><b>Movie has been added. Thank you.</b></div>`, **no `Location`**, no id |
+| refused | the same POST a second time | **200, 8459 bytes**, `<div class="subtitle2"><b>This Movie already exist</b></div>` |
 
-**Der gewählte Film** war `The Little Rascals (1994)` — vorher belegt als fehlend: `POST search.php`
-mit `q=Little Rascals` und `q=Rascals` → 0 Treffer, `movies-L.html` und `movies-R.html` ohne
-„Rascal", `add.php?filter=Rascals` → 0 Zeilen; auf der Maschine liegt er als
+**The chosen film** was `The Little Rascals (1994)` — previously proven missing: `POST search.php`
+with `q=Little Rascals` and `q=Rascals` → 0 hits, `movies-L.html` and `movies-R.html` without
+„Rascal", `add.php?filter=Rascals` → 0 rows; on the machine it lies as
 `<library>/The.Little.Rascals.1994/The.Little.Rascals.1994.1080p.BluRay.x265-RARBG.mp4`
-(1379629713 Bytes).
+(1379629713 bytes).
 
-**Und danach?** Die Nachsuche fand ihn **nicht** (`q=Little Rascals` → 0), `movies-L.html` blieb
-byte-gleich (478353 Bytes, nur die „Page generation"-Zeit änderte sich), `add.php?filter=Rascals`
-blieb bei 0 Zeilen, die Statistik bei `Movies: 23368`, und `movie-26231.html` und folgende
-existieren nicht — die neueste Seite `movie-26230.html` trägt `(1994)` mit **leerem** Namen. Der
-Doppeleintrag-Schutz der Seite sieht den Film also (zweiter POST → „already exist"), die öffentlichen
-Listen nicht. **Eine Id ist damit nicht titelbelegt** — der Client behauptet keine und lädt nichts
-hoch. Dasselbe Bild beim Film `Project Hail Mary (2026)`: „This Movie already exist", aber weder in
-`search.php` noch in `movies-P.html` (443 KB) noch in `add.php?filter=`.
+**And after that?** The follow-up search did **not** find it (`q=Little Rascals` → 0), `movies-L.html` stayed
+byte-identical (478353 bytes, only the „Page generation" time changed), `add.php?filter=Rascals`
+stayed at 0 rows, the statistics at `Movies: 23368`, and `movie-26231.html` and following
+do not exist — the newest page `movie-26230.html` carries `(1994)` with an **empty** name. The
+duplicate protection of the site therefore sees the film (second POST → „already exist"), the public
+lists do not. **An id is thereby not proven by title** — the client claims none and uploads nothing
+up. The same picture with the film `Project Hail Mary (2026)`: „This Movie already exist", but neither in
+`search.php` nor in `movies-P.html` (443 KB) nor in `add.php?filter=`.
 
-**Was das für die Kette heißt:** Anlegen gelingt (Meldung belegt), aber der Untertitel kann
-**nicht** folgen, solange keine `tvid` lesbar ist. Der Client sagt das und tut nichts weiter; ein
-zweiter Anlage-Versuch fällt nie.
+**What that means for the chain:** creation succeeds (message proven), but the subtitle can
+**not** follow as long as no `tvid` is readable. The client says that and does nothing further; a
+second creation attempt never falls.
 
-## F-M517 — die Nummer überlebt auch ohne Medien-Hash
+## F-M517 — the number survives without a media hash too
 
-**Beleg (echter Lauf 16.11.2026, 04:13, jf-test, `jf-run.log`):**
+**Proof (real run 16.11.2026, 04:13, jf-test, `jf-run.log`):**
 
 ```
-UploadPipeline: [moviesubtitles] ?: 'Hotel Transylvania 2' (2015) ist Film 13392 — nicht gespeichert:
-kein Medien-Hash bekannt — die Nummer gilt nur für diesen Lauf.
+UploadPipeline: [moviesubtitles] ?: 'Hotel Transylvania 2' (2015) is film 13392 — not stored:
+no media hash known — the number applies only for this run.
 ```
 
-Der Upload lief danach durch — nur die **Nummer** war weg.
+The upload then went through — only the **number** was gone.
 
-**Warum.** Der Medien-Hash kommt aus `ContentHashRegistry.GetMediaHash(mediaPath)`; die Methode
-antwortet `null`, sobald die Datei nicht lesbar ist. Genau das war hier der Fall: der Pfad
-`media/movies-test/Hotel Transylvania 2 (2015)/Hotel Transylvania 2 (2015).mkv` ist ein **Symlink ohne
-Ziel** (`readlink -f` → `<library>/…ShAaNiG.mkv`, `test -e` → nicht vorhanden) — also kein Hash,
-obwohl die Zeile über `Path` adressierbar wäre. `MsubMovieResolver.Persist` kehrte bei fehlendem Hash
-**stumm** zurück (die Spalte `MsubMovieId` wurde nie erreicht), und die Logzeile sagte das als
-„nicht gespeichert". Derselbe Weg schrieb auch die Seriennummer (`TvstShowId`) — der Serienfall hatte
-dasselbe Loch.
+**Why.** The media hash comes from `ContentHashRegistry.GetMediaHash(mediaPath)`; the method
+answers `null` as soon as the file is not readable. Exactly that was the case here: the path
+`media/movies-test/Hotel Transylvania 2 (2015)/Hotel Transylvania 2 (2015).mkv` is a **symlink without
+target** (`readlink -f` → `<library>/…ShAaNiG.mkv`, `test -e` → not present) — so no hash,
+although the row would be addressable over `Path`. `MsubMovieResolver.Persist` returned
+**silently** (the column `MsubMovieId` was never reached), and the log line said that as
+„not stored". The same path also wrote the series number (`TvstShowId`) — the series case had
+the same hole.
 
-**Was jetzt gilt.**
+**What applies now.**
 
-| Stück | Wo | Was es tut |
+| Piece | Where | What it does |
 |---|---|---|
-| Schreibweg | `ContentHashRegistry.SetMsubMovieId` / `SetTvstShowId` (ein gemeinsamer `SetMediaNumber`) | Hash zuerst (Zeile per `Id`); sonst die Zeile über ihren **Pfad** (`MediaEntity.Path`) — dieselbe Spalte, nur eine andere Adresse |
-| Eindeutigkeit | dieselbe Methode | kein Hash **und** keine Pfad-Zeile → `None` (nichts geschrieben); **mehrere** Zeilen mit dem Pfad → ebenfalls `None` (kein Raten, keine Wahl) |
-| Leseweg | `MsubMovieIdAtPath` / `TvstShowIdAtPath` | ohne Hash wird die gespeicherte Nummer über den Pfad **gelesen** — sonst wäre sie für jeden Folgelauf unsichtbar |
-| Auflöser | `MsubMovieResolver` / `TvstShowLookup` (neuer Parameter `mediaPath`) | reicht den Pfad durch; `Persist` gibt zurück, **wie** geschrieben wurde |
-| Logzeile | `Api/Endpoints/MediaNumberNote` | `gespeichert (über den Medien-Hash).` / `gespeichert über den Pfad (kein Medien-Hash bekannt).` / `nicht gespeichert: kein Medien-Hash und keine eindeutige Pfad-Zeile im Store — die Nummer gilt nur für diesen Lauf.` |
-| Kette | `UploadPipeline` (Film- und Serien-Adresse), `DownloadPipeline` | geben den Pfad der Mediendatei mit |
+| Write path | `ContentHashRegistry.SetMsubMovieId` / `SetTvstShowId` (a shared `SetMediaNumber`) | hash first (row by `Id`); otherwise the row over its **path** (`MediaEntity.Path`) — the same column, only a different address |
+| Uniqueness | the same method | no hash **and** no path row → `None` (nothing written); **several** rows with the path → also `None` (no guessing, no choice) |
+| Read path | `MsubMovieIdAtPath` / `TvstShowIdAtPath` | without a hash the stored number is **read** over the path — otherwise it would be invisible to every follow-up run |
+| Resolver | `MsubMovieResolver` / `TvstShowLookup` (new parameter `mediaPath`) | passes the path through; `Persist` returns **how** it was written |
+| Log line | `Api/Endpoints/MediaNumberNote` | `gespeichert (über den Medien-Hash).` / `gespeichert über den Pfad (kein Medien-Hash bekannt).` / `nicht gespeichert: kein Medien-Hash und keine eindeutige Pfad-Zeile im Store — die Nummer gilt nur für diesen Lauf.` |
+| Chain | `UploadPipeline` (film and series address), `DownloadPipeline` | pass the path of the media file along |
 
-**Beleg am Store-Abbild** (Kopie des Live-Stores, `<scratch>/fm517-proof/store`, nur die
-Kopie beschrieben):
+**Proof on the plugin database image** (copy of the live plugin database, `<scratch>/fm517-proof/store`, only the
+copy written):
 
-| Schritt | Ergebnis |
+| Step | Result |
 |---|---|
-| Kopie unverändert | **31** Medienzeilen, **0** Zeilen mit dem Pfad des Films — diese Datei hat dort gar keine Zeile (ohne Hash wurde nie eine angelegt), der Schreibversuch ergibt `None`, 31 → **31** |
-| Zeile vorhanden, Hash nicht (der beschriebene Fall) | `ByPath`, die Zeile trägt danach `MsubMovieId = 13392`, Zeilen **32 → 32** (die +1 kam vom Anlegen der Zeile für den Beleg, nicht vom Schreiben) |
-| derselbe Schreibvorgang noch einmal | `ByPath`, Zeilen **32 → 32** (idempotent) |
-| Lesen | über den Pfad **13392**, über den Hash **13392** |
-| Auflöser echt gefahren (ohne Hash, Zeile vorhanden) | Status `found`, Id 13392, Zeilen 32 → 32, Logzeile im Wortlaut: `[moviesubtitles] ?: 'Hotel Transylvania 2' (2015) ist Film 13392 — gespeichert über den Pfad (kein Medien-Hash bekannt).` |
+| copy unchanged | **31** media rows, **0** rows with the path of the film — this file has no row there at all (without a hash none was ever created), the write attempt yields `None`, 31 → **31** |
+| row present, hash not (the described case) | `ByPath`, the row then carries `MsubMovieId = 13392`, rows **32 → 32** (the +1 came from creating the row for the proof, not from the write) |
+| the same write once more | `ByPath`, rows **32 → 32** (idempotent) |
+| reading | over the path **13392**, over the hash **13392** |
+| resolver run for real (without hash, row present) | status `found`, id 13392, rows 32 → 32, log line verbatim: `[moviesubtitles] ?: 'Hotel Transylvania 2' (2015) ist Film 13392 — gespeichert über den Pfad (kein Medien-Hash bekannt).` |
 
-**Ehrlich dazu:** für *diesen* Film bleibt es auf der Testinstanz beim „nicht gespeichert", solange
-keine Zeile mit seinem Pfad existiert — der Symlink zeigt ins Leere, also entsteht auch kein Hash. Der
-Fix wirkt dort, wo die Zeile da ist (aus einem früheren Lauf, aus dem Einreiher, aus einer anderen
-Quelle) und nur der Hash fehlt; ohne beides bleibt die Logzeile wahr.
+**Honestly about it:** for *this* film it stays at „not stored" on the test instance as long as
+no row with its path exists — the symlink points into nothing, so no hash arises either. The
+fix takes effect where the row is there (from an earlier run, from the enqueuer, from another
+source) and only the hash is missing; without both the log line stays true.
 
-## Was ein Client hier brauchen wird (Naht: Etappe 2)
+## What a client will need here (seam: stage 2)
 
-Damit die Naht `IDownloadEndpoint`/`IUploadEndpoint` hier genauso passt wie bei
-`TvSubtitlesEndpoints`, sind das die Stücke. **Nach Etappe 2a/2b/3 gilt: der Download ist verdrahtet
-(F-M507), der Upload gebaut (F-M508), die Anlage gebaut (F-M513) — siehe die Abschnitte oben.
-Etappe 1 hat die Methoden gebaut, Etappe 2 die Naht — Endpunkt, Konfigurationsfelder, Store-Spalte,
-Quellenkatalog —, Etappe 3 die Anlage:**
+So that the seam `IDownloadEndpoint`/`IUploadEndpoint` fits here exactly as with
+`TvSubtitlesEndpoints`, these are the pieces. **After stage 2a/2b/3 this applies: the download is wired
+(F-M507), the upload built (F-M508), the creation built (F-M513) — see the sections above.
+Stage 1 built the methods, stage 2 the seam — endpoint, configuration fields, plugin database column,
+source catalogue —, stage 3 the creation:**
 
-| Stück | Zweck |
+| Piece | Purpose |
 |---|---|
-| `SearchAsync(query)` | `search.php?q=` **und** `add.php?filter=`; 500 nicht als Fehler werten, Rumpf parsen |
-| `ResolveMovie(candidates, title, year)` | Kern-Titel + Jahr, Artikel-Inversion (`Matrix, The`) berücksichtigen, eng vergleichen, sonst `null` |
-| `MoviesAsync(letter)` | `movies-<L>.html` → `id, Name, Jahr, Sprachen` (nur Filme mit Einträgen) |
-| `EntriesAsync(movieId)` | `movie-<id>.html` → `SubtitleId, Language, Rip, Release, Parts, Age`, abschnittsweise nach Sprache |
-| `DownloadAsync(subtitleId)` | `download-<id>.html` → 302 auswerten, `files/…zip` holen, `PK\x03\x04` prüfen, alle `.srt` zurückgeben |
-| `BuildUpload(...)` | Felder `tvid lang rip release author UFile UFile2 UFile3 comments go` |
-| `BuildAddMovie(name, year)` | `add-movie.php`; erst auflösen, dann anlegen — gebaut mit F-M513 |
-| Sprachbrücke | die 13 Kürzel; wiederverwenden, was `SiteLanguage` schon kennt (Teilmenge) |
-| Rip-Tabelle | eigene, neun Werte, **nicht** die von tvst |
+| `SearchAsync(query)` | `search.php?q=` **and** `add.php?filter=`; do not rate 500 as an error, parse the body |
+| `ResolveMovie(candidates, title, year)` | core title + year, take article inversion (`Matrix, The`) into account, compare narrowly, otherwise `null` |
+| `MoviesAsync(letter)` | `movies-<L>.html` → `id, Name, Jahr, Sprachen` (only films with entries) |
+| `EntriesAsync(movieId)` | `movie-<id>.html` → `SubtitleId, Language, Rip, Release, Parts, Age`, section by section per language |
+| `DownloadAsync(subtitleId)` | `download-<id>.html` → evaluate 302, fetch `files/…zip`, check `PK\x03\x04`, return all `.srt` |
+| `BuildUpload(...)` | fields `tvid lang rip release author UFile UFile2 UFile3 comments go` |
+| `BuildAddMovie(name, year)` | `add-movie.php`; resolve first, then create — built with F-M513 |
+| Language bridge | the 13 codes; reuse what `SiteLanguage` already knows (subset) |
+| Rip table | its own, nine values, **not** those of tvst |
 
-Der Client muss außerdem wissen, dass **ein Film mit `parts`>1 mehrere Dateien** liefert: das ist
-kein Pack, das ist ein geschnittener Film, und die Segmente sind nicht austauschbar.
+The client must also know that **a film with `parts`>1** delivers **several files**: that is
+no pack, that is a cut film, and the segments are not interchangeable.
