@@ -1895,7 +1895,7 @@ def main():
     check("F-M755: the TMDb help line says how to get a free key, and the address is the link word",
           tmdb_text.startswith("Free API key after registration at themoviedb.org.")
           and len(tmdb_text) <= 80
-          and 'href="https://www.themoviedb.org/settings/api"' in tmdb_hilfe.group(1)
+          and 'href="https://www.themoviedb.org/"' in tmdb_hilfe.group(1)
           and ">themoviedb.org</a>" in tmdb_hilfe.group(1),
           "Text: %r (%d Zeichen)" % (tmdb_text, len(tmdb_text)))
 

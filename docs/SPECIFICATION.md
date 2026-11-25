@@ -2103,7 +2103,7 @@ and the help line is the one a field may carry, at most 80 characters (F-M745). 
 `preferSeasonZip`; renaming it would orphan every stored value for a word nobody reads. Checked in `sources`.
 
 **F-M755 [G]:** **The TMDb help line says how to get a free key, and nothing else.** Concept decision: the line reads
-`Free API key after registration at themoviedb.org.` — one sentence, the address as the link word, 50 characters. What the
+`Free API key after registration at themoviedb.org.` — one sentence, the address as the link word and its target the start page of that site, 50 characters. What the
 key is used for is not said again: the heading already carries `Required`, and the page's other lines stay silent about it.
 Checked in `gui-structure`.
 
