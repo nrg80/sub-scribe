@@ -4,7 +4,7 @@
 
 This file is the vocabulary of the documentation. **English is the master** (operator, 24.11.2026),
 and the German wording is retired. Every document — `REQUIREMENTS.md`, `CONTRACTS.md`, `AUTOSYNC.md`,
-`DATA-MODEL.md`, `TESTS.md`, `LOGGING.md`, `ENDPOINTS.md`, `MULTI-SOURCE.md`, `TVSUBTITLES.md`,
+`DATA-MODEL.md`, `TESTS.md`, `GUI.md`, `LOGGING.md`, `ENDPOINTS.md`, `MULTI-SOURCE.md`, `TVSUBTITLES.md`,
 `MOVIESUBTITLES.md`, `RELEASE.md`, `README.md` and the papers under `engines/` — uses these words and
 no synonyms.
 

@@ -1944,6 +1944,9 @@ When no file exists yet, only the plugin's own fields are written; the document 
 
 ## 13. Configuration and Settings Page
 
+**The page as the operator meets it — tabs, fields, switches, readouts, colours and wording — stands in
+`docs/GUI.md`**, every statement there carrying its `F-M` tag. This chapter keeps the normative rules.
+
 **F-M18 [B1]:** Library selection: checkbox list of all JF libraries — only selected ones are scanned/uploaded (default: none).
 
 **F-M53:** Manual run buttons and statistics reset on the General tab
