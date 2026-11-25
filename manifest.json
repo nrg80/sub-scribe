@@ -12,9 +12,9 @@
         "version": "12.3.8.47",
         "changelog": "v12.3.8.47: the state of each source is one lamp on its tab instead of a word in every card.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.47-dev/Jellyfin.Plugin.SubdlSync_12.3.8.47.zip",
-        "checksum": "17a837f26efa6a134cb1d964ee4fb249",
-        "timestamp": "2026-11-25T07:15:44Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.47/Jellyfin.Plugin.SubdlSync_12.3.8.47.zip",
+        "checksum": "d53490167501942635717d4fbdfd7a91",
+        "timestamp": "2026-11-25T07:29:28Z"
       }
     ]
   }
