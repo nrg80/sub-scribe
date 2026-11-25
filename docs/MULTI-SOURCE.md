@@ -1,9 +1,20 @@
 # Multi-Source Architecture — SubDL and the tvst family
 
+**Owner: the two-source architecture.** What two sources do to one pair; how a pair is allocated to a slot stands in §8 of `CONTRACTS.md`.
+
 As of 20.11.2026, plugin 12.2.0.14. This sheet pulls together what is
 spread across many numbers in [`REQUIREMENTS.md`](REQUIREMENTS.md): how the sources
 relate to one another, what „done" means, and how download and upload behave
 with several sources. It is the one place where the source question can be read as a whole.
+
+## Contents
+
+- [1. Two sources, not two truths](#1-two-sources-not-two-truths)
+- [2. The principle: what is done at one source is open at the other](#2-the-principle-what-is-done-at-one-source-is-open-at-the-other)
+- [3. Upload: one slot per pair, two sources at the same time](#3-upload-one-slot-per-pair-two-sources-at-the-same-time)
+- [4. Download: one after another, in order — the opposite of upload](#4-download-one-after-another-in-order-the-opposite-of-upload)
+- [5. What this means in operation](#5-what-this-means-in-operation)
+- [6. Checks that hold this architecture in place](#6-checks-that-hold-this-architecture-in-place)
 
 ## 1. Two sources, not two truths
 

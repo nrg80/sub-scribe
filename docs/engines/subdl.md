@@ -1,5 +1,7 @@
 # subdl.com — the API source
 
+**Owner: the source at a glance** — contracts, capabilities, languages, transport, cost, failure shapes, the ledger, the boundary. The detailed site material stands in `../MULTI-SOURCE.md` and `../REQUIREMENTS.md`.
+
 ## 1. What it is
 
 subdl.com is the only one of the three that offers an API (F-M682). It carries film and series
@@ -22,7 +24,8 @@ Downloads arrive as a ZIP container, either one subtitle or a whole season.
 **This is the only source that answers it** — and it is the reason the account-ledger contract exists
 at all (F-M729).
 
-- **Two jobs, not four.** `ListAsync` reads what the account holds, `WithdrawAsync` pulls one
+- **Two calls, three tasks.** One call reads what the account holds — our own submissions or the
+  published ones — the other pulls one submission back (`WithdrawAsync`)
   submission back; `Key` names the source in the same value the plugin database carries. There is no
   third route and no edit: a submission is withdrawn and sent again, never patched.
 - **Two lists, two handles.** A published submission carries the handle to withdraw it **and** next to

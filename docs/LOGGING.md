@@ -1,12 +1,37 @@
-# Log and text — the standard for this plugin
+# Logging — the standard for every line and every text
 
-As of 18.11.2026. Applies to every line the plugin writes and to every text the operator
-reads in the GUI.
+**Owner: the log and text standard.** Every line the plugin writes and every text the operator reads follows it.
 
-**The request:** „with the log and the texts I struggle anyway. Is there no concept or a
-best practice paper one could apply to it?"
+*Paper: this document states the house standard for the log and for every text the operator reads in
+the GUI. It is not derived — it is the rule the log code implements, and where the requirements own a
+rule they are cited with their `F-M` tag. The words are those of `TERMS.md`.*
 
-This paper is the answer. It leans on three things that already exist outside this repo,
+## Contents
+
+- [1. What it is](#1-what-it-is)
+- [2. The yardstick](#2-the-yardstick)
+- [3. The rules](#3-the-rules)
+  - [3.1 One line = one event](#31-one-line-one-event)
+  - [3.2 Fixed frame: event, subject, numbers, result](#32-fixed-frame-event-subject-numbers-result)
+  - [3.3 The source that answered belongs in the line](#33-the-source-that-answered-belongs-in-the-line)
+  - [3.4 Numbers instead of adjectives](#34-numbers-instead-of-adjectives)
+  - [3.5 The severity says what is to be DONE](#35-the-severity-says-what-is-to-be-done)
+  - [3.6 No cancellation without a subject](#36-no-cancellation-without-a-subject)
+  - [3.7 One state, one word](#37-one-state-one-word)
+  - [3.8 Summarise repetitions](#38-summarise-repetitions)
+  - [3.9 Only what happened](#39-only-what-happened)
+  - [3.10 The event code stands at the end, exactly one](#310-the-event-code-stands-at-the-end-exactly-one)
+  - [3.11 No broken characters](#311-no-broken-characters)
+  - [3.12 The lower case of existing keywords stays](#312-the-lower-case-of-existing-keywords-stays)
+- [4. The levels — what belongs where](#4-the-levels-what-belongs-where)
+- [5. The run report](#5-the-run-report)
+- [6. The check list](#6-the-check-list)
+- [7. What the standard never does](#7-what-the-standard-never-does)
+
+## 1. What it is
+
+Every line the plugin writes, and every text the operator reads on the settings pages, follows the
+standard in this document. It leans on three things that already exist outside this repository,
 instead of inventing a school of its own:
 
 - **Serilog Message Templates** (<https://messagetemplates.org>) — a fixed text frame with named
@@ -16,49 +41,53 @@ instead of inventing a school of its own:
 - **Google SRE Book, „Monitoring Distributed Systems"** — write for the one who is woken at night:
   the severity says what the reader is to DO, not how interesting the author found the spot.
 
-The yardstick is one question: **Can the operator decide from a single line whether he has to do
-something?** If not, the line is wrong — not too long, not too short, but wrongly built.
+The one level that decides a line's existence is the marker `[N]` (Normal), `[V]` (Verbose and up),
+`[D]` (Detail): every plugin line belongs to exactly one level and carries its marker as text
+(F-M226), and the statistics never depend on logging (F-M225).
 
-## 1. Rules
+## 2. The yardstick
 
-Every rule names reason and example. The examples are real, from the prod run of 18.11.2026.
+**Can the operator decide from a single line whether he has to do something?** If not, the line is
+wrong — not too long, not too short, but wrongly built.
 
-### 1.1 One line = one event
+## 3. The rules
 
-One event per line, no intermediate step, no intention, no addendum about work that
-happens later.
+Every rule names its reason and gives an example. The examples are real lines from this plugin.
+
+### 3.1 One line = one event
+
+One event per line, no intermediate step, no intention, no addendum about work that happens later.
 
 - Wrong: `upload saved for "X.mkv" [UK] — the SubDL id is read back once at the end of the run (F-M588).`
   Two things stand in one line here, and the second is an announcement, not an event.
 - Right: `UPLOAD SAVED "X.mkv" [UK] → subdl`, and when the identifier really is assigned:
   `UPLOAD ID "X.mkv" [UK] = 421844 (mySubtitles)`.
 
-### 1.2 Fixed frame: event, subject, numbers, result
+### 3.2 Fixed frame: event, subject, numbers, result
 
-The order in the sentence is always the same. An event word in capitals first (`UPLOADED`,
-`REJECTED`, `SKIP`, `SEED`, `PACK`, `DEFER`), then the subject, then numbers, then the result.
+The order in the sentence is always the same. An event word in capitals first (`UPLOADED`, `REJECTED`,
+`SKIP`, `SEED`, `PACK`, `DEFER`), then the subject, then numbers, then the result.
 
 - `UPLOADED "Doctor.Who.2023.S02E01.1080p.x265-ELiTE.mkv" [EN] → tvsubtitles` ✓
 - `SKIP "War.2026.S01E05…mkv" — item settled before extraction (every text stream has its end state)` ✓
 
-### 1.3 The source that answered belongs in the line
+### 3.3 The source that answered belongs in the line
 
-The prefix `[Sub Scribe]` is the name of the plugin, not of the source. Whoever reads `UPLOADED` must, without
-prior knowledge, see where it went.
+The prefix `[Sub Scribe]` is the name of the plugin, not of the source. Whoever reads `UPLOADED` must,
+without prior knowledge, see where it went.
 
 - Wrong: `[Sub Scribe] UPLOADED "X.mkv" ["EN"]`
 - Right: `UPLOADED "X.mkv" [EN] → tvsubtitles`
-- If no source answered, that is written there: `no source answered` — not a gap that
-  looks like SubDL.
+- If no source answered, that is written there: `no source answered` — not a gap that looks like SubDL.
 
-### 1.4 Numbers instead of adjectives
+### 3.4 Numbers instead of adjectives
 
 Every summary names the number and the distribution, not an evaluation.
 
 - Wrong: `upload: finished — everything rejected`
 - Right: `RUN END upload — 0 uploaded | 295 rejected (275 duplicate, 20 duplicate-HI) | 97 skipped | 14 min`
 
-### 1.5 The severity says what is to be DONE
+### 3.5 The severity says what is to be DONE
 
 | Level | Meaning | Example |
 |---|---|---|
@@ -68,64 +97,124 @@ Every summary names the number and the distribution, not an evaluation.
 
 - A **success** needs a Normal line. An error that logs does not replace it.
 - A line that at Normal level names only the position („item 429/1417"), belongs on Debug.
+- **Which line belongs on which level is a policy, not a taste question:** chapter 4.
 
-### 1.6 No cancellation without a subject
+### 3.6 No cancellation without a subject
 
 A word like `cancelled` must say WHAT was cancelled. The run, the extraction, an attempt?
 
 - Wrong: `ffmpeg for "Ali G….mkv" was stopped — the run was cancelled (F-M596)`
-  (in the run of 18.11.2026 it stood there four times, and the run then went on for another 300 positions)
-- Right: `EXTRACT CANCELLED "Ali G….mkv" — the item settled first`, and a real run cancellation only
-  at the place where the run really ends.
+- Right: `EXTRACT CANCELLED "Ali G….mkv" — the item settled first`, and a real run cancellation only at
+  the place where the run really ends.
 
-### 1.7 One state, one word
+### 3.7 One state, one word
 
 `ok`, `fail`, `skip`, `cancel`, `defer` — the same words in the log as in the GUI. No synonym, no
 second spelling, no paraphrase. A state has exactly one colour and exactly one word.
 
-### 1.8 Summarise repetitions
+### 3.8 Summarise repetitions
 
 Do not put the same lines N times at Normal. One line with the number, the single cases at Verbose.
 
 - Normal: `SECOND SOURCE moviesubtitles — 66 title(s) closed, 18 id(s) unusable, 5 language(s) missing`
 - Verbose: one line per title with the reason.
 
-### 1.9 Only what happened
+### 3.9 Only what happened
 
 No intention („will", „shall", „read back once at the end"), no guess, no passive without an actor,
-when the actor is known. A line that announces a later action is a promise in
-the log — and promises in the log go stale.
+when the actor is known. A line that announces a later action is a promise in the log — and promises
+in the log go stale.
 
-### 1.10 The event code stands at the end, exactly one
+### 3.10 The event code stands at the end, exactly one
 
 `F-M###` is a stable identifier for the finding site, so that tests can pin it down. One code per
 line, in brackets, at the end. Two codes in one line mean: there are two events.
 
-### 1.11 No broken characters
+### 3.11 No broken characters
 
 The log writer itself puts quote marks around every **string value** and doubles existing ones.
-Therefore: **no quote marks of your own around a placeholder** and **no empty
-string argument as a suffix**.
+Therefore: **no quote marks of your own around a placeholder** and **no empty string argument as a
+suffix**.
 
-- Wrong (real): `LAUF upload — item 1/1417 ""Back to the Suture""` — the template writes
-  `\"{Name}\"`, the writer quotes on top of that.
-  Right: `LAUF upload — item 1/1417 {Name}` (the value arrives quoted).
-- Wrong (real): `upload: started""` — the suffix `{Dry}` is an **empty** string and is printed as `""`.
-  Right: attach the suffix only when it has content, or a line of its own for it.
-- Wrong (real): `"sent"""` — the same mistake on the success message of a send.
+- Wrong: `LAUF upload — item 1/1417 ""Back to the Suture""` — the template writes `\"{Name}\"`, the
+  writer quotes on top of that. Right: `LAUF upload — item 1/1417 {Name}` (the value arrives quoted).
+- Wrong: `upload: started""` — the suffix `{Dry}` is an **empty** string and is printed as `""`.
+  Right: attach the suffix only when it has content, or give it a line of its own.
+- Wrong: `"sent"""` — the same mistake on the success message of a send.
 
-Measured on the prod run 18.11.2026: **1.424 of 7.021 lines** carried such artefacts. That is not a
-cosmetic problem — a reader takes the line for broken and looks for the fault in the wrong place.
+A line with such an artefact is not a cosmetic problem: the reader takes the line for broken and looks
+for the fault in the wrong place.
 
-### 1.12 The lower case of existing keywords stays
+### 3.12 The lower case of existing keywords stays
 
-`upload:`, `download:`, `season pack:`, `LAUF`, `TAKT` are grown markers on which filters and
-tests hang. New lines follow 1.2, old markers are not renamed without the tests coming along.
+`upload:`, `download:`, `season pack:`, `LAUF`, `TAKT` are grown markers on which filters and tests
+hang. New lines follow 3.2, old markers are not renamed without the tests coming along.
 
-## 2. The run report (scaffold)
+## 4. The levels — what belongs where
 
-Goal: **at most ten Normal lines per run and direction**, from which the run can be retold
-in words. Everything else is Verbose.
+The plugin's own log mode is the only authority: everything is written at the normal level and the
+detail is gated inside the log helper — the per-item level from Verbose upward, the detail level from
+Debug upward (F-M224). `Normal` stays lifecycle and summary. Warnings and errors are **never** gated,
+and **no plugin line is written at Trace**.
+
+**One question per level, in this order:**
+
+- **Normal — must the operator know it without being asked?** Run lifecycle, abort reasons, task
+  summaries (F-M225), and one line per event that changed something.
+- **Verbose — does someone asking „where exactly?" need it?** The per-item work: the reason a single
+  item was skipped, a verdict's reason, the per-track detail.
+- **Debug — is it only for us while diagnosing?** Internals and diagnostics (F-M225): resolved tool
+  paths, the reschedule budget, seed pre-check timestamps, database statements, the decoder call, the
+  timing, and every progress counter.
+
+**What stands at Normal**
+
+- `RUN START` and `RUN END` — the lifecycle of the run, with all counters including the zeros.
+- One line per **success**: an item that was uploaded, downloaded, saved, packed, aligned.
+- Every **abort or cancellation** with its subject, and every refusal that ends a hunt.
+- The **source summaries** and the statistics block of a run, and `POSTPROCESS` armed or not armed.
+- The dry-run line — a dry run does the same work and reports it, but contributes nothing to the
+  statistics (F-M247).
+- **Warnings and errors**, always, whatever the log mode is.
+
+**What belongs at Verbose**
+
+- The **reason** of a single verdict or a single skip (duplicate, duplicate-HI, language missing,
+  no film identifier, refusal cause).
+- The per-track detail of a rewrite or an alignment.
+- One line per title where the Normal line only carries the count.
+
+**What belongs at Debug**
+
+- The **position** in a list („item 429/1417") and any other progress counter.
+- Timing, durations, the cost of a step.
+- What the plugin resolved or computed: tool path, decoder arguments, database statements, cache hits.
+- Anything needed to reproduce a defect but not to decide anything.
+
+**What may never stand at Normal**
+
+- A diagnostic: a resolved path, a budget, a timestamp of a pre-check.
+- A progress counter or a per-case repetition (rule 3.8).
+- An intention or a promise (rule 3.9).
+- Anything a statistic depends on — the counters are written by the statistics writer from the run
+  summaries, never read out of a log line (F-M225), so a `Normal` run counts exactly like a `Debug`
+  run.
+
+**Two rules that hold the assignment together**
+
+- **One gate per message.** A call site picks the lowest level that must carry its message and calls
+  the one matching gate; `Normal < Verbose < Debug` is cumulative, so a second call would print the
+  same message twice (F-M245).
+- **The marker matches the gate.** `[N]`, `[V]`, `[D]` are written as text at the normal level
+  (F-M226), so a line whose marker disagrees with its gate is a defect that a reader sees.
+
+**Changing a level is a change of the contract between us and the reader** — and it needs the test
+that pins it down, in the same commit (chapter 6).
+
+## 5. The run report
+
+Goal: **at most ten Normal lines per run and direction**, from which the run can be retold in words.
+Everything else is Verbose.
 
 ```
 [N] RUN START upload — 1417 item(s), sources: tvsubtitles, subdl, moviesubtitles
@@ -145,35 +234,29 @@ Rules for this scaffold:
 - `RUN END` is mandatory and carries **all** counters, including the zeros.
 - `POSTPROCESS` is mandatory, because „nothing uploaded" and „nothing scheduled" are two different
   states that would otherwise look the same.
-- A cancelled run writes the same scaffold, `RUN END` with `cancelled` and what it still
-  managed.
+- A cancelled run writes the same scaffold, `RUN END` with `cancelled` and what it still managed.
 
-## 3. Check list (before every release, for every new line)
+## 6. The check list
+
+Before every release, for every new line:
 
 1. Does the line say **what** happened, **on which object**, **with which number**, **where to**?
 2. Does it have exactly **one** event, **one** code, **one** source?
-3. Is it at the level where the reader needs it — and is it not missing at Normal when it
-   describes a success?
+3. Is it at the level where the reader needs it — and is it not missing at Normal when it describes a
+   success?
 4. Does it use the word the GUI uses for the same state?
 5. Does a number stand where an adjective stood?
 6. Would a stranger read it correctly without knowing the code?
 7. Does it stand in the run report in its place — or does it make the report longer than ten lines?
 
-Whoever changes a line adds the test that pins it down (`scripts/tests/`), otherwise the
-next cleanup round will be rid of the old line again.
+Whoever changes a line adds the test that pins it down (`scripts/tests/`), otherwise the next cleanup
+round will be rid of the old line again.
 
-## 4. Appendix: measurement on the prod run 18.11.2026, 22:08–22:22
+## 7. What the standard never does
 
-Counted on `log_20261118.log` (upload direction, 1.417 positions):
-
-- **7.021 lines** in total, of which **125 Normal**, 1.301 Verbose, 5.254 Debug. So what can be read is
-  **1,8 %** of the run — that is the whole reason for „with the log I struggle".
-- The 125 Normal lines are **34 different templates**, of which **around 90 single cases** from the
-  season pack path (`season pack: "<id>" S<n> — …`). By rule 1.8 those belong on Verbose; the
-  report shrinks to about 30 lines with that.
-- **1.424 lines** with quote-mark artefacts (rule 1.11), **94 lines** with two `F-M` codes
-  (rule 1.10), **4 lines** with a wrong cancellation subject (rule 1.6: „the run was cancelled", while
-  the run went on).
-
-These four points are the backlog for the next cleanup round — in this order, because
-every following point without the previous one only re-sorts lines again.
+- **It never lets statistics depend on a log line** (F-M225, F-M247): a dry run contributes nothing,
+  and no counter is read out of a message.
+- **It never carries a credential, an address or a path of the operator** — the same rule as every
+  other document (NF-10).
+- **It never quotes a value twice** and never writes an empty suffix (3.11).
+- **It never announces work that has not happened yet** (3.9); the line appears when the event does.

@@ -1,11 +1,20 @@
 # tvsubtitles.net — protocol and methods
 
+**Owner: the site.** Paths, tables, peculiarities and methods of tvsubtitles.net; the contract view of the same source stands in `engines/tvsubtitles.md`.
+
 As of 16.11.2026. Applies to `Jellyfin.Plugin.SubdlSync/Api/TvSubtitlesClient.cs` (F-M480–F-M482, F-M516).
 
 The site has **no API**. Checked on 15.11.2026: `/api*`, `/xmlrpc.php` and `api.tvsubtitles.net`
 answer with 404 or do not resolve; `/rss.xml` exists (RSS 2.0), but it carries no
 episode data. Everything therefore runs through the pages that the site's own navigation offers —
 HTML is read, a form is written.
+
+## Contents
+
+- [The path (download)](#the-path-download)
+- [The path (upload)](#the-path-upload)
+- [Boundaries and open points](#boundaries-and-open-points)
+- [Methods](#methods)
 
 ## The path (download)
 

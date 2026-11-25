@@ -1,5 +1,7 @@
 # Endpoints — two sources, one path
 
+**Owner: the seam.** How another source is attached, in detail: the catalogue, the marks, the order. The checklist and its pitfalls stand normatively in §21 of `REQUIREMENTS.md`, the boundary in `CONTRACTS.md`.
+
 As of 15.11.2026. Applies to `Jellyfin.Plugin.SubdlSync/Api/Endpoints/` (F-M483, F-M484).
 
 **The order:** „2 download endpoints and 2 upload endpoints, and leave the rest of the plugin
@@ -11,6 +13,20 @@ So there are four endpoints, one per source and direction:
 |---|---|---|
 | Download | `ScribeDownloadEndpoint` — **wired** | `TvSubtitlesDownloadEndpoint` — in place, **not wired** |
 | Upload | `ScribeUploadEndpoint` — **wired** | `TvSubtitlesUploadEndpoint` — in place, **not wired** |
+
+## Contents
+
+- [The seam](#the-seam)
+- [The catalog](#the-catalog)
+- [What the endpoints do](#what-the-endpoints-do)
+- [Checks](#checks)
+- [Origin in the plugin database and no cross-contamination (F-M486/F-M487)](#origin-in-the-plugin-database-and-no-cross-contamination-f-m486f-m487)
+- [Four marks, one per source and direction (F-M488)](#four-marks-one-per-source-and-direction-f-m488)
+- [Order and notion of success (F-M491, F-M494)](#order-and-notion-of-success-f-m491-f-m494)
+- [„Uploaded" per source (F-M490)](#uploaded-per-source-f-m490)
+- [No re-up, per source (F-M489)](#no-re-up-per-source-f-m489)
+- [Upload: both endpoints one after the other (F-M495)](#upload-both-endpoints-one-after-the-other-f-m495)
+- [The next step (not part of this cut)](#the-next-step-not-part-of-this-cut)
 
 ## The seam
 

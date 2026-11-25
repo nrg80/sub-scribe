@@ -1,9 +1,12 @@
 # Terms — one word per concept
 
+**Owner: the vocabulary.** One word per concept, for every document.
+
 This file is the vocabulary of the documentation. **English is the master** (operator, 24.11.2026),
-and the German wording is retired. Every document — `REQUIREMENTS.md`, `CONTRACTS.md`, `ENDPOINTS.md`,
-`LOGGING.md`, `MULTI-SOURCE.md`, `TVSUBTITLES.md`, `MOVIESUBTITLES.md`, `RELEASE.md`, `README.md` —
-uses these words and no synonyms.
+and the German wording is retired. Every document — `REQUIREMENTS.md`, `CONTRACTS.md`, `AUTOSYNC.md`,
+`DATA-MODEL.md`, `LOGGING.md`, `ENDPOINTS.md`, `MULTI-SOURCE.md`, `TVSUBTITLES.md`,
+`MOVIESUBTITLES.md`, `RELEASE.md`, `README.md` and the papers under `engines/` — uses these words and
+no synonyms.
 
 **The rule that makes the file worth having:** one concept, one word. A second word for the same thing
 is not a style question, it hides a second meaning. Where the documentation used to carry two words,
@@ -40,8 +43,14 @@ the retired one is named below so it cannot creep back in.
   Retired: Marke.
 - **lock** — pipeline knowledge that a title stays closed after repeated failure. Retired: Sperre.
 - **loose subtitle** — a subtitle file lying loose in the library next to the media file, as opposed
-  to one embedded in it. Retired: Beiwerk.
+  to one embedded in it. Retired: Beiwerk. **The plugin database keeps the old name as a LEVEL: the
+  table is called `sidecar` and its identifiers read `#yyyyy&zzz`** (F-M671, F-M674). That is one
+  double word with two homes and it stays: the level name is a stored key, renaming it would be a
+  migration for a word, while the concept in every text is `loose subtitle`. A document that means
+  the concept writes `loose subtitle`; a document that means the table writes `sidecar`.
 - **identifier** — a value that names something. Short form `id` in code only. Retired: Kennung.
+- **media container** — the file that carries the media itself and its streams (Matroska, MP4): its
+  per-stream language tags are what the seeder writes and what `0:s:N` counts. Not a pack. Retired: —
 - **handle** — an opaque string a source hands out to name one of its own records later; we never
   parse it. Retired: Griff.
 - **verdict** — our judgement about a pair of source and track, or about a pack for one language.
@@ -71,8 +80,8 @@ the retired one is named below so it cannot creep back in.
 - **contract** — an interface one source may fulfil. Retired: Vertrag.
 - **job contract** — exactly four jobs: **search**, **fetch**, **send**, **report**. Mandatory for
   every source.
-- **account-ledger contract** — three tasks: list our own submissions, list published submissions,
-  withdraw one submission. Voluntary, only sources with an account.
+- **account-ledger contract** — **two calls, three tasks**: one call lists (our own submissions, or the
+  published ones) and one withdraws a single submission. Voluntary, only sources with an account.
 - **inquiry contract** — two tasks: how the source stands, and how much quota is left today.
   Voluntary in name, fulfilled by every source. Retired: Selbstauskunftsvertrag, self-report contract.
 - **send outcomes** — exactly four: **accepted**, **rejected**, **busy**, **failed**. Withdrawing
