@@ -2765,10 +2765,25 @@ def main():
           and page_src.find('id="ScribeStatusBox"') > page_src.find('id="WorkerRunList"')
           and page_src.find('id="ScribeLocalDeferLine"') < page_src.find('<h3>Status</h3>'),
           "status heading after the worker list, deferral line above it")
-    check("F-M749: the refresh control stays the last block of the tab, below the Status block",
+    check("F-M749: the refresh control stands below the Status block",
           page_src.find('id="RefreshSubdlStatus"') > page_src.find('id="ScribeDirStatusList"')
           and page_src.find('id="ScribeDirStatusList"') > page_src.find('id="ScribeStatusBox"'),
           "refresh button after the status block")
+
+    # F-M757 (Betreiberanweisung 25.11.2026, woertlich: "Statistics in der gui ganz nach unten in
+    # general"): die Statistik ist der LETZTE Block des Reiters. Sie beschreibt, was der
+    # Auffrischknopf neu holt, und steht deshalb unter ihm — nicht mehr zwischen Dateiarbeit und
+    # Worker-Liste. Der Knopf bleibt der Griff, die Zahlen stehen darunter.
+    check("F-M757: the Statistics block stands below the refresh control",
+          page_src.find('<h3>Statistics</h3>') > page_src.find('id="RefreshSubdlStatus"')
+          and page_src.find('id="StatsTable"') > page_src.find('id="RefreshSubdlStatus"'),
+          "Statistik unter dem Auffrischknopf")
+    check("F-M757: Statistics is the last block of the General tab",
+          page_src.find('<h3>Statistics</h3>') < page_src.find('data-tab-content="expert"')
+          and page_src.find('id="StatsTable"') < page_src.find('data-tab-content="expert"')
+          and page_src.find('<h3>Statistics</h3>') > page_src.find('<h3>Workers</h3>')
+          and page_src.find('<h3>Statistics</h3>') > page_src.find('<h3>Media files</h3>'),
+          "Statistik nach Media files, Workern, Status und Knopf, vor dem naechsten Reiter")
 
     # F-M752 (Betreiberanweisung 25.11.2026, woertlich: "Refetch interval bitte vor den media files
     # block einsortieren. Gui general"): der Takt steht direkt ueber der Dateiarbeit — nach den
