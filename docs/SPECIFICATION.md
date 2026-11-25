@@ -3,7 +3,7 @@
 **Owner: the rules.** This is the master document: every other paper is derived from it and cites its `F-M` tags. The contract boundaries stand in `CONTRACTS.md`, the vocabulary in `TERMS.md`.
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.61.
+**Status:** Implementation — v12.3.8.62.
 
 **A rule stands here with its ground: the decision behind it in one sentence, under `Concept decision`, and the
 check that proves it. The detailed measurement archive — what was measured, which run showed it, what happened —
@@ -39,7 +39,7 @@ states the rule, its constants, its ground and its test.**
 - [10. Scheduler, Quota and Timing](#10-scheduler-quota-and-timing) — 24 requirements
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
-- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 33 requirements
+- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 34 requirements
 - [14. Data Model and Persistence](#14-data-model-and-persistence) — 92 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 61 requirements
 - [16. Non-Goals](#16-non-goals)
@@ -2114,6 +2114,8 @@ are the exception this field needs: a percentage whose subject stays unnamed can
 the rule rather than a reason (F-M745). Checked in `gui-structure`.
 
 **F-M757 [G]:** **The Statistics block is the last block of the General tab.** Concept decision: the counters describe what the refresh control reloads, so the control is the handle and the numbers stand under it. The tab is read from the run outward and ends with the two readouts that report the run: the Status block, the refresh control, and then the statistics with their reset button. The block itself is unchanged, and the counters still belong to the tab that holds every live readout (F-M270). Checked in `gui-structure`.
+
+**F-M758 [G]:** **The reset control carries the footprint of the refresh control.** Concept decision: both controls only re-read or clear a readout, neither of them saves, so they look alike — full width, flush with both edges, the same grey. The blue Save stays the only blue control of the tab, and the page never shows two different kinds of button in one column. Checked in `gui-structure`.
 
 ## 14. Data Model and Persistence
 

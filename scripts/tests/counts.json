@@ -1080,6 +1080,12 @@
       "checks": 2,
       "requirement": "F-M757",
       "title": "Statistics ist der letzte Block des General-Reiters, unter dem Auffrischknopf"
+    },
+    "T421": {
+      "suite": "gui-structure",
+      "checks": 2,
+      "requirement": "F-M758",
+      "title": "Der Reset-statistics-Knopf traegt den Fussabdruck des Auffrischknopfs"
     }
   }
 }

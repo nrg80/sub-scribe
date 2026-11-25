@@ -33,7 +33,7 @@ the plugin — no readout is computed in the page itself.
 
 - **General** carries the libraries, the manual run buttons and the statistics reset (F-M18, F-M53). It
   ends with the two readouts: the Status block, the refresh control, then the statistics with their reset
-  button (F-M757).
+  button (F-M757). Both controls at the end share one footprint — full width, same grey (F-M758).
 - **The two direction tabs** — upload and download — carry the switches of their direction, and only
   those (F-M479). There is no provider tab of its own.
 - **Expert** carries the lists that are edited by hand: the skip directories and the file-name patterns,
