@@ -2778,6 +2778,28 @@ def main():
           page_src.find('<h3>Statistics</h3>') > page_src.find('id="RefreshSubdlStatus"')
           and page_src.find('id="StatsTable"') > page_src.find('id="RefreshSubdlStatus"'),
           "Statistik unter dem Auffrischknopf")
+    # F-M758 (Betreiberanweisung 25.11.2026, woertlich: "Der reset statistics button kann dann
+    # eigentlich genauso gestaltet werden wie der regreh starus button"): der Reset-Knopf traegt den
+    # Fussabdruck des Auffrischknopfs. Beide lesen nur, beide grau, beide volle Breite — der blaue
+    # Save bleibt der einzige blaue Knopf des Reiters.
+    import re as _re
+    def _knopf(kennung):
+        m = _re.search(r'<button[^>]*id="%s"[^>]*>' % kennung, page_src)
+        return m.group(0) if m else ""
+    _reset, _refresh = _knopf("ResetStats"), _knopf("RefreshSubdlStatus")
+    check("F-M758: the Reset statistics button carries the refresh button's footprint",
+          _reset != "" and _refresh != ""
+          and 'class="raised button-submit block emby-button"' in _reset
+          and 'class="raised button-submit block emby-button"' in _refresh
+          and 'background-color:#424242' in _reset and 'background-color:#424242' in _refresh
+          and 'width:100%' in _reset and 'width:100%' in _refresh
+          and 'display:block' in _reset,
+          "gleiche Klassen, gleiche Inline-Maße, gleiches Grau")
+    check("F-M758: the reset button never becomes the blue action",
+          'button-submit' in _reset and 'background-color:#424242' in _reset
+          and 'emby-button-block' not in _reset,
+          "kein blauer Aktionsknopf")
+
     check("F-M757: Statistics is the last block of the General tab",
           page_src.find('<h3>Statistics</h3>') < page_src.find('data-tab-content="expert"')
           and page_src.find('id="StatsTable"') < page_src.find('data-tab-content="expert"')

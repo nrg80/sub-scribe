@@ -227,8 +227,14 @@
                         <div id="StatsTable"></div>
                         <div class="fieldDescription" id="StatsSinceLine" style="margin-bottom:0.5em;">&mdash;</div>
 
-                        <div style="margin-top:0.5em;">
-                            <button is="emby-button" type="button" class="raised" id="ResetStats">Reset statistics</button>
+                        <!-- F-M758 (Betreiberanweisung 25.11.2026, woertlich: "Der reset statistics button
+                             kann dann eigentlich genauso gestaltet werden wie der regreh starus button"):
+                             derselbe Fussabdruck wie der Auffrischknopf — volle Breite, buendig links und
+                             rechts, dasselbe Grau #424242. Zwei Knoepfe untereinander im selben Reiter
+                             sollen nicht wie zwei verschiedene Sorten Knopf aussehen; beide lesen nur,
+                             keiner von beiden speichert (der blaue Save bleibt der einzige blaue Knopf). -->
+                        <div>
+                            <button is="emby-button" type="button" class="raised button-submit block emby-button" id="ResetStats" style="display:block;width:100%;box-sizing:border-box;background-color:#424242;border-color:#5a5a5a;color:rgba(255,255,255,0.85);">Reset statistics</button>
                         </div>
 
                     
