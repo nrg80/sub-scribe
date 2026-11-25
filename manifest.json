@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.45",
-        "changelog": "v12.3.8.45: a source without its access data reads off on its tab and in its card, and a field may carry one short line of help.",
+        "version": "12.3.8.46",
+        "changelog": "v12.3.8.46: the source tabs show their card again, and each tab is labelled with the short name of its source.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.45-dev/Jellyfin.Plugin.SubdlSync_12.3.8.45.zip",
-        "checksum": "0dead2478731f5ca328da3bd13a069f5",
-        "timestamp": "2026-11-25T06:47:22Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.46-dev/Jellyfin.Plugin.SubdlSync_12.3.8.46.zip",
+        "checksum": "c44fd640acaaec2be6f326bfcdd3aab1",
+        "timestamp": "2026-11-25T06:59:38Z"
       }
     ]
   }
