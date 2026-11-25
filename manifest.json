@@ -12,9 +12,9 @@
         "version": "12.3.8.59",
         "changelog": "v12.3.8.59: the TMDb help line is one sentence, the address as the link word.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.59-dev/Jellyfin.Plugin.SubdlSync_12.3.8.59.zip",
-        "checksum": "858242d5e543f7035902d405939df646",
-        "timestamp": "2026-11-25T13:15:49Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.59/Jellyfin.Plugin.SubdlSync_12.3.8.59.zip",
+        "checksum": "17168889a1d4a34d1e1addf6e6be055c",
+        "timestamp": "2026-11-25T13:28:12Z"
       }
     ]
   }
