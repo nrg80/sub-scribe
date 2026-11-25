@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.49",
-        "changelog": "v12.3.8.49: the source cards explain their fields in one line each, with the provider as a link.",
+        "version": "12.3.8.50",
+        "changelog": "v12.3.8.50: the report switch sits in the source card, and the runtime window takes a share setting.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.49-dev/Jellyfin.Plugin.SubdlSync_12.3.8.49.zip",
-        "checksum": "8baf33a9d830f9d952bbafc27db286ca",
-        "timestamp": "2026-11-25T08:01:22Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.50-dev/Jellyfin.Plugin.SubdlSync_12.3.8.50.zip",
+        "checksum": "fdda6cc1158980783300a0eb6b44d59f",
+        "timestamp": "2026-11-25T09:05:36Z"
       }
     ]
   }
