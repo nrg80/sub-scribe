@@ -1899,6 +1899,18 @@ def main():
           and ">themoviedb.org</a>" in tmdb_hilfe.group(1),
           "Text: %r (%d Zeichen)" % (tmdb_text, len(tmdb_text)))
 
+    # ---- F-M756 (Betreiberanweisung 25.11.2026: "Runtime tolerance share gui description. Diesmal vielleicht
+    # zu wenig: percentage of cue span different to media span. Floor... . Default 12%."): das Feld sagt in zwei
+    # Zeilen erst, was gemessen wird, dann Vorgabe und Untergrenze.
+    _tol = re.search(r'id="DownloadRuntimeToleranceSharePercent".*?<div class="fieldDescription">(.*?)</div>', html, re.S)
+    _zeilen = [re.sub(r'\s+', ' ', z).strip() for z in _tol.group(1).split('<br>')] if _tol else []
+    check("F-M756: the runtime tolerance field says what it measures, then the default and the floor",
+          len(_zeilen) == 2
+          and _zeilen[0] == "Allowed drift between the cue span and the media runtime."
+          and _zeilen[1] == "Default 12 %. Floor: 7 min films, 4 min episodes; 0 = floor only."
+          and all(len(z) <= 80 for z in _zeilen),
+          "Zeilen: %r" % (_zeilen,))
+
     # ---- F-M228 (Betreiberbefund 25.11.2026: „previously the required in the headlines was in gui
     # style blue"): die Pflichtmarke in den drei Ueberschriften traegt die Akzentfarbe. Der Befund war
     # eine Regression: die Klasse stand im Markup, ihre CSS-Regel war beim Karten-Umbau verloren
