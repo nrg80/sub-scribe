@@ -740,6 +740,10 @@ The searches DO cost API quota, one per language set (two while the HI switch is
 
 ### 4.3 Auto-Sync — Download
 
+**Explained in `docs/AUTOSYNC.md`.** That paper carries the constants of the fit, the speech rule that
+keeps cues describing sound from voting, the gap and order rules between cues and the significance
+rules that decide when a correction is written. This section states the rules normatively.
+
 **F-M296 [D]:** **A fetched subtitle is shifted to the audio: by the ONE constant offset
 the detector measures while that offset is constant, and by a STAIRCASE — one offset per segment —
 when it moves (F-M300).**
@@ -753,76 +757,13 @@ The feature has two halves that must not be confused: **which** track the audio 
 **Rule.** Priority: **(1)** a track whose language equals the subtitle's language, **(2)** an English
 track, **(3)** the first track without a language tag, else the first track at all.
 
-**Why a rule was needed at all.** Both audio-reading gates decoded `0:a:0` — the first audio stream —
-with a comment defending the hard index, and the reasoning behind that comment is sound about
-*what to do when a stream is missing* while being wrong about *which stream to read*. **304 files of this library that carry sidecar subtitles**, the rule above picks a different track than
-`0:a:0` in **34 of 387 (file, subtitle-language) cases (~9 %)**; 353 cases are unchanged. The recurring
-shape is an **Italian release whose first track is the Italian dub** with the English original on
-track 1 — a German subtitle then wants English (prio 2) and an English one wants English too (prio 1),
-while the hard index reads the dub. **76 files carry no language tag on their first track at all.**
-Priority distribution: 158 / 122 / 107.
-
-**The 2-vs-3-letter trap, and why it is written down.** A subtitle file name carries `en`/`de`
-(2 letters); a container tag carries `eng`/`deu` (3). Comparing the two sets directly **never matches**.
-A first attempt at counting this reported *"subtitle language in NO audio track: 252 of 304"* and
-*"wrong first track: 0"* — both pure artefacts of the mismatch, one of which reads as a finding. The
-implementation therefore carries an **explicit ISO map**, and the rule that **a zero or a perfect value
-is root-caused rather than reported** applies.
-
-**What it does not claim.** On the one multi-track file measured closely (Italian + English audio)
-both tracks returned the **same verdict** — span 17.4 s vs. 18.1 s, median 8.4 s vs. 7.8 s, deviation
-0.6–0.7 s — because the envelope reads sound, not language. The rule's value is that it removes the
-assumption *"the first track is the right one"*, which is measurably false on ~9 % of these files. **That is not a setting**, because it is not a choice: choosing by language is the right answer, the page offers no switch for it (F-M303, F-M304). The configuration entry for the per-language track check remains in the file with its default `true`; forced off, the old hard `0:a:0` is read again.
-
 #### 4.3.2 Method — a constant offset is corrected, a moving one is corrected as a staircase
 
-**What is measured.** The same arithmetic that the drift gate (F-M295) runs also yields the single
-best offset. The two questions were validated together: planted constant shifts of
-**−3.0 / +2.0 / +4.0 / +8.0 / +12.0 s** came back as **−3.20 / +1.80 / +3.80 / +7.80 / +11.80 s** — an
-error of about **0.2 s** in every case (the residual is the ~0.3 s per-cue SDH lead moving the median).
-At every one of those values the detector reported `drifts=False, boundaries=0`: **a large constant
-shift is not mistaken for drift**. That separation is what makes the feature possible at all.
-
-**The sign is MEASURED, and getting it wrong doubles the error.** The correction is **minus** the
-detector's value (`srt_time − measured = synced`). Established on a real episode with a planted +5.0 s:
-the detector read **+4.50 s**, applying **−4.50 s** landed the file **0.50 s** from its plain subtitle,
-while applying **+4.50 s** landed it at **+9.50 s**. The first version of the pipeline added the value
-and every corrected file came out **exactly twice as far off as it went in**. A unit test cannot catch
-this — the shift function is correct in isolation; only the sign of what is handed to it was wrong.
-The end-to-end test (T111) therefore applies **both** directions and prints both outcomes, so a future
-sign flip fails loudly instead of silently doubling.
-
-**The floor is measured, not chosen — 0.20 s was too low.** The plain subtitle of a real episode, the
-file nothing is wrong with, measures **−0.50 s** against its own audio: that is this material's
-measurement floor (a cue leads the speech onset by a per-cue varying amount), and it is the same order
-as a small real offset. With a floor of 0.20 s the feature therefore **moved a file that was already in
-sync** — caught by the end-to-end test, not by reasoning. The minimum shift was **1,0 s**, at which a finding
-is at least twice the floor. **Threshold: 0,7 s.** He weighed both ends ("1 second is too much, 0.2 seconds too little"): 0.2 s is the value that already moved a correct file, 1.0 s leaves a real half-cue finding untouched, and 0.7 s keeps a 0.2 s margin over the ~0.5 s floor while reaching into the band the operator sees on screen. The number is fixed in code, not a setting.
+**The sign.** The correction is **minus** the detector's value — `srt_time − measured = synced`. The sign is measured, never assumed: with a plus instead of a minus every corrected file comes out as far off as it went in, doubled. The end-to-end test T111 drives both directions so a future flip fails loudly.
 
 **The refusal names its cause (order).** The old text was composed from the values the revert had already zeroed, so a perfectly in-sync file and a file whose fit had measured 887 moved cues at t = 1.71 on a better score printed the identical line — `no proven gain (0 cue(s) moved, t = +0.00)`. The operator read a measured +1.40 s drift in the gate next to "no gain" and asked how both can be true. The deploy rule now records which of its four conditions refused (no movement, not significant, worse value, below the threshold) and the measurement itself survives the revert, so the line carries the numbers the decision was made on: `no proven gain (not significant: t = +1.71 < 2.0, score 0.5591 -> 0.5667 (+0.0076), 5 segment(s) [+2.00/+1.25/+0.50/-0.50/+2.50], 887/887 cues, largest 2.50 s) — left as downloaded`. **Significance settles the class, not the score (operator).** "Significance above 2 is mandatory for improved subs" — no correction is deployed without `t > DeployZ`, and there is no such thing as a MATERIAL score improvement without significance: `+0.0131` at `t = +1.54`, `+0.0076` at `t = +1.71`, `+0.0036` at `t = +0.57` are all under 2 and prove nothing, so they are "not sufficiently evidenced" and hunt the next candidate. A correction that is worse but NOT significantly worse (`t = -1.59`, score `0.5032 -> 0.4914`) is equally unevidenced — it hunts too. The score keeps exactly one vote, where it decides: a correction at `t > 2` that would LOWER the score is refused as "worse". Nowhere else is the score consulted; it is reported so the operator can read it.
 
 **Two classes, and the difference decides whether another candidate is fetched**: a correction that improves the score but cannot prove it is `gain not statistically proven (..) — original kept, next candidate` and is CANDIDATE-SPECIFIC — the reserved `9x` original stays and the pipeline pulls the next candidate (F-M318). `no proven gain` stays for the three shapes where the file really is the best there is — nothing had to move, the shift is below the floor, or the untreated file is SIGNIFICANTLY better (`t <= -2`) — and only those END the walk. The rejection check matches the `no proven gain` prefix exactly, which is what keeps the two apart.
-
-**The refusal list, and what replaced one of its entries.** A drifting file has **no valid single
-offset** (see F-M295): every number is an average over the drift and describes no real state, so
-shifting by *it* moves one part right and spoils another. That is correct about the average. The
-conclusion once drawn from it — "so nothing can be done" — was wrong, and F-M300 corrects it. The
-remaining refusals stand:
-
-- gate did not run (no ffmpeg, unreadable audio, no speech, too few cues) ⇒ **nothing is written**. An
- unavailable analysis tool is not a licence to guess.
-- `Drifts = true` **with no segment offsets reported** ⇒ nothing is written; the segment list is what
- the staircase needs, and without it there is no correction to apply.
-- a **single staircase step** above 20 s ⇒ nothing is written; beyond that the figure is implausible.
-- `|offset| < 1.0 s` on a **constant** offset ⇒ nothing is written; that is within this material's
- measurement floor.
-- `|offset| > 20 s` on a constant offset ⇒ nothing is written.
-- a shift that would push a cue **below zero** ⇒ the fitted shift is **applied as measured** and the
- cue is **clamped to 0**. **Supersedes the former whole-file refusal**. **Rule.** The fit decides
- the offset; the clamp only stops a cue running off the front of the file. A refusal may not replace the
- fitted value — it discarded the whole correction over one leading cue and reported the file as clean
- (`no proven gain`) while it was **9.00 s** out of sync. The clamp changes one cue's relation to its
- neighbour; that is the smaller price, and the fitted shift stands.
 
 **Applied to times only.** Text is carried through byte-for-byte, the cue count and cue order are
 unchanged, and the corrected file is written **canonical** (UTF-8, no BOM, LF, trailing whitespace
@@ -842,58 +783,10 @@ segment**: the boundaries the detector already found divide the cue list, and se
 cues from its start time up to the next boundary. The applied shift is **minus** that offset — the same
 sign the constant path proved by measurement (§4.3.2).
 
-**Why the segments ARE the repair, and why the structure is not overfitting.** A staircase model has
-one parameter per segment, so it fits *anything* better than a single offset; that is not evidence. The
-evidence is a permutation test on the same files: the same staircase fit applied to a **shuffled**
-ordering gives **4.13 s** residual against **0.30 s** on the real ordering — **14× better**, which a
-model fitting noise cannot achieve. The structure itself was measured:
-
-- **4–5 steps per episode** (median 4), **all positive** in the 22 episodes that were examined for it.
-- Step height **median +2.84 s**, range **+1.07 to +3.77 s**.
-- Step spacing **median 8.5 min** — S02E01 at **10.5 / 18.1 / 27.1 / 35.5 min**, i.e. act breaks.
-- The steps **sum to the total drift** (**11.98 s** against a measured **10.92 s**), so they explain it
- completely rather than approximately.
-- Each step lands **between two adjacent dialogue lines** — a cut, not a smooth ramp.
-
-The last point is what rules out a framerate error: a framerate error makes every interval equally
-steep, whereas a stepwise-constant curve with jumps is a re-cut. **The grid is not fixed**: boundaries
-on 5-minute multiples matched only 48 % against 40 % chance (not significant, spacing scatter 2.55 min),
-so the steps are **measured, never computed**.
-
-**The measurement, on the material it was built for.** Over the **36 drifting episodes** of this
-library, the worst single-cue residual against the same-language plain subtitle went from a **10.74 s
-median to 4.51 s**, with **33 of 36 improved**.
-
-**Where the REMAINING error comes from: the boundary, not the step height.** The applied offsets come
-out close to right; what is uncertain is **where the step starts**, because a boundary carries the
-±1–2 min positional uncertainty stated in §4.3.1. The cues inside that window receive the far side's
-offset, and that difference is what the residual measures. The same uncertainty is why an episode can
-come out worse: a boundary drawn through a region that was already correct moves that region off it.
-The result is therefore read **per segment**, never as a file-wide total, because a total hides exactly
-that.
-
-**The limit, stated because it is measured.** **Two of the 36 come out worse** — S01E04
-(**8.00 → 21.30 s**) and S01E06 (**2.47 → 11.91 s**). **No reference-free signal separated them from the
-33 successes.** Six candidates were tried, all computed from the run itself: monotone distortion
-(4.55 s good vs. 3.42 s bad), split-half disagreement (22.80 vs. 7.80), remaining drift after the
-correction (22.10 vs. 10.90), run-back against the main direction (26.8 vs. 11.7), outlier offset
-(14.35 vs. 11.75), raw drift span (0.90 vs. 13.10). **Every one of them overlaps.** With 2 failures in
-36, any threshold computed from that same distribution is a circle — so no gate is built on them, and
-the staircase is applied with those two accepted as the price of a ~6 s average gain.
-
 **The staircase is the ONE correction for a moving offset.** There is no second route: the audio is the
 only reference, and the segments the detector found are the repair.
 
-**Order guard.** At a step the two neighbours move by different amounts. Where that would push a cue
-back across its neighbour's end — the case a player renders as stacked text — the previous cue's shift
-is carried forward. The guard is measured against the **previous cue's END**, and because the staircase
-**adds** its shift the bound is a **lower** one (`eff[k] ≥ eff[k−1] − gap + MinGapSec`). A gap already
-below the minimum gap must not be shrunk further: measured on
-a real episode, **560 of 724 gaps are below 0.04 s** with a median of **0.002 s**, so demanding the floor
-everywhere makes the guard fire on nearly every cue and carry one shift through the whole file.
-**Getting this direction wrong is not cosmetic**: the synthetic test measured a **1.92 s** residual and
-**22** guarded cues with the sign reversed, against **one misplaced step** and **6** guarded cues with
-it right.
+**Order guard.** At a step the two neighbours move by different amounts. Where that would push a cue back across its neighbour's end — the case a player renders as stacked text — the previous cue's shift is carried forward. The guard is measured against the **previous cue's END**, and because the staircase **adds** its shift the bound is a **lower** one (`eff[k] ≥ eff[k−1] − gap + MinGapSec`, `MinGapSec` = 0.04 s). A gap already below the floor is not shrunk further: then the previous shift is carried forward unchanged. Demanding the floor everywhere makes the guard fire on nearly every cue and flattens the staircase into one constant shift while the step heights still look right.
 
 **F-M305 [D]:** **A real-material score is taken against the AUDIO, never against a
 subtitle.** The synthetic episode T114 runs on puts the boundaries where the test put them, so it cannot
