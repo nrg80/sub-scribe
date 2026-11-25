@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.56",
-        "changelog": "v12.3.8.56: every written setting names itself in the debug log — no password, no key, not even its length.",
+        "version": "12.3.8.57",
+        "changelog": "v12.3.8.57: the settings line lands as a detail line (information + [D]), so it is readable without raising the server level.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.56-dev/Jellyfin.Plugin.SubdlSync_12.3.8.56.zip",
-        "checksum": "1d68ae44b22f17c3e6651d62c9c334c1",
-        "timestamp": "2026-11-25T12:33:21Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.57-dev/Jellyfin.Plugin.SubdlSync_12.3.8.57.zip",
+        "checksum": "ee9053688c01798ab36d124be8f746fb",
+        "timestamp": "2026-11-25T12:40:47Z"
       }
     ]
   }
