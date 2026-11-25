@@ -107,7 +107,7 @@ public sealed class MsubEngine : ISourceEngine
         {
             Key = SourceKey,
             DisplayName = "moviesubtitles.org",
-            ShortName = "mst",        // F-M746: der Reiter traegt den Kurznamen
+            TabName = "mst",   // F-M746: Beschriftung des Reiters
 
             // F-M712: Upload ist eine Fähigkeit DIESER Quelle. Der Betreiber hat sie eingefordert
             // („Wir haben schon auf mst hochgeladen"); die Sperre ist nicht die Fähigkeit, sondern der

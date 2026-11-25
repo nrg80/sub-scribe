@@ -1929,20 +1929,25 @@ def main():
           "F-M743: eigene Klasse fuer die Quellenreiter (subdlShowTab fasst .subdl-tab-btn an)")
 
     # ---- F-M746 (Betreiberwunsch 25.11.2026: "Wir koennen fuer die Reiter Abkuerzungen einfuehren SubDL,
-    # tvst, mst"): der Reiter traegt den Kurznamen, der Kartenkopf den vollen Namen. Der Kurzname kommt
-    # aus den Faehigkeiten der Quelle — die Seite haelt keine eigene Namensliste.
+    # tvst, mst"): der Reiter traegt eine Abkuerzung, der Kartenkopf den vollen Namen. Die Abkuerzung ist
+    # NICHT der Kurzname der Zeile — den haelt F-M731 fest (tvst in der Zeile je Paar, sonst unveraendert) —
+    # sondern ein eigener Traeger in den Faehigkeiten der Quelle; die Seite haelt keine Namensliste.
     view_src = open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
         os.path.abspath(__file__))))), "Jellyfin.Plugin.SubdlSync/Api/SourceSettingsView.cs"),
         encoding="utf-8").read()
-    check("F-M746: the tab carries the source's short name, the card head the full one",
-          "btn.textContent = eintrag.shortName || eintrag.displayName || eintrag.key;" in page_src_f497
+    kontrakt = open(os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.dirname(
+        os.path.abspath(__file__))))), "Jellyfin.Plugin.SubdlSync/Sources/SourceContract.cs"),
+        encoding="utf-8").read()
+    check("F-M746: the tab carries the source's abbreviation, the card head the full name",
+          "btn.textContent = eintrag.tabName || eintrag.displayName || eintrag.key;" in page_src_f497
           and "btn.title = eintrag.displayName || eintrag.key;" in page_src_f497,
-          "F-M746: Reiter = Kurzname, Tooltip = voller Name")
-    check("F-M746: the short name comes from the source, not from a list in the page",
-          "string ShortName," in view_src
-          and "engine.Capabilities.Short," in view_src
-          and "subdl-source-tab" in page_src_f497,
-          "F-M746: ShortName kommt aus SourceCapabilities.Short")
+          "F-M746: Reiter = Abkuerzung, Tooltip = voller Name")
+    check("F-M746: the abbreviation comes from the source, on its own carrier",
+          "string TabName," in view_src
+          and "engine.Capabilities.Tab," in view_src
+          and "public string TabName { get; init; }" in kontrakt
+          and "public string Tab =>" in kontrakt,
+          "F-M746: eigener Traeger TabName/Tab, nicht der Kurzname der Zeile (F-M731)")
 
     # ---- F-M744 (Betreiberwunsch 25.11.2026: „Wenn irgendein endpoint nicht konfiguriert ist, keine
     # Zugangsdaten fuer subdl zb, soll er als off angezeigt werden"): eine Quelle, die nicht teilnehmen

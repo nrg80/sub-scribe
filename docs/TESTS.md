@@ -469,7 +469,7 @@ Without a hash **and** without a path row it stays with the honest result: the n
 
 **T406:** A source that cannot take part reads `off` (F-M744), in `gui-structure`. **3 checks**. The card head carries the word from the endpoint's `participates` (never from a second check of the page), the tab's dot switches between `on` and `off` with the same answer, and the `off` colour is grey — red stays reserved for destructive and failing states (F-M228).
 
-**T407:** A tab carries the short name of its source (F-M746), in `gui-structure`. **2 checks**. The tab button takes `shortName`, falling back to the display name and then the key, and keeps the full name in its tooltip; the short name arrives through the source endpoint (`ShortName` from `SourceCapabilities.Short`), so the page holds no list of names of its own.
+**T407:** A tab carries an abbreviation of its source (F-M746), in `gui-structure`. **2 checks**. The tab button takes `tabName`, falling back to the display name and then the key. The full name stays in its tooltip. The abbreviation arrives through the source endpoint on its own carrier (`TabName` / `Tab` in the capabilities), so the page holds no list of names of its own and the row labels of F-M731 stay untouched.
 
 ## 12. Tests of the data model and persistence (§14)
 

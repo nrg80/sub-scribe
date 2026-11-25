@@ -227,7 +227,7 @@ public sealed class SubdlEngine : ISourceEngine
         {
             Key = SourceKey,
             DisplayName = "SubDL",
-            ShortName = "SubDL",     // F-M746: der Reiter traegt den Kurznamen
+            TabName = "SubDL",   // F-M746: Beschriftung des Reiters
             CanUpload = true,
             // F-M696: SubDL fuehrt Serien UND Filme.
             ServesSeries = true,

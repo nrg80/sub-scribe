@@ -2690,8 +2690,8 @@ workers.forEach(function (w) {
                     btn.className = 'subdl-source-tab raised emby-button';
                     btn.setAttribute('data-source-tab', eintrag.key);
                     btn.setAttribute('role', 'tab');
-                    // F-M746: der Reiter traegt den Kurznamen (SubDL, tvst, mst), der Kartenkopf den vollen.
-                    btn.textContent = eintrag.shortName || eintrag.displayName || eintrag.key;
+                    // F-M746: der Reiter traegt die Abkuerzung (SubDL, tvst, mst), der Kartenkopf den vollen Namen.
+                    btn.textContent = eintrag.tabName || eintrag.displayName || eintrag.key;
                     btn.title = eintrag.displayName || eintrag.key;
                     var an = subdlSourceTabState(list, eintrag.key);
                     var punkt = subdlSourceEl('span', 'subdl-source-tab-dot ' + (an ? 'on' : 'off'), an ? '●' : '○');
