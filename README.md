@@ -89,7 +89,7 @@ Save.
 
 Uploads the subtitle tracks embedded in your media files — enable it under **Dashboard → Plugins →
 Sub Scribe → Upload → Upload enabled**. Both endpoints are tried in turn, in the configured source
-order: a source that is switched off, not configured, already holds the subtitle, or is not allowed to
+order. A source that is switched off, not configured, already holding the subtitle, or not allowed to
 take it (a downloaded subtitle never travels to the other source) is skipped, and the next one still
 runs. Quality gates and duplicate protection apply here exactly as on the download side.
 

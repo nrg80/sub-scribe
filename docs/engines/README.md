@@ -51,6 +51,6 @@ behaviour towards it — and nothing that belongs to an operator or an account:
 are the configuration surface; a field value never appears. Where an example is needed, a placeholder
 stands in: `<repo>`, `<dotnet>`, `<library>`, `<scratch>`.
 
-The rule is checked, not promised: **NF-10 / T403** reads every document under `docs/` and the
-README and fails on a credential value, a provider key shape, a hex string of 32 characters or more,
-a foreign e-mail address, a private host address, an IBAN or an absolute operator path.
+The rule is checked, not promised. **NF-10 / T403** reads every document under `docs/` and the
+README, and fails on a credential value, a provider key shape, a hex string of 32 characters or more,
+a foreign e-mail address, a private host address, an IBAN, or an absolute operator path.

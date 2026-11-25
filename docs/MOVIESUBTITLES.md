@@ -190,9 +190,9 @@ carries the release **group** from the release name, never the file name, and `c
 identifiers (TMDb, IMDb) and the client. The body is multipart with its own boundary, and the bytes
 of the file stand unchanged in it.
 
-The check runs **before** the body is built: `tvid` > 0, language in the mapping (an ISO code is
-mapped), rip in the mapping or empty, at least one file, the file not empty and ending `.srt` or
-`.zip` — otherwise a refusal with **one** line and **no** request. A dry run is decided by the
+The check runs **before** the body is built. It asks: `tvid` > 0, language in the mapping (an ISO
+code is mapped), rip in the mapping or empty, at least one file, the file not empty and ending `.srt`
+or `.zip`. Anything else is a refusal with **one** line and **no** request. A dry run is decided by the
 caller, never read from the configuration: it builds the same body, byte for byte, and puts nothing
 on the wire (F-M508).
 
@@ -515,11 +515,12 @@ What the checks pin down, in the order of this paper:
   `Oppenheimer`, the doubling `O Beautiful (2002) (2002)` loses exactly one year, and a bracketed
   title or a year inside the title stays untouched.
 - **The three list views** (F-M506): the film list with 487 rows, the upload list with 492, the
-  search with 5 rows despite HTTP 500 — including a repeated year in the name; the film page with
-  54 entries in 12 sections and 51 in 13, the language from the flag and the section heading as the
-  counter-check, free rip values kept, the doubled year bracket, the film **without** entries, the
-  entry page with rip, release, `filename:` and `parts`, and the junk page of an unknown identifier
-  yielding nothing.
+  search with 5 rows despite HTTP 500 — including a repeated year in the name.
+- **The film page** (F-M506): 54 entries in 12 sections and 51 in 13, the language from the flag and
+  the section heading as the counter-check, free rip values kept, the doubled year bracket, the film
+  **without** entries.
+- **The entry page and a junk page** (F-M506): the entry page with rip, release, `filename:` and
+  `parts`, and the junk page of an unknown identifier yielding nothing.
 - **The download** (F-M506): the **relative** 302 is followed, parentheses in the target stay
   (`ru(2).zip`), the file with the language code is taken out of the zip, multi-parters are marked,
   a target `files/` is refused and bare `.srt` bytes are returned unchanged.
@@ -527,27 +528,28 @@ What the checks pin down, in the order of this paper:
   UFile2 UFile3 comments go` with `go=1`, no `author` when empty, the release group instead of the
   file name, identifiers and client in `comments`, `UFile2`/`UFile3` only when filled. A
   `tvid` of 0, an unknown language, a rip outside the table, missing identifiers, an empty file, a
-  wrong extension and a third extra are refused **without a single request**. A ticket with season
-  or episode, one with a season pack, one with a foreign language and one with a missing number and
-  no year are refused without any request arising; the dry run reports the body and sends nothing;
-  a 2xx reads as „accepted, identifier unknown" and a 500 as a failure carrying the page's text.
+  wrong extension and a third extra are refused **without a single request**. Four tickets are refused without any
+  request arising: one with season or episode, one with a season pack, one with a foreign language,
+  and one with a missing number and no year. The dry run reports the body and sends nothing. A 2xx
+  reads as „accepted, identifier unknown", a 500 as a failure carrying the page's text.
 - **The quality mapping** (F-M511): six raw values — `web`, `1080p BluRay x264`, `WEB-DL`, `HDTV`,
   `x265`, empty — are accepted, and each produces a payload byte-identical to the payload of its
   mapped value; the foreign mapping is not borrowed.
 - **The creation** (F-M513, F-M515): the body carries exactly `name`, `year`, `go=1` in that order,
-  neither a file name nor `tvid`; an empty name, 1887 and a year above the bound are refused without
-  a request, the bounds themselves (1888, current year+3) and the one-letter title `X` go through;
-  the identifier comes from the lookup, never from the answer; a 500 is a failure without a lookup;
-  an accepted POST without a hit yields „created, identifier not readable" with the answer text.
+  neither a file name nor `tvid`. An empty name, 1887 and a year above the bound are refused without
+  a request; the bounds themselves (1888, current year+3) and the one-letter title `X` go through.
+  The identifier comes from the lookup, never from the answer, and a 500 is a failure without a
+  lookup. An accepted POST without a hit yields „created, identifier not readable" with the answer
+  text.
   The guard decides take, refuse (found year 1999), create, and `unclear` with an answer count of 0
   — two rows with the same title and year are a refusal with a hit count of 2. The two markers are
   read literally as the page writes them („exist", not „exists"), the unchanged form and empty text
   are a rejection with **0** lookups.
 - **The film number without a hash** (F-M517): a row that was created via its hash and carries the
   path receives the number, the row count stays the same, and the second call reads instead of
-  searching (exactly one GET); without a hash and without a path row the number is found and the
-  plugin database keeps **0** rows, with the note „holds for this run only"; a path carried by two
-  rows is no address, nothing is chosen.
+  searching (exactly one GET). Without a hash and without a path row the number is found and the
+  plugin database keeps **0** rows, with the note „holds for this run only". A path carried by two
+  rows is no address — nothing is chosen.
 
 The suite never posts to the site: the upload and the creation run against recorded pages and a
 counting handler, and the plugin database of the last block is a throwaway one in the scratch area.

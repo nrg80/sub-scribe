@@ -82,7 +82,7 @@ English. The client therefore checks against the table and sends no unknown code
 
 **ISO is mapped, and only here (F-M502):** `TvSubtitlesClient.SiteLanguage` pulls an
 incoming code onto the site's code — `el`/`ell`/`gre` → `gr`, `cs`/`ces`/`cze` → `cz`,
-`zh`/`zho`/`chi` → `cn`, `ja`/`jpn` → `jp` (the four deviations in both spellings), plus the
+`zh`/`zho`/`chi` → `cn`, `ja`/`jpn` → `jp` (the four deviations in both spellings). To that come the
 ISO 639-2 forms of the remaining site languages (`deu`/`ger` → `de`, `fra`/`fre` → `fr`, `spa` → `es`,
 `pob` → `br`, `ukr` → `ua`, `nld`/`dut` → `nl`, `ron`/`rum` → `ro` …). Case does not
 count, region and script are dropped (`zh-Hans` → `cn`, `ja-JP` → `jp`) — **except** `pt-BR`/`pt_BR`:
@@ -160,10 +160,10 @@ TMDb first-broadcast year and the TMDb season count (limited to 1..22). The numb
 afterwards in `MediaEntity.TvstShowId` on the same level as `TmdbId`/`ImdbId` and is
 read instead of searched the next time. Creation happens **at most once per medium and run**, and only if the site
 answered cleanly before; never in a dry run. After the creation (F-M516) applies: search the number
-(search, then list) and **store only on a hit**; if the site confirms the creation but the
+(search, then list) and **store only on a hit**. If the site confirms the creation but the
 series is not in the list, the result is honestly `created-id-unknown` and **nothing** is
-stored; if it does not confirm and the series is there anyway, it was already present
-(`existed`) — the number is stored, a second entry does not arise.
+stored. If it does not confirm and the series is there anyway, it was already present
+(`existed`) — the number is stored and a second entry does not arise.
 
 ## Boundaries and open points
 
@@ -212,7 +212,7 @@ DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 <dotnet>/dotnet run \
   --project scripts/tests/tvsubtitles/tvsubtitles.csproj -c Release -- <repo> --live
 ```
 
-It shows: the series list (on 16.11.2026: 2.774 entries in the selection field, including the
-placeholder `0`), The Middle = 512, the result of the site search for „The Middle", seasons 1–9,
-24 episode pages in season 2, page 31911 = 2x24 with 3 entries and the download of an English
+It shows the series list — 2.774 entries in the selection field, including the
+placeholder `0` — and The Middle = 512. Then the result of the site search for „The Middle", seasons
+1–9, 24 episode pages in season 2, page 31911 = 2x24 with 3 entries, and the download of an English
 entry. It **creates nothing** — the creation is expressly not part of the probe.
