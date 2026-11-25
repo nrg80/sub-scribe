@@ -22,5 +22,5 @@ switched per site. Your keys and logins never leave your server and never appear
 expected, what happened, and the matching log lines — never a key, a password or your e-mail address;
 "the key is set" is enough.
 
-**More.** <https://github.com/nrg80/sub-scribe/blob/main/docs/briefings/users.md> for the full user
-sheet, `docs/briefings/developers.md` in the same repository for the technical one.
+**More.** The project page is <https://github.com/nrg80/sub-scribe>: the README explains the parts in
+order, and `docs/SPECIFICATION.md` in that repository is the full account.
