@@ -6,6 +6,8 @@
 **The reasoning behind a rule — why it holds, what was measured, what happened — does not live here. It
 lives locally in the method archive, sorted by chapter and marked with the requirement number. This document states the rule, its constants, its ground and its test — nothing else.**
 
+**The vocabulary is `docs/TERMS.md` — one word per concept, and English is the master.** This document uses it without repeating it.
+
 **Counting convention of the contents counters.** A section counter is the **number of definition lines in its block, sub-headings included, retired entries included** — a plain count that says nothing about what is in force. A section counter that excludes its sub-sections is not the convention. Checked by T115.
 
 ## Contents

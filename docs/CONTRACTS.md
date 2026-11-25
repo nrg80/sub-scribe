@@ -1,5 +1,7 @@
 # The contracts of the sources — where the boundary runs
 
+**The vocabulary is `docs/TERMS.md`; this document uses it without repeating it.**
+
 This document fixes **which contract answers which question** and **what none of them may do**. It
 complements the requirements (F-M682, F-M729 to F-M734) and does not repeat them: the rule lives
 there, the boundary between the contracts lives here.
@@ -15,29 +17,21 @@ live.
 - [2. Scope](#2-scope)
 - [3. The job contract — the work on one subtitle](#3-the-job-contract-the-work-on-one-subtitle)
 - [4. The account-ledger contract — the account's own record](#4-the-account-ledger-contract-the-accounts-own-record)
-- [5. The self-report contract — how the source stands](#5-the-self-report-contract-how-the-source-stands)
+- [5. The inquiry contract — how the source stands](#5-the-inquiry-contract-how-the-source-stands)
 - [6. Shared boundary rules](#6-shared-boundary-rules)
-- [7. Who writes to the store](#7-who-writes-to-the-store)
+- [7. Who writes to the plugin database](#7-who-writes-to-the-plugin-database)
 - [8. Allocation: which question belongs where](#8-allocation-which-question-belongs-where)
 - [9. Work that lives in no contract](#9-work-that-lives-in-no-contract)
 - [10. Checks that hold the boundary](#10-checks-that-hold-the-boundary)
 
 ## 1. Terms
 
-Four words carry the whole document, so they are pinned once:
+**The vocabulary is `docs/TERMS.md` and it applies here too** — source, pipeline, plugin database,
+pack, handle, verdict, capability, light, inquiry. Three words are used in this document only:
 
-- **Source** — a site a subtitle can be fetched from or sent to, with its own access data.
-- **Engine** — the part that speaks for one source and answers its contracts. The engine is where
-  everything source-specific lives.
-- **Client** — the part of an engine that speaks HTTP to one site. A client transports; it never
-  decides and never reports a state.
-- **Pipeline** — the part that owns our store, our identifiers and every decision. It knows no source
-  by name.
-- **Store** — our own database and files: identifiers, marks, locks, counters.
-- **Handle** — an opaque string a source hands out so it can name one of its own records later. We
-  never parse it.
-- **Pack** — one container holding a whole season's subtitles for one language.
-- **Light** — one line of a source's self-report: a key, a label, a health state and plain text.
+- **job contract**, **account-ledger contract**, **inquiry contract** — the three contracts.
+- **boundary rule** — one of the seven numbered rules in §6.
+- **allocation** — the assignment of a question to exactly one contract (§8).
 
 ## 2. Scope
 
@@ -46,7 +40,7 @@ Four words carry the whole document, so they are pinned once:
 - **A job contract** with exactly four jobs: search, fetch, send, report (F-M682).
 - **An account-ledger contract** with three tasks: list our own submissions, list published
   submissions, withdraw one submission (F-M729).
-- **A self-report contract** with two tasks: how the source stands, and how much quota is left today
+- **A inquiry contract** with two tasks: how the source stands, and how much quota is left today
   (F-M730, F-M733).
 - **Every source may fulfil one, two or all three of them.** The job contract is mandatory, the other
   two are voluntary. Whoever does not fulfil them is absent from the respective list — there is no
@@ -88,9 +82,9 @@ Four words carry the whole document, so they are pinned once:
 - **The outcome of withdrawing is the outcome of sending.** Four outcomes, no second vocabulary
   (F-M685).
 - **The account-ledger contract answers no reachability and no quota question.** It keeps a record,
-  it does not give a self-report.
+  it does not give an inquiry answer.
 
-## 5. The self-report contract — how the source stands
+## 5. The inquiry contract — how the source stands
 
 - **Every source fulfils it**, including one without an account: whether it is reachable is something
   it knows best itself.
@@ -102,29 +96,29 @@ Four words carry the whole document, so they are pinned once:
 
 ## 6. Shared boundary rules
 
-1. **No contract knows the store.** No database, no directory, none of our identifier shapes, no row
+1. **No contract knows the plugin database.** No database, no directory, none of our identifier shapes, no row
    of our storage.
 2. **What is handed in is handed in.** Network connection, archive cache, log and settings come from
    outside; no engine opens its own network connection.
 3. **Only neutral data crosses the boundary:** language in one uniform spelling, timestamps in UTC,
    the source's plain text, and opaque handles. No addresses, no access data, no foreign identifier
    shape.
-4. **The source name is a data value, not a switch.** It stands in the store, in the origin line and
+4. **The source name is a data value, not a switch.** It stands in the plugin database, in the origin line and
    on the tile; nothing is decided by it.
 5. **Capabilities instead of name comparisons.** Whether a source can upload, report, accept packs,
    create a title or keep a quota is said by its capabilities — not by its name (F-M682, F-M734).
 6. **A contract is a promise, not an obligation to be complete.** Whoever cannot do a task does not
    fulfil the contract; it does not pretend it could.
 7. **Which language a source accepts, the source says** — in both directions and with the information
-   whether it keeps a closed list. "I keep no list" is its own answer and **not** the same as an empty
-   list, which would mean "I can do nothing" (F-M735).
+   whether it states supported languages. "I keep no list" is its own answer and **not** the same as an empty
+   list of supported languages, which would mean "I can do nothing" (F-M735).
 
-## 7. Who writes to the store
+## 7. Who writes to the plugin database
 
 - **The pipeline writes, the source never.** Stored identifiers, marks, locks and counters belong to
   the pipeline.
 - **What the source returns is a proposal with evidence:** an identifier, a state, a plain text. Only
-  the pipeline decides whether and where it enters the store (F-M508, F-M734).
+  the pipeline decides whether and where it enters the plugin database (F-M508, F-M734).
 - **A lock is pipeline knowledge.** That a title stays closed for good after four failed attempts
   (F-M608) is known only to the pipeline; the source never sees any of it.
 
@@ -132,7 +126,7 @@ Four words carry the whole document, so they are pinned once:
 
 | Question | Responsible | Never responsible |
 | --- | --- | --- |
-| Which subtitles do you have for this title? | Job contract (search) | Account ledger, self-report |
+| Which subtitles do you have for this title? | Job contract (search) | Account ledger, inquiry answer |
 | Take this subtitle | Job contract (send), including title creation | Account ledger |
 | What else lies with my account? | Account ledger | Job contract |
 | Withdraw this entry | Account ledger | Job contract |
@@ -145,26 +139,26 @@ Four words carry the whole document, so they are pinned once:
 ## 9. Work that lives in no contract
 
 - **Creating a title** is not a job of its own but a field of sending (F-M734).
-- **Quota** is not account bookkeeping but a self-report (F-M733).
+- **Quota** is not account bookkeeping but an inquiry answer (F-M733).
 - **Diagnosis on the account** (paging through one's own submissions) uses the account ledger with a
   page depth of one — it invents no path of its own (F-M729).
-- **Status lights** use the self-report; they open no connection of their own to the source (F-M730).
+- **Status lights** use the inquiry answer; they open no connection of their own to the source (F-M730).
 - **A source's short name** is a capability, not a condition in the pipeline (F-M731).
-- **A site's language table** is a data value of the source, not a matter of fetching; the one neutral
-  spelling of the store stays above the sources (F-M557, F-M735).
+- **A site's language mapping** is a data value of the source, not a matter of fetching; the one neutral
+  spelling of the plugin database stays above the sources (F-M557, F-M735).
 
 ## 10. Checks that hold the boundary
 
-- **F-M682:** no file of a source names the store or the pipeline; no file of the pipeline names a
+- **F-M682:** no file of a source names the plugin database or the pipeline; no file of the pipeline names a
   source; every source is built explicitly, not looked up.
 - **T392:** the account-ledger contract carries exactly its three tasks, stands next to the four jobs,
   and only the source with an account fulfils it.
-- **T393:** the self-report contract carries exactly its tasks, every source fulfils it, and outside
+- **T393:** the inquiry contract carries exactly its tasks, every source fulfils it, and outside
   the source no file reads an access datum from the general configuration.
 - **T394:** the pipeline no longer names a source — short name from the capabilities, lists from the
-  account ledger, quota from the self-report.
+  account ledger, quota from the inquiry answer.
 - **T395:** the send job carries the title question; both sides that create titles do so without our
-  store, and without a verdict in a dry run.
-- **T396:** every source yields its language answer — the two sites with a closed list, the third
-  open; the return path delivers the store's spelling, and the pipeline no longer asks a client for
+  plugin database, and without a verdict in a dry run.
+- **T396:** every source yields its language answer — the two sites with supported languages, the third
+  open without a list; the return path delivers the plugin database's spelling, and the pipeline no longer asks a client for
   its table.
