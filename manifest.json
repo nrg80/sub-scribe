@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.52",
-        "changelog": "v12.3.8.52: the runtime floors are fixed; the share in percent is the only setting of the quality gate.",
+        "version": "12.3.8.53",
+        "changelog": "v12.3.8.53: an eye beside a secret field shows the stored value while the button is held.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.52-dev/Jellyfin.Plugin.SubdlSync_12.3.8.52.zip",
-        "checksum": "afbd9d9ec5ca55bab743c0d318cd1400",
-        "timestamp": "2026-11-25T09:34:14Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.53-dev/Jellyfin.Plugin.SubdlSync_12.3.8.53.zip",
+        "checksum": "869ac8d2a9865425a5ddb81f2e7df028",
+        "timestamp": "2026-11-25T10:15:38Z"
       }
     ]
   }
