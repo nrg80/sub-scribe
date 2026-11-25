@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.50",
-        "changelog": "v12.3.8.50: the report switch sits in the source card, and the runtime window takes a share setting.",
+        "version": "12.3.8.51",
+        "changelog": "v12.3.8.51: the tolerance is a share in percent with a floor for films and one for episodes; the lamp on a source tab goes out with its source.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.50-dev/Jellyfin.Plugin.SubdlSync_12.3.8.50.zip",
-        "checksum": "fdda6cc1158980783300a0eb6b44d59f",
-        "timestamp": "2026-11-25T09:05:36Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.51-dev/Jellyfin.Plugin.SubdlSync_12.3.8.51.zip",
+        "checksum": "ffaf42ac73d1c4a3939bf9badedfa824",
+        "timestamp": "2026-11-25T09:22:04Z"
       }
     ]
   }
