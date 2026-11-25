@@ -90,7 +90,7 @@ versions is normal (`main` went from `12.1.12.169` straight to `12.1.12.175`), b
 release is a choice. Nothing carries `main` along automatically: no CI workflow touches it, no scheduled
 job runs `release.sh`, and the script pushes only the branch it runs on.
 
-**`main` was absent for part of 03.10.2026** — deleted after it had served exactly one release,
+**`main` was absent for part of a day** — deleted after it had served exactly one release,
 `12.1.12.169`, and restored the same day for `12.1.12.175`. It came back by re-creating it at the tip it
 had (`a12b8b4d`, a docs-only commit) and merging `develop` into it, **not** by pointing it at
 `develop`. A fast-forward carries `develop`'s `manifest.json` along, and a stable-looking branch then
