@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.53",
-        "changelog": "v12.3.8.53: an eye beside a secret field shows the stored value while the button is held.",
+        "version": "12.3.8.54",
+        "changelog": "v12.3.8.54: the eye sits inside the field as a quiet mark, and the email of the SubDL card is a secret too.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.53-dev/Jellyfin.Plugin.SubdlSync_12.3.8.53.zip",
-        "checksum": "869ac8d2a9865425a5ddb81f2e7df028",
-        "timestamp": "2026-11-25T10:15:38Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.54-dev/Jellyfin.Plugin.SubdlSync_12.3.8.54.zip",
+        "checksum": "35c476a37aecd7ef64be092441fca7e2",
+        "timestamp": "2026-11-25T10:28:39Z"
       }
     ]
   }
