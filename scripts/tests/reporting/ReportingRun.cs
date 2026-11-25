@@ -389,6 +389,27 @@ internal static class ReportingRun
         Check(flusch > 0 && abhaengen > 0 && flusch < abhaengen,
             "F-M535: reports are filed while the API trace is still attached");
 
+        // F-M43 (operator decision 25.11.2026: "C"): the runtime window is a floor plus a share of the
+        // runtime. The two cases below are the REAL ones from the run of that morning — both were
+        // reported to SubDL under the fixed 600 s window, both carry 88 % and 91 % of their film.
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(600, 5414) == 650,
+            "F-M43: 12 % of a 90-minute runtime is larger than the 600 s floor, so the window grows");
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.ToleranceSeconds(600, 1200) == 600,
+            "F-M43: the share never tightens the floor — a short item keeps the configured window");
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(4772, 5414, 600),
+            "F-M43: the reported 88 % subtitle (span 4772s of 5414s) now sits inside the window");
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(6074, 6682, 600),
+            "F-M43: the reported 91 % subtitle (span 6074s of 6682s) now sits inside the window");
+        Check(!Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 6600, 600),
+            "F-M43: a genuinely cut subtitle (span 3600s short) is still rejected — the window is no free pass");
+        Check(Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 0, 600) && Jellyfin.Plugin.SubScribe.Qa.RuntimeWindow.Covers(3000, 6600, 0),
+            "F-M43: no runtime metadata and a switched-off check pass everything, as before");
+        Check(Read(plugin, "Pipeline/DownloadPipeline.cs")
+                  .Contains("Qa.RuntimeWindow.ToleranceSeconds(floorSec, runtimeSec)", StringComparison.Ordinal)
+              && Read(plugin, "Pipeline/DownloadPipeline.cs")
+                  .Contains("(tolerance ±{toleranceSec}s)", StringComparison.Ordinal),
+            "F-M43: the gate asks the window and the verdict names the window that was applied");
+
         Console.WriteLine(Failures.Count == 0
             ? $"reporting: {_checks} checks, all green."
             : $"reporting: {Failures.Count} of {_checks} checks FAILED:");

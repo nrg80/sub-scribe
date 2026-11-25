@@ -5335,8 +5335,8 @@ public sealed class DownloadPipeline : IDisposable
     private bool RuntimeMatches(BaseItem item, byte[] srtBytes, string? language, out string? reason)
     {
         reason = null;
-        int toleranceSec = _config.DownloadRuntimeToleranceSec;
-        if (toleranceSec <= 0 || (item.RunTimeTicks ?? 0) <= 0)
+        int floorSec = _config.DownloadRuntimeToleranceSec;
+        if (floorSec <= 0 || (item.RunTimeTicks ?? 0) <= 0)
         {
             return true; // check disabled or no runtime metadata
         }
@@ -5363,7 +5363,11 @@ public sealed class DownloadPipeline : IDisposable
 
         long spanSec = (lastEnd - firstStart) / 1000;
         long runtimeSec = (item.RunTimeTicks ?? 0) / TimeSpan.TicksPerSecond;
-        if (Math.Abs(spanSec - runtimeSec) > toleranceSec)
+
+        // F-M43: the window is a floor plus a share of the runtime, never the floor alone — a long
+        // film carries long credits, and a subtitle that stops with the dialogue is complete.
+        long toleranceSec = Qa.RuntimeWindow.ToleranceSeconds(floorSec, runtimeSec);
+        if (!Qa.RuntimeWindow.Covers(spanSec, runtimeSec, floorSec))
         {
             reason = $"span {spanSec}s vs runtime {runtimeSec}s (tolerance ±{toleranceSec}s)";
             return false;

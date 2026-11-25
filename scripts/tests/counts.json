@@ -1030,6 +1030,10 @@
     "T408": {
       "suite": "gui-structure",
       "checks": 3
+    },
+    "T409": {
+      "suite": "reporting",
+      "checks": 7
     }
   }
 }

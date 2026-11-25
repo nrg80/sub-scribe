@@ -13,7 +13,7 @@ stands in §19 of `SPECIFICATION.md`, and the binding of a test to its suite in 
 
 - [1. Tests of the seeder (§2)](#1-tests-of-the-seeder-2) — 5 tests
 - [2. Tests of the upload pipeline (§3)](#2-tests-of-the-upload-pipeline-3) — 28 tests
-- [3. Tests of the download pipeline (§4)](#3-tests-of-the-download-pipeline-4) — 34 tests
+- [3. Tests of the download pipeline (§4)](#3-tests-of-the-download-pipeline-4) — 35 tests
 - [4. Tests of upload postprocessing (§5)](#4-tests-of-upload-postprocessing-5) — 7 tests
 - [5. Tests of the database refresh (§6)](#5-tests-of-the-database-refresh-6) — 5 tests
 - [6. Tests of the rules shared by both directions (§8)](#6-tests-of-the-rules-shared-by-both-directions-8) — 2 tests
@@ -132,6 +132,8 @@ number when it moves to another chapter, and a number is never reused.
 **T128:** The reserved block is exactly **90–99**: the reservation test is true at 90 and 99 and false at 89 and 1. The target-name search runs **downwards**: 99 first, then 98. It returns **null** when all ten are taken, never a name that would overwrite. The target name for corrected files never hands out a reserved slot: with slots 1–89 taken it returns slot 1 (`<base>.<lang>.01.srt`, F-M316) so the caller's own existence check refuses the move.
 
 **T175:** The account filter of the download search — account identifier, no mis-grab on foreign uploaders, exclusion before the ranking and the switch including its label (F-M449).
+
+**T409:** The runtime window (F-M43), in `reporting`. **7 checks**. The window is 12 % of the runtime when that is larger than the configured floor, and never smaller than it. The two reported cases of the run (88 % and 91 % of their film) now sit inside it. A genuinely cut subtitle is still rejected, and a missing runtime with a switched-off check passes everything. The gate asks the window, and the verdict names the one that was applied.
 
 **T176:** The report of an observed defect — wording without justification, category per finding, name of the affected file in both tracks, sender line with version and account name. Report in the same run, deferral instead of discarding, locked candidate after the report, switch and its position as the second-to-last entry (F-M450). **4 checks on the file naming.**
 
