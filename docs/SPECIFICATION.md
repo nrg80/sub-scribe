@@ -39,7 +39,7 @@ states the rule, its constants, its ground and its test.**
 - [10. Scheduler, Quota and Timing](#10-scheduler-quota-and-timing) — 24 requirements
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
-- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 31 requirements
+- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 32 requirements
 - [14. Data Model and Persistence](#14-data-model-and-persistence) — 92 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 61 requirements
 - [16. Non-Goals](#16-non-goals)
@@ -2106,6 +2106,12 @@ and the help line is the one a field may carry, at most 80 characters (F-M745). 
 `Free API key after registration at themoviedb.org.` — one sentence, the address as the link word and its target the start page of that site, 50 characters. What the
 key is used for is not said again: the heading already carries `Required`, and the page's other lines stay silent about it.
 Checked in `gui-structure`.
+
+**F-M756 [G]:** **The runtime tolerance field says what it measures, then its default and its floor.** Concept decision:
+the field carries two lines. The first names the measurement — `Allowed drift between the cue span and the media
+runtime.` The second carries the setting — `Default 12 %. Floor: 7 min films, 4 min episodes; 0 = floor only.` Two lines
+are the exception this field needs: a percentage whose subject stays unnamed cannot be set well, and the floor is part of
+the rule rather than a reason (F-M745). Checked in `gui-structure`.
 
 ## 14. Data Model and Persistence
 

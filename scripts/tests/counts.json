@@ -1070,6 +1070,10 @@
     "T418": {
       "suite": "gui-structure",
       "checks": 1
+    },
+    "T419": {
+      "suite": "gui-structure",
+      "checks": 1
     }
   }
 }

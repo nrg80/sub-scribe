@@ -586,7 +586,11 @@
                         <div class="inputContainer">
                             <label class="inputLabel inputLabelUnfocused" for="DownloadRuntimeToleranceSharePercent">Runtime tolerance share (%)</label>
                             <input id="DownloadRuntimeToleranceSharePercent" name="DownloadRuntimeToleranceSharePercent" type="number" is="emby-input" min="0" max="50" />
-                            <div class="fieldDescription">Floor is fixed: 7 min films, 4 min episodes. 0 = floor only.</div>
+                            <!-- Betreiberanweisung 25.11.2026, woertlich: "Runtime tolerance share gui description.
+                                 Diesmal vielleicht zu wenig: percentage of cue span different to media span. Floor... .
+                                 Default 12%." — zwei Zeilen: erst was gemessen wird, dann Vorgabe und Untergrenze. -->
+                            <div class="fieldDescription">Allowed drift between the cue span and the media runtime.<br>
+                            Default 12 %. Floor: 7 min films, 4 min episodes; 0 = floor only.</div>
                         </div>
 
 
