@@ -10,7 +10,7 @@
 # See the GNU General Public License for more details.
 name: "Sub Scribe"
 guid: "7d1c5a2e-3f4b-4d6e-9a8b-5c2f8e1d4a9b"
-version: "12.3.8.46"
+version: "12.3.8.47"
 targetAbi: "12.1.0.0"
 framework: "net10.0"
 owner: "nrg80"
@@ -26,6 +26,7 @@ artifacts:
 - "Jellyfin.Plugin.SubdlSync.dll"
 - "LanguageDetection.dll"
 changelog: >
+  v12.3.8.47: the state of each source is one lamp on its tab instead of a word in every card.
   v12.3.8.46: the source tabs show their card again, and each tab is labelled with the short name of its source.
   v12.3.8.45: a source without its access data reads off on its tab and in its card, and a field may carry one short line of help.
   v12.3.8.44: the sources' status lights speak English again and no longer repeat the quota bars.
