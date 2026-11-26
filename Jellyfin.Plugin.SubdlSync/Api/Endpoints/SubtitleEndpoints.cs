@@ -81,6 +81,13 @@ public sealed record SubtitleQuery(
 /// Staffel-ZIP-Eintrags). Der Lauf legt ihn damit auf die HI-Seite und nie auf die regulaere — und
 /// umgekehrt. Vorgabe false, damit jeder vorhandene Aufrufer unveraendert die regulaere Seite meint.
 /// </param>
+/// <param name="ContainerFileCount">
+/// F-M760: wie viele Untertitel-Dateien der Behälter dieser Quelle enthält — 0, wenn die Quelle es nicht
+/// sagt. Die Zahl kommt aus dem Behälter SELBST (SubDL: <c>unpack_files</c>, tvsubtitles: der gelesene
+/// Staffel-ZIP), nicht aus dem Dateinamen. Sie dient allein der Statistik (F-M759): ab zwei Dateien ist
+/// die Lieferung ein Season pack. Die MitgliederLISTE bleibt davon getrennt, weil an ihr die Auswahl der
+/// Datei hängt.
+/// </param>
 public sealed record SubtitleHit(
     SubtitleProvider Provider,
     string Id,
@@ -88,7 +95,8 @@ public sealed record SubtitleHit(
     string Rip,
     string Release,
     bool FullSeason,
-    bool HearingImpaired = false);
+    bool HearingImpaired = false,
+    int ContainerFileCount = 0);
 
 /// <summary>
 /// F-M483: the file an endpoint delivers — name and bytes, nothing decoded. The transport never

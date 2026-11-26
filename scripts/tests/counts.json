@@ -1098,6 +1098,12 @@
       "checks": 3,
       "requirement": "F-M759",
       "title": "Season packs stehen je Richtung direkt unter den Untertiteln und lesen den eigenen Zaehler"
+    },
+    "T424": {
+      "suite": "endpoints",
+      "checks": 1,
+      "requirement": "F-M760",
+      "title": "Die Zahl der Dateien im Behaelter kommt aus dem Behaelter selbst, bei jeder Quelle"
     }
   }
 }

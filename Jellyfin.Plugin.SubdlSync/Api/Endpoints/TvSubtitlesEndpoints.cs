@@ -166,7 +166,10 @@ public sealed class TvSubtitlesDownloadEndpoint : IDownloadEndpoint
                     string.Empty,
                     release,
                     false,
-                    datei.HearingImpaired);
+                    datei.HearingImpaired,
+                    // F-M760: die Zahl der Dateien in diesem Staffel-ZIP — sie liegt hier ohnehin
+                    // gelesen vor, also wird sie weitergegeben statt spaeter geraten.
+                    pack.Count);
 
                 // F-M664: die Marke entscheidet die SEITE, nicht die Stufe. Die regulaere Fassung der
                 // ZIP ist Stufe 1 und geht sofort weiter; die HI-Fassung wandert in den Stufe-3-Korb und

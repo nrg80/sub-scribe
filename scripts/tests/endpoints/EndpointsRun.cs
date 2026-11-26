@@ -714,6 +714,19 @@ internal static class Program
             && downloadSource.Contains(".Where(SourceAllowed)", StringComparison.Ordinal)
             && downloadSource.Contains("candidate from {Source} skipped: that source is switched off", StringComparison.Ordinal)
             && !downloadSource.Contains("if (_config.IsDownloadEnabled(Configuration.SubtitleProvider.TvSubtitles))", StringComparison.Ordinal));
+        // F-M760 (Konzept 26.11.2026): die Zahl der Dateien im Behaelter kommt aus dem Behaelter SELBST
+        // und wird von JEDER Quelle an derselben neutralen Stelle gefuehrt — nicht aus einem Dateinamen,
+        // nicht aus einer Quellen-Marke. Die Statistik liest nur diese eine Zahl (F-M759).
+        var subdlSource760 = ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Sources/Subdl/SubdlEngine.cs"));
+        var tvstSource760 = ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Sources/Tvst/TvstEngine.cs"));
+        var tvstEndpoints760 = ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/Endpoints/TvSubtitlesEndpoints.cs"));
+        Check("the container's file count is read from the container, for every source",
+            downloadSource.Contains("cand.ContainerFileCount >= 2", StringComparison.Ordinal)
+            && subdlSource760.Contains("ContainerFileCount = c.UnpackFiles.Count", StringComparison.Ordinal)
+            && tvstSource760.Contains("ContainerFileCount = h.ContainerFileCount", StringComparison.Ordinal)
+            && tvstEndpoints760.Contains("pack.Count", StringComparison.Ordinal)
+            && !downloadSource.Contains("OriginalName.EndsWith(\".zip\"", StringComparison.Ordinal));
+
         // F-M759 (26.11.2026): die Unterscheidung "heruntergeladen, aber nicht erfolgreich" lebt weiter,
         // sie entscheidet jetzt VOR der Zaehlung, ob ein Save ueberhaupt zaehlt (Pack oder Untertitel).
         Check("a kept original is a download but not a success while auto-sync is on",

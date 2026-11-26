@@ -377,6 +377,7 @@ public sealed class SubdlEngine : ISourceEngine
                 EntryId = c.SubdlId,
                 Address = c.Url,
                 ReportId = c.NId,
+                ContainerFileCount = c.UnpackFiles.Count, // F-M760: die Zahl steht im Behälter selbst
                 Members = c.UnpackFiles
                     .Select(m => new SourceMember(m.Name, m.Season, m.Episode, m.HearingImpaired))
                     .ToList(),

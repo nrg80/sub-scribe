@@ -2695,6 +2695,13 @@ public sealed class SubtitleCandidate
     /// which is what makes per-episode selection inside a pack possible (F-M215).</summary>
     public List<SubtitleUnpackFile> UnpackFiles { get; set; } = new();
 
+    /// <summary>
+    /// Gets or sets F-M760: wie viele Untertitel-Dateien der Behälter enthielt, aus dem dieser Kandidat
+    /// kommt — 0, wenn die Quelle es nicht sagt. Die Zahl wird aus dem Behälter gelesen, nie aus einem
+    /// Dateinamen, und nur von der Statistik benutzt (F-M759).
+    /// </summary>
+    public int ContainerFileCount { get; set; }
+
     /// <summary>Parses a candidate from the API's subtitles array element.</summary>
     /// <param name="el">JSON element.</param>
     /// <returns>Candidate or null when the url is missing.</returns>

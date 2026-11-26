@@ -4687,6 +4687,10 @@ public sealed class DownloadPipeline : IDisposable
 
                 // F-M663: die Marke reist mit, damit die HI-Ablage (Name, hi=true im Store) sie traegt.
                 HearingImpaired = h.HearingImpaired,
+
+                // F-M760: die Zahl der Dateien im Behaelter reist ebenfalls mit — sonst zaehlte
+                // dieselbe Lieferung auf diesem Weg als Untertitel statt als Season pack (F-M759).
+                ContainerFileCount = h.ContainerFileCount,
             };
 
             (h.HearingImpaired ? hi : regulaer).Add(cand);
@@ -4969,6 +4973,7 @@ public sealed class DownloadPipeline : IDisposable
             OriginalName = c.OriginalName ?? string.Empty,
             SubdlId = c.EntryId ?? string.Empty,
             Author = c.Author ?? string.Empty,
+            ContainerFileCount = c.ContainerFileCount, // F-M760
             UnpackFiles = c.Members
                 .Select(m => new SubtitleUnpackFile
                 {
@@ -5714,7 +5719,7 @@ public sealed class DownloadPipeline : IDisposable
     /// <param name="cand">The candidate the saved subtitle came from.</param>
     /// <returns>True when the bytes came out of a real season archive.</returns>
     private static bool IstSeasonPack(SubtitleCandidate cand)
-        => cand.UnpackFiles.Count >= 2;
+        => cand.ContainerFileCount >= 2;
 
     /// <summary>
     /// F-M759: the identity of the archive behind a candidate — the entry id when the source names one,

@@ -431,6 +431,15 @@ public sealed record SourceCandidate(
     /// Folge daraus zu wählen (F-M215), ohne die fremde Adresse je zu sehen.
     /// </summary>
     public IReadOnlyList<SourceMember> Members { get; init; } = Array.Empty<SourceMember>();
+
+    /// <summary>
+    /// Gets F-M760: wie viele Untertitel-Dateien der Behälter dieser Quelle enthält — 0, wenn die Quelle
+    /// es nicht sagt. Gefüllt aus dem Behälter selbst (SubDL zählt seine <c>unpack_files</c>, tvsubtitles
+    /// die gelesene Staffel-ZIP), nie aus einem Dateinamen. Gelesen wird die Zahl nur von der Statistik
+    /// (F-M759): ab zwei Dateien ist die Lieferung ein Season pack. Eine Quelle, die keine Behälter
+    /// führt, lässt sie stehen — geraten wird nichts.
+    /// </summary>
+    public int ContainerFileCount { get; init; }
 }
 
 /// <summary>
