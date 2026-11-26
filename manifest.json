@@ -12,9 +12,9 @@
         "version": "12.3.8.68",
         "changelog": "v12.3.8.68: the cache reports from the first access on — \"configured\" and \"trim\" were silent because the logger came too late.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.68-dev/Jellyfin.Plugin.SubdlSync_12.3.8.68.zip",
-        "checksum": "ea396de8ce2a0840ecb7017903fc72d7",
-        "timestamp": "2026-11-26T13:53:45Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.68/Jellyfin.Plugin.SubdlSync_12.3.8.68.zip",
+        "checksum": "7276f4452c1e7fbbd8c5e13d3a2d4c5c",
+        "timestamp": "2026-11-26T13:56:28Z"
       }
     ]
   }
