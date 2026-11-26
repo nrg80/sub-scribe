@@ -2628,7 +2628,8 @@ public sealed class UploadPipeline : IPackFiller
                     switch (result)
                 {
                     case { Ok: true }:
-                        summary.Uploaded++;
+                        // F-M763: eine Zustellung je annehmender Quelle — nicht eine je Untertitel.
+                        summary.Uploaded += System.Math.Max(1, result.AcceptedSources);
                         ReportOutcome(item, ItemOutcome.Done);
                         itemUploadedThisRun = true;
                         dieseSpurHochgeladen = true; // F-M589: nur DIESE Spur hat uebertragen
@@ -3911,6 +3912,13 @@ public sealed class UploadPipeline : IPackFiller
             ?? quellenReihenfolge.Select(Ergebnis).FirstOrDefault(e => e is { SkippedItem: false })
             ?? quellenReihenfolge.Select(Ergebnis).FirstOrDefault(e => e is not null)
             ?? UploadResult.Skipped("no-upload-source");
+
+        // F-M763: die Statistik zählt JE QUELLE. Die Kette fragt alle zuständigen Quellen; wie viele
+        // angenommen haben, steht hier — ein Durchlauf mit zwei Quellen ist zwei Zustellungen.
+        if (result is { Ok: true })
+        {
+            result.AcceptedSources = System.Math.Max(1, ergebnisse.Values.Count(e => e is { Ok: true }));
+        }
 
         if (result.Ok)
         {

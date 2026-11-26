@@ -39,7 +39,7 @@ states the rule, its constants, its ground and its test.**
 - [10. Scheduler, Quota and Timing](#10-scheduler-quota-and-timing) — 24 requirements
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
-- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 38 requirements
+- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 39 requirements
 - [14. Data Model and Persistence](#14-data-model-and-persistence) — 92 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 61 requirements
 - [16. Non-Goals](#16-non-goals)
@@ -2127,6 +2127,8 @@ the rule rather than a reason (F-M745). Checked in `gui-structure`.
 **F-M761 [S]:** **A release group stands behind a technical word, never behind an episode title.** Concept decision: a season pack carries one release, so the group is read from the file name — but only where the name states one. Behind a dash the group counts only when the whole segment in front of it is a technical token, which is the same rule the dot and space branches already follow. A segment that ends on an episode tag can never be followed by a group: `Better Call Saul - S04E01 - Smoke.mkv` ends in a title. Nothing is invented where a name names nothing; those episodes share the unknown group, and a season that is unknown throughout still becomes one pack. A stored pack verdict is not invalidated by a rule change; the operator clears it for the season in the expert view, so the moment a verdict is set aside stays visible. Checked in `seasonpack`.
 
 **F-M762 [S]:** **Whether a source has a follow-up pass is a capability of that source.** Concept decision: the run asks each source whether its uploads need a postprocessing pass and arms the appointment from that answer, so the pipeline names no source. SubDL is the one source that says yes today — it hands out a handle while uploading and needs the pass for the entry id; a second such source would be wired by its engine alone. Checked in `packretry`.
+
+**F-M763 [S]:** **Every delivery counts — the statistics count per source, in both directions.** Concept decision: a subtitle that two sources accept is two deliveries, and the counter says two; a container likewise counts once per source. Until here the upload counter added one per subtitle, no matter how many sources took it, while the pack counter already counted per send — measured on 26.11.2026: 42 subtitles stayed 42 in the statistics but were 70 deliveries (SubDL 42, tvsubtitles 28). The download direction needs no change: a fetched subtitle comes from exactly one source, so counting per save already counts per source, and one archive counts one pack at the source that served it. A dry run still counts nothing. Checked in `seasonpack`.
 
 ## 14. Data Model and Persistence
 

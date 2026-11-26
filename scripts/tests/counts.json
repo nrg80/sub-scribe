@@ -1110,6 +1110,12 @@
       "checks": 3,
       "requirement": "F-M761",
       "title": "Eine Release-Gruppe steht nur hinter einem technischen Wort, nie hinter einem Folgentitel"
+    },
+    "T426": {
+      "suite": "seasonpack",
+      "checks": 3,
+      "requirement": "F-M763",
+      "title": "Die Statistik zählt je Quelle — ein Untertitel mit zwei annehmenden Quellen ist zwei Zustellungen"
     }
   }
 }
