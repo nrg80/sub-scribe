@@ -186,6 +186,13 @@ public sealed record SourceCapabilities
     /// <summary>Gets kann die Quelle eigene Untertitel annehmen?</summary>
     public bool CanUpload { get; init; }
 
+    /// <summary>
+    /// Gets F-M762: hat der Upload dieser Quelle einen Nachlauf? SubDL vergibt beim Hochladen eine
+    /// Griff-Nummer und liefert die endgültige Eintrags-Nummer erst später nach — dieser Nachlauf ist der
+    /// Grund, warum ein Upload-Lauf überhaupt einen Termin anmahnt. Die übrigen Quellen haben ihn nicht.
+    /// </summary>
+    public bool CanPostprocess { get; init; }
+
     /// <summary>Gets hat die Quelle einen Meldeweg für Defekte?</summary>
     public bool CanReport { get; init; }
 

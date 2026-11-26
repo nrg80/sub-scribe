@@ -236,6 +236,9 @@ public sealed class SubdlEngine : ISourceEngine
             DisplayName = "SubDL",
             TabName = "SubDL",   // F-M746: Beschriftung des Reiters
             CanUpload = true,
+            // F-M762: SubDL haengt an jeden Upload einen Nachlauf — erst der holt die endgueltige
+            // Eintrags-Nummer zur Griff-Nummer. Deshalb mahnt ein Lauf MIT SubDL den Termin an.
+            CanPostprocess = true,
             // F-M696: SubDL fuehrt Serien UND Filme.
             ServesSeries = true,
             ServesMovies = true,

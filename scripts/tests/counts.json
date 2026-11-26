@@ -161,7 +161,7 @@
     },
     "T189": {
       "suite": "packretry",
-      "checks": 7
+      "checks": 9
     },
     "T190": {
       "suite": "seasonpack",

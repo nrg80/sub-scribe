@@ -650,12 +650,22 @@ internal static class Program
         Check(PickedWithName("16 - Relevance.en.srt").Entry == "16 - Relevance.en.srt",
             "F-M450: the resolution names the entry it took — that name is what a report has to say");
 
-        // F-M465 (operator decision 11.11.2026, "nur bei > 0 uploaded anmahnen"): a run that uploaded
-        // nothing arms no postprocessing order; an order someone else placed is left alone.
+        // F-M465 (Bediener-Anweisung 26.11.2026: "Sobald ein Upload laeuft der eine Quelle mit
+        // Postprocessing umfasst (aktuell nur subdl) soll das pp geschuled werden"): der Termin haengt an
+        // der QUELLE mit Nachlauf, nicht an der Zahl der Uploads. Ein Lauf, der nur Staffel-Behaelter
+        // abgeliefert hat, braucht ihn genauso — genau dieser Fall fehlte am 26.11.2026 auf prod.
         string uploadSource = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Pipeline", "UploadPipeline.cs"));
-        Check(uploadSource.Contains("else if (summary.Uploaded > 0)", StringComparison.Ordinal)
-              && uploadSource.Contains("nothing uploaded — no postprocessing order armed (F-M465)", StringComparison.Ordinal),
-            "F-M465: the postprocessing is only armed when the run actually uploaded something");
+        string contractSource = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Sources", "SourceContract.cs"));
+        string subdlSource = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Sources", "Subdl", "SubdlEngine.cs"));
+        Check(uploadSource.Contains("else if (PostprocessingSources() is { Count: > 0 } nachlauf)", StringComparison.Ordinal)
+              && !uploadSource.Contains("else if (summary.Uploaded > 0)", StringComparison.Ordinal),
+            "F-M465: the order hangs on a source with a postprocessing pass, not on the number of uploads");
+        Check(contractSource.Contains("public bool CanPostprocess { get; init; }", StringComparison.Ordinal)
+              && subdlSource.Contains("CanPostprocess = true,", StringComparison.Ordinal),
+            "F-M762: the contract carries the capability and only SubDL claims it");
+        Check(uploadSource.Contains("private List<string> PostprocessingSources()", StringComparison.Ordinal)
+              && uploadSource.Contains(".Where(key => SourceAllowed(key))", StringComparison.Ordinal),
+            "F-M465: only a source that is switched on and still in the run may arm the order");
 
         // F-M466: the memo per season + language — its key is the fingerprint over the members, and it
         // answers "same pack?" in one comparison. The hash itself is the REAL one used for the name.

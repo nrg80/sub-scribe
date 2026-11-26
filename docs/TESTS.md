@@ -203,7 +203,7 @@ dots), and the measured special shapes (`X64`, `ESub`, `SubS`, `H 264`, an uploa
 
 **T188:** A fetch carries its verdict, a resolution happens once — no client state, a common resolution order, archive via the path of the file list (F-M464). **9 checks.**
 
-**T189:** The upload follow-up hangs on the upload, the season memo on the fingerprint (F-M465, F-M466). **7 checks.**
+**T189:** The upload follow-up hangs on a source with a postprocessing pass (not on the upload count), the season memo on the fingerprint (F-M465, F-M466, F-M762). **9 checks.**
 
 **T190:** The series is resolved via its id — without a loaded series, without lookup, and with precedence of the loaded series (F-M467). **4 checks.**
 
