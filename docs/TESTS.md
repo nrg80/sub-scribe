@@ -175,6 +175,8 @@ carries its pack row directly under its subtitle row, and each pack row reads it
 counting rule reads that one number, SubDL fills it from the entry's file list, tvsubtitles from the season
 archive it has read, and no rule anywhere reads a file name ending in `.zip`.
 
+**T428:** The memo of the season archive carries no bytes (F-M766), in `tvsubtitles`. **2 checks**. The entry type has `Name` but no `Data`, and a member read after a run that already paid for the archive comes back byte-identical with **0** requests — from disk, not from memory.
+
 **T427:** An arrival run never asks the completeness question (F-M764), in `packretry`. **2 checks**. The arrival line stands before the single `CompleteSeasonsAsync` call, and that call appears exactly once, in the else branch of the guard.
 
 **T426:** The statistics count per source, not per subtitle (F-M763), in `seasonpack`. **3 checks**. The result carries the number of accepting sources (default 1 for a single send), the chain counts the acceptances, and the run adds that number instead of incrementing by one.

@@ -119,8 +119,9 @@ public sealed class TvSubtitlesDownloadEndpoint : IDownloadEndpoint
 
         // F-M663 (Bediener-Anweisung 21.11.2026): STUFE 1 ist die Staffel-ZIP. Gemessen an MobLand S02:
         // 27 Dateien fuer 9 Folgen in EINER ZIP je Sprache (610.807 B), Regular und HI durch `.HI.`
-        // getrennt. Der Merker im Client haelt sie fuer den ganzen Lauf, also kostet die Staffel EINEN
-        // Abruf statt einen je Folge.
+        // getrennt. Die ZIP liegt im Platten-Cache (F-M665), im Merker des Clients stehen nur die Namen
+        // (F-M766) — also kostet die Staffel EINEN Abruf statt einen je Folge, und zwar ohne die Bytes
+        // fuer den ganzen Lauf zu halten.
         bool regulaerGedeckt = false;
         bool hiGedeckt = false;
 

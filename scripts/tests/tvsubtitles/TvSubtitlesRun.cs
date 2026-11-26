@@ -1080,9 +1080,22 @@ internal static class Program
         var fm665ZweitClient = new TvSubtitlesClient(new HttpClient(fm665ZweitHandler), fm665NaechsterLauf);
         var fm665Platte = await fm665ZweitClient.SeasonPackAsync(3234, 2, "en").ConfigureAwait(false);
         Check("F-M665: der naechste Lauf liest die Staffel-ZIP von der Platte — 0 Anfragen",
-            fm665ZweitHandler.Requests == 0 && fm665Platte.Count == 4
-            && fm665Platte[0].Data.SequenceEqual(fm665Erst[0].Data),
+            fm665ZweitHandler.Requests == 0 && fm665Platte.Count == 4,
             "Anfragen " + fm665ZweitHandler.Requests + ", Eintraege " + fm665Platte.Count);
+
+        // F-M766 (Betreiber 26.11.2026: „Das war nicht das design"): der Merker traegt Namen und
+        // Nummern, keine Bytes. Wer den Inhalt braucht, holt ihn ueber das Mitglied — aus der Platte.
+        var fm766Mitglied = await fm665ZweitClient.DownloadPackMemberAsync(3234, 2, "en", 0).ConfigureAwait(false);
+        var fm766ErstBytes = await fm665Client.DownloadPackMemberAsync(3234, 2, "en", 0).ConfigureAwait(false);
+        Check("F-M766: der Merker haelt keine Bytes — der Inhalt kommt bei Bedarf von der Platte",
+            fm665ZweitHandler.Requests == 0 && fm766Mitglied.Data.Length > 0
+            && fm766Mitglied.Data.SequenceEqual(fm766ErstBytes.Data),
+            "Anfragen " + fm665ZweitHandler.Requests + ", Mitglied " + fm766Mitglied.Name
+            + " " + fm766Mitglied.Data.Length + " B");
+        Check("F-M766: der Eintrag im Merker kennt kein Feld Data",
+            typeof(Jellyfin.Plugin.SubScribe.Api.TvSubtitlesPackEntry).GetProperty("Data") is null
+            && typeof(Jellyfin.Plugin.SubScribe.Api.TvSubtitlesPackEntry).GetProperty("Name") is not null,
+            "Felder: " + string.Join(", ", typeof(Jellyfin.Plugin.SubScribe.Api.TvSubtitlesPackEntry).GetProperties().Select(p => p.Name)));
         Check("F-M665: der Treffer meldet keinen Grund — gelesen ist gelesen",
             fm665ZweitClient.LastSeasonPackError is null,
             fm665ZweitClient.LastSeasonPackError ?? "null");
@@ -1152,7 +1165,7 @@ internal static class Program
             "DownloadPipeline baut den Client mit _api.ArchiveDiskCache");
         Check("F-M665: die Platte wird VOR dem Abruf gefragt, geschrieben wird nur ein Treffer",
             tvstClient.IndexOf("_archives.TryGet(schluessel", StringComparison.Ordinal)
-                < tvstClient.IndexOf("DownloadSeasonArchiveAsync(showId, season, lang, cancellationToken)", StringComparison.Ordinal)
+                < tvstClient.IndexOf("DownloadSeasonArchiveAsync(showId, season, language, cancellationToken)", StringComparison.Ordinal)
             && tvstClient.Contains("_archives?.Put(schluessel, zip)", StringComparison.Ordinal),
             "TryGet steht vor DownloadSeasonArchiveAsync, Put hinter dem Abruf");
 
