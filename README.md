@@ -21,16 +21,16 @@ in and one card per source (direction switches, what it serves, credentials), th
 last run of every worker. The e-mail address in the SubDL card is blurred; the plugin keeps it in the
 source's own file:
 
-![The Sub Scribe settings page](docs/images/config-general.png?v=12.3.8.62)
+![The Sub Scribe settings page](docs/images/config-general.png?v=12.3.8.63)
 
 **Download** — what gets fetched, when a run happens, and the quality gates a subtitle has to pass
 before it is saved:
 
-![Download settings](docs/images/config-download.png?v=12.3.8.62)
+![Download settings](docs/images/config-download.png?v=12.3.8.63)
 
 **Upload** — off by default; the same shape as the download side, with its own gates:
 
-![Upload settings](docs/images/config-upload.png?v=12.3.8.62)
+![Upload settings](docs/images/config-upload.png?v=12.3.8.63)
 
 ## Requirements
 
