@@ -105,6 +105,14 @@ public class UploadResult
     public Configuration.SubtitleProvider? Source { get; set; }
 
     /// <summary>
+    /// F-M763 (Bediener-Entscheidung 26.11.2026: „2. Für upload und download" — die Statistik zählt je
+    /// Quelle): wie viele Quellen diesen Text angenommen haben. Die Kette fragt alle zuständigen Quellen;
+    /// bis hierher zählte der Aufrufer eine Lieferung, egal wie viele Quellen sie bekamen. Vorgabe 1, weil
+    /// ein Versand an genau eine Quelle (Sammelstufe, Nachlauf) eine Zustellung ist.
+    /// </summary>
+    public int AcceptedSources { get; set; } = 1;
+
+    /// <summary>
     /// Creates a success result carrying the source's own id for the upload.
     /// </summary>
     /// <param name="sourceId">The id the source reported, or null.</param>

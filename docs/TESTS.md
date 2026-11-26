@@ -175,6 +175,8 @@ carries its pack row directly under its subtitle row, and each pack row reads it
 counting rule reads that one number, SubDL fills it from the entry's file list, tvsubtitles from the season
 archive it has read, and no rule anywhere reads a file name ending in `.zip`.
 
+**T426:** The statistics count per source, not per subtitle (F-M763), in `seasonpack`. **3 checks**. The result carries the number of accepting sources (default 1 for a single send), the chain counts the acceptances, and the run adds that number instead of incrementing by one.
+
 **T425:** A release group needs a technical word in front of it (F-M761), in `seasonpack`. **3 checks**. Episode
 titles behind an episode tag yield no group, real groups behind a codec survive (including `H.264` written with
 dots), and the measured special shapes (`X64`, `ESub`, `SubS`, `H 264`, an uploader pair) keep their group.

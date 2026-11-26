@@ -1587,6 +1587,19 @@ internal static class Program
             "F-M759: der Upload-Lauf schliesst den Pack-Zaehler an",
             "Lambda im UploadPipeline-Aufruf");
 
+        // F-M763 (Bediener-Entscheidung 26.11.2026: "2. Fuer upload und download" — die Statistik zaehlt
+        // je Quelle): ein Durchlauf mit zwei annehmenden Quellen ist ZWEI Zustellungen. Bis hierher zaehlte
+        // der Aufrufer eine, egal wie viele Quellen den Text bekamen (am 26.11.2026: 42 Untertitel, 70
+        // Zustellungen an subdl und tvst).
+        string resultSrc = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Api", "UploadResult.cs"));
+        Check(resultSrc.Contains("public int AcceptedSources { get; set; } = 1;", StringComparison.Ordinal),
+            "F-M763: das Ergebnis traegt die Zahl der annehmenden Quellen (Vorgabe 1 fuer einen Einzelversand)");
+        Check(uploadSrc.Contains("result.AcceptedSources = System.Math.Max(1, ergebnisse.Values.Count(e => e is { Ok: true }));", StringComparison.Ordinal),
+            "F-M763: die Kette zaehlt, wie viele Quellen angenommen haben");
+        Check(uploadSrc.Contains("summary.Uploaded += System.Math.Max(1, result.AcceptedSources);", StringComparison.Ordinal)
+              && !uploadSrc.Contains("summary.Uploaded++;", StringComparison.Ordinal),
+            "F-M763: der Lauf zaehlt je Quelle statt je Untertitel");
+
         Console.WriteLine(Failures.Count == 0
             ? $"seasonpack: {_checks} checks, all green."
             : $"seasonpack: {_checks} checks, {Failures.Count} failed.");
