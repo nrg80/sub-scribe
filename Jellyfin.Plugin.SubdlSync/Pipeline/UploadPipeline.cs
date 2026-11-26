@@ -4495,11 +4495,10 @@ public sealed class UploadPipeline : IPackFiller
             }
         }
 
-        // F-M761: die Regel, die das Urteil faellt, gehoert in die Signatur. Sonst bliebe eine Staffel
-        // nach einer Regel-Verbesserung fuer immer "unchanged since the last judgement" (F-M604) und der
-        // Fehlbefund zementierte sich selbst — genau das war bei Blade Runner 2099 S1 der Fall.
-        return Jellyfin.Plugin.SubScribe.Registry.PackSeasonStore.SignatureOf(aired, dateien)
-            + "|rg=" + SeasonPack.ReleaseGroupRuleVersion;
+        // Betreiber-Entscheidung 26.11.2026: die Signatur bleibt am Altstand — sie traegt die Dateien,
+        // nicht die Regel. Ein gespeichertes Urteil wird stattdessen ausdruecklich in der Experten-Ansicht
+        // zurueckgesetzt (Pack-Urteil je Staffel), damit sichtbar bleibt, WANN jemand ein Urteil verwirft.
+        return Jellyfin.Plugin.SubScribe.Registry.PackSeasonStore.SignatureOf(aired, dateien);
     }
 
     private HashSet<(string Language, bool HearingImpaired)> LanguagesOf(string imdbId, int season)

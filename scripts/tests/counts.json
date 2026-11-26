@@ -1107,9 +1107,9 @@
     },
     "T425": {
       "suite": "seasonpack",
-      "checks": 4,
+      "checks": 3,
       "requirement": "F-M761",
-      "title": "Eine Release-Gruppe steht nur hinter einem technischen Wort; die Regel selbst steht in der Signatur"
+      "title": "Eine Release-Gruppe steht nur hinter einem technischen Wort, nie hinter einem Folgentitel"
     }
   }
 }

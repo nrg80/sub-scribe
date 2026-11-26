@@ -430,13 +430,6 @@ internal static class Program
               && SeasonPack.ReleaseGroup("/x/Show.S01E01.x264-ZoroSenpai_EniaHD.mkv") == "ZoroSenpai",
             "F-M761: die gemessenen Sonderformen behalten ihre Gruppe (X64, ESub, SubS, H 264, Uploader-Paar)");
 
-        // Ohne die Regel in der Signatur bliebe ein gespeichertes "kein Pack" fuer immer stehen (F-M604):
-        // genau daran waere die Verbesserung bei Blade Runner 2099 S1 vorbeigelaufen.
-        Check(File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Pipeline/UploadPipeline.cs"))
-                  .Contains("+ \"|rg=\" + SeasonPack.ReleaseGroupRuleVersion", StringComparison.Ordinal)
-              && SeasonPack.ReleaseGroupRuleVersion.Length > 0,
-            "F-M761: die Release-Gruppen-Regel gehoert in die Signatur der Staffel");
-
 
         // F-M505 (measured 15.11.2026 on tvsubtitles.net, first Middle season, 193 entries read): the
         // Release column of the page carries the GROUP — 2HD (28x), REWARD (24x), FQM (14x), FEVER,

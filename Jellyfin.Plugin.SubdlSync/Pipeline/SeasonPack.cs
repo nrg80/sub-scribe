@@ -401,14 +401,6 @@ public static partial class SeasonPack
     /// of it, not a codec, so the answer stays null. A name that states no release at all states no group
     /// either — nothing is invented.
     /// </remarks>
-    /// <summary>
-    /// F-M761: die Fassung der Release-Gruppen-Regel. Sie gehört in die Signatur einer Staffel (F-M604),
-    /// weil das gespeicherte Urteil „kein Pack" aus der Regel UND den Dateien folgt. Ändert sich die Regel,
-    /// muss das alte Urteil ungültig werden — sonst bliebe eine Staffel für immer „unchanged" und die
-    /// Verbesserung käme nie an. Bei jeder Änderung an <see cref="ReleaseGroup(string?)"/> erhöhen.
-    /// </summary>
-    public const string ReleaseGroupRuleVersion = "2";
-
     public static string? ReleaseGroup(string? releaseName)
     {
         return ReleaseGroup(releaseName, 0);
