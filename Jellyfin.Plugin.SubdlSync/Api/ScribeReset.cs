@@ -117,7 +117,7 @@ public class ScribeReset : ControllerBase
                 // F-M427 (operator order 03.11.2026): the archive cache goes with the database. A reset
                 // says "forget everything"; keeping hundreds of megabytes of fetched archives behind
                 // would mean the next run serves files from a state that no longer exists anywhere.
-                int purgedArchives = ArchiveDiskCache.PurgeDirectory(dataDir);
+                int purgedArchives = ArchiveDiskCache.PurgeDirectory(dataDir, _logger);
 
 
                 Plugin.Instance.RecreateDbContext();

@@ -1122,6 +1122,18 @@
       "checks": 2,
       "requirement": "F-M764",
       "title": "Ein Ankunftslauf stellt die Vollständigkeitsfrage gar nicht erst — der Wächter steht vor der Prüfung"
+    },
+    "T428": {
+      "suite": "tvsubtitles",
+      "checks": 2,
+      "requirement": "F-M766",
+      "title": "Der Merker der Staffel-ZIP trägt Namen und Nummern, keine Bytes — der Inhalt kommt bei Bedarf von der Platte"
+    },
+    "T429": {
+      "suite": "archivecache",
+      "checks": 7,
+      "requirement": "F-M767",
+      "title": "Jede Cache-Operation sagt eine Zeile — Treffer, Fehltreffer mit Grund, Ablage, Aufräumen, Purge"
     }
   }
 }

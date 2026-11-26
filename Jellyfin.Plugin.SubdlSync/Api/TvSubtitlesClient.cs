@@ -1210,9 +1210,10 @@ public sealed class TvSubtitlesClient
     /// schon nicht geantwortet hat.
     /// </para>
     /// </summary>
-    private readonly System.Collections.Generic.Dictionary<
-        (int ShowId, int Season, string Language),
-        (IReadOnlyList<TvSubtitlesPackFile> Files, string? Error)> _seasonPacks = new();
+    // F-M768 (Betreiber 26.11.2026: „Merker ganz streichen"): es gibt KEINEN Merker mehr. Weder Bytes
+    // noch Namen werden gehalten: jeder Aufruf liest die Staffel-ZIP aus der Ablage auf der Platte (oder
+    // holt sie EINMAL) und entpackt sie. Was das kostet, ist ein Lesevorgang plus Entpacken — keine
+    // Anfrage. Ein Fehlschlag wird nicht gemerkt; er wird beim naechsten Aufruf erneut versucht.
 
     /// <summary>
     /// F-M663: warum die Staffel-ZIP des zuletzt gefragten (Serie, Staffel, Sprache) nicht nutzbar
@@ -1220,18 +1221,17 @@ public sealed class TvSubtitlesClient
     /// </summary>
     public string? LastSeasonPackError { get; private set; }
 
+
     /// <summary>
-    /// F-M663: die Eintraege der Staffel-ZIP einer Sprache — geholt beim ERSTEN Aufruf, danach aus dem
-    /// Merker (<see cref="_seasonPacks"/>). Leer, wenn die Seite keine ZIP fuer diese Sprache traegt
-    /// oder sie nicht lesbar ist; der Grund steht dann in <see cref="LastSeasonPackError"/>.
+    /// F-M663: die Eintraege der Staffel-ZIP einer Sprache. Leer, wenn die Seite keine ZIP fuer diese
+    /// Sprache traegt oder sie nicht lesbar ist; der Grund steht dann in
+    /// <see cref="LastSeasonPackError"/>.
     /// <para>
-    /// F-M665 (Bediener-Entscheidung 21.11.2026): vor dem Merker steht der Archiv-Cache. Die ZIP liegt
-    /// in <see cref="ArchiveDiskCache"/> — der Ablage, die jede Engine benutzt —, unter eigenem
-    /// Schluesselraum je Quelle (<see cref="ArchiveKey.ForTvstSeason"/>) und unter der Frist und der
-    /// Groessengrenze, die fuer die ganze Ablage gelten. Ein Treffer wird gelesen, nicht geholt: ein
-    /// Lauf, der die Staffel schon bezahlt hat, zahlt sie im naechsten nicht wieder. Ein Fehlschlag
-    /// landet NICHT auf der Platte — er wird nur im Merker gemerkt, damit ein kaputter Abruf den
-    /// naechsten Lauf nicht blockiert.
+    /// F-M665/F-M768: die ZIP liegt in <see cref="ArchiveDiskCache"/> — der Ablage, die jede Engine
+    /// benutzt —, unter eigenem Schluesselraum je Quelle (<see cref="ArchiveKey.ForTvstSeason"/>) und
+    /// unter der Frist und der Groessengrenze, die fuer die ganze Ablage gelten. Ein Treffer wird
+    /// gelesen, nicht geholt: ein Lauf, der die Staffel schon bezahlt hat, zahlt sie im naechsten nicht
+    /// wieder. Einen Merker gibt es nicht mehr — jeder Aufruf liest aus der Ablage und entpackt.
     /// </para>
     /// <para>
     /// Es wird NICHTS geworfen ausser einem echten Abbruch: Stufe 1 ist eine Abkuerzung, kein Muss —
@@ -1243,62 +1243,88 @@ public sealed class TvSubtitlesClient
     /// <param name="language">The site's language code, e.g. <c>en</c>.</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>One entry per <c>.srt</c> member; empty when there is no usable archive.</returns>
-    public async Task<IReadOnlyList<TvSubtitlesPackFile>> SeasonPackAsync(
+    public async Task<IReadOnlyList<TvSubtitlesPackEntry>> SeasonPackAsync(
         int showId, int season, string language, CancellationToken cancellationToken = default)
     {
         string lang = (language ?? string.Empty).Trim().ToLowerInvariant();
-        lock (_seasonPacks)
+
+        // F-M768: kein Merker, kein Gedaechtnis. Die Bytes kommen aus der Ablage (oder aus EINEM Abruf)
+        // und sind nach dem Entpacken wieder Freigabe; gehalten wird nur die Liste, die der Aufrufer
+        // gerade braucht.
+        IReadOnlyList<TvSubtitlesPackEntry> files = Array.Empty<TvSubtitlesPackEntry>();
+        string? fehler = null;
+
+        byte[]? zip = await SeasonArchiveAsync(showId, season, lang, cancellationToken).ConfigureAwait(false);
+        if (zip is null)
         {
-            if (_seasonPacks.TryGetValue((showId, season, lang), out var gemerkt))
+            fehler = LastSeasonPackError ?? "die Staffelseite trug keine ZIP fuer " + lang;
+        }
+        else
+        {
+            try
             {
-                LastSeasonPackError = gemerkt.Error;
-                return gemerkt.Files;
+                var mitglieder = ReadSeasonArchive(zip);
+                if (mitglieder.Count == 0)
+                {
+                    fehler = "die ZIP (" + zip.Length.ToString(CultureInfo.InvariantCulture) + " B) trug keinen lesbaren .srt-Eintrag";
+                }
+                else
+                {
+                    files = mitglieder
+                        .Select(m => new TvSubtitlesPackEntry(m.Name, m.Season, m.Episode, m.Language, m.HearingImpaired))
+                        .ToList();
+                }
+            }
+            catch (Exception ex)
+            {
+                // F-M663: kaputte ZIP, halbe Antwort, was auch immer — EINE Zeile Grund, kein Abbruch.
+                fehler = ex.GetType().Name + ": " + ex.Message;
             }
         }
 
-        IReadOnlyList<TvSubtitlesPackFile> files = Array.Empty<TvSubtitlesPackFile>();
-        string? fehler = null;
+        LastSeasonPackError = fehler;
+        return files;
+    }
 
+    /// <summary>
+    /// F-M766: die Bytes der Staffel-ZIP — aus dem Platten-Cache, sonst EIN Abruf. Nichts wird gehalten:
+    /// der Aufrufer liest, was er braucht, und die Bytes sind danach Freigabe.
+    /// </summary>
+    /// <param name="showId">The site's show id.</param>
+    /// <param name="season">Season number.</param>
+    /// <param name="language">Language code, already lower-cased.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The archive bytes, or null with the reason in <see cref="LastSeasonPackError"/>.</returns>
+    private async Task<byte[]?> SeasonArchiveAsync(
+        int showId, int season, string language, CancellationToken cancellationToken)
+    {
         // F-M665: eigener Schluesselraum je Quelle, gebildet aus dem, was den Abruf bestimmt — Serie,
         // Staffel, Sprache. Welche Quelle geliefert hat, steht im Praefix, nicht im Verzeichnis.
-        string? schluessel = ArchiveKey.ForTvstSeason(showId, season, lang);
+        string? schluessel = ArchiveKey.ForTvstSeason(showId, season, language);
         try
         {
-            byte[]? zip;
             if (_archives is not null
                 && _archives.TryGet(schluessel, out byte[]? gespeichert)
                 && gespeichert is { Length: > 0 })
             {
                 // Treffer: die Bytes kommen von der Platte, es geht KEINE Anfrage raus.
-                zip = gespeichert;
-            }
-            else
-            {
-                zip = await DownloadSeasonArchiveAsync(showId, season, lang, cancellationToken).ConfigureAwait(false);
-
-                // Nur ein gelungener Abruf wird abgelegt. Ein Fehlschlag bleibt im Merker (unten).
-                if (zip is not null)
-                {
-                    _archives?.Put(schluessel, zip);
-                }
+                return gespeichert;
             }
 
-            if (zip is null)
+            byte[]? zip = await DownloadSeasonArchiveAsync(showId, season, language, cancellationToken).ConfigureAwait(false);
+
+            // Nur ein gelungener Abruf wird abgelegt. Ein Fehlschlag landet NICHT auf der Platte.
+            if (zip is not null)
             {
-                fehler = "die Staffelseite trug keine ZIP fuer " + lang;
+                _archives?.Put(schluessel, zip);
             }
-            else
-            {
-                files = ReadSeasonArchive(zip);
-                if (files.Count == 0)
-                {
-                    fehler = "die ZIP (" + zip.Length.ToString(CultureInfo.InvariantCulture) + " B) trug keinen lesbaren .srt-Eintrag";
-                }
-            }
+
+            return zip;
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {
-            fehler = "keine Antwort der Seite (Client-Timeout)";
+            LastSeasonPackError = "keine Antwort der Seite (Client-Timeout)";
+            return null;
         }
         catch (OperationCanceledException)
         {
@@ -1307,32 +1333,8 @@ public sealed class TvSubtitlesClient
         catch (Exception ex)
         {
             // F-M663: kaputte ZIP, halbe Antwort, was auch immer — EINE Zeile Grund, kein Abbruch.
-            fehler = ex.GetType().Name + ": " + ex.Message;
-        }
-
-        LastSeasonPackError = fehler;
-        lock (_seasonPacks)
-        {
-            if (_seasonPacks.Count >= MemoLimit)
-            {
-                _seasonPacks.Clear();
-            }
-
-            _seasonPacks[(showId, season, lang)] = (files, fehler);
-        }
-
-        return files;
-    }
-
-    /// <summary>
-    /// F-M663: verwirft die gemerkten Staffel-ZIPs (Bytes und Fehlschlag). Noetig, wenn WIR eine Staffel
-    /// veraendern — dieselbe Regel wie <see cref="ClearSeasonMemos"/> fuer die Folgenliste.
-    /// </summary>
-    public void ClearSeasonPacks()
-    {
-        lock (_seasonPacks)
-        {
-            _seasonPacks.Clear();
+            LastSeasonPackError = ex.GetType().Name + ": " + ex.Message;
+            return null;
         }
     }
 
@@ -1349,15 +1351,47 @@ public sealed class TvSubtitlesClient
     public async Task<(string Name, byte[] Data)> DownloadPackMemberAsync(
         int showId, int season, string language, int index, CancellationToken cancellationToken = default)
     {
-        var files = await SeasonPackAsync(showId, season, language, cancellationToken).ConfigureAwait(false);
-        if (index < 0 || index >= files.Count)
+        string lang = (language ?? string.Empty).Trim().ToLowerInvariant();
+        var eintraege = await SeasonPackAsync(showId, season, lang, cancellationToken).ConfigureAwait(false);
+        if (index < 0 || index >= eintraege.Count)
         {
             throw new InvalidOperationException(
                 "the season archive carries no member #" + index.ToString(CultureInfo.InvariantCulture)
-                + " (" + files.Count.ToString(CultureInfo.InvariantCulture) + " available, tvsubtitles.net)");
+                + " (" + eintraege.Count.ToString(CultureInfo.InvariantCulture) + " available, tvsubtitles.net)");
         }
 
-        return (files[index].Name, files[index].Data);
+        // F-M766: die Bytes stehen NICHT im Merker. Sie kommen aus dem Platten-Cache (oder aus genau
+        // einem Abruf) und werden hier gelesen, nicht gehalten. Gesucht wird ueber den Namen, weil der
+        // Merker nur ihn kennt; die Position dient als Rueckfall, wenn ein Archiv sich umsortiert hat.
+        string gesucht = eintraege[index].Name;
+        byte[]? zip = await SeasonArchiveAsync(showId, season, lang, cancellationToken).ConfigureAwait(false);
+        if (zip is null)
+        {
+            throw new InvalidOperationException(
+                "the season archive is not readable any more (" + (LastSeasonPackError ?? "kein Grund") + ", tvsubtitles.net)");
+        }
+
+        IReadOnlyList<TvSubtitlesPackFile> mitglieder;
+        try
+        {
+            mitglieder = ReadSeasonArchive(zip);
+        }
+        catch (Exception ex)
+        {
+            // F-M663: kaputte ZIP — Grund nennen, nicht werfen; der Einzelweg laeuft weiter.
+            throw new InvalidOperationException(
+                "the season archive is not readable (" + ex.GetType().Name + ": " + ex.Message + ", tvsubtitles.net)", ex);
+        }
+
+        var treffer = mitglieder.FirstOrDefault(m => string.Equals(m.Name, gesucht, StringComparison.Ordinal))
+            ?? (index < mitglieder.Count ? mitglieder[index] : null);
+        if (treffer is null)
+        {
+            throw new InvalidOperationException(
+                "the season archive carries no member \"" + gesucht + "\" (tvsubtitles.net)");
+        }
+
+        return (treffer.Name, treffer.Data);
     }
 
     /// <summary>
@@ -2041,6 +2075,14 @@ public sealed record TvSubtitlesEntry(
 /// <param name="Data">The subtitle bytes, untouched.</param>
 public sealed record TvSubtitlesPackFile(
     string Name, int Season, int Episode, string Language, bool HearingImpaired, byte[] Data);
+
+/// <summary>
+/// F-M766: ein Eintrag der Staffel-ZIP, wie ihn der MERKER traegt — Name und Nummern, keine Bytes.
+/// <see cref="TvSubtitlesPackFile"/> bleibt der Eintrag mit Inhalt, entsteht aber nur fuer die Dauer
+/// eines Aufrufs.
+/// </summary>
+public sealed record TvSubtitlesPackEntry(
+    string Name, int Season, int Episode, string Language, bool HearingImpaired);
 
 /// <summary>
 /// F-M480: a finished upload payload — the form's fields, the file and the two derived names.

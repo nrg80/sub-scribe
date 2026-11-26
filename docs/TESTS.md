@@ -175,6 +175,10 @@ carries its pack row directly under its subtitle row, and each pack row reads it
 counting rule reads that one number, SubDL fills it from the entry's file list, tvsubtitles from the season
 archive it has read, and no rule anywhere reads a file name ending in `.zip`.
 
+**T429:** Every cache operation is logged (F-M767), in `archivecache`. **7 checks**. Enabling names folder, retention and size. A store names key, bytes and the state of the store. A hit names key, bytes and age, a miss its reason. A refused store names its reason, and an expired archive is reported as expired and as removed. The trim names expired, evicted and the state. The purge reports its count without a live instance, and a cache without a logger keeps working silently.
+
+**T428:** The season archive is not remembered at all (F-M766/F-M768), in `tvsubtitles`. **2 checks**. The entry type has `Name` but no `Data`, and a member read after a run that already paid for the archive comes back byte-identical with **0** requests — from disk, not from memory.
+
 **T427:** An arrival run never asks the completeness question (F-M764), in `packretry`. **2 checks**. The arrival line stands before the single `CompleteSeasonsAsync` call, and that call appears exactly once, in the else branch of the guard.
 
 **T426:** The statistics count per source, not per subtitle (F-M763), in `seasonpack`. **3 checks**. The result carries the number of accepting sources (default 1 for a single send), the chain counts the acceptances, and the run adds that number instead of incrementing by one.
@@ -861,7 +865,7 @@ The three old SubDL fields (`Username`, `Password`, `ApiKey`) have disappeared f
 
 ## 15. Tests of the source contracts (§22)
 
-**T328:** The tvst season pack (F-M641/F-M642), in `tvsubtitles`: `BuildSeasonPack` writes into the season slot (`episode=0`), the pack name stands in `release`, the comment names the season instead of the episode and carries neither version nor client name. `hi` goes along only if the whole pack is HI, `double` never. The field order is that of the form, a non-zip and a missing pack name are rejected, the client reads the episode list from the entry names in ascending order and without duplicates, and the body carries the zip unchanged. **8 checks** in `tvsubtitles` (97 → 105); plus **4** in `endpoints` (the pack is rejected when `UploadSeasonPacks` is off, built with the switch on and not sent, a non-zip and a missing pack name are rejected, 388 → 391).
+**T328:** The tvst season pack (F-M641/F-M642), in `tvsubtitles`: `BuildSeasonPack` writes into the season slot (`episode=0`), the pack name stands in `release`, the comment names the season instead of the episode and carries neither version nor client name. `hi` goes along only if the whole pack is HI, `double` never. The field order is that of the form, a non-zip and a missing pack name are rejected, the client reads the episode list from the entry names in ascending order and without duplicates, and the body carries the zip unchanged. **8 checks** in `tvsubtitles` (97 → 105); plus **4** in `endpoints` (the endpoint carries no pack switch any more — F-M765, a pack is built and not sent in a dry run, a non-zip and a missing pack name are rejected, 388 → 391).
 
 **T329:** The pack row per source (F-M642), in `storex`. The key names the source, and a call without a source stays on `subdl`. Both sources keep one row each for the same season, and each row keeps its own pack identifier. A row in the old format, column missing, key without a source part, stands after the next opening under its source key and carries `subdl`. **6 checks** in `storex` (11 → 17).
 
@@ -1074,7 +1078,7 @@ A real run goes as `multipart/form-data` to `/add1.php` with `/add.html` as refe
 
 The SubDL mapping of a candidate onto the neutral hit is complete and invents no rip, and the site's series resolution needs the name. The language bridge knows the site's vocabulary. The tvsubtitles search walks the real pages and finds exactly the wanted language; a missing episode and an unknown series deliver nothing, and the fetch delivers name and unchanged bytes.
 
-The upload dry run builds the body and sends nothing. The season pack is refused with reason when `UploadSeasonPacks` is off, as a non-zip and without pack name; unknown language, missing name and unknown series likewise. The SubDL endpoint refuses season pack, missing IMDb identifier and non-UTF-8 bytes, and without session a readable rejection comes instead of an exception.
+The upload dry run builds the body and sends nothing. The season pack is refused with reason as a non-zip and without pack name, and the endpoint holds no pack switch of its own (F-M765); unknown language, missing name and unknown series likewise. The SubDL endpoint refuses season pack, missing IMDb identifier and non-UTF-8 bytes, and without session a readable rejection comes instead of an exception.
 
 Counting happens in T205: the same suite carries both.
 

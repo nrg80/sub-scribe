@@ -382,14 +382,15 @@ internal static class Program
             Data = packZip,
             Release = "The.Middle.S02.GERMAN.1080p.WEB-FEVER",
         };
-        var ohneSchalter = new TvSubtitlesUploadEndpoint(tvClient, dryRun: true, seasonPacks: false);
-        var packAus = await ohneSchalter.SendAsync(packTicket).ConfigureAwait(false);
-        Check("a pack is refused while the GUI's UploadSeasonPacks switch is off (F-M641)",
-            !packAus.Ok && packAus.Bytes == 0
-            && packAus.Reason!.Contains("UploadSeasonPacks", StringComparison.Ordinal),
-            packAus.Reason);
+        // F-M765: der Endpunkt kennt keinen Pack-Schalter mehr — wer packen darf, entscheidet die Quelle
+        // (PackSlot). Frueher lehnte er hier mit einem Grund ab, den es seit F-M719 nicht mehr gibt.
+        Check("the upload endpoint carries no pack switch of its own any more (F-M765)",
+            typeof(TvSubtitlesUploadEndpoint).GetConstructors()
+                .All(c => c.GetParameters().All(p => !string.Equals(p.Name, "seasonPacks", StringComparison.Ordinal))),
+            "ctor parameters: " + string.Join(", ", typeof(TvSubtitlesUploadEndpoint).GetConstructors()
+                .SelectMany(c => c.GetParameters()).Select(p => p.Name)));
 
-        var mitSchalter = new TvSubtitlesUploadEndpoint(tvClient, dryRun: true, seasonPacks: true);
+        var mitSchalter = new TvSubtitlesUploadEndpoint(tvClient, dryRun: true);
         var packTrocken = await mitSchalter.SendAsync(packTicket).ConfigureAwait(false);
         Check("with the switch on a pack is built (zip body) and sends nothing in a dry run (F-M641)",
             packTrocken.Ok && packTrocken.DryRun && packTrocken.Bytes > packZip.Length,

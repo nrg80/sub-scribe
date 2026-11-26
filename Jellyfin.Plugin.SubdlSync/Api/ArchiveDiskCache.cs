@@ -39,6 +39,34 @@ public sealed class ArchiveDiskCache
     private long _maxBytes;
 
     /// <summary>
+    /// F-M767 (Bediener 26.11.2026: „Dann bitte ein umfangreiches debug logging fuer alle
+    /// cache Operationen einfuehren"): die Ablage sagt JETZT jede Operation. Bis 12.3.8.66 sagte sie
+    /// nichts — der SubDL-Client hatte zwei Zeilen auf einem Kanal, den Jellyfin nicht schreibt, und
+    /// der tvst-Client gar keine. Eine Zeile je Treffer, Fehltreffer (mit Grund), Ablage (mit Grund),
+    /// Aufraeumen und Purge, alle mit Schluessel und Bytes.
+    /// <para>
+    /// Der Logger kommt vom Lauf (<see cref="Attach"/>), nicht aus dem Konstruktor: die Instanz lebt
+    /// im API-Client, der keinen Logger kennt. Ohne Logger schweigt die Ablage wie vorher.
+    /// </para>
+    /// </summary>
+    private Microsoft.Extensions.Logging.ILogger? _logger;
+
+    /// <summary>
+    /// Der Meldegrad, den die Zeilen brauchen. Vorgabe ist <see cref="Configuration.LogLevelMode.Debug"/>
+    /// — die Stufe, die der Betreiber genau dafür einschaltet; der Lauf reicht seinen eigenen Grad durch.
+    /// </summary>
+    private Configuration.LogLevelMode _mode;
+
+    /// <summary>Initializes a new instance of the <see cref="ArchiveDiskCache"/> class.</summary>
+    /// <param name="logger">Optional logger; may also be attached later via <see cref="Attach"/>.</param>
+    /// <param name="mode">Log level the cache reports at; default is the plugin's Debug mode.</param>
+    public ArchiveDiskCache(Microsoft.Extensions.Logging.ILogger? logger = null, Configuration.LogLevelMode mode = Configuration.LogLevelMode.Debug)
+    {
+        _logger = logger;
+        _mode = mode;
+    }
+
+    /// <summary>
     /// F-M427 (operator order 03.11.2026: "Cache bei db reset bitte mit purgen"): removes every archive
     /// this cache wrote, and nothing else.
     /// <para>
@@ -49,12 +77,17 @@ public sealed class ArchiveDiskCache
     /// </para>
     /// </summary>
     /// <param name="dataFolder">The plugin's data folder.</param>
+    /// <param name="dataFolder">The plugin's data folder.</param>
+    /// <param name="logger">Optional logger — the purge is the one operation without an instance.</param>
+    /// <param name="mode">Log level the purge reports at; default is the plugin's Debug mode.</param>
     /// <returns>Number of archives removed.</returns>
-    public static int PurgeDirectory(string dataFolder)
+    public static int PurgeDirectory(
+        string dataFolder, Microsoft.Extensions.Logging.ILogger? logger = null, Configuration.LogLevelMode mode = Configuration.LogLevelMode.Debug)
     {
         string dir = Path.Combine(dataFolder, "archive-cache");
         if (!System.IO.Directory.Exists(dir))
         {
+            Pipeline.LogUtil.Detail(mode, logger, "[Sub Scribe-Cache] purge — no folder \"{Dir}\", nothing to remove (F-M767)", dir);
             return 0;
         }
 
@@ -89,8 +122,25 @@ public sealed class ArchiveDiskCache
             }
         }
 
+        Pipeline.LogUtil.Detail(
+            mode, logger, "[Sub Scribe-Cache] purge — {Removed} archive(s) removed from \"{Dir}\" (F-M767)", removed, dir);
         return removed;
     }
+
+    /// <summary>
+    /// F-M767: gibt der Ablage den Logger des Laufs. Der Lauf ruft das, sobald er seinen Cache benutzt
+    /// — danach ist jede Operation im Log (Detail-Ebene, also bei Protokollierung „Debug").
+    /// </summary>
+    /// <param name="logger">The run's logger.</param>
+    /// <param name="mode">The run's log mode — the cache speaks at Detail (mode „Debug").</param>
+    public void Attach(Microsoft.Extensions.Logging.ILogger? logger, Configuration.LogLevelMode mode = Configuration.LogLevelMode.Debug)
+    {
+        _logger = logger;
+        _mode = mode;
+    }
+
+    private void Log(string message, params object?[] args)
+        => Pipeline.LogUtil.Detail(_mode, _logger, "[Sub Scribe-Cache] " + message, args);
 
     /// <summary>Gets the number of lookups answered from disk since <see cref="Reset"/>.</summary>
     public int Hits { get; private set; }
@@ -129,6 +179,7 @@ public sealed class ArchiveDiskCache
             if (string.IsNullOrWhiteSpace(dataFolder) || _ttlDays == 0 || _maxBytes == 0)
             {
                 _directory = null;
+                Log("off — {Days} day(s), {Mb} MB: nothing is read or written (F-M370)", _ttlDays, _maxBytes / (1024L * 1024L));
                 return;
             }
 
@@ -137,11 +188,13 @@ public sealed class ArchiveDiskCache
             {
                 System.IO.Directory.CreateDirectory(dir);
                 _directory = dir;
+                Log("configured — folder \"{Dir}\", {Days} day(s), {Mb} MB (F-M767)", dir, _ttlDays, _maxBytes / (1024L * 1024L));
             }
             catch (Exception ex)
             {
                 LastError = ex.Message;
                 _directory = null;
+                Log("NOT configured — \"{Dir}\": {Error}", dir, ex.Message);
             }
         }
     }
@@ -155,6 +208,7 @@ public sealed class ArchiveDiskCache
             Misses = 0;
             Stores = 0;
             Removed = 0;
+            Log("counters reset — hits, misses, stores and removals start at zero for this run (F-M767)");
         }
     }
 
@@ -169,6 +223,7 @@ public sealed class ArchiveDiskCache
         bytes = null;
         if (!Enabled || string.IsNullOrEmpty(key))
         {
+            Log("lookup \"{Key}\" — the cache is off, nothing is read (F-M767)", key ?? "(no key)");
             return false;
         }
 
@@ -181,13 +236,16 @@ public sealed class ArchiveDiskCache
                 if (!info.Exists || info.Length == 0)
                 {
                     Misses++;
+                    Log("miss \"{Key}\" — no archive on disk (F-M767)", key);
                     return false;
                 }
 
                 if (IsExpired(info))
                 {
-                    Delete(path);
+                    double tage = (DateTime.UtcNow - info.LastWriteTimeUtc).TotalDays;
+                    Delete(path, "expired");
                     Misses++;
+                    Log("miss \"{Key}\" — expired ({Age:0.0} day(s) > {Ttl} day(s)), removed (F-M767)", key, tage, _ttlDays);
                     return false;
                 }
 
@@ -205,12 +263,16 @@ public sealed class ArchiveDiskCache
                 }
 
                 Hits++;
+                Log(
+                    "hit \"{Key}\" — {Bytes} B, written {Age:0.0} h ago, {Count} archive(s) / {Total} B held (F-M767)",
+                    key, bytes.Length, (DateTime.UtcNow - info.LastWriteTimeUtc).TotalHours, Count(), SizeBytes());
                 return bytes.Length > 0;
             }
             catch (Exception ex)
             {
                 LastError = ex.Message;
                 Misses++;
+                Log("miss \"{Key}\" — unreadable: {Error} (F-M767)", key, ex.Message);
                 return false;
             }
         }
@@ -226,11 +288,17 @@ public sealed class ArchiveDiskCache
     {
         if (!Enabled || string.IsNullOrEmpty(key) || bytes == null || bytes.Length == 0)
         {
+            Log("not stored \"{Key}\" — {Why} (F-M767)", key ?? "(no key)",
+                !Enabled ? "the cache is off"
+                : string.IsNullOrEmpty(key) ? "no key"
+                : bytes == null ? "no body"
+                : "empty body");
             return;
         }
 
         if (bytes.Length > MaxEntryBytes)
         {
+            Log("not stored \"{Key}\" — {Bytes} B is above the per-archive ceiling of {Max} B (F-M767)", key, bytes.Length, MaxEntryBytes);
             return;
         }
 
@@ -239,6 +307,8 @@ public sealed class ArchiveDiskCache
         // the wrong caller. A ZIP carries the whole page (see ArchiveKey and F-M370).
         if (bytes.Length <= 4 || bytes[0] != 'P' || bytes[1] != 'K')
         {
+            // Packs only: a single body under a page segment would be served to the wrong caller.
+            Log("not stored \"{Key}\" — {Bytes} B is not a ZIP, only containers are kept (F-M767)", key, bytes.Length);
             return;
         }
 
@@ -251,10 +321,14 @@ public sealed class ArchiveDiskCache
                 File.WriteAllBytes(temp, bytes);
                 File.Move(temp, path, overwrite: true);
                 Stores++;
+                Log(
+                    "stored \"{Key}\" — {Bytes} B; {Count} archive(s) / {Total} B on disk (F-M767)",
+                    key, bytes.Length, Count(), SizeBytes());
             }
             catch (Exception ex)
             {
                 LastError = ex.Message;
+                Log("NOT stored \"{Key}\" — write failed: {Error} (F-M767)", key, ex.Message);
             }
         }
     }
@@ -267,6 +341,7 @@ public sealed class ArchiveDiskCache
     {
         if (!Enabled || _directory == null)
         {
+            Log("trim skipped — the cache is off (F-M767)");
             return;
         }
 
@@ -275,6 +350,7 @@ public sealed class ArchiveDiskCache
             try
             {
                 var files = new List<FileInfo>();
+                int abgelaufen = 0;
                 foreach (string path in System.IO.Directory.EnumerateFiles(_directory, "*.zip"))
                 {
                     var info = new FileInfo(path);
@@ -285,7 +361,8 @@ public sealed class ArchiveDiskCache
 
                     if (IsExpired(info))
                     {
-                        Delete(path);
+                        Delete(path, "expired");
+                        abgelaufen++;
                         continue;
                     }
 
@@ -295,9 +372,13 @@ public sealed class ArchiveDiskCache
                 long total = files.Sum(f => f.Length);
                 if (total <= _maxBytes)
                 {
+                    Log(
+                        "trim — {Expired} expired, nothing evicted; {Count} archive(s) / {Total} B held, ceiling {Max} B (F-M767)",
+                        abgelaufen, files.Count, total, _maxBytes);
                     return;
                 }
 
+                int verdrangt = 0;
                 foreach (var info in files.OrderBy(f => f.LastWriteTimeUtc))
                 {
                     if (total <= _maxBytes)
@@ -306,12 +387,18 @@ public sealed class ArchiveDiskCache
                     }
 
                     total -= info.Length;
-                    Delete(info.FullName);
+                    Delete(info.FullName, "size ceiling");
+                    verdrangt++;
                 }
+
+                Log(
+                    "trim — {Expired} expired, {Evicted} evicted for the size ceiling; {Total} B held, ceiling {Max} B (F-M767)",
+                    abgelaufen, verdrangt, total, _maxBytes);
             }
             catch (Exception ex)
             {
                 LastError = ex.Message;
+                Log("trim failed — {Error} (F-M767)", ex.Message);
             }
         }
     }
@@ -362,16 +449,18 @@ public sealed class ArchiveDiskCache
     private bool IsExpired(FileInfo info) =>
         _ttlDays > 0 && info.LastWriteTimeUtc < DateTime.UtcNow.AddDays(-_ttlDays);
 
-    private void Delete(string path)
+    private void Delete(string path, string reason)
     {
         try
         {
             File.Delete(path);
             Removed++;
+            Log("removed \"{File}\" — {Reason} (F-M767)", Path.GetFileName(path), reason);
         }
         catch (Exception ex)
         {
             LastError = ex.Message;
+            Log("could not remove \"{File}\" — {Reason}: {Error} (F-M767)", Path.GetFileName(path), reason, ex.Message);
         }
     }
 }

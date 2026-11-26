@@ -336,9 +336,96 @@ internal static class Program
             "F-M471: no single-file shape behind the archive — a refused archive is the finding");
 
         Console.WriteLine();
+        // F-M767 (Bediener 26.11.2026: „Dann bitte ein umfangreiches debug logging fuer alle cache
+        // Operationen einfuehren"): JEDE Operation der Ablage sagt eine Zeile — Treffer, Fehltreffer mit
+        // Grund, Ablage mit Grund, Aufraeumen, Purge. Vorher sagte sie nichts: der SubDL-Client hatte
+        // zwei Zeilen auf einem Kanal, den Jellyfin nicht schreibt, der tvst-Client gar keine.
+        Console.WriteLine("F-M767: every cache operation is logged");
+        string logBasis = Path.Combine(Path.GetTempPath(), "cache-log-" + Guid.NewGuid().ToString("N")[..8]);
+        var logRec = new Rec();
+        var logCache = new ArchiveDiskCache(logRec);
+        logCache.Configure(logBasis, 7, 8);
+        Check(logRec.Lines.Any(x => x.Contains("configured", StringComparison.Ordinal)),
+            "F-M767: das Einschalten nennt Ordner, Frist und Groesse (" + logRec.Join() + ")");
+
+        byte[] einZip = Zip(64 * 1024);
+        string einSchluessel = ArchiveKey.FromUrl("https://dl.subdl.com/subtitle/9001.zip")!;
+        logCache.Put(einSchluessel, einZip);
+        Check(logRec.Lines.Any(x => x.Contains("stored", StringComparison.Ordinal) && x.Contains("9001", StringComparison.Ordinal)),
+            "F-M767: eine Ablage nennt Schluessel, Bytes und den Stand der Ablage (" + logRec.Join() + ")");
+
+        logCache.TryGet(einSchluessel, out _);
+        Check(logRec.Lines.Any(x => x.Contains("hit", StringComparison.Ordinal) && x.Contains("9001", StringComparison.Ordinal)),
+            "F-M767: ein Treffer nennt Schluessel, Bytes und Alter (" + logRec.Join() + ")");
+
+        logCache.TryGet(ArchiveKey.FromUrl("https://dl.subdl.com/subtitle/9002.zip"), out _);
+        Check(logRec.Lines.Any(x => x.Contains("miss", StringComparison.Ordinal) && x.Contains("no archive on disk", StringComparison.Ordinal)),
+            "F-M767: ein Fehltreffer nennt den Grund (keine Datei) (" + logRec.Join() + ")");
+
+        logCache.Put(ArchiveKey.FromUrl("https://dl.subdl.com/subtitle/9003.zip"), System.Text.Encoding.UTF8.GetBytes("kein zip"));
+        Check(logRec.Lines.Any(x => x.Contains("not stored", StringComparison.Ordinal) && x.Contains("not a ZIP", StringComparison.Ordinal)),
+            "F-M767: eine abgelehnte Ablage nennt den Grund (kein ZIP) (" + logRec.Join() + ")");
+
+        // Frist: eine alte ZIP faellt beim Lesen und nennt Grund und Alter.
+        string altPfad = Path.Combine(logBasis, "archive-cache", "9001.zip");
+        File.SetLastWriteTimeUtc(altPfad, DateTime.UtcNow.AddDays(-30));
+        logRec.Lines.Clear();
+        logCache.TryGet(einSchluessel, out _);
+        Check(logRec.Lines.Any(x => x.Contains("expired", StringComparison.Ordinal) && x.Contains("removed", StringComparison.Ordinal)),
+            "F-M767: eine abgelaufene ZIP wird als abgelaufen gemeldet und als entfernt (" + logRec.Join() + ")");
+
+        // Aufraeumen: Decke von 1 MB, zwei Archive a 700 KB — das aeltere geht, mit Zeile.
+        logRec.Lines.Clear();
+        var kleinBasis = Path.Combine(Path.GetTempPath(), "cache-log-klein-" + Guid.NewGuid().ToString("N")[..8]);
+        var kleinRec = new Rec();
+        var klein = new ArchiveDiskCache(kleinRec);
+        klein.Configure(kleinBasis, 7, 1);
+        klein.Put(ArchiveKey.ForTvstSeason(11, 1, "en"), Zip(700 * 1024));
+        File.SetLastWriteTimeUtc(Path.Combine(kleinBasis, "archive-cache", "tvst.11.1.en.zip"), DateTime.UtcNow.AddMinutes(-30));
+        klein.Put(ArchiveKey.ForTvstSeason(11, 2, "en"), Zip(700 * 1024));
+        kleinRec.Lines.Clear();
+        klein.Trim();
+        Check(kleinRec.Lines.Any(x => x.Contains("trim", StringComparison.Ordinal) && x.Contains("evicted for the size ceiling", StringComparison.Ordinal)),
+            "F-M767: das Aufraeumen nennt Abgelaufenes, Verdrangtes und den Stand (" + kleinRec.Join() + ")");
+
+        // Purge (ohne Instanz) — auch die nennt ihre Zahl.
+        logRec.Lines.Clear();
+        ArchiveDiskCache.PurgeDirectory(logBasis, logRec);
+        Check(logRec.Lines.Any(x => x.Contains("purge", StringComparison.Ordinal)),
+            "F-M767: auch das Purge ohne laufende Instanz sagt, was es entfernt hat (" + logRec.Join() + ")");
+
+        // Ohne Logger schweigt die Ablage — nichts faellt um.
+        var stumm = new ArchiveDiskCache();
+        stumm.Configure(kleinBasis, 7, 1);
+        Check(stumm.Enabled, "F-M767: ohne Logger arbeitet die Ablage weiter, sie sagt nur nichts");
+
         Console.WriteLine(Failures.Count == 0
             ? $"archivecache: {_checks} checks, all green."
             : $"archivecache: {_checks} checks, {Failures.Count} FAILED.");
         return Failures.Count == 0 ? 0 : 1;
+    }
+}
+
+/// <summary>F-M767: ein Logger, der die Zeilen mitschreibt — damit die Suite die Meldungen pruefen kann.</summary>
+internal sealed class Rec : Microsoft.Extensions.Logging.ILogger
+{
+    public System.Collections.Generic.List<string> Lines { get; } = new();
+
+    public string Join() => Lines.Count == 0 ? "keine Zeile" : string.Join(" | ", Lines.Take(3));
+
+    public IDisposable BeginScope<TState>(TState state) where TState : notnull => new Nichts();
+
+    public bool IsEnabled(Microsoft.Extensions.Logging.LogLevel logLevel) => true;
+
+    public void Log<TState>(
+        Microsoft.Extensions.Logging.LogLevel logLevel, Microsoft.Extensions.Logging.EventId eventId,
+        TState state, Exception? exception, Func<TState, Exception?, string> formatter)
+        => Lines.Add(formatter(state, exception));
+
+    private sealed class Nichts : IDisposable
+    {
+        public void Dispose()
+        {
+        }
     }
 }

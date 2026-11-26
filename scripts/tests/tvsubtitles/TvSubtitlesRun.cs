@@ -817,7 +817,8 @@ internal static class Program
         // die ZIP selbst (die Seite antwortet auf download-… direkt mit ihr) und Folgenseiten. Er
         // zaehlt JE ART, damit eine Pruefung die Kosten der Staffel nennen kann statt sie zu behaupten.
         var staffelHandler = new SeasonPackHandler { Zip = BuildSeasonZipFor(1, 5), EpisodesOnPages = { 1, 5 } };
-        var staffelEndpoint = new TvSubtitlesDownloadEndpoint(new TvSubtitlesClient(new HttpClient(staffelHandler)));
+        var staffelClient = MitAblage(staffelHandler, out string staffelAblage);
+        var staffelEndpoint = new TvSubtitlesDownloadEndpoint(staffelClient);
 
         var ersteFolge = await staffelEndpoint
             .SearchAsync(new SubtitleQuery("MobLand", null, null, 2, 1, "en")).ConfigureAwait(false);
@@ -910,7 +911,7 @@ internal static class Program
 
         // Kaputte ZIP: Stufe 1 faellt aus, der Lauf bricht nicht ab, Stufe 2 traegt die Staffel.
         var kaputtHandler = new SeasonPackHandler { Zip = BuildSeasonZipFor(1, 5), BrokenZip = true, EpisodesOnPages = { 1 } };
-        var kaputtClient = new TvSubtitlesClient(new HttpClient(kaputtHandler));
+        var kaputtClient = MitAblage(kaputtHandler, out string kaputtAblage);
         var kaputtEndpoint = new TvSubtitlesDownloadEndpoint(kaputtClient);
         var kaputtHits = await kaputtEndpoint
             .SearchAsync(new SubtitleQuery("MobLand", null, null, 2, 1, "en")).ConfigureAwait(false);
@@ -923,11 +924,14 @@ internal static class Program
         int kaputtVorher = kaputtHandler.Requests;
         var kaputtZweiteFolge = await kaputtEndpoint
             .SearchAsync(new SubtitleQuery("MobLand", null, null, 2, 2, "en")).ConfigureAwait(false);
-        Check("F-M663: die kaputte ZIP wird je Staffel+Sprache EINMAL versucht — die naechste Folge kostet keine neue Anfrage",
+        // F-M768: ohne Merker entpackt jeder Aufruf neu — die kaputte ZIP kommt dabei aus der Ablage
+        // (sie traegt die PK-Signatur, also liegt sie dort), kostet also keine neue Anfrage. Nur wenn
+        // die Ablage aus ist, wird sie je Aufruf neu geholt. Nichts bricht ab, der Einzelweg traegt.
+        Check("F-M768: ohne Merker entpackt jeder Aufruf neu — die kaputte ZIP kommt aus der Ablage, ohne neue Anfrage",
             kaputtHandler.SeasonPages == 1
             && kaputtHandler.DownloadPages == 1
             && kaputtHandler.Requests == kaputtVorher
-            && kaputtZweiteFolge.Count == 0,
+            && File.Exists(Path.Combine(kaputtAblage, "archive-cache", "tvst.3234.2.en.zip")),
             "Staffelseiten=" + kaputtHandler.SeasonPages + " ZIP-Abrufe=" + kaputtHandler.DownloadPages
             + " Anfragen vorher/nachher=" + kaputtVorher + "/" + kaputtHandler.Requests
             + " Treffer Folge 2=" + kaputtZweiteFolge.Count);
@@ -1068,7 +1072,7 @@ internal static class Program
         Check("F-M665: der Abruf liegt danach als Datei im Platten-Cache", File.Exists(fm665Datei), fm665Datei);
 
         var fm665Zweit = await fm665Client.SeasonPackAsync(3234, 2, "en").ConfigureAwait(false);
-        Check("F-M665: derselbe Lauf fragt nicht zweimal — der Merker traegt die zweite Folge",
+        Check("F-M665/F-M768: derselbe Lauf fragt nicht zweimal — die Ablage auf der Platte traegt die zweite Folge",
             fm665Zweit.Count == 4 && fm665Handler.Requests == 2,
             "Anfragen " + fm665Handler.Requests);
 
@@ -1080,9 +1084,22 @@ internal static class Program
         var fm665ZweitClient = new TvSubtitlesClient(new HttpClient(fm665ZweitHandler), fm665NaechsterLauf);
         var fm665Platte = await fm665ZweitClient.SeasonPackAsync(3234, 2, "en").ConfigureAwait(false);
         Check("F-M665: der naechste Lauf liest die Staffel-ZIP von der Platte — 0 Anfragen",
-            fm665ZweitHandler.Requests == 0 && fm665Platte.Count == 4
-            && fm665Platte[0].Data.SequenceEqual(fm665Erst[0].Data),
+            fm665ZweitHandler.Requests == 0 && fm665Platte.Count == 4,
             "Anfragen " + fm665ZweitHandler.Requests + ", Eintraege " + fm665Platte.Count);
+
+        // F-M766 (Betreiber 26.11.2026: „Das war nicht das design"): der Merker traegt Namen und
+        // Nummern, keine Bytes. Wer den Inhalt braucht, holt ihn ueber das Mitglied — aus der Platte.
+        var fm766Mitglied = await fm665ZweitClient.DownloadPackMemberAsync(3234, 2, "en", 0).ConfigureAwait(false);
+        var fm766ErstBytes = await fm665Client.DownloadPackMemberAsync(3234, 2, "en", 0).ConfigureAwait(false);
+        Check("F-M766: der Merker haelt keine Bytes — der Inhalt kommt bei Bedarf von der Platte",
+            fm665ZweitHandler.Requests == 0 && fm766Mitglied.Data.Length > 0
+            && fm766Mitglied.Data.SequenceEqual(fm766ErstBytes.Data),
+            "Anfragen " + fm665ZweitHandler.Requests + ", Mitglied " + fm766Mitglied.Name
+            + " " + fm766Mitglied.Data.Length + " B");
+        Check("F-M766: der Eintrag im Merker kennt kein Feld Data",
+            typeof(Jellyfin.Plugin.SubScribe.Api.TvSubtitlesPackEntry).GetProperty("Data") is null
+            && typeof(Jellyfin.Plugin.SubScribe.Api.TvSubtitlesPackEntry).GetProperty("Name") is not null,
+            "Felder: " + string.Join(", ", typeof(Jellyfin.Plugin.SubScribe.Api.TvSubtitlesPackEntry).GetProperties().Select(p => p.Name)));
         Check("F-M665: der Treffer meldet keinen Grund — gelesen ist gelesen",
             fm665ZweitClient.LastSeasonPackError is null,
             fm665ZweitClient.LastSeasonPackError ?? "null");
@@ -1152,7 +1169,7 @@ internal static class Program
             "DownloadPipeline baut den Client mit _api.ArchiveDiskCache");
         Check("F-M665: die Platte wird VOR dem Abruf gefragt, geschrieben wird nur ein Treffer",
             tvstClient.IndexOf("_archives.TryGet(schluessel", StringComparison.Ordinal)
-                < tvstClient.IndexOf("DownloadSeasonArchiveAsync(showId, season, lang, cancellationToken)", StringComparison.Ordinal)
+                < tvstClient.IndexOf("DownloadSeasonArchiveAsync(showId, season, language, cancellationToken)", StringComparison.Ordinal)
             && tvstClient.Contains("_archives?.Put(schluessel, zip)", StringComparison.Ordinal),
             "TryGet steht vor DownloadSeasonArchiveAsync, Put hinter dem Abruf");
 
@@ -1184,6 +1201,18 @@ internal static class Program
     /// Pruefung sehen kann, ob der Griff die richtige Fassung liefert — vertauschte Bytes waeren sonst
     /// nicht von richtigen zu unterscheiden.
     /// </summary>
+    /// <summary>
+    /// F-M768: ein Client MIT eingeschalteter Ablage — so laeuft prod. Ohne Merker ist die Ablage der
+    /// Ort, der eine Staffel ueber die Folgen eines Laufs hinweg bezahlt.
+    /// </summary>
+    private static TvSubtitlesClient MitAblage(HttpMessageHandler handler, out string ordner, string? vorhanden = null)
+    {
+        ordner = vorhanden ?? Path.Combine(Path.GetTempPath(), "tvst-ablage-" + Guid.NewGuid().ToString("N")[..8]);
+        var ablage = new ArchiveDiskCache();
+        ablage.Configure(ordner, 7, 256);
+        return new TvSubtitlesClient(new HttpClient(handler), ablage);
+    }
+
     private static byte[] BuildSeasonZipFor(int fromEpisode, int toEpisode, bool withHi = true)
     {
         using var buffer = new MemoryStream();
