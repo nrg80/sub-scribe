@@ -175,6 +175,11 @@ carries its pack row directly under its subtitle row, and each pack row reads it
 counting rule reads that one number, SubDL fills it from the entry's file list, tvsubtitles from the season
 archive it has read, and no rule anywhere reads a file name ending in `.zip`.
 
+**T425:** A release group needs a technical word in front of it (F-M761), in `seasonpack`. **4 checks**. Episode
+titles behind an episode tag yield no group, real groups behind a codec survive (including `H.264` written with
+dots), the measured special shapes (`X64`, `ESub`, `SubS`, `H 264`, an uploader pair) keep their group, and the
+rule's version enters the season signature.
+
 **T176:** The report of an observed defect — wording without justification, category per finding, name of the affected file in both tracks, sender line with version and account name. Report in the same run, deferral instead of discarding, locked candidate after the report, switch and its position as the second-to-last entry (F-M450). **4 checks on the file naming.**
 
 **T177:** What a file on disk proves — the reserved original block (51–99) closes no pair, an aligned `01` does, a deleted `01` opens it again, an unnumbered name still counts, and the slot reader reads what the writer writes (F-M452). **12 checks.**

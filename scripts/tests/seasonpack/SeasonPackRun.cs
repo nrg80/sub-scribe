@@ -402,6 +402,42 @@ internal static class Program
         Check(SeasonPack.ReleaseGroup(null) == null && SeasonPack.ReleaseGroup("") == null,
             "no name, no group");
 
+        // F-M761 (Befund 26.11.2026): "Blade Runner 2099 - S01E01 - Hades.mkv" — die Bibliothek schreibt
+        // "Serie - SxxExx - Folgentitel" und nennt dabei GAR KEINE Release-Gruppe. Ein einwortiger Titel
+        // wurde zur Gruppe, die mehrwortigen blieben "?" — die Staffel sah aus wie zwei Releases und bekam
+        // keinen Pack. Die Gruppe steht nur dann hinter dem Bindestrich, wenn davor ein technisches Wort
+        // steht; endet der Abschnitt auf eine Folgenmarke, ist alles danach ein Titel.
+        Check(SeasonPack.ReleaseGroup("/x/Blade Runner 2099 - S01E01 - Hades.mkv") == null
+              && SeasonPack.ReleaseGroup("/x/Better Call Saul - S04E01 - Smoke.mkv") == null
+              && SeasonPack.ReleaseGroup("/x/The Thundermans Undercover - S01E01 - Thundercover.mkv") == null
+              && SeasonPack.ReleaseGroup(
+                     "/x/Ginny & Georgia (2021) Season 3 Episode 1- Episode 1 - PrimeWire.mp4") == null,
+            "F-M761: ein Folgentitel hinter der Folgenmarke ist keine Release-Gruppe (Hades, Smoke, PrimeWire bleiben ohne)");
+
+        Check(SeasonPack.ReleaseGroup("/x/Show.S01E01.1080p.WEB-DL.DDP5.1.H.264-NTb.mkv") == "NTb"
+              && SeasonPack.ReleaseGroup("/x/Dustfall.S01E01.1080p.ABCiView.WEB-DL.AAC2.0.H.264-WH.mkv") == "WH"
+              && SeasonPack.ReleaseGroup(
+                     "/x/Unicorn.Academy.S02E03.Star.Showers.1080p.NF.WEB-DL.DDP5.1.H.264-XEBEC.mkv") == "XEBEC",
+            "F-M761: echte Gruppen hinter einem Codec bleiben erhalten, auch wenn er H.264 mit Punkt heisst");
+
+        Check(SeasonPack.ReleaseGroup("/x/The.Rainmaker S02E01-HDTV-X64-NGP.mp4") == "NGP"
+              && SeasonPack.ReleaseGroup(
+                     "/x/Eyes S01E01 720p 10bit DS4K SL WEBRip x265 HEVC [Hindi DDP 5.1] ESub - Immortal.mkv") == "Immortal"
+              && SeasonPack.ReleaseGroup(
+                     "/x/The.Walking.Dead.Dead.City.S03e01.Ita.Eng.Spa.1080p.hevc10.SubS-Me7alh.mkv") == "Me7alh"
+              && SeasonPack.ReleaseGroup(
+                     "/x/Ms X S01E01 Till Death Do Us Part 1080p DSNP WEB-DL DD 5 1 H 264-playWEB[EZTVx.to].mkv") == "playWEB"
+              && SeasonPack.ReleaseGroup("/x/Show.S01E01.x264-ZoroSenpai_EniaHD.mkv") == "ZoroSenpai",
+            "F-M761: die gemessenen Sonderformen behalten ihre Gruppe (X64, ESub, SubS, H 264, Uploader-Paar)");
+
+        // Ohne die Regel in der Signatur bliebe ein gespeichertes "kein Pack" fuer immer stehen (F-M604):
+        // genau daran waere die Verbesserung bei Blade Runner 2099 S1 vorbeigelaufen.
+        Check(File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Pipeline/UploadPipeline.cs"))
+                  .Contains("+ \"|rg=\" + SeasonPack.ReleaseGroupRuleVersion", StringComparison.Ordinal)
+              && SeasonPack.ReleaseGroupRuleVersion.Length > 0,
+            "F-M761: die Release-Gruppen-Regel gehoert in die Signatur der Staffel");
+
+
         // F-M505 (measured 15.11.2026 on tvsubtitles.net, first Middle season, 193 entries read): the
         // Release column of the page carries the GROUP — 2HD (28x), REWARD (24x), FQM (14x), FEVER,
         // POW4, CTU, LOL, DIMENSION, 91 empty, not one entry with a dot. Our uploads carried the media

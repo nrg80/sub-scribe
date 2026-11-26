@@ -1104,6 +1104,12 @@
       "checks": 1,
       "requirement": "F-M760",
       "title": "Die Zahl der Dateien im Behaelter kommt aus dem Behaelter selbst, bei jeder Quelle"
+    },
+    "T425": {
+      "suite": "seasonpack",
+      "checks": 4,
+      "requirement": "F-M761",
+      "title": "Eine Release-Gruppe steht nur hinter einem technischen Wort; die Regel selbst steht in der Signatur"
     }
   }
 }
