@@ -402,6 +402,35 @@ internal static class Program
         Check(SeasonPack.ReleaseGroup(null) == null && SeasonPack.ReleaseGroup("") == null,
             "no name, no group");
 
+        // F-M761 (Befund 26.11.2026): "Blade Runner 2099 - S01E01 - Hades.mkv" — die Bibliothek schreibt
+        // "Serie - SxxExx - Folgentitel" und nennt dabei GAR KEINE Release-Gruppe. Ein einwortiger Titel
+        // wurde zur Gruppe, die mehrwortigen blieben "?" — die Staffel sah aus wie zwei Releases und bekam
+        // keinen Pack. Die Gruppe steht nur dann hinter dem Bindestrich, wenn davor ein technisches Wort
+        // steht; endet der Abschnitt auf eine Folgenmarke, ist alles danach ein Titel.
+        Check(SeasonPack.ReleaseGroup("/x/Blade Runner 2099 - S01E01 - Hades.mkv") == null
+              && SeasonPack.ReleaseGroup("/x/Better Call Saul - S04E01 - Smoke.mkv") == null
+              && SeasonPack.ReleaseGroup("/x/The Thundermans Undercover - S01E01 - Thundercover.mkv") == null
+              && SeasonPack.ReleaseGroup(
+                     "/x/Ginny & Georgia (2021) Season 3 Episode 1- Episode 1 - PrimeWire.mp4") == null,
+            "F-M761: ein Folgentitel hinter der Folgenmarke ist keine Release-Gruppe (Hades, Smoke, PrimeWire bleiben ohne)");
+
+        Check(SeasonPack.ReleaseGroup("/x/Show.S01E01.1080p.WEB-DL.DDP5.1.H.264-NTb.mkv") == "NTb"
+              && SeasonPack.ReleaseGroup("/x/Dustfall.S01E01.1080p.ABCiView.WEB-DL.AAC2.0.H.264-WH.mkv") == "WH"
+              && SeasonPack.ReleaseGroup(
+                     "/x/Unicorn.Academy.S02E03.Star.Showers.1080p.NF.WEB-DL.DDP5.1.H.264-XEBEC.mkv") == "XEBEC",
+            "F-M761: echte Gruppen hinter einem Codec bleiben erhalten, auch wenn er H.264 mit Punkt heisst");
+
+        Check(SeasonPack.ReleaseGroup("/x/The.Rainmaker S02E01-HDTV-X64-NGP.mp4") == "NGP"
+              && SeasonPack.ReleaseGroup(
+                     "/x/Eyes S01E01 720p 10bit DS4K SL WEBRip x265 HEVC [Hindi DDP 5.1] ESub - Immortal.mkv") == "Immortal"
+              && SeasonPack.ReleaseGroup(
+                     "/x/The.Walking.Dead.Dead.City.S03e01.Ita.Eng.Spa.1080p.hevc10.SubS-Me7alh.mkv") == "Me7alh"
+              && SeasonPack.ReleaseGroup(
+                     "/x/Ms X S01E01 Till Death Do Us Part 1080p DSNP WEB-DL DD 5 1 H 264-playWEB[EZTVx.to].mkv") == "playWEB"
+              && SeasonPack.ReleaseGroup("/x/Show.S01E01.x264-ZoroSenpai_EniaHD.mkv") == "ZoroSenpai",
+            "F-M761: die gemessenen Sonderformen behalten ihre Gruppe (X64, ESub, SubS, H 264, Uploader-Paar)");
+
+
         // F-M505 (measured 15.11.2026 on tvsubtitles.net, first Middle season, 193 entries read): the
         // Release column of the page carries the GROUP — 2HD (28x), REWARD (24x), FQM (14x), FEVER,
         // POW4, CTU, LOL, DIMENSION, 91 empty, not one entry with a dot. Our uploads carried the media
@@ -1520,6 +1549,43 @@ internal static class Program
         Check(uploadSrc.Contains("_packIdentity.Clear();", StringComparison.Ordinal),
             "F-M737: der Merker gilt je Lauf, nicht über Läufe hinweg",
             "_packIdentity.Clear() beim Laufstart");
+
+        // F-M759 (Betreiberanweisung 26.11.2026, woertlich: "season packs uploaded unter subtitles
+        // uploaded … season packs dann nur noch unter seasonpacks, nicht mehr unter subtitles zaehlen.
+        // Ein zip ist ein seasonpack"): der angenommene Behaelter zaehlt als EIN Season pack, seine
+        // Folgen zaehlen nicht mehr als Untertitel — und der Zaehler geht durch die eine Stelle, die
+        // die Statistik schreibt (StatusCounterDelta), nicht an ihr vorbei.
+        var hochPack = new RunSummary { SeasonPacksUploaded = 2 };
+        var deltaNurPack = StatusCounterDelta.From(hochPack, null);
+        Check(deltaNurPack.SeasonPacksUploaded == 2 && deltaNurPack.Uploaded == 0,
+            "F-M759: ein Lauf mit zwei angenommenen Behaeltern liefert zwei Season packs und keinen Untertitel",
+            $"packs={deltaNurPack.SeasonPacksUploaded} uploaded={deltaNurPack.Uploaded}");
+        Check(!deltaNurPack.IsEmpty,
+            "F-M759: ein Lauf, der nur Packs gebracht hat, ist nicht leer — sonst schriebe er keine Zeile",
+            "IsEmpty=false");
+
+        var trocken = new RunSummary { IsDryRun = true, SeasonPacksUploaded = 2 };
+        var deltaTrocken = StatusCounterDelta.From(trocken, null);
+        Check(deltaTrocken.SeasonPacksUploaded == 0 && deltaTrocken.IsEmpty,
+            "F-M759: ein Trockenlauf zaehlt keine Season packs (F-M247 gilt auch fuer sie)",
+            $"packs={deltaTrocken.SeasonPacksUploaded}");
+
+        var runterPack = new DownloadRunSummary { SeasonPacksDownloaded = 3 };
+        var deltaRunter = StatusCounterDelta.From(null, runterPack);
+        Check(deltaRunter.SeasonPacksDownloaded == 3 && deltaRunter.Downloaded == 0,
+            "F-M759: die Downloadseite meldet ihre Season packs getrennt von den Untertiteln",
+            $"packs={deltaRunter.SeasonPacksDownloaded} downloaded={deltaRunter.Downloaded}");
+
+        // Der Behaelter-Weg im Koordinator und der Einzel-Weg muessen getrennt bleiben: nur der
+        // angenommene Behaelter zaehlt als Pack, eine einzeln hochgeladene Folge bleibt ein Untertitel.
+        Check(coordinatorSrc.Contains("_countPackUploaded(", StringComparison.Ordinal)
+              && coordinatorSrc.Split("_countPackUploaded(").Length == 3
+              && coordinatorSrc.Contains(", 1);", StringComparison.Ordinal),
+            "F-M759: der Behaelter zaehlt als Pack (zwei Versandstellen), die einzeln hochgeladene Folge als Untertitel",
+            "zwei getrennte Zaehlwege im Koordinator");
+        Check(uploadSrc.Contains("label => { summary.SeasonPacksUploaded++; }", StringComparison.Ordinal),
+            "F-M759: der Upload-Lauf schliesst den Pack-Zaehler an",
+            "Lambda im UploadPipeline-Aufruf");
 
         Console.WriteLine(Failures.Count == 0
             ? $"seasonpack: {_checks} checks, all green."

@@ -473,14 +473,84 @@ public static partial class SeasonPack
         int dash = name.LastIndexOf('-');
         if (dash > 0 && dash < name.Length - 1)
         {
-            string? tail = ShapeOfTail(name[(dash + 1)..].Trim());
-            if (tail != null)
+            // F-M761 (Befund 26.11.2026, Blade Runner 2099 S1 hiess "Blade Runner 2099 - S01E01 -
+            // Hades.mkv"): der Abschnitt hinter dem Bindestrich ist nur dann eine Gruppe, wenn der
+            // GANZE Abschnitt davor ein technisches Wort ist — genau wie im Punkt- und Leerzeichen-Zweig
+            // (LastTokenAfter). Vorher pruefte dieser Zweig nur die FORM des Endes, und ein einwortiger
+            // Folgentitel ("Hades") wurde zur Release-Gruppe, waehrend die mehrwortigen Titel derselben
+            // Staffel "?" blieben: die Staffel sah aus wie zwei Releases und bekam keinen Pack.
+            string davor = name[..dash].Trim();
+            if (!IstFolgenmarke(davor) && IstTechnischerAbschnitt(davor))
             {
-                return tail;
+                string? tail = ShapeOfTail(name[(dash + 1)..].Trim());
+                if (tail != null)
+                {
+                    return tail;
+                }
             }
         }
 
         return LastTokenAfter(name, '.') ?? LastTokenAfter(name, ' ');
+    }
+
+    /// <summary>
+    /// F-M761: ENDET der Abschnitt vor dem Bindestrich auf eine Folgenmarke (<c>S01E01</c>, <c>1x01</c>),
+    /// dann ist das, was danach kommt, ein Titel und keine Gruppe — <c>… - S04E01 - Smoke.mkv</c>.
+    /// Nur das Ende zählt: <c>The.Rainmaker S02E01-HDTV-X64-NGP</c> trägt die Marke mitten im Abschnitt und
+    /// die Gruppe dahinter ist echt (gemessen 26.11.2026).
+    /// </summary>
+    /// <param name="abschnitt">Der Abschnitt vor dem letzten Bindestrich.</param>
+    /// <returns>True, wenn der Abschnitt auf einer Folgenmarke endet.</returns>
+    private static bool IstFolgenmarke(string abschnitt)
+        => Regex.IsMatch(abschnitt, @"([sS]\d{1,2}[eE]\d{1,3}|\d{1,2}x\d{1,3})\s*$");
+
+    /// <summary>
+    /// F-M761: ist der Abschnitt vor dem Bindestrich technisch? Gemessen an der Bibliothek (26.11.2026)
+    /// steht dort <c>H.264</c>, <c>HEVC</c>, <c>x265</c>, <c>X64</c> oder <c>1080p</c> — und bei
+    /// Bibliotheksnamen die Folgenmarke. Die Punkte im Abschnitt sind KEIN Trenner für das Wort
+    /// (<c>H.264</c> bleibt eines), sie werden nur am Ende gelesen: das letzte Wort vor dem Bindestrich
+    /// gilt auch dann als technisch, wenn es auf <c>H.264</c> oder <c>DDP5.1</c> endet.
+    /// </summary>
+    /// <param name="abschnitt">Der Abschnitt vor dem letzten Bindestrich.</param>
+    /// <returns>True, wenn dort ein technisches Wort steht.</returns>
+    private static bool IstTechnischerAbschnitt(string abschnitt)
+    {
+        if (IsTechnicalToken(abschnitt) || EndetTechnisch(abschnitt))
+        {
+            return true;
+        }
+
+        // Auch der Bindestrich trennt Woerter: in "The.Rainmaker S02E01-HDTV-X64-NGP" ist das letzte Wort
+        // vor der Gruppe "X64" — ohne diese Trennung ginge die echte Gruppe NGP verloren.
+        string[] woerter = abschnitt.Split(new[] { ' ', '_', '-' }, StringSplitOptions.RemoveEmptyEntries);
+        if (woerter.Length == 0)
+        {
+            return false;
+        }
+
+        return IsTechnicalToken(woerter[^1]) || EndetTechnisch(woerter[^1]);
+    }
+
+    /// <summary>
+    /// F-M761: endet das Wort auf ein technisches Token? Fängt <c>WEB-DL.AAC2.0.H.264</c> und
+    /// <c>DDP5.1</c> ab, ohne dass der Punkt zum Trenner werden muss.
+    /// </summary>
+    /// <param name="wort">Ein Wort aus dem Abschnitt vor dem Bindestrich.</param>
+    /// <returns>True, wenn das Wort auf ein technisches Token endet.</returns>
+    private static bool EndetTechnisch(string wort)
+    {
+        string[] teile = wort.Split('.', StringSplitOptions.RemoveEmptyEntries);
+        if (teile.Length == 0)
+        {
+            return false;
+        }
+
+        if (teile.Length >= 2 && IsTechnicalToken(teile[^2] + "." + teile[^1]))
+        {
+            return true;
+        }
+
+        return IsTechnicalToken(teile[^1]);
     }
 
     /// <summary>
@@ -608,6 +678,11 @@ public static partial class SeasonPack
             "2.0" or "5.1" or "7.1" or "4k" or "8k" or "8bit" or "10bit" or "8bits" or "10bits"
                 or "hdr" or "hdr10" or "dv" or "sdr" => true,
             "proper" or "repack" or "extended" or "uncut" or "remastered" => true,
+
+            // F-M761: gemessen an der Bibliothek (26.11.2026) — "The Rainmaker S02E01-HDTV-X64-NGP" und
+            // "…hevc10.SubS-Me7alh" tragen ihre Gruppe hinter diesen beiden Marken. Ohne sie verlören
+            // echte Gruppen ihren Namen, nur weil dort kein Codec steht.
+            "x64" or "264" or "265" or "subs" or "sub" or "esub" => true,
             _ => false,
         };
     }

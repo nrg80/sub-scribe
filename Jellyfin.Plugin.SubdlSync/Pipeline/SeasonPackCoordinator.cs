@@ -165,6 +165,7 @@ public sealed class SeasonPackCoordinator
     private readonly ISet<(string ImdbId, int Season)> _packable;
     private readonly Dictionary<(string ImdbId, int Season, string Lang, bool Hi), List<Candidate>> _buffers = new();
     private readonly Action<string, int> _countUploaded;
+    private readonly Action<string>? _countPackUploaded;
     private readonly Action<int> _countFailed;
     private readonly Action<string> _reportDone;
     private readonly IPackFiller? _filler;
@@ -198,6 +199,11 @@ public sealed class SeasonPackCoordinator
     /// <param name="countUploaded">Called with (season label, number uploaded) after a pack.</param>
     /// <param name="countFailed">Called with the number of failed episodes.</param>
     /// <param name="reportDone">Called with an item id whose position is done.</param>
+    /// <param name="countPackUploaded">
+    /// F-M759: called with the season label after ONE accepted container. Passed when the caller counts
+    /// season packs in their own counter instead of adding the members to the subtitle counter — the
+    /// members of an accepted zip are then counted nowhere else. Null keeps the old behaviour.
+    /// </param>
     /// <param name="filler">
     /// F-M389: supplies the episodes a buffer does not cover, from subtitles that are already
     /// uploaded. Null keeps the pre-02.11.2026 behaviour byte for byte: an incomplete buffer goes
@@ -215,7 +221,8 @@ public sealed class SeasonPackCoordinator
         Action<string> reportDone,
         IPackFiller? filler = null,
         Action? progress = null,
-        Sources.SourceRegistry? sources = null)
+        Sources.SourceRegistry? sources = null,
+        Action<string>? countPackUploaded = null)
     {
         _api = api;
         _registry = registry;
@@ -224,6 +231,7 @@ public sealed class SeasonPackCoordinator
         _complete = complete;
         _packable = packable;
         _countUploaded = countUploaded;
+        _countPackUploaded = countPackUploaded;
         _countFailed = countFailed;
         _reportDone = reportDone;
         _filler = filler;
@@ -1227,7 +1235,17 @@ public sealed class SeasonPackCoordinator
                 _reportDone(candidate.ItemId);
             }
 
-            _countUploaded($"{key.ImdbId} S{key.Season} [{key.Lang}]", ordered.Count);
+            // F-M759: der Behälter ist EIN Season pack. Ist der Zähler dafür angeschlossen, zählen seine
+            // Folgen NICHT mehr als Untertitel — sonst beschrieben zwei Zeilen dieselbe Lieferung.
+            if (_countPackUploaded != null)
+            {
+                _countPackUploaded($"{key.ImdbId} S{key.Season} [{key.Lang}]");
+            }
+            else
+            {
+                _countUploaded($"{key.ImdbId} S{key.Season} [{key.Lang}]", ordered.Count);
+            }
+
             // F-M646: die zweite Meldung des Behälters — nach dem Versand, mit Namen und Folgen.
             LogUtil.Normal(
                 _logger,
@@ -1294,7 +1312,16 @@ public sealed class SeasonPackCoordinator
         _registry?.MarkAndFlush(() => _registry.SetPackTmdbId(
             key.ImdbId, key.Season, key.Lang, key.Hi, source, first.TmdbId));
 
-        _countUploaded($"{key.ImdbId} S{key.Season} [{key.Lang}]", ordered.Count);
+        // F-M759: derselbe Griff wie oben — ein angenommener Behälter ist ein Season pack.
+        if (_countPackUploaded != null)
+        {
+            _countPackUploaded($"{key.ImdbId} S{key.Season} [{key.Lang}]");
+        }
+        else
+        {
+            _countUploaded($"{key.ImdbId} S{key.Season} [{key.Lang}]", ordered.Count);
+        }
+
         LogUtil.Normal(
             _logger,
             "[Sub Scribe] SEASON PACK {Name} — {Count} episode(s), {Imdb} S{Season} [{Lang}], Ef/Ee {From}-{To}, id {Id}",

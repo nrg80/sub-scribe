@@ -48,6 +48,14 @@ public class RunSummary
     /// <summary>Gets or sets the number of uploaded subtitles.</summary>
     public int Uploaded { get; set; }
 
+    /// <summary>
+    /// F-M759 (operator order 26.11.2026: "season packs uploaded unter subtitles uploaded … season
+    /// packs dann nur noch unter seasonpacks, nicht mehr unter subtitles zählen. Ein zip ist ein
+    /// seasonpack"): accepted season containers. ONE container is ONE pack, however many episodes it
+    /// carries — and its members no longer appear under <see cref="Uploaded"/>.
+    /// </summary>
+    public int SeasonPacksUploaded { get; set; }
+
     /// <summary>Gets or sets the number of failed uploads.</summary>
     public int Failed { get; set; }
 
@@ -790,7 +798,10 @@ public sealed class UploadPipeline : IPackFiller
                     watchdog.Heartbeat,
                     // F-M687: der Versand fragt die Registry nach der Engine SEINES Schlüssels; welche
                     // Quelle wofür zuständig ist, steht dort (Reihenfolge, Fähigkeiten), nicht im Versand.
-                    _sources);
+                    _sources,
+                    // F-M759: der angenommene Behälter zählt als Season pack; seine Folgen zählen
+                    // nicht zusätzlich als Untertitel.
+                    label => { summary.SeasonPacksUploaded++; });
 
                 // F-M611: der Koordinator schreibt seine Urteile mit der Datei-Signatur der Staffel,
                 // die die Planung gerade berechnet hat (Luftzahl + Groesse + Speicherdatum je Folge).
@@ -4484,6 +4495,9 @@ public sealed class UploadPipeline : IPackFiller
             }
         }
 
+        // Betreiber-Entscheidung 26.11.2026: die Signatur bleibt am Altstand — sie traegt die Dateien,
+        // nicht die Regel. Ein gespeichertes Urteil wird stattdessen ausdruecklich in der Experten-Ansicht
+        // zurueckgesetzt (Pack-Urteil je Staffel), damit sichtbar bleibt, WANN jemand ein Urteil verwirft.
         return Jellyfin.Plugin.SubScribe.Registry.PackSeasonStore.SignatureOf(aired, dateien);
     }
 

@@ -679,6 +679,22 @@ public class StatusStatsEntity
     /// <summary>Total subtitles downloaded since <see cref="SinceUtc"/>.</summary>
     public long Downloaded { get; set; }
 
+    /// <summary>
+    /// F-M759 (operator order 26.11.2026: "season packs uploaded unter subtitles uploaded …
+    /// season packs dann nur noch unter seasonpacks, nicht mehr unter subtitles zählen. Ein zip ist
+    /// ein seasonpack"): season packs uploaded since <see cref="SinceUtc"/>. One accepted container is
+    /// ONE pack, however many episodes it carries — and those episodes are no longer counted as
+    /// subtitles, so the two rows never describe the same delivery twice.
+    /// </summary>
+    public long SeasonPacksUploaded { get; set; }
+
+    /// <summary>
+    /// F-M759: season packs downloaded since <see cref="SinceUtc"/> — counted per ARCHIVE, not per
+    /// episode: the one fetched zip is one pack, and the further episodes served from that same zip
+    /// count neither as a pack nor as a subtitle.
+    /// </summary>
+    public long SeasonPacksDownloaded { get; set; }
+
 
     /// <summary>
     /// F-M286: candidates FETCHED and then thrown away, per direction — every reject path, not the QA

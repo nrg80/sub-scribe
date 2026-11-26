@@ -10,7 +10,7 @@
 # See the GNU General Public License for more details.
 name: "Sub Scribe"
 guid: "7d1c5a2e-3f4b-4d6e-9a8b-5c2f8e1d4a9b"
-version: "12.3.8.62"
+version: "12.3.8.63"
 targetAbi: "12.1.0.0"
 framework: "net10.0"
 owner: "nrg80"
@@ -26,6 +26,7 @@ artifacts:
 - "Jellyfin.Plugin.SubdlSync.dll"
 - "LanguageDetection.dll"
 changelog: >
+  v12.3.8.63: the statistics count season packs in their own rows, and a season pack is read from the container's own file count; a release group now needs a technical word in front of it.
   v12.3.8.62: the reset statistics control looks like the refresh control — full width, same grey.
   v12.3.8.61: the statistics are the last block of the General tab, under the refresh control.
   v12.3.8.60: the runtime tolerance field says what it measures, then the default and the floor.

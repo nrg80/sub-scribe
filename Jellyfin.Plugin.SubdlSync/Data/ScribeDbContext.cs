@@ -1025,6 +1025,20 @@ public sealed class ScribeDbContext : IDisposable
                 _db.Database.ExecuteSqlRaw("ALTER TABLE status_stats ADD COLUMN BrokenReported INTEGER NOT NULL DEFAULT 0;");
                 LogUtil.Normal(_logger, "[Sub Scribe] data file: column BrokenReported added to status_stats.");
             }
+
+            // F-M759: the two season-pack counters reach an existing data file the same way — additively,
+            // one PRAGMA per start, no schema bump. A fresh file has them from the model.
+            if (!existing.Contains("SeasonPacksUploaded"))
+            {
+                _db.Database.ExecuteSqlRaw("ALTER TABLE status_stats ADD COLUMN SeasonPacksUploaded INTEGER NOT NULL DEFAULT 0;");
+                LogUtil.Normal(_logger, "[Sub Scribe] data file: column SeasonPacksUploaded added to status_stats.");
+            }
+
+            if (!existing.Contains("SeasonPacksDownloaded"))
+            {
+                _db.Database.ExecuteSqlRaw("ALTER TABLE status_stats ADD COLUMN SeasonPacksDownloaded INTEGER NOT NULL DEFAULT 0;");
+                LogUtil.Normal(_logger, "[Sub Scribe] data file: column SeasonPacksDownloaded added to status_stats.");
+            }
         }
         catch (Exception ex)
         {

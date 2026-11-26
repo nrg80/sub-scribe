@@ -1224,7 +1224,11 @@
                             // disk, and the seeder serves both directions, so neither carries a prefix.
                             var rows = [
                                 ['Subtitles downloaded', s.Downloaded || 0, true],
+                                // F-M759: Season packs stehen direkt unter ihrer Richtung — ein Zip ist
+                                // ein Season pack, und seine Folgen zaehlen nicht mehr als Untertitel.
+                                ['Season packs downloaded', s.SeasonPacksDownloaded || 0, true],
                                 ['Subtitles uploaded', s.Uploaded || 0, true],
+                                ['Season packs uploaded', s.SeasonPacksUploaded || 0, true],
                                 ['Downloads: rejected after being fetched', s.RejectedDownload || 0],
                                 ['Downloads: Auto-Sync', s.FittedToAudio || 0],
                                 // F-M455 (operator order 10.11.2026): right behind the Auto-Sync row —

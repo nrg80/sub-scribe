@@ -267,6 +267,7 @@ public sealed class TvstEngine : ISourceEngine
                     EntryId = h.Id,
                     Address = h.Id,
                     ReportId = h.Id,
+                    ContainerFileCount = h.ContainerFileCount, // F-M760: aus dem gelesenen Staffel-ZIP
                 });
             }
         }
