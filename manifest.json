@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.62",
-        "changelog": "v12.3.8.62: the reset statistics control looks like the refresh control — full width, same grey.",
+        "version": "12.3.8.63",
+        "changelog": "v12.3.8.63: the statistics count season packs in their own rows, and a season pack is read from the container's own file count; a release group now needs a technical word in front of it.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.62-dev/Jellyfin.Plugin.SubdlSync_12.3.8.62.zip",
-        "checksum": "22ae84648d8677d412d6633b75f851f1",
-        "timestamp": "2026-11-25T21:21:42Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.63-dev/Jellyfin.Plugin.SubdlSync_12.3.8.63.zip",
+        "checksum": "fff7c2f4519f49f5cec2a92828e807d8",
+        "timestamp": "2026-11-26T06:29:41Z"
       }
     ]
   }
