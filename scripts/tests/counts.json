@@ -1131,7 +1131,7 @@
     },
     "T429": {
       "suite": "archivecache",
-      "checks": 7,
+      "checks": 8,
       "requirement": "F-M767",
       "title": "Jede Cache-Operation sagt eine Zeile — Treffer, Fehltreffer mit Grund, Ablage, Aufräumen, Purge"
     }

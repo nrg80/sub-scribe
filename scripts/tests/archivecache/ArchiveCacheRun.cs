@@ -394,6 +394,15 @@ internal static class Program
         Check(logRec.Lines.Any(x => x.Contains("purge", StringComparison.Ordinal)),
             "F-M767: auch das Purge ohne laufende Instanz sagt, was es entfernt hat (" + logRec.Join() + ")");
 
+        // F-M767: der Logger haengt VOR dem ersten Zugriff. Auf jf-test gemessen (26.11.2026): stand das
+        // Attach hinter Configure/Trim, fehlten im Lauf genau die zwei Zeilen, die den Anfang machen.
+        string pipelineQuelle = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Pipeline", "DownloadPipeline.cs"));
+        int iAttach = pipelineQuelle.IndexOf("ArchiveDiskCache.Attach", StringComparison.Ordinal);
+        int iConfigure = pipelineQuelle.IndexOf("ArchiveDiskCache.Configure", StringComparison.Ordinal);
+        int iTrim = pipelineQuelle.IndexOf("ArchiveDiskCache.Trim", StringComparison.Ordinal);
+        Check(iAttach >= 0 && iConfigure > iAttach && iTrim > iAttach,
+            "F-M767: der Logger haengt vor dem ersten Zugriff (Attach " + iAttach + " vor Configure " + iConfigure + " und Trim " + iTrim + ")");
+
         // Ohne Logger schweigt die Ablage — nichts faellt um.
         var stumm = new ArchiveDiskCache();
         stumm.Configure(kleinBasis, 7, 1);

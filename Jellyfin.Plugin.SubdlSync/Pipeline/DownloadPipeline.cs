@@ -622,6 +622,11 @@ public sealed class DownloadPipeline : IDisposable
         // die Seite neu, ein zweiter Film desselben Mediums im selben Lauf nicht.
         _msubMovies.BeginRun();
 
+        // F-M767: der Logger steht VOR dem ersten Zugriff — sonst schweigen genau die zwei Zeilen,
+        // die den Anfang machen ("configured" und "trim"). Gemessen auf jf-test 26.11.2026: Attach stand
+        // hinter Configure/Trim, und im Lauf fehlten beide Zeilen.
+        _api.ArchiveDiskCache.Attach(_logger, _config.LogMode);
+
         // F-M370: point the disk cache at this plugin's data folder and apply the two switches.
         // Either at 0 leaves it off; the trim happens before the first request so a run never
         // starts on a full volume, and it only deletes expired or over-ceiling archives.
@@ -718,9 +723,6 @@ public sealed class DownloadPipeline : IDisposable
 
         // F-M24a: forward per-call API traces to LogLevel.Debug
         _api.DebugTrace += OnApiTrace;
-
-        // F-M767: die Ablage bekommt den Logger des Laufs, damit jede Cache-Operation im Log steht.
-        _api.ArchiveDiskCache.Attach(_logger, _config.LogMode);
 
         // F-M521: the tvst family gets the same channel as SubDL, in both directions. Without it the
         // answer of tvsubtitles.net / moviesubtitles.org never reached the log, so a run that asked the
