@@ -3976,6 +3976,31 @@ internal static class Program
                 || q.Contains("meldung = \"angemeldet\"", StringComparison.Ordinal)),
             "Englisch wie vor dem dritten Vertrag");
 
+        // ---- 22. F-M769: das Plugin misst seinen eigenen Speicher ----------------------------
+        // Anlass: die Behauptung "Jellyfin frisst RAM, und davon das Plugin unkontrolliert" liess
+        // sich von aussen nicht pruefen — es gab keine Zahl aus dem Prozess. Der Diagnose-Endpunkt
+        // fuehrt sie jetzt: GC-Heap, Arbeitsseite, private Bytes, GC-Zaehler und die Zeilen, die der
+        // geteilte Kontext mitfuehrt. Ohne TrackedRows waere der groesste eigene Posten unsichtbar.
+        string diagQuelle = await File.ReadAllTextAsync(Path.Combine(
+            root, "Jellyfin.Plugin.SubdlSync", "Api", "ScribeDiagnosticsController.cs")).ConfigureAwait(false);
+        Check(
+            "F-M769: the diagnostics endpoint reports the process memory it lives in (GcHeap, WorkingSet, Private, Gen0-2, TrackedRows)",
+            diagQuelle.Contains("Memory = new", StringComparison.Ordinal)
+            && diagQuelle.Contains("GcHeapBytes = GC.GetTotalMemory(false)", StringComparison.Ordinal)
+            && diagQuelle.Contains("WorkingSetBytes = Environment.WorkingSet", StringComparison.Ordinal)
+            && diagQuelle.Contains("PrivateBytes = System.Diagnostics.Process.GetCurrentProcess().PrivateMemorySize64", StringComparison.Ordinal)
+            && diagQuelle.Contains("Gen2 = GC.CollectionCount(2)", StringComparison.Ordinal),
+            "vier Zahlen und drei Zaehler");
+        Check(
+            "F-M769: and it counts the tracked rows of the shared context — the biggest item the plugin holds itself",
+            diagQuelle.Contains("TrackedRows = db.Context.ChangeTracker.Entries().Count()", StringComparison.Ordinal),
+            "ChangeTracker am geteilten Kontext");
+        Check(
+            "F-M769: the reading takes no forced collection — it must not change what it measures",
+            !diagQuelle.Contains("GC.Collect()", StringComparison.Ordinal)
+            && diagQuelle.Contains("GC.GetTotalMemory(false)", StringComparison.Ordinal),
+            "kein GC.Collect im Endpunkt");
+
         if (_failures > 0)
         {
             Console.WriteLine($">>> ENDPUNKTE: {_failures} von {_checks} Pruefungen fehlgeschlagen");

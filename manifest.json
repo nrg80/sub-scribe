@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.68",
-        "changelog": "v12.3.8.68: the cache reports from the first access on — \"configured\" and \"trim\" were silent because the logger came too late.",
+        "version": "12.3.8.69",
+        "changelog": "v12.3.8.69: the diagnostics report the plugin's own memory — heap, working set, private bytes, collection counters and the tracked rows of the shared context.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.68/Jellyfin.Plugin.SubdlSync_12.3.8.68.zip",
-        "checksum": "7276f4452c1e7fbbd8c5e13d3a2d4c5c",
-        "timestamp": "2026-11-26T13:56:28Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.69-dev/Jellyfin.Plugin.SubdlSync_12.3.8.69.zip",
+        "checksum": "a1be66ac97a64395b31774ed52a56cfc",
+        "timestamp": "2026-11-26T18:12:17Z"
       }
     ]
   }

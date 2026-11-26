@@ -3,7 +3,7 @@
 **Owner: the rules.** This is the master document: every other paper is derived from it and cites its `F-M` tags. The contract boundaries stand in `CONTRACTS.md`, the vocabulary in `TERMS.md`.
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.68.
+**Status:** Implementation — v12.3.8.69.
 
 **A rule stands here with its ground: the decision behind it in one sentence, under `Concept decision`, and the
 check that proves it. The detailed measurement archive — what was measured, which run showed it, what happened —
@@ -39,7 +39,7 @@ states the rule, its constants, its ground and its test.**
 - [10. Scheduler, Quota and Timing](#10-scheduler-quota-and-timing) — 24 requirements
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
-- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 43 requirements
+- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 44 requirements
 - [14. Data Model and Persistence](#14-data-model-and-persistence) — 92 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 61 requirements
 - [16. Non-Goals](#16-non-goals)
@@ -2131,6 +2131,8 @@ the rule rather than a reason (F-M745). Checked in `gui-structure`.
 **F-M767 [S]:** **Every cache operation writes a line at the plugin's Debug mode.** Concept decision: the cache reports switching on (folder, retention, size), every hit (key, bytes, age, state), every miss and every refused store with its reason, the trim and the purge. The run hands it its logger and its log mode, so the lines appear exactly when the plugin logs at Debug. Until 12.3.8.66 the cache said nothing itself — a season archive served from disk was invisible. The lines are listed in `SEASON-PACK-CACHING.md`, checked in `archivecache`.
 
 **F-M766 [S]:** **The season archive is not remembered at all — everything comes from the cache on disk.** Concept decision: the client keeps no memo. Every call reads the archive from the disk cache (or fetches it **once**) and unpacks it; what it costs is a read and an unpack, not a request. Until 12.3.8.66 the memo held the unpacked subtitles of every season it had touched for the whole run, which contradicted F-M663/F-M665. One consequence is named on purpose: a season whose archive is missing or unreadable is asked again on the next call. Described in `SEASON-PACK-CACHING.md`, checked in `tvsubtitles`.
+
+**F-M769 [S]:** **The plugin measures its own memory and names it in the diagnostics.** Concept decision: the diagnostics endpoint reports the heap the collector holds, the working set, the private bytes of the process, the three collection counters and the number of rows the shared context carries. The reading takes no forced collection, so asking does not change the answer; the tracked rows are the part the plugin holds itself, and they are the only figure that can grow with the library. Until 12.3.8.68 the endpoint described the store and said nothing about the process it lives in, so a claim about the plugin's memory could not be tested from the outside. Checked in `endpoints`.
 
 **F-M765 [S]:** **The upload endpoint carries no pack switch of its own.** Concept decision: whether a pack may go up is decided by the source (the switch **Packs**, `PackSlot`), never by the endpoint. The tvsubtitles upload endpoint still held a parameter that refused a pack with the reason `season packs are switched off in the settings (UploadSeasonPacks)` — a setting that fell away on 23.11.2026 (F-M719), so the refusal named a switch nobody could reach. The parameter is gone; the endpoint checks the container (a pack is one `.zip`) and nothing else. Checked in `endpoints`.
 

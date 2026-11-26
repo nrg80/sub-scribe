@@ -1134,6 +1134,12 @@
       "checks": 8,
       "requirement": "F-M767",
       "title": "Jede Cache-Operation sagt eine Zeile — Treffer, Fehltreffer mit Grund, Ablage, Aufräumen, Purge"
+    },
+    "T430": {
+      "suite": "endpoints",
+      "checks": 3,
+      "requirement": "F-M769",
+      "title": "Der Diagnose-Endpunkt nennt den eigenen Speicher: GC-Heap, Arbeitsseite, private Bytes, GC-Zähler und die Zeilen des geteilten Kontexts"
     }
   }
 }
