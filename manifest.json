@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.64",
-        "changelog": "v12.3.8.64: the upload follow-up hangs on a source with a postprocessing pass, not on the number of uploads.",
+        "version": "12.3.8.65",
+        "changelog": "v12.3.8.65: the statistics count per source — a subtitle that two sources accept is two deliveries.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.64-dev/Jellyfin.Plugin.SubdlSync_12.3.8.64.zip",
-        "checksum": "51f8bd65d671cc9c24893e1644292408",
-        "timestamp": "2026-11-26T08:39:15Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.65-dev/Jellyfin.Plugin.SubdlSync_12.3.8.65.zip",
+        "checksum": "b7710370a685e75aae5b00df44314f99",
+        "timestamp": "2026-11-26T10:38:38Z"
       }
     ]
   }
