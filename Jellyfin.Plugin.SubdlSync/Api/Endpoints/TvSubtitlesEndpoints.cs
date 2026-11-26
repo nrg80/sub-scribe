@@ -351,7 +351,6 @@ public sealed class TvSubtitlesUploadEndpoint : IUploadEndpoint
     private readonly TvSubtitlesClient _client;
     private readonly bool _dryRun;
     private readonly ILogger? _logger;
-    private readonly bool _seasonPacks;
     private readonly ContentHashRegistry? _registry;
 
     /// <summary>
@@ -361,11 +360,6 @@ public sealed class TvSubtitlesUploadEndpoint : IUploadEndpoint
     /// <param name="dryRun">True (default) builds the request and sends nothing. The plugin's own
     /// DryRun switch is passed in here — it is not read inside, so the endpoint stays testable.</param>
     /// <param name="logger">Optional logger — it only ever says why an id could not be read back.</param>
-    /// <param name="seasonPacks">
-    /// F-M641: der vorhandene Pack-Schalter der GUI (<see cref="PluginConfiguration.UploadSeasonPacks"/>),
-    /// hereingereicht wie der Trockenlauf — der Endpunkt liest die Konfiguration nicht selbst. Steht er
-    /// aus, wird ein Pack abgelehnt, statt an einer Einstellung vorbei zu senden.
-    /// </param>
     /// <param name="registry">
     /// F-M642: der Store, in den ein erfolgreicher Pack seine Zeile schreibt. Optional, weil ein
     /// Trockenlauf und jede Suite ohne Store laufen muessen; ohne ihn wird nichts gebucht.
@@ -374,13 +368,11 @@ public sealed class TvSubtitlesUploadEndpoint : IUploadEndpoint
         TvSubtitlesClient client,
         bool dryRun = true,
         ILogger? logger = null,
-        bool seasonPacks = false,
         ContentHashRegistry? registry = null)
     {
         _client = client ?? throw new ArgumentNullException(nameof(client));
         _dryRun = dryRun;
         _logger = logger;
-        _seasonPacks = seasonPacks;
         _registry = registry;
     }
 
@@ -399,17 +391,14 @@ public sealed class TvSubtitlesUploadEndpoint : IUploadEndpoint
         if (ticket.SeasonPack)
         {
             // F-M641 (Betreiber-Vorgabe 20.11.2026): ein Staffel-Pack geht als EIN Zip in den
-            // Staffel-Slot der Seite (episode=0) — nicht als Folge ohne Nummer. Zwei Dinge muessen
-            // vorher stimmen, sonst wird nichts gesendet:
-            //   1. der vorhandene Pack-Schalter der GUI ist an (kein eigener Schalter fuer tvst),
-            //   2. die Datei ist ein Zip (sonst legte die Seite eine .srt in den Staffel-Slot).
-            if (!_seasonPacks)
-            {
-                return new EndpointAnswer(
-                    Provider, false, "season packs are switched off in the settings (UploadSeasonPacks)",
-                    0, null, _dryRun);
-            }
-
+            // Staffel-Slot der Seite (episode=0) — nicht als Folge ohne Nummer. Die Datei muss ein Zip
+            // sein (sonst legte die Seite eine .srt in den Staffel-Slot).
+            //
+            // F-M765 (Betreiber 26.11.2026: „Ja rausnehmen"): der frueher hier gelesene globale
+            // Pack-Schalter ist fort. Er wurde schon am 23.11.2026 durch den Schalter „Packs" der Quelle
+            // ersetzt (F-M719), existierte aber als Parameter dieses Endpunkts weiter und lehnte Packs
+            // mit einem Grund ab, den es nicht mehr gibt. Wer packen darf, entscheidet allein die Quelle
+            // (PackSlot, F-M682) — der Endpunkt kennt keinen Schalter mehr.
             if (!ticket.FileName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase))
             {
                 return new EndpointAnswer(
