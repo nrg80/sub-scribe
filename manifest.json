@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.67",
-        "changelog": "v12.3.8.67: the season archive is not remembered in the run any more — it comes from the cache on disk, and every cache operation writes a line at Debug.",
+        "version": "12.3.8.68",
+        "changelog": "v12.3.8.68: the cache reports from the first access on — \"configured\" and \"trim\" were silent because the logger came too late.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.67-dev/Jellyfin.Plugin.SubdlSync_12.3.8.67.zip",
-        "checksum": "f236357b74e0b93d241898623a1d9127",
-        "timestamp": "2026-11-26T12:33:07Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.68-dev/Jellyfin.Plugin.SubdlSync_12.3.8.68.zip",
+        "checksum": "ea396de8ce2a0840ecb7017903fc72d7",
+        "timestamp": "2026-11-26T13:53:45Z"
       }
     ]
   }
