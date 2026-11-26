@@ -2933,19 +2933,22 @@ public sealed class UploadPipeline : IPackFiller
                 ScheduledTasks.ScribeSchedulerCoordinator.Instance?.CancelUploadPostprocessing(
                     $"upload run stopped by the user ({summary.Uploaded} uploaded)");
             }
-            else if (summary.Uploaded > 0)
+            else if (PostprocessingSources() is { Count: > 0 } nachlauf)
             {
+                // F-M465 (Bediener-Anweisung 26.11.2026: "Sobald ein Upload laeuft der eine Quelle mit
+                // Postprocessing umfasst (aktuell nur subdl) soll das pp geschuled werden"): der Termin
+                // haengt an der QUELLE mit Nachlauf, nicht an der Zahl der Uploads. Ein Lauf, der nur
+                // Staffel-Behaelter abgeliefert hat, braucht den Nachlauf genauso — ohne ihn bleibt die
+                // Griff-Nummer stehen.
                 ScheduledTasks.ScribeSchedulerCoordinator.Instance?.ArmUploadPostprocessing(
-                    $"upload run ended ({summary.Uploaded} uploaded)");
+                    $"upload run ended ({summary.Uploaded} uploaded, {summary.SeasonPacksUploaded} season pack(s); postprocessing for {string.Join(", ", nachlauf)})");
             }
             else
             {
-                // F-M465 (operator decision 11.11.2026, "nur bei > 0 uploaded anmahnen"): a run that
-                // uploaded nothing has nothing for the postprocessing to remap, so it arms no order.
-                // An order someone else placed stays untouched — this run does not own it.
+                // F-M465: keine Quelle mit Nachlauf im Lauf — dann gibt es auch nichts zuzuordnen.
                 LogUtil.Normal(
                     _logger,
-                    "[Sub Scribe] upload: nothing uploaded — no postprocessing order armed (F-M465).");
+                    "[Sub Scribe] upload: no source with a postprocessing pass took part — no postprocessing order armed (F-M465).");
             }
 
             // F-M684: die Summenzeile der Netzarbeit, je Quelle eine — im finally, damit sie auch nach
@@ -7726,6 +7729,18 @@ public sealed class UploadPipeline : IPackFiller
     /// <param name="key">Der Quellenschlüssel.</param>
     /// <returns>Wahr, wenn diese Quelle in diesem Lauf senden darf.</returns>
     private bool SourceAllowed(string key) => Api.Endpoints.Provenance.Provider(key) is { } provider && SourceAllowed(provider);
+
+    /// <summary>
+    /// F-M465: welche Quellen DIESES Laufs haben einen Nachlauf? Gefragt wird die Fähigkeit
+    /// (<see cref="Sources.SourceCapabilities.CanPostprocess"/>) — kein Quellenname — und der Schalter der
+    /// Quelle, denn eine abgeschaltete Quelle ist nicht Teil des Laufs.
+    /// </summary>
+    /// <returns>Die Schlüssel der Quellen mit Nachlauf; leer, wenn keine dabei ist.</returns>
+    private List<string> PostprocessingSources() =>
+        _sources.With(c => c.CanPostprocess)
+            .Select(engine => engine.Capabilities.Key)
+            .Where(key => SourceAllowed(key))
+            .ToList();
 
     /// <summary>
     /// F-M721: die Marke DIESER Spur-Position bei einer Quelle — ebenfalls mit Schlüssel, damit das Tor

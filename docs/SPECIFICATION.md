@@ -3,7 +3,7 @@
 **Owner: the rules.** This is the master document: every other paper is derived from it and cites its `F-M` tags. The contract boundaries stand in `CONTRACTS.md`, the vocabulary in `TERMS.md`.
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.63.
+**Status:** Implementation — v12.3.8.64.
 
 **A rule stands here with its ground: the decision behind it in one sentence, under `Concept decision`, and the
 check that proves it. The detailed measurement archive — what was measured, which run showed it, what happened —
@@ -39,7 +39,7 @@ states the rule, its constants, its ground and its test.**
 - [10. Scheduler, Quota and Timing](#10-scheduler-quota-and-timing) — 24 requirements
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
-- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 37 requirements
+- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 38 requirements
 - [14. Data Model and Persistence](#14-data-model-and-persistence) — 92 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 61 requirements
 - [16. Non-Goals](#16-non-goals)
@@ -794,7 +794,10 @@ Reporting goes through the portal's report form, with the bare finding (pack ide
 
 **F-M464 [D]:** **A fetch carries its own verdict; a resolution happens once.** Every fetch returns status, bytes, error name and payload as one result; no consumer reads state that a later fetch can overwrite. An entry resolved once (name, season, episode) is passed on as identity and not read again from the file name at a deeper level. An archive is fetched via the route its file list comes from; the cache key is the archive's identity, not the route.
 
-**F-M465 [D]:** **The upload follow-up hangs on the upload.** An upload run that uploaded nothing sets no follow-up appointment; an appointment set from another place stays untouched. A user stop still cancels.
+**F-M465 [D]:** **The upload follow-up hangs on a source that has one.** Concept decision: an upload run arms the follow-up appointment whenever a source with a postprocessing pass takes part in it — whether that run delivered subtitles, season packs or nothing at all. The count of uploads is not the criterion. The pass exists for the handle remap: SubDL hands out a handle while uploading, and only the pass brings the entry id beside it. A run that delivered nothing but containers therefore needs the pass exactly as much as one that delivered singles. A source whose upload switch is off, or which dropped out of the run, is not part of it and arms nothing; an appointment set from another place stays untouched. A user stop still cancels.
+
+<!-- Bediener-Anweisung 11.11.2026: "nur bei > 0 uploaded anmahnen" — abgeloest am 26.11.2026. -->
+<!-- Bediener-Anweisung 26.11.2026: "Sobald ein Upload laeuft der eine Quelle mit Postprocessing umfasst (aktuell nur subdl) soll das pp geschuled werden" -->
 
 **F-M466 [D]:** **Season memo with fingerprint.** Per series, season, language and variant the built pack is remembered with a fingerprint over its members. The same fingerprint means the same pack: nothing is derived or sent again. A different fingerprint means a new pack. A row without a fingerprint falls back to the member comparison.
 
@@ -2122,6 +2125,8 @@ the rule rather than a reason (F-M745). Checked in `gui-structure`.
 **F-M760 [S]:** **The container's file count comes from the container.** Concept decision: every source fills one neutral number on the offer it makes — how many subtitle files the archive holds, or zero when the source does not say. SubDL counts the files it lists for the entry, tvsubtitles counts the season archive it has just read, and a source that carries no archives leaves the number alone. Nothing is read from a file name: SubDL wraps every delivery in a zip, so a name ending in `.zip` says nothing about how many episodes travelled inside. The statistics read that one number and nothing else, which is why the same rule holds for every source. Checked in `endpoints`.
 
 **F-M761 [S]:** **A release group stands behind a technical word, never behind an episode title.** Concept decision: a season pack carries one release, so the group is read from the file name — but only where the name states one. Behind a dash the group counts only when the whole segment in front of it is a technical token, which is the same rule the dot and space branches already follow. A segment that ends on an episode tag can never be followed by a group: `Better Call Saul - S04E01 - Smoke.mkv` ends in a title. Nothing is invented where a name names nothing; those episodes share the unknown group, and a season that is unknown throughout still becomes one pack. A stored pack verdict is not invalidated by a rule change; the operator clears it for the season in the expert view, so the moment a verdict is set aside stays visible. Checked in `seasonpack`.
+
+**F-M762 [S]:** **Whether a source has a follow-up pass is a capability of that source.** Concept decision: the run asks each source whether its uploads need a postprocessing pass and arms the appointment from that answer, so the pipeline names no source. SubDL is the one source that says yes today — it hands out a handle while uploading and needs the pass for the entry id; a second such source would be wired by its engine alone. Checked in `packretry`.
 
 ## 14. Data Model and Persistence
 
