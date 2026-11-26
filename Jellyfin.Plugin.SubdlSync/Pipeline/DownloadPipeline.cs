@@ -5655,39 +5655,6 @@ public sealed class DownloadPipeline : IDisposable
     /// <param name="season">Season of that item.</param>
     /// <param name="episode">Episode number of that item.</param>
     /// <param name="cand">The candidate the file came from.</param>
-    /// <summary>
-    /// F-M759: is this offer an archive? The operator's definition is flat — "a zip is a season pack" —
-    /// so the answer is read from what the offer itself says: a name that ends in .zip, a declared full
-    /// season, or the member list of an archive.
-    /// </summary>
-    /// <param name="cand">The candidate the saved subtitle came from.</param>
-    /// <returns>True when the bytes came out of an archive.</returns>
-    private static bool IstSeasonPack(SubtitleCandidate cand)
-        => cand.OriginalName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
-           || cand.FullSeason
-           || cand.UnpackFiles.Count > 0;
-
-    /// <summary>
-    /// F-M759: the identity of the archive behind a candidate — the entry id when the source names one,
-    /// else its download address, else the release name. Used to count an archive once per run.
-    /// </summary>
-    /// <param name="cand">The candidate the saved subtitle came from.</param>
-    /// <returns>A key that is stable for one archive within one run.</returns>
-    private static string ArchivKennung(SubtitleCandidate cand)
-        => !string.IsNullOrWhiteSpace(cand.NId) ? "n:" + cand.NId
-            : !string.IsNullOrWhiteSpace(cand.Url) ? "u:" + cand.Url
-            : "r:" + cand.ReleaseName;
-
-    /// <summary>
-    /// F-M759: counts a season pack instead of a subtitle. Only the FIRST episode served from one
-    /// archive can count, and only when that save counts as a success at all.
-    /// </summary>
-    /// <param name="cand">The candidate the saved subtitle came from.</param>
-    /// <param name="erfolg">Whether this save counts as a successful download.</param>
-    /// <returns>True when a season pack is to be counted.</returns>
-    private bool ZaehleSeasonPack(SubtitleCandidate cand, bool erfolg)
-        => _gezaehlteArchive.Add(ArchivKennung(cand)) && erfolg;
-
     private void RememberPackCover(BaseItem item, int season, int episode, SubtitleCandidate cand)
     {
         // Never clear here. The item starts with a clean marker, and a save from a single-file entry
@@ -5736,6 +5703,40 @@ public sealed class DownloadPipeline : IDisposable
 
         _packCover = new PackCover(item is Episode ep ? ep.SeriesId : null, cand.ReleaseName, season, episodes);
     }
+
+    /// <summary>
+    /// F-M759: is this offer a season pack? Measured, not guessed: SubDL wraps EVERY delivery in a zip —
+    /// on 25.11.2026, 75 of 85 saved downloads carried a <c>.zip</c> name and most of those were single
+    /// films. The file NAME therefore proves nothing, and neither does the source's own "is pack" flag,
+    /// which is already true when the archive lists one file (24.11.2026: nine such single-file zips).
+    /// What decides is the member list: the archive carried at least two episodes.
+    /// </summary>
+    /// <param name="cand">The candidate the saved subtitle came from.</param>
+    /// <returns>True when the bytes came out of a real season archive.</returns>
+    private static bool IstSeasonPack(SubtitleCandidate cand)
+        => cand.UnpackFiles.Count >= 2;
+
+    /// <summary>
+    /// F-M759: the identity of the archive behind a candidate — the entry id when the source names one,
+    /// else its download address, else the release name. Used to count an archive once per run.
+    /// </summary>
+    /// <param name="cand">The candidate the saved subtitle came from.</param>
+    /// <returns>A key that is stable for one archive within one run.</returns>
+    private static string ArchivKennung(SubtitleCandidate cand)
+        => !string.IsNullOrWhiteSpace(cand.NId) ? "n:" + cand.NId
+            : !string.IsNullOrWhiteSpace(cand.Url) ? "u:" + cand.Url
+            : "r:" + cand.ReleaseName;
+
+    /// <summary>
+    /// F-M759: counts a season pack instead of a subtitle. Only the FIRST episode served from one
+    /// archive can count, and only when that save counts as a success at all.
+    /// </summary>
+    /// <param name="cand">The candidate the saved subtitle came from.</param>
+    /// <param name="erfolg">Whether this save counts as a successful download.</param>
+    /// <returns>True when a season pack is to be counted.</returns>
+    private bool ZaehleSeasonPack(SubtitleCandidate cand, bool erfolg)
+        => _gezaehlteArchive.Add(ArchivKennung(cand)) && erfolg;
+
 
     /// <summary>
     /// F-M450: files one stored defect with SubDL and marks the row when SubDL takes it. A report
