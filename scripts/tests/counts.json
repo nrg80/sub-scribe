@@ -1086,6 +1086,18 @@
       "checks": 2,
       "requirement": "F-M758",
       "title": "Der Reset-statistics-Knopf traegt den Fussabdruck des Auffrischknopfs"
+    },
+    "T422": {
+      "suite": "seasonpack",
+      "checks": 5,
+      "requirement": "F-M759",
+      "title": "Season-Pack-Zaehler laufen durch StatusCounterDelta, Behaelter getrennt vom Einzel-Upload"
+    },
+    "T423": {
+      "suite": "gui-structure",
+      "checks": 3,
+      "requirement": "F-M759",
+      "title": "Season packs stehen je Richtung direkt unter den Untertiteln und lesen den eigenen Zaehler"
     }
   }
 }

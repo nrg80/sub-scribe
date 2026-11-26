@@ -522,13 +522,17 @@ def main():
     # year kann entfallen. In statistik und der Zähler"). The table is SEVEN rows now and the volume
     # pair leads directly; the both-directions row that used to sit between them no longer exists, so
     # the prefix assertion covers the two volume rows only.
+    # F-M759 (26.11.2026): jede Richtung fuehrt ihre Volumen-Zeile und DIRECT darunter ihre Pack-Zeile.
+    # Vier Volumen-Zeilen stehen jetzt vorn, Download zuerst.
     expected_prefix = [
         "Subtitles downloaded",
+        "Season packs downloaded",
         "Subtitles uploaded",
+        "Season packs uploaded",
     ]
     check("the volume rows lead, download first",
-          order[:2] == expected_prefix,
-          "got: %s" % " | ".join(order[:2]))
+          order[:4] == expected_prefix,
+          "got: %s" % " | ".join(order[:4]))
     dl = [i for i, o in enumerate(order) if o.startswith("Downloads")]
     up = [i for i, o in enumerate(order) if o.startswith("Uploads")]
     check("the remaining rows are grouped by direction, downloads before uploads",
@@ -538,7 +542,7 @@ def main():
     # under the Auto-Sync row, and its first label pushed the figure out of the column — labels stay
     # within the width of the longest row that already fits. Eight rows now, each exactly once.
     check("every quality row is present exactly once",
-          len(order) == 8 and len(set(order)) == 8,
+          len(order) == 10 and len(set(order)) == 10,
           "%d row(s): %s" % (len(order), order))
     check("the reported-to-SubDL row sits directly under Auto-Sync (F-M455)",
           order.index("Downloads: Broken subtitles reported") == order.index("Downloads: Auto-Sync") + 1,
@@ -2778,6 +2782,24 @@ def main():
           page_src.find('<h3>Statistics</h3>') > page_src.find('id="RefreshSubdlStatus"')
           and page_src.find('id="StatsTable"') > page_src.find('id="RefreshSubdlStatus"'),
           "Statistik unter dem Auffrischknopf")
+    # F-M759 (Betreiberanweisung 26.11.2026, woertlich: "season packs downloaded unter subtitles
+    # downloaded und season packs uploaded unter subtitles uploaded einfuehren … season packs dann nur
+    # noch unter seasonpacks, nicht mehr unter subtitles zaehlen. Ein zip ist ein seasonpack"): je
+    # Richtung steht die Pack-Zeile DIREKT unter der Untertitel-Zeile, und sie liest den eigenen Zaehler.
+    _dl = page_src.find("'Subtitles downloaded'")
+    _dlp = page_src.find("'Season packs downloaded'")
+    _ul = page_src.find("'Subtitles uploaded'")
+    _ulp = page_src.find("'Season packs uploaded'")
+    _naechste = lambda a, b: page_src[a:b].count("['") <= 1 if (a > 0 and b > a) else False
+    check("F-M759: Season packs downloaded steht direkt unter Subtitles downloaded",
+          _dl > 0 and _dlp > _dl and _naechste(_dl, _dlp)
+          and 's.SeasonPacksDownloaded' in page_src[_dl:_dlp + 200],
+          "Pack-Zeile direkt unter der Untertitel-Zeile der Download-Richtung")
+    check("F-M759: Season packs uploaded steht direkt unter Subtitles uploaded",
+          _ul > 0 and _ulp > _ul and _naechste(_ul, _ulp)
+          and 's.SeasonPacksUploaded' in page_src[_ul:_ulp + 200],
+          "Pack-Zeile direkt unter der Untertitel-Zeile der Upload-Richtung")
+
     # F-M758 (Betreiberanweisung 25.11.2026, woertlich: "Der reset statistics button kann dann
     # eigentlich genauso gestaltet werden wie der regreh starus button"): der Reset-Knopf traegt den
     # Fussabdruck des Auffrischknopfs. Beide lesen nur, beide grau, beide volle Breite — der blaue

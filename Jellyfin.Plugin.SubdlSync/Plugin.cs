@@ -185,11 +185,14 @@ public class Plugin : BasePlugin<Configuration.PluginConfiguration>, IHasWebPage
         long fittedToAudio = 0,
         long languageCodesAllocated = 0,
         long looseSubtitlesRenamed = 0,
-        long brokenReported = 0)
+        long brokenReported = 0,
+        long seasonPacksUploaded = 0,
+        long seasonPacksDownloaded = 0)
     {
         if (uploaded == 0 && downloaded == 0
             && rejectedDownload == 0 && rejectedUpload == 0 && fittedToAudio == 0
-            && languageCodesAllocated == 0 && looseSubtitlesRenamed == 0 && brokenReported == 0)
+            && languageCodesAllocated == 0 && looseSubtitlesRenamed == 0 && brokenReported == 0
+            && seasonPacksUploaded == 0 && seasonPacksDownloaded == 0)
         {
             return; // nothing happened — do not touch the row (keeps Updated meaningful)
         }
@@ -205,6 +208,8 @@ public class Plugin : BasePlugin<Configuration.PluginConfiguration>, IHasWebPage
         row.LanguageCodesAllocated += languageCodesAllocated; // F-M311
         row.LooseSubtitlesRenamed += looseSubtitlesRenamed; // F-M313
         row.BrokenReported += brokenReported; // F-M455
+        row.SeasonPacksUploaded += seasonPacksUploaded; // F-M759
+        row.SeasonPacksDownloaded += seasonPacksDownloaded; // F-M759
         row.Updated = DateTime.UtcNow;
         db.StatusStats.Upsert(row);
     }
@@ -225,6 +230,8 @@ public class Plugin : BasePlugin<Configuration.PluginConfiguration>, IHasWebPage
         row.LanguageCodesAllocated = 0; // F-M311
         row.LooseSubtitlesRenamed = 0; // F-M313
         row.BrokenReported = 0; // F-M455
+        row.SeasonPacksUploaded = 0; // F-M759
+        row.SeasonPacksDownloaded = 0; // F-M759
         row.SinceUtc = DateTime.UtcNow;
         row.Updated = DateTime.UtcNow;
         db.StatusStats.Upsert(row);

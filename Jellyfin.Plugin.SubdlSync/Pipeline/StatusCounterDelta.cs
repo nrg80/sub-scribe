@@ -41,7 +41,9 @@ public readonly struct StatusCounterDelta
         long fittedToAudio,
         long languageCodesAllocated,
         long looseSubtitlesRenamed,
-        long brokenReported = 0)
+        long brokenReported = 0,
+        long seasonPacksUploaded = 0,
+        long seasonPacksDownloaded = 0)
     {
         Uploaded = uploaded;
         Downloaded = downloaded;
@@ -51,6 +53,8 @@ public readonly struct StatusCounterDelta
         LanguageCodesAllocated = languageCodesAllocated;
         LooseSubtitlesRenamed = looseSubtitlesRenamed;
         BrokenReported = brokenReported;
+        SeasonPacksUploaded = seasonPacksUploaded;
+        SeasonPacksDownloaded = seasonPacksDownloaded;
     }
 
     /// <summary>Gets subtitles uploaded by this run.</summary>
@@ -77,11 +81,24 @@ public readonly struct StatusCounterDelta
     /// <summary>Gets the F-M455 broken subtitles this run reported to SubDL and the portal accepted.</summary>
     public long BrokenReported { get; }
 
+    /// <summary>
+    /// F-M759: season packs uploaded by this run — one accepted container is one pack, and its members
+    /// are counted nowhere else.
+    /// </summary>
+    public long SeasonPacksUploaded { get; }
+
+    /// <summary>
+    /// F-M759: season packs downloaded by this run — one fetched archive is one pack; further episodes
+    /// from the same archive count neither as a pack nor as a subtitle.
+    /// </summary>
+    public long SeasonPacksDownloaded { get; }
+
     /// <summary>Gets a value indicating whether this delta leaves the statistics row untouched.</summary>
     public bool IsEmpty
         => Uploaded == 0 && Downloaded == 0
            && RejectedDownload == 0 && RejectedUpload == 0 && FittedToAudio == 0
-           && LanguageCodesAllocated == 0 && LooseSubtitlesRenamed == 0 && BrokenReported == 0;
+           && LanguageCodesAllocated == 0 && LooseSubtitlesRenamed == 0 && BrokenReported == 0
+           && SeasonPacksUploaded == 0 && SeasonPacksDownloaded == 0;
 
     /// <summary>
     /// F-M247: builds the delta for one direction run, discarding everything a dry run produced.
@@ -111,6 +128,9 @@ public readonly struct StatusCounterDelta
             fittedToAudio: downloadDry ? 0 : download?.FittedToAudio ?? 0,
             languageCodesAllocated: languageCodesAllocated,
             looseSubtitlesRenamed: looseSubtitlesRenamed,
-            brokenReported: downloadDry ? 0 : download?.Reported ?? 0);
+            brokenReported: downloadDry ? 0 : download?.Reported ?? 0,
+            // F-M759: ein trockener Lauf liefert nichts, also zaehlt er auch keine Packs.
+            seasonPacksUploaded: uploadDry ? 0 : upload?.SeasonPacksUploaded ?? 0,
+            seasonPacksDownloaded: downloadDry ? 0 : download?.SeasonPacksDownloaded ?? 0);
     }
 }

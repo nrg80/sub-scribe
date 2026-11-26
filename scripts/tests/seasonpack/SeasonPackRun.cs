@@ -1521,6 +1521,43 @@ internal static class Program
             "F-M737: der Merker gilt je Lauf, nicht über Läufe hinweg",
             "_packIdentity.Clear() beim Laufstart");
 
+        // F-M759 (Betreiberanweisung 26.11.2026, woertlich: "season packs uploaded unter subtitles
+        // uploaded … season packs dann nur noch unter seasonpacks, nicht mehr unter subtitles zaehlen.
+        // Ein zip ist ein seasonpack"): der angenommene Behaelter zaehlt als EIN Season pack, seine
+        // Folgen zaehlen nicht mehr als Untertitel — und der Zaehler geht durch die eine Stelle, die
+        // die Statistik schreibt (StatusCounterDelta), nicht an ihr vorbei.
+        var hochPack = new RunSummary { SeasonPacksUploaded = 2 };
+        var deltaNurPack = StatusCounterDelta.From(hochPack, null);
+        Check(deltaNurPack.SeasonPacksUploaded == 2 && deltaNurPack.Uploaded == 0,
+            "F-M759: ein Lauf mit zwei angenommenen Behaeltern liefert zwei Season packs und keinen Untertitel",
+            $"packs={deltaNurPack.SeasonPacksUploaded} uploaded={deltaNurPack.Uploaded}");
+        Check(!deltaNurPack.IsEmpty,
+            "F-M759: ein Lauf, der nur Packs gebracht hat, ist nicht leer — sonst schriebe er keine Zeile",
+            "IsEmpty=false");
+
+        var trocken = new RunSummary { IsDryRun = true, SeasonPacksUploaded = 2 };
+        var deltaTrocken = StatusCounterDelta.From(trocken, null);
+        Check(deltaTrocken.SeasonPacksUploaded == 0 && deltaTrocken.IsEmpty,
+            "F-M759: ein Trockenlauf zaehlt keine Season packs (F-M247 gilt auch fuer sie)",
+            $"packs={deltaTrocken.SeasonPacksUploaded}");
+
+        var runterPack = new DownloadRunSummary { SeasonPacksDownloaded = 3 };
+        var deltaRunter = StatusCounterDelta.From(null, runterPack);
+        Check(deltaRunter.SeasonPacksDownloaded == 3 && deltaRunter.Downloaded == 0,
+            "F-M759: die Downloadseite meldet ihre Season packs getrennt von den Untertiteln",
+            $"packs={deltaRunter.SeasonPacksDownloaded} downloaded={deltaRunter.Downloaded}");
+
+        // Der Behaelter-Weg im Koordinator und der Einzel-Weg muessen getrennt bleiben: nur der
+        // angenommene Behaelter zaehlt als Pack, eine einzeln hochgeladene Folge bleibt ein Untertitel.
+        Check(coordinatorSrc.Contains("_countPackUploaded(", StringComparison.Ordinal)
+              && coordinatorSrc.Split("_countPackUploaded(").Length == 3
+              && coordinatorSrc.Contains(", 1);", StringComparison.Ordinal),
+            "F-M759: der Behaelter zaehlt als Pack (zwei Versandstellen), die einzeln hochgeladene Folge als Untertitel",
+            "zwei getrennte Zaehlwege im Koordinator");
+        Check(uploadSrc.Contains("label => { summary.SeasonPacksUploaded++; }", StringComparison.Ordinal),
+            "F-M759: der Upload-Lauf schliesst den Pack-Zaehler an",
+            "Lambda im UploadPipeline-Aufruf");
+
         Console.WriteLine(Failures.Count == 0
             ? $"seasonpack: {_checks} checks, all green."
             : $"seasonpack: {_checks} checks, {Failures.Count} failed.");

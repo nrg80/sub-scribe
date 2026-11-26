@@ -61,6 +61,13 @@ public class DownloadRunSummary
     public int Downloaded { get; set; }
 
     /// <summary>
+    /// F-M759: season packs downloaded in this run — counted per ARCHIVE. A zip is a season pack, so
+    /// the subtitle it served is not counted again under <see cref="Downloaded"/>, and the further
+    /// episodes taken from the same archive are not counted at all.
+    /// </summary>
+    public int SeasonPacksDownloaded { get; set; }
+
+    /// <summary>
     /// F-M491: downloads that were kept but did NOT pass the alignment significance while auto-sync is on.
     /// The file exists, so it is a download; it is not a success, so the pair stays open (F-M452) and a
     /// later candidate gets its chance.
@@ -285,6 +292,15 @@ public sealed class DownloadPipeline : IDisposable
     /// front of the queue instead of waiting for their own turn.
     /// </summary>
     private PackCover? _packCover;
+
+    /// <summary>
+    /// F-M759 (operator order 26.11.2026: "season packs downloaded unter subtitles downloaded …
+    /// season packs dann nur noch unter seasonpacks, nicht mehr unter subtitles zählen. Ein zip ist
+    /// ein seasonpack"): the archives this run has already counted. ONE fetched zip is ONE season
+    /// pack — the further episodes served from the same archive count neither as a pack nor as a
+    /// subtitle, so one delivery is never counted twice. Cleared at the start of a run.
+    /// </summary>
+    private readonly HashSet<string> _gezaehlteArchive = new(StringComparer.Ordinal);
 
     /// <summary>
     /// Libraries something was actually saved into during this run. F-M473: at the end of the run
@@ -589,6 +605,7 @@ public sealed class DownloadPipeline : IDisposable
     public async Task<DownloadRunSummary> RunAsync(IProgress<double> progress, CancellationToken ct)
     {
         var summary = new DownloadRunSummary();
+        _gezaehlteArchive.Clear(); // F-M759: jede Archive-Kennung zaehlt einmal je Lauf
 
         // F-M598 (Operator-Anweisung 18.11.2026): auch der Download wird vermessen — Item-Liste,
         // Item-Schleife und Lauf gesamt, je eine Zeile auf `Detail` (Debug-LogMode).
@@ -2665,7 +2682,19 @@ public sealed class DownloadPipeline : IDisposable
                                             tvSubtitlesDownloadId: hi.Provider == Configuration.SubtitleProvider.TvSubtitles ? hi.Url : null,
                                             moviesubtitlesDownloadId: hi.Provider == Configuration.SubtitleProvider.MovieSubtitles ? hi.Url : null));
                                         _qaFails.RecordSuccess(item.Id.ToString(), lang); // HI save resets the pair counter too
-                                        summary.Downloaded++;
+                                        // F-M759: auch die HI-Fassung kann aus einem Archiv kommen — dann
+                                        // zaehlt sie einen Season pack, keinen Untertitel.
+                                        if (IstSeasonPack(hi))
+                                        {
+                                            if (ZaehleSeasonPack(hi, true))
+                                            {
+                                                summary.SeasonPacksDownloaded++;
+                                            }
+                                        }
+                                        else
+                                        {
+                                            summary.Downloaded++;
+                                        }
                                         // F-M594: keine Pause mehr HIER — der Takt sitzt als Slot vor dem
                                         // naechsten Abruf (`WaitForTransferSlotAsync` in
                                         // `DownloadCandidateRawAsync`) und rechnet ab dem Ende des letzten
@@ -3634,7 +3663,18 @@ public sealed class DownloadPipeline : IDisposable
                     // Eine behaltene Originalfassung ist heruntergeladen — die Datei liegt ja —, aber
                     // nicht erfolgreich; das Paar bleibt damit offen (F-M452). Ist Auto-Sync aus, gibt es
                     // keinen Fit und damit keinen Unterschied: jeder Abruf zählt.
-                    if (!_config.QaDownloadAutoSync || alignedForNaming)
+                    // F-M759: ein Zip ist ein Season pack. Kommen die Bytes aus einem Archiv, zaehlt die
+                    // erste bediente Folge EINEN Season pack, und die weiteren Folgen aus demselben
+                    // Archiv zaehlen gar nichts mehr — weder als Pack noch als Untertitel.
+                    bool erfolg = !_config.QaDownloadAutoSync || alignedForNaming;
+                    if (IstSeasonPack(cand))
+                    {
+                        if (ZaehleSeasonPack(cand, erfolg))
+                        {
+                            summary.SeasonPacksDownloaded++;
+                        }
+                    }
+                    else if (erfolg)
                     {
                         summary.Downloaded++;
                     }
@@ -5615,6 +5655,39 @@ public sealed class DownloadPipeline : IDisposable
     /// <param name="season">Season of that item.</param>
     /// <param name="episode">Episode number of that item.</param>
     /// <param name="cand">The candidate the file came from.</param>
+    /// <summary>
+    /// F-M759: is this offer an archive? The operator's definition is flat — "a zip is a season pack" —
+    /// so the answer is read from what the offer itself says: a name that ends in .zip, a declared full
+    /// season, or the member list of an archive.
+    /// </summary>
+    /// <param name="cand">The candidate the saved subtitle came from.</param>
+    /// <returns>True when the bytes came out of an archive.</returns>
+    private static bool IstSeasonPack(SubtitleCandidate cand)
+        => cand.OriginalName.EndsWith(".zip", StringComparison.OrdinalIgnoreCase)
+           || cand.FullSeason
+           || cand.UnpackFiles.Count > 0;
+
+    /// <summary>
+    /// F-M759: the identity of the archive behind a candidate — the entry id when the source names one,
+    /// else its download address, else the release name. Used to count an archive once per run.
+    /// </summary>
+    /// <param name="cand">The candidate the saved subtitle came from.</param>
+    /// <returns>A key that is stable for one archive within one run.</returns>
+    private static string ArchivKennung(SubtitleCandidate cand)
+        => !string.IsNullOrWhiteSpace(cand.NId) ? "n:" + cand.NId
+            : !string.IsNullOrWhiteSpace(cand.Url) ? "u:" + cand.Url
+            : "r:" + cand.ReleaseName;
+
+    /// <summary>
+    /// F-M759: counts a season pack instead of a subtitle. Only the FIRST episode served from one
+    /// archive can count, and only when that save counts as a success at all.
+    /// </summary>
+    /// <param name="cand">The candidate the saved subtitle came from.</param>
+    /// <param name="erfolg">Whether this save counts as a successful download.</param>
+    /// <returns>True when a season pack is to be counted.</returns>
+    private bool ZaehleSeasonPack(SubtitleCandidate cand, bool erfolg)
+        => _gezaehlteArchive.Add(ArchivKennung(cand)) && erfolg;
+
     private void RememberPackCover(BaseItem item, int season, int episode, SubtitleCandidate cand)
     {
         // Never clear here. The item starts with a clean marker, and a save from a single-file entry

@@ -1671,7 +1671,9 @@ public sealed class ScribeEventDispatcher : IDisposable
                 delta.FittedToAudio,
                 delta.LanguageCodesAllocated,
                 delta.LooseSubtitlesRenamed,
-                delta.BrokenReported); // F-M455: broken subtitles filed with SubDL and accepted
+                delta.BrokenReported, // F-M455: broken subtitles filed with SubDL and accepted
+                delta.SeasonPacksUploaded,   // F-M759
+                delta.SeasonPacksDownloaded); // F-M759
         }
         catch (Exception ex)
         {

@@ -714,8 +714,10 @@ internal static class Program
             && downloadSource.Contains(".Where(SourceAllowed)", StringComparison.Ordinal)
             && downloadSource.Contains("candidate from {Source} skipped: that source is switched off", StringComparison.Ordinal)
             && !downloadSource.Contains("if (_config.IsDownloadEnabled(Configuration.SubtitleProvider.TvSubtitles))", StringComparison.Ordinal));
+        // F-M759 (26.11.2026): die Unterscheidung "heruntergeladen, aber nicht erfolgreich" lebt weiter,
+        // sie entscheidet jetzt VOR der Zaehlung, ob ein Save ueberhaupt zaehlt (Pack oder Untertitel).
         Check("a kept original is a download but not a success while auto-sync is on",
-            downloadSource.Contains("if (!_config.QaDownloadAutoSync || alignedForNaming)", StringComparison.Ordinal)
+            downloadSource.Contains("bool erfolg = !_config.QaDownloadAutoSync || alignedForNaming;", StringComparison.Ordinal)
             && downloadSource.Contains("summary.DownloadedWithoutSignificance++;", StringComparison.Ordinal));
 
         // ---- 14. Quellenabhaengige Vorpruefungen und Herkunft an jeder Ablage (F-M492/F-M493) -----

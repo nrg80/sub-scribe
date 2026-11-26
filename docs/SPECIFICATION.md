@@ -39,7 +39,7 @@ states the rule, its constants, its ground and its test.**
 - [10. Scheduler, Quota and Timing](#10-scheduler-quota-and-timing) — 24 requirements
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
-- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 34 requirements
+- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 35 requirements
 - [14. Data Model and Persistence](#14-data-model-and-persistence) — 92 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 61 requirements
 - [16. Non-Goals](#16-non-goals)
@@ -2116,6 +2116,8 @@ the rule rather than a reason (F-M745). Checked in `gui-structure`.
 **F-M757 [G]:** **The Statistics block is the last block of the General tab.** Concept decision: the counters describe what the refresh control reloads, so the control is the handle and the numbers stand under it. The tab is read from the run outward and ends with the two readouts that report the run: the Status block, the refresh control, and then the statistics with their reset button. The block itself is unchanged, and the counters still belong to the tab that holds every live readout (F-M270). Checked in `gui-structure`.
 
 **F-M758 [G]:** **The reset control carries the footprint of the refresh control.** Concept decision: both controls only re-read or clear a readout, neither of them saves, so they look alike — full width, flush with both edges, the same grey. The blue Save stays the only blue control of the tab, and the page never shows two different kinds of button in one column. Checked in `gui-structure`.
+
+**F-M759 [S]:** **Season packs are counted as season packs.** Concept decision: the statistics carry two rows per direction — *Season packs downloaded* directly under *Subtitles downloaded*, and *Season packs uploaded* directly under *Subtitles uploaded*. A zip is a season pack, so nothing it delivers is counted twice. One accepted container is one uploaded pack, however many episodes it carries. One fetched archive is one downloaded pack, and further episodes served from that same archive count neither as a pack nor as a subtitle. A dry run counts no packs, like every other counter. The two rows reach an existing data file additively, so a counter that did not exist before starts at zero while the older volume row keeps its history. Checked in `seasonpack` and `gui-structure`.
 
 ## 14. Data Model and Persistence
 

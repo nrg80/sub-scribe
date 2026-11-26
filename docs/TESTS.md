@@ -163,6 +163,14 @@ files, the workers and the status, and before the next tab opens.
 controls carry the same classes and the same inline width, depth and grey, and the reset control never takes
 the blue action look.
 
+**T422:** The season-pack counters go through the one writer (F-M759), in `seasonpack`. **5 checks**. A run with two
+accepted containers reports two packs and no subtitle, and is therefore not empty; a dry run reports none; the
+download side reports its packs apart from its subtitles; the container path and the single-upload path keep
+separate counters.
+
+**T423:** The two pack rows in the statistics table (F-M759), in `gui-structure`. **3 checks**. Each direction
+carries its pack row directly under its subtitle row, and each pack row reads its own counter.
+
 **T176:** The report of an observed defect — wording without justification, category per finding, name of the affected file in both tracks, sender line with version and account name. Report in the same run, deferral instead of discarding, locked candidate after the report, switch and its position as the second-to-last entry (F-M450). **4 checks on the file naming.**
 
 **T177:** What a file on disk proves — the reserved original block (51–99) closes no pair, an aligned `01` does, a deleted `01` opens it again, an unnumbered name still counts, and the slot reader reads what the writer writes (F-M452). **12 checks.**

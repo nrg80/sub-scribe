@@ -171,6 +171,8 @@ public class ScribeStatusController : ControllerBase
             RejectedUpload = row.RejectedUpload,
             FittedToAudio = row.FittedToAudio,
             BrokenReported = row.BrokenReported, // F-M455
+            SeasonPacksUploaded = row.SeasonPacksUploaded, // F-M759
+            SeasonPacksDownloaded = row.SeasonPacksDownloaded, // F-M759
             LanguageCodesAllocated = row.LanguageCodesAllocated,
             LooseSubtitlesRenamed = row.LooseSubtitlesRenamed,
             SinceUtc = row.SinceUtc?.ToString("O", System.Globalization.CultureInfo.InvariantCulture),
@@ -366,6 +368,8 @@ public class ScribeStatusController : ControllerBase
             ok = true,
             Uploaded = row.Uploaded,
             Downloaded = row.Downloaded,
+            SeasonPacksUploaded = row.SeasonPacksUploaded, // F-M759
+            SeasonPacksDownloaded = row.SeasonPacksDownloaded, // F-M759
             RejectedDownload = row.RejectedDownload,
             RejectedUpload = row.RejectedUpload,
             FittedToAudio = row.FittedToAudio,
