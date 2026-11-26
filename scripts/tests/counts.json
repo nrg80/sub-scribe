@@ -1116,6 +1116,12 @@
       "checks": 3,
       "requirement": "F-M763",
       "title": "Die Statistik zählt je Quelle — ein Untertitel mit zwei annehmenden Quellen ist zwei Zustellungen"
+    },
+    "T427": {
+      "suite": "packretry",
+      "checks": 2,
+      "requirement": "F-M764",
+      "title": "Ein Ankunftslauf stellt die Vollständigkeitsfrage gar nicht erst — der Wächter steht vor der Prüfung"
     }
   }
 }

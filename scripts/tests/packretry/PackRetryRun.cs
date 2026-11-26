@@ -470,6 +470,18 @@ internal static class Program
               && !upload.Contains("HasOpenLanguage(", StringComparison.Ordinal),
             "F-M680: the arrival-only helpers fell with it — no dead scope cut, no second season question");
 
+        // F-M764 (Betreiber 26.11.2026: „Ja. Sollte längst so sein"): die Frage steht VOR der Prüfung.
+        // Bis 12.3.8.65 lief `CompleteSeasonsAsync` zuerst und der Ankunftszweig warf das Ergebnis weg
+        // (gemessen 26.11.2026: "pack phase done after 166343 ms" in einem Ankunftslauf, 128 Staffeln,
+        // 1.093 Urteilszeilen, 1.084 Sprachpaare, 85 Kandidaten).
+        int arrivalLine = upload.IndexOf("arrival run — no season pack", StringComparison.Ordinal);
+        int seasonQuestion = upload.IndexOf("CompleteSeasonsAsync(runCt)", StringComparison.Ordinal);
+        Check(arrivalLine > 0 && seasonQuestion > arrivalLine,
+            "F-M764: der Ankunftslauf sagt es VOR der Vollständigkeitsfrage — die Prüfung läuft für ihn gar nicht erst",
+            "Reihenfolge der beiden Stellen im Upload-Lauf");
+        Check(upload.Split("CompleteSeasonsAsync(runCt)").Length == 2,
+            "F-M764: die Bibliotheksfrage wird an genau EINER Stelle gestellt, im else-Zweig der Abfrage");
+
         // ── 28. F-M426: eine vollständig gepackte Staffel wird gar nicht erst untersucht ─
         // F-M680: die arrival-eigene Fassung dieser Frage (`HasOpenLanguage`, VOR dem Vergleich
         // gefragt) ist mit dem Ankunftslauf-Zweig gefallen. Die Regel selbst gilt weiter — sie steht

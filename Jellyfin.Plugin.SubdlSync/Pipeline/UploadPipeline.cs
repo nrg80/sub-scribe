@@ -747,19 +747,7 @@ public sealed class UploadPipeline : IPackFiller
         // Schalter "Packs" offen hat — und angesprochen wird nur, wer ihn offen hat (PackSlot).
         if (PackSlotSources().Count > 0)
         {
-            completeSeasons = await CompleteSeasonsAsync(runCt).ConfigureAwait(false);
-            if (!IsArrivalRun)
-            {
-                // F-M420 (Operator-Freigabe 20.11.2026: „Ja. Aber nur für den vollen lauf, refetch oder
-                // manuell") — ein voller Lauf packt aus der BIBLIOTHEK und dem Store, nicht aus seiner
-                // Warteschlange. Vorher galt hier dieselbe Verengung wie beim Ankunftslauf: der Lauf um
-                // 05:05 hatte 71 vollstaendige Staffeln vor sich und 0 Pakete im Ergebnis.
-                LogUtil.Normal(
-                    _logger,
-                    "[Sub Scribe] full run — the pack scope is the library: {N} complete season(s); the packs are assembled from the store at the end of this run (F-M420).",
-                    completeSeasons.Count);
-            }
-            else
+            if (IsArrivalRun)
             {
                 // F-M680 (Betreiber-Vorgabe 22.11.2026: „Season Packs nur bei Refetch- und Manual-Läufen
                 // (also nicht bei Ankunftsläufen) — und für alle Quellen gleich"): ein Ankunftslauf
@@ -769,10 +757,29 @@ public sealed class UploadPipeline : IPackFiller
                 // (MobLand S02, regular 524.500 B und HI 574.748 B), während tvsubtitles.net im selben
                 // Lauf mit „stays with a full run" ausgeschlossen wurde. Wer ankommt, lädt einzeln hoch;
                 // wer packt, ist der Refetch- oder der Manual-Lauf.
+                //
+                // F-M764 (Betreiber 26.11.2026: „Ja. Sollte längst so sein"): die Frage steht VOR der
+                // Prüfung, nicht dahinter. Bis 12.3.8.65 lief `CompleteSeasonsAsync` zuerst und der
+                // Ankunftszweig warf das Ergebnis weg — gemessen im Ankunftslauf 26.11.2026:
+                // "LAUF upload — pack phase done after 166343 ms", darin 128 Staffeln mit mindestens
+                // zwei Folgen, 1.093 Urteilszeilen über 124 Staffeln, 1.084 Sprachpaare und 85
+                // Kandidaten, für nichts. Ein Ankunftslauf stellt die Vollständigkeitsfrage nicht.
                 LogUtil.Normal(
                     _logger,
                     "[Sub Scribe] arrival run — no season pack, the episodes go up single and the season stays with the next full, refetch or manual run (F-M680).");
                 completeSeasons = new Dictionary<(string ImdbId, int Season), IReadOnlyList<int>>();
+            }
+            else
+            {
+                completeSeasons = await CompleteSeasonsAsync(runCt).ConfigureAwait(false);
+                // F-M420 (Operator-Freigabe 20.11.2026: „Ja. Aber nur für den vollen lauf, refetch oder
+                // manuell") — ein voller Lauf packt aus der BIBLIOTHEK und dem Store, nicht aus seiner
+                // Warteschlange. Vorher galt hier dieselbe Verengung wie beim Ankunftslauf: der Lauf um
+                // 05:05 hatte 71 vollstaendige Staffeln vor sich und 0 Pakete im Ergebnis.
+                LogUtil.Normal(
+                    _logger,
+                    "[Sub Scribe] full run — the pack scope is the library: {N} complete season(s); the packs are assembled from the store at the end of this run (F-M420).",
+                    completeSeasons.Count);
             }
             if (completeSeasons.Count > 0)
             {
