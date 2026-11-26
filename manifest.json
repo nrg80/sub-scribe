@@ -12,9 +12,9 @@
         "version": "12.3.8.65",
         "changelog": "v12.3.8.65: the statistics count per source — a subtitle that two sources accept is two deliveries.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.65-dev/Jellyfin.Plugin.SubdlSync_12.3.8.65.zip",
-        "checksum": "b7710370a685e75aae5b00df44314f99",
-        "timestamp": "2026-11-26T10:38:38Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.65/Jellyfin.Plugin.SubdlSync_12.3.8.65.zip",
+        "checksum": "f45869a62e8b2b53ca703f37488bc978",
+        "timestamp": "2026-11-26T10:41:28Z"
       }
     ]
   }
