@@ -654,6 +654,9 @@ public sealed class UploadPipeline : IPackFiller
         // F-M24a: forward per-call API traces to LogLevel.Debug
         _api.DebugTrace += OnApiTrace;
 
+        // F-M767: die Ablage bekommt den Logger des Laufs, damit jede Cache-Operation im Log steht.
+        _api.ArchiveDiskCache.Attach(_logger, _config.LogMode);
+
         // F-M232: the client's LogInfo channel (login retries, 429 raw bodies, rate
         // headers) was subscribed ONLY by the postprocessing path, so every upload-run
         // login diagnostic was dropped — the 02:05 login failure left no retry line

@@ -1128,6 +1128,12 @@
       "checks": 2,
       "requirement": "F-M766",
       "title": "Der Merker der Staffel-ZIP trägt Namen und Nummern, keine Bytes — der Inhalt kommt bei Bedarf von der Platte"
+    },
+    "T429": {
+      "suite": "archivecache",
+      "checks": 7,
+      "requirement": "F-M767",
+      "title": "Jede Cache-Operation sagt eine Zeile — Treffer, Fehltreffer mit Grund, Ablage, Aufräumen, Purge"
     }
   }
 }

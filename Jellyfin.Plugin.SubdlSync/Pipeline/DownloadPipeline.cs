@@ -719,6 +719,9 @@ public sealed class DownloadPipeline : IDisposable
         // F-M24a: forward per-call API traces to LogLevel.Debug
         _api.DebugTrace += OnApiTrace;
 
+        // F-M767: die Ablage bekommt den Logger des Laufs, damit jede Cache-Operation im Log steht.
+        _api.ArchiveDiskCache.Attach(_logger, _config.LogMode);
+
         // F-M521: the tvst family gets the same channel as SubDL, in both directions. Without it the
         // answer of tvsubtitles.net / moviesubtitles.org never reached the log, so a run that asked the
         // site looked exactly like a run that never did.

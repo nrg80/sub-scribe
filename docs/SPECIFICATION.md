@@ -39,7 +39,7 @@ states the rule, its constants, its ground and its test.**
 - [10. Scheduler, Quota and Timing](#10-scheduler-quota-and-timing) — 24 requirements
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
-- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 42 requirements
+- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 43 requirements
 - [14. Data Model and Persistence](#14-data-model-and-persistence) — 92 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 61 requirements
 - [16. Non-Goals](#16-non-goals)
@@ -2128,7 +2128,9 @@ the rule rather than a reason (F-M745). Checked in `gui-structure`.
 
 **F-M762 [S]:** **Whether a source has a follow-up pass is a capability of that source.** Concept decision: the run asks each source whether its uploads need a postprocessing pass and arms the appointment from that answer, so the pipeline names no source. SubDL is the one source that says yes today — it hands out a handle while uploading and needs the pass for the entry id; a second such source would be wired by its engine alone. Checked in `packretry`.
 
-**F-M766 [S]:** **The memo of the season archive carries names, not bytes.** Concept decision: what the client remembers per series, season and language is the list of entries — name, season, episode, language, hearing-impaired — and the reason of a failure. The bytes of an archive are read when they are needed and released afterwards; the archive itself lives in the disk cache (F-M665). Until 12.3.8.66 the memo held the **unpacked SRTs** of every season it had touched for the whole run, which contradicted F-M663/F-M665 (disk, not memory) — a full run over 128 seasons would have carried tens of megabytes of subtitle text it never used again. One archive place stands beside the memo: the last archive read, replaced on the next one, so a member costs no second request when the cache is switched off — and still never more than one archive sits in memory. Checked in `tvsubtitles`.
+**F-M767 [S]:** **Every cache operation writes a line at the plugin's Debug mode.** Concept decision: the cache reports switching on (folder, retention, size), every hit (key, bytes, age, state), every miss and every refused store with its reason, the trim and the purge. The run hands it its logger and its log mode, so the lines appear exactly when the plugin logs at Debug. Until 12.3.8.66 the cache said nothing itself — a season archive served from disk was invisible. The lines are listed in `SEASON-PACK-CACHING.md`, checked in `archivecache`.
+
+**F-M766 [S]:** **The season archive is not remembered at all — everything comes from the cache on disk.** Concept decision: the client keeps no memo. Every call reads the archive from the disk cache (or fetches it **once**) and unpacks it; what it costs is a read and an unpack, not a request. Until 12.3.8.66 the memo held the unpacked subtitles of every season it had touched for the whole run, which contradicted F-M663/F-M665. One consequence is named on purpose: a season whose archive is missing or unreadable is asked again on the next call. Described in `SEASON-PACK-CACHING.md`, checked in `tvsubtitles`.
 
 **F-M765 [S]:** **The upload endpoint carries no pack switch of its own.** Concept decision: whether a pack may go up is decided by the source (the switch **Packs**, `PackSlot`), never by the endpoint. The tvsubtitles upload endpoint still held a parameter that refused a pack with the reason `season packs are switched off in the settings (UploadSeasonPacks)` — a setting that fell away on 23.11.2026 (F-M719), so the refusal named a switch nobody could reach. The parameter is gone; the endpoint checks the container (a pack is one `.zip`) and nothing else. Checked in `endpoints`.
 

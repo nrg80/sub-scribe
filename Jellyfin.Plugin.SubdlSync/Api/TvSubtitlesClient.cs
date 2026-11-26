@@ -1210,9 +1210,10 @@ public sealed class TvSubtitlesClient
     /// schon nicht geantwortet hat.
     /// </para>
     /// </summary>
-    private readonly System.Collections.Generic.Dictionary<
-        (int ShowId, int Season, string Language),
-        (IReadOnlyList<TvSubtitlesPackEntry> Files, string? Error)> _seasonPacks = new();
+    // F-M768 (Betreiber 26.11.2026: „Merker ganz streichen"): es gibt KEINEN Merker mehr. Weder Bytes
+    // noch Namen werden gehalten: jeder Aufruf liest die Staffel-ZIP aus der Ablage auf der Platte (oder
+    // holt sie EINMAL) und entpackt sie. Was das kostet, ist ein Lesevorgang plus Entpacken — keine
+    // Anfrage. Ein Fehlschlag wird nicht gemerkt; er wird beim naechsten Aufruf erneut versucht.
 
     /// <summary>
     /// F-M663: warum die Staffel-ZIP des zuletzt gefragten (Serie, Staffel, Sprache) nicht nutzbar
@@ -1220,26 +1221,17 @@ public sealed class TvSubtitlesClient
     /// </summary>
     public string? LastSeasonPackError { get; private set; }
 
-    /// <summary>
-    /// F-M766: EIN Archiv-Platz neben dem Merker — die zuletzt gelesene Staffel-ZIP, mit ihrem
-    /// Schluessel. Er faengt den Fall ab, dass die Ablage aus ist (0 Tage oder 0 MB): dann kostet das
-    /// Mitglied keine zweite Anfrage, und trotzdem liegt nie mehr als EINE ZIP im Speicher — nicht
-    /// eine je Staffel.
-    /// </summary>
-    private (string Key, byte[] Zip)? _letztesArchiv;
 
     /// <summary>
-    /// F-M663: die Eintraege der Staffel-ZIP einer Sprache — geholt beim ERSTEN Aufruf, danach aus dem
-    /// Merker (<see cref="_seasonPacks"/>). Leer, wenn die Seite keine ZIP fuer diese Sprache traegt
-    /// oder sie nicht lesbar ist; der Grund steht dann in <see cref="LastSeasonPackError"/>.
+    /// F-M663: die Eintraege der Staffel-ZIP einer Sprache. Leer, wenn die Seite keine ZIP fuer diese
+    /// Sprache traegt oder sie nicht lesbar ist; der Grund steht dann in
+    /// <see cref="LastSeasonPackError"/>.
     /// <para>
-    /// F-M665 (Bediener-Entscheidung 21.11.2026): vor dem Merker steht der Archiv-Cache. Die ZIP liegt
-    /// in <see cref="ArchiveDiskCache"/> — der Ablage, die jede Engine benutzt —, unter eigenem
-    /// Schluesselraum je Quelle (<see cref="ArchiveKey.ForTvstSeason"/>) und unter der Frist und der
-    /// Groessengrenze, die fuer die ganze Ablage gelten. Ein Treffer wird gelesen, nicht geholt: ein
-    /// Lauf, der die Staffel schon bezahlt hat, zahlt sie im naechsten nicht wieder. Ein Fehlschlag
-    /// landet NICHT auf der Platte — er wird nur im Merker gemerkt, damit ein kaputter Abruf den
-    /// naechsten Lauf nicht blockiert.
+    /// F-M665/F-M768: die ZIP liegt in <see cref="ArchiveDiskCache"/> — der Ablage, die jede Engine
+    /// benutzt —, unter eigenem Schluesselraum je Quelle (<see cref="ArchiveKey.ForTvstSeason"/>) und
+    /// unter der Frist und der Groessengrenze, die fuer die ganze Ablage gelten. Ein Treffer wird
+    /// gelesen, nicht geholt: ein Lauf, der die Staffel schon bezahlt hat, zahlt sie im naechsten nicht
+    /// wieder. Einen Merker gibt es nicht mehr — jeder Aufruf liest aus der Ablage und entpackt.
     /// </para>
     /// <para>
     /// Es wird NICHTS geworfen ausser einem echten Abbruch: Stufe 1 ist eine Abkuerzung, kein Muss —
@@ -1255,20 +1247,10 @@ public sealed class TvSubtitlesClient
         int showId, int season, string language, CancellationToken cancellationToken = default)
     {
         string lang = (language ?? string.Empty).Trim().ToLowerInvariant();
-        lock (_seasonPacks)
-        {
-            if (_seasonPacks.TryGetValue((showId, season, lang), out var gemerkt))
-            {
-                LastSeasonPackError = gemerkt.Error;
-                return gemerkt.Files;
-            }
-        }
 
-        // F-M766 (Betreiber 26.11.2026: „Das war nicht das design"): der Merker traegt NUR Namen und
-        // Nummern, keine Bytes. Bis 12.3.8.66 lagen die entpackten SRTs einer Staffel hier fuer den
-        // ganzen Lauf im Arbeitsspeicher — obwohl das Papier (F-M663/F-M665) die ZIP auf der Platte
-        // sieht und im Merker nur den Fehlschlag. Die Bytes eines Aufrufs entstehen jetzt, werden
-        // gelesen und sind wieder weg; wer sie braucht, holt sie ueber DownloadPackMemberAsync.
+        // F-M768: kein Merker, kein Gedaechtnis. Die Bytes kommen aus der Ablage (oder aus EINEM Abruf)
+        // und sind nach dem Entpacken wieder Freigabe; gehalten wird nur die Liste, die der Aufrufer
+        // gerade braucht.
         IReadOnlyList<TvSubtitlesPackEntry> files = Array.Empty<TvSubtitlesPackEntry>();
         string? fehler = null;
 
@@ -1301,16 +1283,6 @@ public sealed class TvSubtitlesClient
         }
 
         LastSeasonPackError = fehler;
-        lock (_seasonPacks)
-        {
-            if (_seasonPacks.Count >= MemoLimit)
-            {
-                _seasonPacks.Clear();
-            }
-
-            _seasonPacks[(showId, season, lang)] = (files, fehler);
-        }
-
         return files;
     }
 
@@ -1331,17 +1303,6 @@ public sealed class TvSubtitlesClient
         string? schluessel = ArchiveKey.ForTvstSeason(showId, season, language);
         try
         {
-            // F-M766: der eine Archiv-Platz — er spart die zweite Anfrage, wenn die Ablage aus ist.
-            lock (_seasonPacks)
-            {
-                if (_letztesArchiv is { } letztes
-                    && string.Equals(letztes.Key, schluessel, StringComparison.Ordinal)
-                    && letztes.Zip.Length > 0)
-                {
-                    return letztes.Zip;
-                }
-            }
-
             if (_archives is not null
                 && _archives.TryGet(schluessel, out byte[]? gespeichert)
                 && gespeichert is { Length: > 0 })
@@ -1356,10 +1317,6 @@ public sealed class TvSubtitlesClient
             if (zip is not null)
             {
                 _archives?.Put(schluessel, zip);
-                lock (_seasonPacks)
-                {
-                    _letztesArchiv = (schluessel ?? string.Empty, zip);
-                }
             }
 
             return zip;
