@@ -176,6 +176,10 @@ counting rule reads that one number, SubDL fills it from the entry's file list, 
 archive it has read, and no rule anywhere reads a file name ending in `.zip`.
 
 **T429:** Every cache operation is logged (F-M767), in `archivecache`. **8 checks**. Enabling names folder, retention and size. A store names key, bytes and the state of the store. A hit names key, bytes and age, a miss its reason. A refused store names its reason, and an expired archive is reported as expired and as removed. The trim names expired, evicted and the state. The purge reports its count without a live instance, a cache without a logger keeps working silently, and the run attaches its logger before the first access.
+**T430:** The diagnostics endpoint reports the plugin's own process memory — GC heap, working set,
+private bytes, the three collection counters and the tracked rows of the shared context, in
+`endpoints`. **3 checks**.
+
 
 **T428:** The season archive is not remembered at all (F-M766/F-M768), in `tvsubtitles`. **2 checks**. The entry type has `Name` but no `Data`, and a member read after a run that already paid for the archive comes back byte-identical with **0** requests — from disk, not from memory.
 

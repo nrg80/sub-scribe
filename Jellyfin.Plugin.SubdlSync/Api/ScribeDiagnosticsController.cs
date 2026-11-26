@@ -143,6 +143,22 @@ public class ScribeDiagnosticsController : ControllerBase
                 }),
                 OshashCacheEntries = oshashes,
                 RejectedCandidateEntries = burnedCandidates,
+                // F-M769: der eigene Speicher, aus dem Prozess heraus gemessen. Ohne diese vier Zahlen
+                // ist "das Plugin zieht RAM" eine Behauptung — der Diagnose-Endpunkt war der einzige Ort,
+                // an dem er sich selbst befragen kann, und er sagte bisher nichts dazu.
+                Memory = new
+                {
+                    // Was der GC als erreichbar ansieht (nach der letzten Sammlung, ohne Collect).
+                    GcHeapBytes = GC.GetTotalMemory(false),
+                    // Was das Betriebssystem dem Prozess gibt — die Zahl, die im Container zählt.
+                    WorkingSetBytes = Environment.WorkingSet,
+                    PrivateBytes = System.Diagnostics.Process.GetCurrentProcess().PrivateMemorySize64,
+                    Gen0 = GC.CollectionCount(0),
+                    Gen1 = GC.CollectionCount(1),
+                    Gen2 = GC.CollectionCount(2),
+                    // Zeilen, die der geteilte Kontext gerade mitführt — der größte eigene Posten (F-M769).
+                    TrackedRows = db.Context.ChangeTracker.Entries().Count()
+                },
                 Timestamp = DateTime.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture)
             };
 
