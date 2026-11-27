@@ -12,6 +12,10 @@ decided further down by the gates, never by the trigger.
 | `arrival-followup` | 90 seconds after the cycle that drained the collector | both | the ids that arrived during that cycle |
 | recovery | a one-shot fire per direction, at a reset time plus a dice | the direction it was scheduled for | the whole selection |
 
+The arrival side is told in full in [ARRIVAL-RUN.md](ARRIVAL-RUN.md): how the watcher collects, why an arrival
+cycle cannot widen, and how the during-cycle arrivals reach their own run. This paper only says where the arrival
+triggers sit among the others.
+
 A scheduled run and a button press are the same run. Jellyfin starts the task, the task starts the cycle, and the
 log line says `scheduled-upload` in both cases — measured on the host by pressing the button and reading the next
 line. That is deliberate: `F-M233` reserves full coverage for the scheduled and the manual path, and the operator
