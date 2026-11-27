@@ -202,6 +202,8 @@ milliseconds it took and the rows the context carries afterwards.
 
 **T439:** Stored season verdicts move to the one language form (F-M790), in `endpoints`. **3 checks**. A verdict filed under `GER non-HI` sits under `DEU non-HI` afterwards, with signature, verdict and date carried over. The old spelling is gone while `ENG` and the season-level verdict stay untouched — four rows, four keys. Two spellings meeting on one key leave one row, and the younger statement wins.
 
+**T440:** No half migration (F-M790), in `endpoints`. **3 checks**. A store seeded with the older spelling in all six places — track, sidecar, pack, bad apple, both text lists of the file row and the verdict key — comes out of the startup pass in the canon. A second start changes nothing, so the pass is a state and not an event. And a stored list is brought in line token by token, duplicates fall away, the order stays.
+
 
 **T428:** The season archive is not remembered at all (F-M766/F-M768), in `tvsubtitles`. **2 checks**. The entry type has `Name` but no `Data`, and a member read after a run that already paid for the archive comes back byte-identical with **0** requests — from disk, not from memory.
 

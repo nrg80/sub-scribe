@@ -1194,6 +1194,12 @@
       "checks": 3,
       "requirement": "F-M790",
       "title": "Staffelurteile wandern in die eine Sprachform: Schluessel GER non-HI wird DEU non-HI mit Signatur/Urteil/Datum, alte Zeile weg, ENG und Staffelebene unberuehrt, bei Kollision gilt die juengere Aussage"
+    },
+    "T440": {
+      "suite": "endpoints",
+      "checks": 3,
+      "requirement": "F-M790",
+      "title": "Keine halbe Wanderung: alle sechs Stellen im Kanon (Spur, Seitendatei, Pack, Bad Apple, Abdeckungs- und Stempelliste, Urteilsschluessel), zweiter Start aendert nichts, Liste gliedweise mit Dublettenfall"
     }
   }
 }

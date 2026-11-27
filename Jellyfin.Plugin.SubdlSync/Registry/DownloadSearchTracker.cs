@@ -232,6 +232,8 @@ public sealed class DownloadSearchTracker
     private FileEntity? FindByItemId(string itemId)
         => _db.Files.FindOne(x => x.JellyfinItemId == itemId);
 
+    // F-M790: der Stempel wird im Kanon geschrieben UND im Kanon verglichen — sonst stuende hier die
+    // Schreibweise der Wunschliste und daneben in den Spuren die des Stores.
     private static string Normalize(IReadOnlyList<string> languages)
-        => string.Join(",", languages.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
+        => Language.LanguageMapper.CanonicalList(string.Join(",", languages));
 }

@@ -12,6 +12,8 @@
 using System;
 using System.Collections.Generic;
 
+using System.Linq;
+
 namespace Jellyfin.Plugin.SubScribe.Language;
 
 /// <summary>
@@ -112,6 +114,29 @@ public static class LanguageMapper
         }
 
         return iso.ToUpperInvariant();
+    }
+
+    /// <summary>
+    /// F-M790: eine gespeicherte Sprachliste ("AR, EN, DE") in die eine Form bringen — jedes Glied
+    /// einzeln, Dubletten fallen weg, die Reihenfolge bleibt die alte (OrdinalIgnoreCase). Der Store
+    /// haelt damit auch in Textspalten nur den Kanon.
+    /// </summary>
+    /// <param name="list">Komma-getrennte Liste, darf leer oder null sein.</param>
+    /// <returns>Dieselbe Liste im Kanon, komma-getrennt.</returns>
+    public static string CanonicalList(string? list)
+    {
+        if (string.IsNullOrWhiteSpace(list))
+        {
+            return string.Empty;
+        }
+
+        return string.Join(
+            ",",
+            list.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+                .Select(Canonical)
+                .Where(x => !string.IsNullOrEmpty(x))
+                .Distinct(StringComparer.OrdinalIgnoreCase)
+                .OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
     }
 
     /// <summary>

@@ -904,6 +904,33 @@ public sealed class ScribeDbContext : IDisposable
         }
     }
 
+    /// <summary>
+    /// F-M790: steht dieser gespeicherte Wert schon im Kanon? Leer gilt als in Ordnung (die Zeile sagt
+    /// nichts ueber eine Sprache).
+    /// </summary>
+    private static bool SpracheAusserKanon(string? wert)
+    {
+        if (string.IsNullOrWhiteSpace(wert))
+        {
+            return false;
+        }
+
+        return !string.Equals(Language.LanguageMapper.Canonical(wert), wert, StringComparison.Ordinal);
+    }
+
+    /// <summary>
+    /// F-M790: dasselbe fuer eine gespeicherte Liste.
+    /// </summary>
+    private static bool ListeAusserKanon(string? liste)
+    {
+        if (string.IsNullOrWhiteSpace(liste))
+        {
+            return false;
+        }
+
+        return !string.Equals(Language.LanguageMapper.CanonicalList(liste), liste, StringComparison.Ordinal);
+    }
+
     private void EnsureAiredSeasonsTable()
     {
         try
@@ -982,6 +1009,40 @@ public sealed class ScribeDbContext : IDisposable
                 }
             }
 
+            // F-M790: zwei Textspalten tragen ebenfalls Sprachen — die Abdeckung der Datei
+            // (`LanguagesAvailable`, aus den Spuren gebildet) und der Suchstempel (`LastSearchLanguages`,
+            // die Wunschliste des letzten Laufs). Beide werden gliedweise in den Kanon gezogen, sonst
+            // stuende in einer Datei-Zeile "EN,DE" neben Spuren, die DEU sagen.
+            foreach (var row in _db.FileRows.ToList())
+            {
+                bool geaendertHier = false;
+                if (row.LanguagesAvailable != null)
+                {
+                    string kanonListe = Language.LanguageMapper.CanonicalList(row.LanguagesAvailable);
+                    if (!string.Equals(kanonListe, row.LanguagesAvailable, StringComparison.Ordinal))
+                    {
+                        row.LanguagesAvailable = kanonListe;
+                        geaendertHier = true;
+                    }
+                }
+
+                if (row.LastSearchLanguages != null)
+                {
+                    string kanonStempel = Language.LanguageMapper.CanonicalList(row.LastSearchLanguages);
+                    if (!string.Equals(kanonStempel, row.LastSearchLanguages, StringComparison.Ordinal))
+                    {
+                        row.LastSearchLanguages = kanonStempel;
+                        geaendertHier = true;
+                    }
+                }
+
+                if (geaendertHier)
+                {
+                    _db.FileRows.Update(row);
+                    geaendert++;
+                }
+            }
+
             // F-M790: die Urteile der Pack-Phase tragen die Sprache im SCHLUESSEL ("imdb|staffel|GER
             // non-HI"). Sie werden MITGENOMMEN, nicht vergessen: der Schluessel ist Text, der Tag traegt
             // Sprache und Variante und sonst nichts, also laesst er sich sauber umschreiben. Die Staffel
@@ -1042,6 +1103,57 @@ public sealed class ScribeDbContext : IDisposable
                 }
 
                 urteile++;
+            }
+
+            // F-M790: die Gegenprobe. Nach allen Zuegen wird gezaehlt, was NICHT im Kanon steht — in allen
+            // sechs Stellen, an denen der Store eine Sprache haelt. Die Zahl gehoert ins Protokoll, weil
+            // ein halb gewanderter Bestand schlimmer ist als ein alter: die eine Haelfte findet die andere
+            // nicht mehr.
+            int ausserKanon = 0;
+            foreach (var row in _db.TrackRows.ToList())
+            {
+                ausserKanon += SpracheAusserKanon(row.Language) ? 1 : 0;
+            }
+
+            foreach (var row in _db.SidecarRows.ToList())
+            {
+                ausserKanon += SpracheAusserKanon(row.Language) ? 1 : 0;
+            }
+
+            foreach (var row in _db.PackRows.ToList())
+            {
+                ausserKanon += SpracheAusserKanon(row.Language) ? 1 : 0;
+            }
+
+            foreach (var row in _db.BadAppleRows.ToList())
+            {
+                ausserKanon += SpracheAusserKanon(row.Language) ? 1 : 0;
+            }
+
+            foreach (var row in _db.FileRows.ToList())
+            {
+                ausserKanon += ListeAusserKanon(row.LanguagesAvailable) ? 1 : 0;
+                ausserKanon += ListeAusserKanon(row.LastSearchLanguages) ? 1 : 0;
+            }
+
+            foreach (var row in _db.PackSeasonRows.ToList())
+            {
+                int zweiter = row.Id.IndexOf('|', row.Id.IndexOf('|', StringComparison.Ordinal) + 1);
+                string tag = zweiter > 0 && zweiter + 1 < row.Id.Length ? row.Id[(zweiter + 1)..] : string.Empty;
+                int leer = tag.IndexOf(' ', StringComparison.Ordinal);
+                ausserKanon += SpracheAusserKanon(leer < 0 ? tag : tag[..leer]) ? 1 : 0;
+            }
+
+            if (ausserKanon > 0)
+            {
+                LogUtil.Normal(
+                    _logger,
+                    "[Sub Scribe] data file: {Count} stored language value(s) still outside the canon — the migration is incomplete (F-M790).",
+                    ausserKanon);
+            }
+            else
+            {
+                LogUtil.Debug(_logger, "[Sub Scribe-DB] language values: all inside the canon (F-M790)");
             }
 
             if (urteile > 0)

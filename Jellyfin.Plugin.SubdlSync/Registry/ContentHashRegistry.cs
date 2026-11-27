@@ -3668,7 +3668,7 @@ public sealed class ContentHashRegistry : IDisposable
             return;
         }
 
-        var normalized = string.Join(",", languages.OrderBy(x => x, StringComparer.OrdinalIgnoreCase));
+        var normalized = Language.LanguageMapper.CanonicalList(string.Join(",", languages));
         var now = DateTime.UtcNow;
         _db.EnsureFile(mediaHash, m =>
         {
@@ -3751,10 +3751,7 @@ public sealed class ContentHashRegistry : IDisposable
             return;
         }
 
-        var languages = string.Join(",", tracks.Select(t => t.Language)
-            .Where(l => !string.IsNullOrEmpty(l))
-            .Distinct(StringComparer.OrdinalIgnoreCase)
-            .OrderBy(l => l, StringComparer.OrdinalIgnoreCase));
+        var languages = Language.LanguageMapper.CanonicalList(string.Join(",", tracks.Select(t => t.Language)));
 
         _db.EnsureFile(mediaHash, m =>
         {

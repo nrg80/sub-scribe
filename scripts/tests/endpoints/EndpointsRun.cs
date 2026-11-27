@@ -4513,6 +4513,82 @@ internal static class Program
 
         try { Directory.Delete(urteilOrdner, true); } catch { }
 
+        // ---- 32. F-M790: KEINE halbe Wanderung — alle sechs Stellen, an denen der Store eine Sprache haelt -----
+        string ganzOrdner = Path.Combine(Path.GetTempPath(), "sprachwander-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(ganzOrdner);
+        using (var anlegen = new Jellyfin.Plugin.SubScribe.Data.ScribeDbContext(ganzOrdner, null))
+        {
+            _ = anlegen.Context.TrackRows.Count();
+        }
+
+        using (var roh = new Jellyfin.Plugin.SubScribe.Data.ScribeSqliteContext(Path.Combine(ganzOrdner, "sub-scribe.sqlite")))
+        {
+            roh.TrackRows.Add(new Jellyfin.Plugin.SubScribe.Data.TrackEntity { MediaHash = "hash-1", SubPos = 3, Language = "ger" });
+            roh.SidecarRows.Add(new Jellyfin.Plugin.SubScribe.Data.SidecarEntity { ContentHash = "inhalt-1", Language = "cze" });
+            roh.PackRows.Add(new Jellyfin.Plugin.SubScribe.Data.PackEntity { SeasonKey = "tt1|1|subdl", Language = "dut" });
+            roh.BadAppleRows.Add(new Jellyfin.Plugin.SubScribe.Data.BadAppleEntity
+            {
+                SubjectId = "sub-1", Source = "subdl", SourceId = "42", Member = "a.srt", Language = "chi"
+            });
+            roh.FileRows.Add(new Jellyfin.Plugin.SubScribe.Data.FileEntity
+            {
+                OsHash = "datei-1", LanguagesAvailable = "EN,ger", LastSearchLanguages = "de, EN, ger"
+            });
+            roh.PackSeasonRows.Add(new Jellyfin.Plugin.SubScribe.Registry.PackSeasonEntity
+            {
+                Id = "tt1|1|FRE non-HI", Signature = "sig", Verdict = "no-pack", Reason = "keine Quelle", Written = alt
+            });
+            await roh.SaveChangesAsync();
+        }
+
+        static string StandDerSprachen(Jellyfin.Plugin.SubScribe.Data.ScribeDbContext db)
+        {
+            var teile = new List<string>
+            {
+                string.Join("/", db.Context.TrackRows.ToList().Select(r => r.Language).OrderBy(x => x, StringComparer.Ordinal)),
+                string.Join("/", db.Context.SidecarRows.ToList().Select(r => r.Language).OrderBy(x => x, StringComparer.Ordinal)),
+                string.Join("/", db.Context.PackRows.ToList().Select(r => r.Language).OrderBy(x => x, StringComparer.Ordinal)),
+                string.Join("/", db.Context.BadAppleRows.ToList().Select(r => r.Language).OrderBy(x => x, StringComparer.Ordinal)),
+                string.Join("/", db.Context.FileRows.ToList().Select(r => (r.LanguagesAvailable ?? "-") + ";" + (r.LastSearchLanguages ?? "-"))),
+                string.Join("/", db.Context.PackSeasonRows.ToList().Select(r => r.Id).OrderBy(x => x, StringComparer.Ordinal))
+            };
+            return string.Join(" | ", teile);
+        }
+
+        string nachWanderung;
+        using (var db = new Jellyfin.Plugin.SubScribe.Data.ScribeDbContext(ganzOrdner, null))
+        {
+            nachWanderung = StandDerSprachen(db);
+            var datei = db.Context.FileRows.ToList().Single();
+            var urteil = db.Context.PackSeasonRows.ToList().Single();
+            Check(
+                "F-M790: all six places come out in the canon — track, sidecar, pack, bad apple, both text lists and the verdict key",
+                db.Context.TrackRows.ToList().Single().Language == "DEU"
+                && db.Context.SidecarRows.ToList().Single().Language == "CES"
+                && db.Context.PackRows.ToList().Single().Language == "NLD"
+                && db.Context.BadAppleRows.ToList().Single().Language == "ZHO"
+                && datei.LanguagesAvailable == "DEU,ENG"
+                && datei.LastSearchLanguages == "DEU,ENG"
+                && urteil.Id == "tt1|1|FRA non-HI",
+                nachWanderung);
+        }
+
+        using (var db = new Jellyfin.Plugin.SubScribe.Data.ScribeDbContext(ganzOrdner, null))
+        {
+            Check(
+                "F-M790: a second start changes nothing — the pass is a state, not an event",
+                StandDerSprachen(db) == nachWanderung,
+                StandDerSprachen(db));
+        }
+
+        Check(
+            "F-M790: a stored list is brought in line token by token, duplicates fall away and the order stays",
+            Jellyfin.Plugin.SubScribe.Language.LanguageMapper.CanonicalList("ger, EN , de,EN") == "DEU,ENG"
+            && Jellyfin.Plugin.SubScribe.Language.LanguageMapper.CanonicalList(null) == string.Empty,
+            Jellyfin.Plugin.SubScribe.Language.LanguageMapper.CanonicalList("ger, EN , de,EN"));
+
+        try { Directory.Delete(ganzOrdner, true); } catch { }
+
         if (_failures > 0)
         {
             Console.WriteLine($">>> ENDPUNKTE: {_failures} von {_checks} Pruefungen fehlgeschlagen");
