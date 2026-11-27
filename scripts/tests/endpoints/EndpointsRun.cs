@@ -4738,7 +4738,7 @@ internal static class Program
             "Exemption gefunden");
 
         // ---- 39. F-M800: der Pack steht als ein geschlossenes Papier ------------------------------------
-        string packDoc = await File.ReadAllTextAsync(Path.Combine(root, "docs", "SEASON-PACK.md"));
+        string packDoc = await File.ReadAllTextAsync(Path.Combine(root, "docs", "SEASON-PACK-UPLOAD.md"));
         Check(
             "F-M800: the pack paper names the seven checks before any unpacking and both switches",
             packDoc.Contains("Checks before anything is unpacked", StringComparison.Ordinal)
@@ -4750,7 +4750,7 @@ internal static class Program
         Check(
             "F-M800: the spec entry points at the paper and no longer narrows the origin to one source",
             spec800.Contains("**F-M800 [U]:**", StringComparison.Ordinal)
-            && spec800.Contains("docs/SEASON-PACK.md", StringComparison.Ordinal)
+            && spec800.Contains("docs/SEASON-PACK-UPLOAD.md", StringComparison.Ordinal)
             && !spec800.Contains("originally comes from SubDL", StringComparison.Ordinal)
             && spec800.Contains("a download of one of our sources", StringComparison.Ordinal),
             "Eintrag und Wortlaut geprueft");
@@ -4767,7 +4767,7 @@ internal static class Program
             "Name und Aufrufstelle geprueft");
 
         // ---- 40. F-M801: die vier Wege stehen je als ein geschlossenes Papier --------------------------
-        string[] paare801 = { "SINGLE-UPLOAD", "SEASON-PACK", "SEASON-PACK-DOWNLOAD", "SINGLE-DOWNLOAD" };
+        string[] paare801 = { "SINGLE-UPLOAD", "SEASON-PACK-UPLOAD", "SEASON-PACK-DOWNLOAD", "SINGLE-DOWNLOAD" };
         var fehlend801 = new List<string>();
         string readme801 = await File.ReadAllTextAsync(Path.Combine(root, "README.md"));
         foreach (string name in paare801)

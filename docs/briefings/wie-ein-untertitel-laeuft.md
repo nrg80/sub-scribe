@@ -54,7 +54,7 @@ erkennt: `season pack candidate` (Staffel ist reif), `season pack built` (Paket 
 ## Die genaue Fassung
 
 - Einzelupload: [../SINGLE-UPLOAD.md](../SINGLE-UPLOAD.md)
-- Staffelpaket-Upload: [../SEASON-PACK.md](../SEASON-PACK.md)
+- Staffelpaket-Upload: [../SEASON-PACK-UPLOAD.md](../SEASON-PACK-UPLOAD.md)
 - Staffelpaket-Download: [../SEASON-PACK-DOWNLOAD.md](../SEASON-PACK-DOWNLOAD.md)
 - Einzeldownload: [../SINGLE-DOWNLOAD.md](../SINGLE-DOWNLOAD.md)
 - Die Regeln selbst: [../SPECIFICATION.md](../SPECIFICATION.md)

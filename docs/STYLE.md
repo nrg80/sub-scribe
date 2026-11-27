@@ -25,7 +25,7 @@ line exactly or not at all. Keep the requirement numbers in one paragraph at the
 
 A paper about the way a subtitle travels has eight parts: what it is, the switches, the checks before
 anything expensive happens, the checks after, how the result is built and handed over, what never
-happens, what the log says, and where the rules live. The four papers [SEASON-PACK.md](SEASON-PACK.md),
+happens, what the log says, and where the rules live. The four papers [SEASON-PACK-UPLOAD.md](SEASON-PACK-UPLOAD.md),
 [SINGLE-UPLOAD.md](SINGLE-UPLOAD.md), [SEASON-PACK-DOWNLOAD.md](SEASON-PACK-DOWNLOAD.md) and
 [SINGLE-DOWNLOAD.md](SINGLE-DOWNLOAD.md) follow it, and one of them is the model for the next one.
 
