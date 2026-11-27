@@ -33,7 +33,58 @@ That list wins, and each exception states its reason in the code: Filipino is `T
 
 ## Where translation happens
 
-Translation is allowed in exactly four places, and all four are boundaries. A request to SubDL is built in `MapToSubdl`, a form for tvsubtitles or moviesubtitles is filled in `MapToSubdlName`, an upload file name is assembled because other people read it, and a verdict returns from a source. Everywhere else — in every comparison, in every store key and in every signature — the ISO form stands alone.
+Translation is allowed in exactly five places, and all five are boundaries: the sources, the upload file name, a verdict coming back, the settings page, and the offline detector. Everywhere else — in every comparison, in every store key and in every signature — the ISO form stands alone.
+
+## The seams, one by one
+
+Every place that touches a language code, and in which direction it translates. `in → out` is the
+direction of the translation, not of the data.
+
+| Seam | Where | What it does |
+| --- | --- | --- |
+| `Canonical(code)` | `Language/LanguageMapper.cs` | any spelling → ISO 639-2/T; the only way into the house |
+| `CanonicalList(list)` | same | a stored list → the same list in T, order kept, duplicates dropped |
+| `MapToSubdl(iso)` | same | T → the two-letter code a SubDL request carries |
+| `MapToSubdlName(name)` | same | T → the language name a SubDL form field expects |
+| `KnowsTwoLetter`, `KnowsThreeLetter`, `IsNoLanguage` | same | questions about the table; they translate nothing |
+| `ToSite` / `FromSite` | `Sources/Subdl/SubdlLanguages.cs` | T ↔ SubDL's own code |
+| `ToSite` / `FromSite` plus the `Site` table | `Sources/Tvst/TvstLanguages.cs` | T ↔ tvsubtitles' own code |
+| `ToSite` / `FromSite` plus the `Site` table | `Sources/Msub/MsubLanguages.cs` | T ↔ moviesubtitles' own code |
+| `Voice(key)` | `Sources/SourceLanguages.cs` | picks the bridge of a named source, so a caller never names one |
+| `IsoLanguage(code)` | `Sources/SourceContract.cs` | a value at the boundary → T, or empty; never null |
+| `MapLanguages(codes, map)` | `Sources/SourceContract.cs` | our codes → the codes of one source, deduplicated |
+| `CandidateLanguage(siteCode, map)` | `Sources/SourceContract.cs` | a source's code → T for the store |
+| `DetectLanguage(content)` | `Qa/QaGates.cs` | the library's 639-1 → T (F-M802) |
+| `CorrectedLanguage`, `IsFamilyMatch`, `LangFamilyMap` | `Qa/QaGates.cs` | a comparison; both sides are translated first |
+| `Canonical(tag)` | `Qa/AudioTrackChoice.cs` | a Matroska audio tag → T |
+| the name token | `Registry/SidecarNaming.cs` | T ↔ the lower-case token in `<name>.<lang>.<slot>.srt`, both ways |
+| the target list | `Configuration/configPage.html` | 57 two-letter wishes → T when the setting is read |
+| the table itself | `scripts/tools/gen-language-table.py` | the official list → `LanguageTable`; `scripts/iso639.py` is the helper beside it |
+
+The one translator is `LanguageMapper`. It is the only function that turns an arbitrary spelling into the
+house form, and the table it uses is generated, so it knows 183 two-letter and 486 three-letter codes
+without anybody typing them. Everything else in that class is a question about the table or an exit to
+one particular source.
+
+The three bridges are the sources, and each owns its own list because a site may file a language
+differently than the standard does. `Voice(key)` is the façade over them: a caller asks for the bridge of
+a source by its short name and never has to know which class stands behind it. `MapLanguages` and
+`CandidateLanguage` are the two directions of the same crossing, one outward for a request, one inward for
+a candidate.
+
+The detector is the fifth boundary and the newest one. It speaks ISO 639-1 and cannot be asked for
+anything else, so its answer is translated where it arrives (`DetectLanguage`) and the comparison that
+uses it translates both sides as well. Before 12.3.8.92 it did neither, and every comparison against a
+three-letter tag was false and silent.
+
+Names and the store never translate anything new: the token in a sidecar name is written from the house
+form and read back through `Canonical`, and the store, the verdict keys and the signatures carry the house
+form as it is. The settings page is the one place where a human types a wish, and the wish is two letters
+because a human reads it, so it is translated when the setting is read and never again afterwards.
+
+The rule that holds all of it: only `Canonical` translates **into** the house, every other seam either
+leaves it deliberately or comes back through `Canonical`. A function that translates between two foreign
+forms is a bug, not a convenience.
 
 ## What went wrong
 
@@ -49,8 +100,8 @@ Verdicts of the pack phase are keyed by the language mark, so a season whose pai
 
 ## How it is checked
 
-T437 in the `endpoints` run holds four checks. The three spellings `en`, `eng` and `EN` meet in one form. The languages of a file are asked by id and named in ISO. The plan carries ISO everywhere and compares ISO against ISO, and the comparison is strict, so an unlabelled track never answers for a language.
+T437 in the `endpoints` run holds four checks, and T448 in `langcorrect` holds six for the detector (F-M802). The three spellings `en`, `eng` and `EN` meet in one form. The languages of a file are asked by id and named in ISO. The plan carries ISO everywhere and compares ISO against ISO, and the comparison is strict, so an unlabelled track never answers for a language.
 
 ## Where the rules live
 
-[SPECIFICATION.md](SPECIFICATION.md), F-M557, F-M789, F-M790, F-M797 and F-M798, with the pitfall F-M468. Guarded by `endpoints`.
+[SPECIFICATION.md](SPECIFICATION.md), F-M557, F-M789, F-M790, F-M797, F-M798 and F-M802, with the pitfall F-M468. Guarded by `endpoints` and `langcorrect`.
