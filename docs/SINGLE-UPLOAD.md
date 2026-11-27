@@ -35,15 +35,16 @@ id.
 
 ## What a single upload never does
 
-It deletes nothing, it never invents an id, and it never sends a forced track. It also never sends the
-same subtitle to the same site twice. Whether a site already holds it is read from that site's own
-submission id, not from a shared "uploaded" flag, and that holds for an embedded track and for a loose
-sidecar beside the video alike.
+It deletes nothing, it never invents an id, and it never sends a forced track. A subtitle that was
+downloaded from any site never goes up at all: not back to where it came from, and not to any other
+site either. The origin alone decides that, once per file, before any site is looked at. What a site
+already holds of our own texts is a second and separate question, read from that site's own submission
+id rather than from a shared flag, and it holds for an embedded track and for a loose sidecar alike.
 
 ## What the log says
 
 `SKIP {File} — item settled before extraction`, `SKIP {File} — every text stream was rejected earlier`,
-`LANGUAGE {File} — tagged {Tag}, detected {Lang}`, `UPLOADED {File} [{Lang}] → {Source}`.
+`LANGUAGE {File} — tagged {Tag}, detected {Lang}`, `UPLOADED {File} [{Lang}] → {Source}`, `origin:subdl — downloaded there, never uploaded`.
 
 ## Where the rules live
 
