@@ -1162,3 +1162,5 @@ These entries carry no `F-M` reference: they are older than the tagging discipli
 bound to a suite in `scripts/tests/counts.json`, the rest are proven where they stand.
 
 **T442:** A verdict tag that was two letters moves too (F-M794), in `endpoints`. **1 check**. `tt794|1|EN non-HI` becomes `tt794|1|ENG non-HI`, `tt794|1|DE HI` becomes `tt794|1|DEU HI`, `tt794|1|spa non-hi` becomes `tt794|1|SPA non-hi`, and the season-level verdict keeps its place without a language.
+
+**T443:** The bridge comes from the official list, and nothing is guessed (F-M797, F-M798), in `endpoints`. **5 checks**. Fijian reaches `FJ` where the old guess said `FI` (Finnish). Both three-letter forms meet in the canon. An unknown code, a language without a two-letter form and `und` all answer with nothing. The four codes that name no language are named as such. And the counter tells an unknown code from a known one.

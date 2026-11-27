@@ -1212,6 +1212,12 @@
       "checks": 1,
       "requirement": "F-M794",
       "title": "Auch ein zweistelliger Urteils-Tag wandert: EN non-HI wird ENG non-HI, DE HI wird DEU HI, die Staffelebene bleibt"
+    },
+    "T443": {
+      "suite": "endpoints",
+      "checks": 5,
+      "requirement": "F-M797",
+      "title": "Die Bruecke kommt aus der amtlichen Liste (Fidschi erreicht FJ statt FI), beide dreistelligen Formen treffen sich im Kanon, und geraten wird nichts: unbekannt, ohne Zweisteller und und ergeben null"
     }
   }
 }

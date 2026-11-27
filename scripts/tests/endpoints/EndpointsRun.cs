@@ -4659,6 +4659,43 @@ internal static class Program
 
         try { Directory.Delete(zweiOrdner, true); } catch { }
 
+        // ---- 36. F-M797/F-M798: die Tafel kommt aus der amtlichen Liste, und geraten wird nichts ----
+        Check(
+            "F-M797: the bridge is the official list — Fijian reaches FJ where the old guess said FI (Finnish)",
+            Jellyfin.Plugin.SubScribe.Language.LanguageMapper.MapToSubdl("fij") == "FJ"
+            && Jellyfin.Plugin.SubScribe.Language.LanguageMapper.MapToSubdl("fij") != "FI"
+            && Jellyfin.Plugin.SubScribe.Language.LanguageMapper.Canonical("fij") == "FIJ",
+            Jellyfin.Plugin.SubScribe.Language.LanguageMapper.MapToSubdl("fij") ?? "null");
+        Check(
+            "F-M797: both three-letter forms are known — ger and deu meet in DEU, and DEU is not unknown",
+            Jellyfin.Plugin.SubScribe.Language.LanguageMapper.KnowsThreeLetter("ger")
+            && Jellyfin.Plugin.SubScribe.Language.LanguageMapper.KnowsThreeLetter("deu")
+            && !Jellyfin.Plugin.SubScribe.Language.LanguageMapper.KnowsThreeLetter("xyz")
+            && Jellyfin.Plugin.SubScribe.Language.LanguageMapper.Canonical("ger") == "DEU",
+            Jellyfin.Plugin.SubScribe.Language.LanguageMapper.Canonical("ger") ?? "null");
+        Check(
+            "F-M798: nothing is guessed — an unknown code, a language without a two-letter form and und all give null",
+            Jellyfin.Plugin.SubScribe.Language.LanguageMapper.MapToSubdl("xyz") is null
+            && Jellyfin.Plugin.SubScribe.Language.LanguageMapper.MapToSubdl("ace") is null
+            && Jellyfin.Plugin.SubScribe.Language.LanguageMapper.MapToSubdl("und") is null
+            && Jellyfin.Plugin.SubScribe.Language.LanguageMapper.MapToSubdlName("Klingon") is null,
+            Jellyfin.Plugin.SubScribe.Language.LanguageMapper.MapToSubdl("ace") ?? "null");
+        Check(
+            "F-M798: the four codes that name no language are named as such",
+            Jellyfin.Plugin.SubScribe.Language.LanguageMapper.IsNoLanguage("und")
+            && Jellyfin.Plugin.SubScribe.Language.LanguageMapper.IsNoLanguage("mul")
+            && Jellyfin.Plugin.SubScribe.Language.LanguageMapper.IsNoLanguage("mis")
+            && Jellyfin.Plugin.SubScribe.Language.LanguageMapper.IsNoLanguage("zxx")
+            && !Jellyfin.Plugin.SubScribe.Language.LanguageMapper.IsNoLanguage("deu"),
+            "und/mul/mis/zxx");
+        Check(
+            "F-M797: the counter tells an unknown code from a known one, and a two-letter value is its own case",
+            Jellyfin.Plugin.SubScribe.Data.ScribeDbContext.SpracheUnbekannt("XYZ")
+            && !Jellyfin.Plugin.SubScribe.Data.ScribeDbContext.SpracheUnbekannt("DEU")
+            && !Jellyfin.Plugin.SubScribe.Data.ScribeDbContext.SpracheUnbekannt("EU")
+            && Jellyfin.Plugin.SubScribe.Data.ScribeDbContext.SpracheUnbekannt("YUE"),
+            "XYZ known? " + Jellyfin.Plugin.SubScribe.Data.ScribeDbContext.SpracheUnbekannt("XYZ"));
+
         if (_failures > 0)
         {
             Console.WriteLine($">>> ENDPUNKTE: {_failures} von {_checks} Pruefungen fehlgeschlagen");

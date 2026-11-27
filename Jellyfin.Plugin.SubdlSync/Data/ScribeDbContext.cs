@@ -908,6 +908,102 @@ public sealed class ScribeDbContext : IDisposable
     /// F-M790: steht dieser gespeicherte Wert schon im Kanon? Leer gilt als in Ordnung (die Zeile sagt
     /// nichts ueber eine Sprache).
     /// </summary>
+    /// <summary>
+    /// F-M797: die zweite, unabhaengige Zaehlung — Kennzeichen, die wie der Kanon aussehen, die die
+    /// amtliche Liste aber nicht fuehrt. Sie werden nicht gewandert (die Wanderung kann sie nicht
+    /// erfinden), sondern benannt: <c>unbekannt: XYZ ×4</c>.
+    /// </summary>
+    private void ZaehleUnbekannte()
+    {
+        try
+        {
+            var befund = new Dictionary<string, int>(StringComparer.Ordinal);
+            int gesamt = 0;
+
+            void Nimm(string ort, string? wert)
+            {
+                if (!SpracheUnbekannt(wert))
+                {
+                    return;
+                }
+
+                gesamt++;
+                string schluessel = ort + "=" + (wert ?? string.Empty).Trim().ToUpperInvariant();
+                befund[schluessel] = befund.TryGetValue(schluessel, out int alt) ? alt + 1 : 1;
+            }
+
+            foreach (var row in _db.Set<TrackEntity>().AsNoTracking().ToList())
+            {
+                Nimm("track", row.Language);
+            }
+
+            foreach (var row in _db.Set<SidecarEntity>().AsNoTracking().ToList())
+            {
+                Nimm("sidecar", row.Language);
+            }
+
+            foreach (var row in _db.Set<PackEntity>().AsNoTracking().ToList())
+            {
+                Nimm("pack", row.Language);
+            }
+
+            foreach (var row in _db.Set<BadAppleEntity>().AsNoTracking().ToList())
+            {
+                Nimm("badapple", row.Language);
+            }
+
+            foreach (var row in _db.Set<FileEntity>().AsNoTracking().ToList())
+            {
+                foreach (string glied in (row.LanguagesAvailable ?? string.Empty)
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    Nimm("file.languages", glied);
+                }
+
+                foreach (string glied in (row.LastSearchLanguages ?? string.Empty)
+                    .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                {
+                    Nimm("file.stamp", glied);
+                }
+            }
+
+            if (gesamt == 0)
+            {
+                LogUtil.Debug(_logger, "[Sub Scribe-DB] every stored language value names a code the table knows (F-M797)");
+                return;
+            }
+
+            LogUtil.Normal(
+                _logger,
+                "[Sub Scribe] data file: {Count} stored value(s) name a code the ISO 639-2 list does not carry, in {Shapes} shape(s) (F-M797).",
+                gesamt,
+                befund.Count);
+            foreach (var eintrag in befund.OrderByDescending(x => x.Value).Take(24))
+            {
+                LogUtil.Normal(
+                    _logger,
+                    "[Sub Scribe] data file:   {Shape} (F-M797).",
+                    eintrag.Key + " \u00d7" + eintrag.Value.ToString(CultureInfo.InvariantCulture));
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning("[Sub Scribe] could not count unknown language codes (continuing): {Msg}", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// F-M797: nennt dieser Wert ein Kennzeichen, das die amtliche Liste nicht führt? Ein solcher
+    /// Wert sieht wie der Kanon aus (drei Buchstaben, groß) und ist doch keins — bis 12.3.8.86
+    /// konnte die Gegenprobe ihn nicht von einem echten Kennzeichen unterscheiden.
+    /// </summary>
+    /// <param name="wert">Ein gespeicherter Sprachwert.</param>
+    /// <returns>True, wenn er dreistellig ist und die Tafel ihn nicht kennt.</returns>
+    public static bool SpracheUnbekannt(string? wert)
+        => !string.IsNullOrWhiteSpace(wert)
+           && wert.Trim().Length == 3
+           && !Language.LanguageMapper.KnowsThreeLetter(wert);
+
     public static bool SpracheAusserKanon(string? wert)
     {
         if (string.IsNullOrWhiteSpace(wert))
@@ -1144,6 +1240,7 @@ public sealed class ScribeDbContext : IDisposable
             }
 
             ZaehleSprachbefund();
+            ZaehleUnbekannte();
         }
         catch (Exception ex)
         {

@@ -1,6 +1,6 @@
 # One language code inside the client
 
-**Status:** concept, implemented in 12.3.8.78 (F-M789, F-M790).
+**Status:** concept, implemented in 12.3.8.87 (F-M789, F-M790, F-M797, F-M798).
 **Applies to:** upload pipeline, download pipeline, store, every source adapter.
 
 ## 1. The rule
@@ -41,6 +41,29 @@ an **input**: it is translated on reading, so no stored row and no file name bec
 The Matroska tag written into a media file stays on the old spelling. Containers carry `ger`, `fre`, `chi`
 in practice and ffprobe prints them back that way; rewriting tags across the library would be a change with
 no reader to gain. It is a seam like the sources, and it is named as one.
+
+## 2c. Where the list comes from
+
+The list is not maintained by hand. It is generated from the official ISO 639-2 list of the registration
+authority: every code with its bibliographic form, its terminological form, its two-letter form and its
+English name. The generator is `scripts/tools/gen-language-table.py`, the fetched file is kept beside it so
+the build needs no network, and the generated class `LanguageTable` says in its header where it came from.
+
+That list holds 486 codes. 183 of them have a two-letter form, and 20 carry two different three-letter
+forms. Both facts are properties of the standard, not of this plugin.
+
+Three kinds of entry are worth naming:
+
+- **A language with a two-letter form** translates in both directions. `fij` becomes `FJ`, `ger` becomes
+  `DEU` and `DE` becomes `ger` again for a container tag.
+- **A language without one** — Achinese, Hawaiian — has no code at a source that speaks two letters. That
+  is an answer, not a failure.
+- **Four codes name no language at all**: `und` undetermined, `mul` multiple, `mis` uncoded, `zxx` no
+  linguistic content. They are treated as what they are, never as a language wish.
+
+Where a source keeps its own list, that list wins, and each exception states its reason in the code:
+Filipino is `TL` because the source files it under Tagalog, and Norwegian stays one language although the
+standard splits Bokmål and Nynorsk.
 
 ## 3. Where translation happens
 

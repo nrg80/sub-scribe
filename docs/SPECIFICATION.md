@@ -3,7 +3,7 @@
 **Owner: the rules.** This is the master document: every other paper is derived from it and cites its `F-M` tags. The contract boundaries stand in `CONTRACTS.md`, the vocabulary in `TERMS.md`.
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.86.
+**Status:** Implementation — v12.3.8.87.
 
 **A rule stands here with its ground: the decision behind it in one sentence, under `Concept decision`, and the
 check that proves it. The detailed measurement archive — what was measured, which run showed it, what happened —
@@ -18,8 +18,8 @@ states the rule, its constants, its ground and its test.**
 
 - [1. Objective and Scope](#1-objective-and-scope) — 2 requirements
 - [2. Seeder — what enters the queue](#2-seeder-what-enters-the-queue) — 13 requirements
-- [3. Upload Pipeline](#3-upload-pipeline) — 130 requirements
- - [3.1 Quality Gates — Upload](#31-quality-gates-upload) — 10 requirements
+- [3. Upload Pipeline](#3-upload-pipeline) — 131 requirements
+ - [3.1 Quality Gates — Upload](#31-quality-gates-upload) — 11 requirements
  - [3.2 Dry Run — Upload](#32-dry-run-upload) — 3 requirements
  - [3.3 Season Packs — Upload](#33-season-packs-upload) — cross-cutting, cites F-M379–F-M448 and F-M475, F-M476
  - [3.4 Upload completion criteria](#34-upload-completion-criteria) — 26 requirements (F-M557–F-M563, F-M571–F-M577, F-M580–F-M592)
@@ -277,7 +277,9 @@ New episode, newly ripped episode or replaced episode → different signature �
 
 **F-M796 [U]:** **Case counts.** The verdict pass compared the stored tag with the canon while ignoring case, so a row written as `spa non-hi` counted as done and stayed — three hundred and forty-nine of them, and the counter kept naming them because it compares character by character. The pass compares the same way now. A spelling that differs only in case is still a second spelling to everything that looks it up. Checked by T442.The upload chain, in the order the code applies it. Each switchable gate names its own switch and default.
 
-**F-M16 [B2]:** **Minimum size and minimum cue count.** The 2 KB size floor applies to UPLOADS only and is always on. The cue count (30) applies in BOTH directions and is switchable per direction, default on. Below either, the stream is skipped as "too small".
+**F-M797 [U]:** **The bridge is generated, not typed.** The mapping between the language codes is published: the registration authority lists every ISO 639-2 code with its bibliographic form, its terminological form, its two-letter form and its English name. The client carries that list as generated data, made by `scripts/tools/gen-language-table.py` from the cached official file, so the table can be rebuilt and audited. It holds 486 codes, 183 of them with a two-letter form, and 20 whose two three-letter forms differ. Before, 73 and 106 were known by hand, and the rest was missing without anyone noticing. A language without a two-letter form is a possible answer and not an error: the official list says so. Where the source keeps its own list, that list wins, and each exception names its reason. Checked by T443.
+
+**F-M798 [U]:** **Nothing is guessed.** A code the table does not know, a language without a two-letter form, and the four codes that name no language at all — undetermined, multiple, no linguistic content, uncoded — all answer with nothing. The caller decides: the source refuses the job, or the search runs without a language. Until 12.3.8.86 the bridge cut the first two letters of anything it did not know, so Fijian was searched as Finnish and `und` became `UN`; a valid code for the wrong language is worse than no code, because the search runs and reports nothing. The startup census names such values instead of counting them as the canon. Checked by T443.**F-M16 [B2]:** **Minimum size and minimum cue count.** The 2 KB size floor applies to UPLOADS only and is always on. The cue count (30) applies in BOTH directions and is switchable per direction, default on. Below either, the stream is skipped as "too small".
 
 **F-M13 [B2]:** **SRT parser validation (switchable, default on):** ≥1 cue, monotonically increasing timestamps, plausible cue duration (>0.1 s, <10 min — long music cues stay legal)
 
