@@ -103,7 +103,8 @@ internal static class Program
 
         var coverage = SubtitleCoverage.Read(null, "/kein/solcher/pfad/The.Deputy.mkv", present);
         var open = coverage.Open(SubtitleRef.Required(new[] { "EN", "DE" }, false));
-        Check(open.Any(r => r.Language == "EN"), "EN is OPEN — the download pipeline will search for it");
+        // F-M790: gefragt wird zweistellig ("EN"), geantwortet wird im Kanon ("ENG").
+        Check(open.Any(r => r.Language == "ENG"), "ENG is OPEN — the download pipeline will search for it");
         Check(!open.Any(r => r.Language == "DE"), "DE is closed — nothing to fetch");
 
         // Norwegian is one language on SubDL (measured 01.11.2026: languages=NB and NN are ignored by the
