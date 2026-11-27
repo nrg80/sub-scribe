@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.71",
-        "changelog": "v12.3.8.71: a closed title is a pause, not an end — after seven days it gets one probe, spread over a few hours; until now only a reset could open it.",
+        "version": "12.3.8.72",
+        "changelog": "v12.3.8.72: one TMDb shelf of its own — facts instead of whole responses, lifetimes by kind, 16 MB per kind, and a cache that can no longer close a title.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.71-dev/Jellyfin.Plugin.SubdlSync_12.3.8.71.zip",
-        "checksum": "a0185aa697fb21a9c1873535a338e1b5",
-        "timestamp": "2026-11-27T03:37:30Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.72-dev/Jellyfin.Plugin.SubdlSync_12.3.8.72.zip",
+        "checksum": "16c7b43fff0ce2a3cfacaa29bd1f8ec3",
+        "timestamp": "2026-11-27T03:49:53Z"
       }
     ]
   }
