@@ -196,6 +196,8 @@ milliseconds it took and the rows the context carries afterwards.
 
 **T436:** The extraction store (F-M784 to F-M788), in `endpoints`. **6 checks**. A track is written and read back byte for byte. It is one ZIP with one member, and the key carries no path. The body is built deterministically, so two writes of the same text are the same bytes. A replaced container is a miss because the name carries size and times. An entry that will not unpack is removed rather than repaired, and the run cache is gone: no `RunWorkFiles` is left, and the upload configures the shared store itself.
 
+**T437:** One language code inside (F-M789), in `endpoints`. **4 checks**. The three spellings `en`, `eng` and `EN` meet in one form. The languages of a file are asked by id and named in ISO — not read off the object, not in the source spelling. The pack plan carries ISO everywhere and compares ISO against ISO. And the comparison is strict: a track without a language is never a match.
+
 
 **T428:** The season archive is not remembered at all (F-M766/F-M768), in `tvsubtitles`. **2 checks**. The entry type has `Name` but no `Data`, and a member read after a run that already paid for the archive comes back byte-identical with **0** requests — from disk, not from memory.
 

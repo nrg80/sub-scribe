@@ -5785,17 +5785,12 @@ public sealed class UploadPipeline : IPackFiller
                 continue;
             }
 
-            IReadOnlyList<MediaStream>? streams;
-            try
-            {
-                streams = episode.GetMediaStreams();
-            }
-            catch (Exception)
-            {
-                continue;
-            }
-
-            if (streams == null)
+            // F-M789: dieselbe Falle wie F-M468. Die Pack-Phase liest die Staffel als Ordnerkinder, und
+            // ein solches Item traegt seine Spuren nicht am Objekt — die eigene Liste ist leer, und die
+            // Staffel lieferte keine einzige Sprache. Deshalb per Kennung fragen; die Objektliste bleibt
+            // der Rueckfall in ContainerSubtitleStreams.
+            IReadOnlyList<MediaStream> streams = ContainerSubtitleStreams(episode);
+            if (streams.Count == 0)
             {
                 continue;
             }
@@ -5809,7 +5804,9 @@ public sealed class UploadPipeline : IPackFiller
                     continue;
                 }
 
-                string? code = LanguageMapper.MapToSubdl(stream.Language);
+                // F-M789: der Plan spricht ISO (F-M557). Die zweistellige Schreibweise der Quelle gehoert
+                // an die API-Grenze; hier stand sie im Plan und machte jedes Paar unvergleichbar.
+                string? code = LanguageMapper.Canonical(stream.Language);
                 if (!string.IsNullOrWhiteSpace(code))
                 {
                     pairs.Add((code!, Jellyfin.Plugin.SubScribe.Registry.SidecarNaming.IsHearingImpairedStream(stream)));
@@ -5905,6 +5902,26 @@ public sealed class UploadPipeline : IPackFiller
     /// </summary>
     /// <param name="item">Episode item.</param>
     /// <returns>The subtitle streams inside the container, in container order.</returns>
+    /// <summary>
+    /// F-M789: zwei Sprachangaben sind dieselbe Sprache, wenn ihre ISO-Form dieselbe ist. Der Client
+    /// liefert <c>eng</c>, der Store fuehrt <c>ENG</c>, die Quelle spricht <c>en</c> — verglichen wird
+    /// nur die ISO-Form, der Quellcode bleibt an der API-Grenze.
+    /// <para>
+    /// Absichtlich streng: eine Spur ohne Sprachangabe ist KEIN Treffer. Das bestehende
+    /// <see cref="SameLanguage"/> (F-M414) laesst leere Angaben durch, weil es eine Quelle mit uns
+    /// vergleicht; hier wuerde das jede unbenannte Spur zu jeder Sprache zaehlen.
+    /// </para>
+    /// </summary>
+    /// <param name="left">One spelling.</param>
+    /// <param name="right">The other spelling.</param>
+    /// <returns>True when both name the same language.</returns>
+    private static bool SameLanguageIso(string? left, string? right)
+    {
+        string? a = LanguageMapper.Canonical(left);
+        string? b = LanguageMapper.Canonical(right);
+        return a != null && b != null && string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+    }
+
     private List<MediaStream> ContainerSubtitleStreams(BaseItem item)
     {
         var streams = _mediaSourceManager.GetMediaStreams(item.Id) ?? item.GetMediaStreams();
@@ -5943,7 +5960,7 @@ public sealed class UploadPipeline : IPackFiller
             if (stream.IsExternal
                 || !Jellyfin.Plugin.SubScribe.Registry.SidecarNaming.IsDialogueStream(stream)
                 || Jellyfin.Plugin.SubScribe.Registry.SidecarNaming.IsHearingImpairedStream(stream) != hearingImpaired
-                || !string.Equals(LanguageMapper.MapToSubdl(stream.Language), lang, StringComparison.OrdinalIgnoreCase))
+                || !SameLanguageIso(stream.Language, lang))
             {
                 continue;
             }
@@ -6054,14 +6071,15 @@ public sealed class UploadPipeline : IPackFiller
                         continue;
                     }
 
-                    string? mapped = LanguageMapper.MapToSubdl(stream.Language);
+                    // F-M789: ISO, wie der Store es fuehrt — nicht der Quellcode.
+                    string? mapped = LanguageMapper.Canonical(stream.Language);
                     if (string.IsNullOrWhiteSpace(mapped))
                     {
                         continue;
                     }
 
                     pairs.Add((
-                        mapped.ToUpperInvariant(),
+                        mapped,
                         Jellyfin.Plugin.SubScribe.Registry.SidecarNaming.IsHearingImpairedStream(stream)));
                 }
             }

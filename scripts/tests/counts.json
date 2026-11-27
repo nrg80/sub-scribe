@@ -1176,6 +1176,12 @@
       "checks": 6,
       "requirement": "F-M784",
       "title": "Der Extraktions-Speicher: eine Spur ueberlebt den Lauf, ein ZIP mit einem Mitglied, deterministisch, ersetzte Datei = Fehltreffer, kaputter Eintrag faellt raus, Laufcache geloescht"
+    },
+    "T437": {
+      "suite": "endpoints",
+      "checks": 4,
+      "requirement": "F-M789",
+      "title": "Ein Sprachcode im Client: en/eng/EN fallen auf ENG zusammen, Datei-Sprachen per Kennung und in ISO, Plan ISO gegen ISO, Vergleich streng"
     }
   }
 }

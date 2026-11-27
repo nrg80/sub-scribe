@@ -4351,6 +4351,52 @@ internal static class Program
             "kein Laufcache mehr, Ablage eingerichtet");
         spurenSpeicher.Reset();
 
+
+        // ---- 29. F-M789: ein Sprachcode im Client, uebersetzt wird an den Grenzen -----------------
+        string uploadQuelle789 = ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Pipeline", "UploadPipeline.cs"));
+        string isoA = Jellyfin.Plugin.SubScribe.Language.LanguageMapper.Canonical("en") ?? string.Empty;
+        string isoB = Jellyfin.Plugin.SubScribe.Language.LanguageMapper.Canonical("eng") ?? string.Empty;
+        string isoC = Jellyfin.Plugin.SubScribe.Language.LanguageMapper.Canonical("EN") ?? string.Empty;
+        Check(
+            "F-M789: three spellings of one language meet in one form — en, eng and EN are all ENG",
+            isoA == "ENG" && isoB == "ENG" && isoC == "ENG",
+            $"\"en\"->{isoA}, \"eng\"->{isoB}, \"EN\"->{isoC}");
+        int fileLanguagesStart = uploadQuelle789.IndexOf("public IReadOnlyCollection<(string Language, bool HearingImpaired)> FileLanguages", StringComparison.Ordinal);
+        int fileLanguagesEnd = uploadQuelle789.IndexOf("private List<BaseItem> SeasonItems", fileLanguagesStart, StringComparison.Ordinal);
+        string fileLanguages = fileLanguagesStart >= 0 && fileLanguagesEnd > fileLanguagesStart
+            ? uploadQuelle789[fileLanguagesStart..fileLanguagesEnd]
+            : string.Empty;
+        Check(
+            "F-M789: the file's languages are asked by id and named in ISO — not read off the object and not in the source's spelling",
+            fileLanguages.Contains("ContainerSubtitleStreams(episode)", StringComparison.Ordinal)
+            && fileLanguages.Contains("LanguageMapper.Canonical(stream.Language)", StringComparison.Ordinal)
+            && !fileLanguages.Contains("episode.GetMediaStreams()", StringComparison.Ordinal)
+            && !fileLanguages.Contains("MapToSubdl", StringComparison.Ordinal),
+            $"{fileLanguages.Length} Zeichen geprüft");
+        int packPairsStart = uploadQuelle789.IndexOf("private HashSet<(string Lang, bool Hi)> PackPairsOf", StringComparison.Ordinal);
+        int packPairsEnd = uploadQuelle789.IndexOf("private", packPairsStart + 10, StringComparison.Ordinal);
+        string packPairs = packPairsStart >= 0 && packPairsEnd > packPairsStart
+            ? uploadQuelle789[packPairsStart..packPairsEnd]
+            : string.Empty;
+        int fillStart = uploadQuelle789.IndexOf("private List<int> FindFillStreams", StringComparison.Ordinal);
+        string fillStreams = fillStart >= 0 && fillStart + 2600 <= uploadQuelle789.Length
+            ? uploadQuelle789.Substring(fillStart, 2600)
+            : string.Empty;
+        Check(
+            "F-M789: the pack plan carries ISO everywhere and compares ISO against ISO",
+            packPairs.Contains("LanguageMapper.Canonical(stream.Language)", StringComparison.Ordinal)
+            && !packPairs.Contains("MapToSubdl", StringComparison.Ordinal)
+            && fillStreams.Contains("SameLanguageIso(stream.Language, lang)", StringComparison.Ordinal)
+            && !fillStreams.Contains("MapToSubdl", StringComparison.Ordinal),
+            $"{packPairs.Length} + {fillStreams.Length} Zeichen geprüft");
+        int helper = uploadQuelle789.IndexOf("private static bool SameLanguageIso", StringComparison.Ordinal);
+        string helperBody = helper >= 0 ? uploadQuelle789[helper..(helper + 420)] : string.Empty;
+        Check(
+            "F-M789: the comparison is strict — a track without a language is never a match",
+            helperBody.Contains("a != null && b != null", StringComparison.Ordinal)
+            && helperBody.Contains("LanguageMapper.Canonical", StringComparison.Ordinal),
+            "leere Angabe = kein Treffer");
+
         if (_failures > 0)
         {
             Console.WriteLine($">>> ENDPUNKTE: {_failures} von {_checks} Pruefungen fehlgeschlagen");
