@@ -114,6 +114,7 @@ Do not release by tagging and pushing alone: a release must carry exactly one as
 
 ## Documentation
 
+- The parts of the plugin and how they fit: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)
 - How the documentation is written: [docs/STYLE.md](docs/STYLE.md)
 - Specification and acceptance criteria: [docs/SPECIFICATION.md](docs/SPECIFICATION.md)
 - The test catalogue, one entry per test: [docs/TESTS.md](docs/TESTS.md)
