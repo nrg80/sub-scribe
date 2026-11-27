@@ -1224,6 +1224,12 @@
       "checks": 3,
       "requirement": "F-M799",
       "title": "Jede Quelle liest im Dateinamen ihren eigenen Code: CS gegen cz, ELL gegen gr, ZHO gegen cn, JPN gegen jp, und br statt PT bei moviesubtitles.org"
+    },
+    "T445": {
+      "suite": "endpoints",
+      "checks": 2,
+      "requirement": "F-M585",
+      "title": "Ein bereits hochgeladener Einzel darf zusaetzlich in den Pack: beide Pack-Aufrufstellen fragen die Sperre fuer den Pack, und die Ausnahme deckt nur die beiden schon-da-Gruende"
     }
   }
 }

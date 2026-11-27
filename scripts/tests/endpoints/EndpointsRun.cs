@@ -1472,7 +1472,7 @@ internal static class Program
             && upload600.Contains("public bool EpisodeCannotJoin(string imdbId, int season, int episode, string lang, bool hearingImpaired, out string reason)", StringComparison.Ordinal));
         Check("F-M600: die Vorabfrage kostet keine Extraktion — Spurenliste und Store-Urteile",
             upload600.Contains("var positions = FindFillStreams(item, lang, hearingImpaired);", StringComparison.Ordinal)
-            && upload600.Contains("SpurIstGesperrt(mediaHash, position, lang, hearingImpaired, isSeries: true)", StringComparison.Ordinal)
+            && upload600.Contains("SpurIstGesperrt(mediaHash, position, lang, hearingImpaired, isSeries: true, fuerPack: true)", StringComparison.Ordinal)
             && !upload600.Substring(upload600.IndexOf("public bool EpisodeCannotJoin(", StringComparison.Ordinal), 2600).Contains("ExtractAllAsync", StringComparison.Ordinal));
         Check("F-M600: die Staffel wird VOR der ersten Extraktion geprueft und der Grund genannt",
             coord600.Contains("season pack skipped before any extraction — {Imdb} S{Season} [{Lang}]: episode {Episode} cannot join ({Reason}), and {State} (F-M600).", StringComparison.Ordinal)
@@ -1765,12 +1765,13 @@ internal static class Program
 
         // --- F-M584: eine Ablehnung gilt je Quelle -----------------------------------------------
         Check("F-M584: ein Selbst-Echo sperrt die Spur nur, solange keine Quelle das Paar mehr verlangt",
-            uploadSource584.Contains("private bool SpurIstGesperrt(string? mediaHash, int position, string language, bool hearingImpaired, bool isSeries)", StringComparison.Ordinal)
+            uploadSource584.Contains("private bool SpurIstGesperrt(", StringComparison.Ordinal)
+            && uploadSource584.Contains("bool fuerPack = false)", StringComparison.Ordinal)
             && uploadSource584.Contains("if (reason == RejectReason.SelfEcho", StringComparison.Ordinal)
             && uploadSource584.Contains("&& AnyUploadSourceStillWants(mediaHash, language, hearingImpaired, isSeries, position))", StringComparison.Ordinal)
             && uploadSource584.Contains("return true;", StringComparison.Ordinal));
         Check("F-M584: der Pack-Fueller und der Kopf-Ausstieg fragen je Quelle",
-            uploadSource584.Contains(".Where(position => SpurIstGesperrt(fillMediaHash, position, lang, hearingImpaired, isSeries: true))", StringComparison.Ordinal)
+            uploadSource584.Contains(".Where(position => SpurIstGesperrt(fillMediaHash, position, lang, hearingImpaired, isSeries: true, fuerPack: true))", StringComparison.Ordinal)
             && uploadSource584.Contains("bool nochEinPaarOffen = Registry.RecordedPairsByHash(mediaHash)", StringComparison.Ordinal)
             && uploadSource584.Contains("if (textPositions.Count > 0 && !nochEinPaarOffen", StringComparison.Ordinal));
 
@@ -4720,6 +4721,21 @@ internal static class Program
             && Jellyfin.Plugin.SubScribe.Api.MovieSubtitlesClient.SiteLanguage("POR") is null
             && Jellyfin.Plugin.SubScribe.Language.LanguageMapper.MapToSubdl("POR") == "PT",
             Jellyfin.Plugin.SubScribe.Api.MovieSubtitlesClient.SiteLanguage("POR") ?? "null");
+
+        // ---- 38. F-M585: ein schon hochgeladener Einzel darf zusaetzlich in den Pack ---------------------
+        string uploadQuelle585 = await File.ReadAllTextAsync(
+            Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Pipeline", "UploadPipeline.cs"));
+        Check(
+            "F-M585: both pack call sites ask the lock with the pack in mind",
+            System.Text.RegularExpressions.Regex.Matches(uploadQuelle585, @"SpurIstGesperrt\([^)]*fuerPack: true\)").Count == 2
+            && System.Text.RegularExpressions.Regex.Matches(uploadQuelle585, @"SpurIstGesperrt\(mediaHash|SpurIstGesperrt\(fillMediaHash").Count == 2,
+            "Treffer: " + System.Text.RegularExpressions.Regex.Matches(uploadQuelle585, @"fuerPack: true").Count);
+        Check(
+            "F-M585: the pack exemption covers the two \"already there\" verdicts and nothing else",
+            uploadQuelle585.Contains("if (fuerPack", StringComparison.Ordinal)
+            && uploadQuelle585.Contains("reason == RejectReason.SelfEcho || reason == RejectReason.DuplicateContent", StringComparison.Ordinal)
+            && uploadQuelle585.Contains("private bool SpurIstGesperrt(", StringComparison.Ordinal),
+            "Exemption gefunden");
 
         if (_failures > 0)
         {

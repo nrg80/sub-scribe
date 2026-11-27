@@ -3,7 +3,7 @@
 **Owner: the rules.** This is the master document: every other paper is derived from it and cites its `F-M` tags. The contract boundaries stand in `CONTRACTS.md`, the vocabulary in `TERMS.md`.
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.88.
+**Status:** Implementation — v12.3.8.89.
 
 **A rule stands here with its ground: the decision behind it in one sentence, under `Concept decision`, and the
 check that proves it. The detailed measurement archive — what was measured, which run showed it, what happened —
@@ -543,7 +543,13 @@ New:
 
 Verified by T302.
 
-**F-M585 [U]:** **A single upload and a season pack no longer exclude each other — the pack steps beside the single.** Concept decision: SubDL allows a single upload that is at the same time part of a season pack. Three places hold up today's prohibition:
+**F-M585 [U]:** **A single upload and a season pack do not exclude each other — the pack steps beside the single.** The policy in one line: single when the upload switch is on, pack when the pack switch is on, and a subtitle that is already uploaded may go into the pack as well. SubDL allows an upload that is a single and a member of a season pack at the same time. Three places used to hold the prohibition up, and all three now ask the same question with the pack in mind:
+
+1. `SpurIstGesperrt` — the lock. It no longer locks a track for the pack when the stored verdict says the pair is already there (`duplicate-self-echo`, `duplicate-content`). A verdict about the content itself still locks the pack: too small, QA, a failed extraction, a language the file does not carry. Those say the text is not usable, not that it is already up.
+2. `EpisodeCannotJoin` — the cheap pre-check of the pack phase (F-M600). It reads the same lock, so an episode that is up as a single is no longer refused before the first extraction.
+3. `FillFromFileAsync` — the filler that picks the track per episode (F-M443/F-M611). Same lock, same answer.
+
+The single path keeps its own `duplicate-self-echo` skip: there, the verdict is right — a single is not sent twice. Checked by T445.
 
 - (1) F-M391 deleted the single before the pack via `deletePublishedSubtitle` — the call falls away, the ids are named in the `packs` row as "standing beside it";
 - (2) F-M429 skipped every position of a pack (`pack-carries-it`, 127 rows) — it now goes up additionally as a single, with a log line instead of a rejection;

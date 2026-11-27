@@ -5334,7 +5334,7 @@ public sealed class UploadPipeline : IPackFiller
         }
 
         var gesperrt = positions
-            .Where(position => SpurIstGesperrt(mediaHash, position, lang, hearingImpaired, isSeries: true))
+            .Where(position => SpurIstGesperrt(mediaHash, position, lang, hearingImpaired, isSeries: true, fuerPack: true))
             .ToList();
         if (gesperrt.Count == positions.Count)
         {
@@ -5462,7 +5462,7 @@ public sealed class UploadPipeline : IPackFiller
             // die das Paar hat. Verlangt eine andere Quelle es noch, wird die Spur entpackt und der Pack
             // kann gebaut werden.
             var alreadyRefused = fillPositions
-                .Where(position => SpurIstGesperrt(fillMediaHash, position, lang, hearingImpaired, isSeries: true))
+                .Where(position => SpurIstGesperrt(fillMediaHash, position, lang, hearingImpaired, isSeries: true, fuerPack: true))
                 .ToList();
             if (alreadyRefused.Count > 0)
             {
@@ -8064,7 +8064,9 @@ public sealed class UploadPipeline : IPackFiller
     /// <param name="hearingImpaired">HI-Merker des Paares.</param>
     /// <param name="isSeries">Wahr für eine Serie.</param>
     /// <returns>True, wenn die Ablehnung die Spur für alle Quellen sperrt.</returns>
-    private bool SpurIstGesperrt(string? mediaHash, int position, string language, bool hearingImpaired, bool isSeries)
+    /// <param name="fuerPack">Wahr, wenn die Frage fuer den STAFFEL-PACK gestellt wird.</param>
+    private bool SpurIstGesperrt(
+        string? mediaHash, int position, string language, bool hearingImpaired, bool isSeries, bool fuerPack = false)
     {
         if (mediaHash is null)
         {
@@ -8073,6 +8075,16 @@ public sealed class UploadPipeline : IPackFiller
 
         string? reason = Registry.EmbedRejectedReason(mediaHash, position);
         if (reason is null)
+        {
+            return false;
+        }
+
+        // F-M585: die Politik ist „einzeln, wenn Upload ein; Pack, wenn Pack ein" — und ein bereits
+        // hochgeladener Untertitel darf ZUSÄTZLICH noch einmal ins Pack. Die beiden Gründe, die genau
+        // das besagen („liegt bei einer Quelle schon"), sperren den Pack daher nicht. Alles andere
+        // (zu klein, QA, Extraktion gescheitert, Sprachtafel) bleibt gesperrt — dort fehlt der Inhalt.
+        if (fuerPack
+            && (reason == RejectReason.SelfEcho || reason == RejectReason.DuplicateContent))
         {
             return false;
         }
