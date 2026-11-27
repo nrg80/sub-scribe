@@ -30,7 +30,7 @@ saves nothing, and a later member of the same archive can still pass.
 ## What is counted
 
 One archive counts once, under *Season packs downloaded*; the further episodes that come out of it
-count nothing. The archive itself stays in the cache, which [SEASON-PACK-CACHING.md](SEASON-PACK-CACHING.md)
+count nothing. The archive itself stays in the cache, which [CACHING.md](CACHING.md)
 describes.
 
 ## Two things worth knowing

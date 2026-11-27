@@ -1,9 +1,9 @@
 # moviesubtitles.org — the film source
 
-Paths, tables and peculiarities of moviesubtitles.org; the contract view of the same source stands in
-`engines/moviesubtitles.md`.
+moviesubtitles.org carries subtitles for films only, and whether a medium of ours is a film or a series is
+decided by TMDb, not by its name (F-M507).
 
-## 1. What it is
+## What it is
 
 The site has **no API** (F-M506): `/api.php`, `/sitemap.xml` and `/rss.xml` answer with 302 to `/`;
 `/admin.php` is an operator login in Ukrainian (cp1251), not a user account; `/login.php`, `/panel.php`
@@ -14,10 +14,9 @@ Layout, CSS classes (`left_articles`, `description`, `stat`, `footer`) and form 
 tvsubtitles.net, and the header carries the reference „TV Show subtitles" to the sister: the same family,
 the same build with different data. The site carries **films alone** — a series never reaches it, and the
 film address of the family is never asked for a series (F-M507) — and it keeps no account we could read:
-no login, no panel, no page of our own submissions. What is not proven is listed in chapter 7 and not
-disguised as a guess.
+no login, no panel, no page of our own submissions.
 
-## 2. Which media reach it (films only; TMDb decides — F-M507)
+## Which media reach it
 
 **TMDb decides which source is asked — not the file name, not the folder name, not the library name**
 (F-M507), and that within **one** source. At the top level there are **two** sources: SubDL and the
@@ -52,10 +51,10 @@ next to `Children of Dune` and `Dune: Prophecy`. From „Dune" alone no source f
 - **The self-promotion does not count.** „movies and TV films" on the home page means television films; a
   series offering cannot be derived from it and was not found either.
 
-The site does not say *which* film is meant when title and year are ambiguous (see „Ambiguity" in chapter
-3); the film identifier is unambiguous, the name is not.
+The site does not say *which* film is meant when title and year are ambiguous (see „Ambiguity" under this
+heading); the film identifier is unambiguous, the name is not.
 
-## 3. The path (download)
+## The path (download)
 
 | Step | Address | What comes out of it |
 |---|---|---|
@@ -123,7 +122,7 @@ series path already applies (F-M506).
 The download is one source of the chain: the film address is asked next to SubDL, never instead of it,
 and a film is never handed to the series address (F-M507).
 
-## 4. The path (upload) and creating a film
+## The path (upload) and creating a film
 
 `GET /add.php?tvid=<id>` shows the form for exactly this film; `POST /add.php`,
 `enctype="multipart/form-data"`, the target is `add.php` (relative, so `/add.php`). The fields are
@@ -132,10 +131,10 @@ literally those of the form (F-M506):
 | Field | Type | Content |
 |---|---|---|
 | `tvid` | hidden | film identifier; already stands in the form (`24811`) |
-| `lang` | select | the site's language code, 13 values (chapter 5) |
+| `lang` | select | the site's language code, 13 values (see *Languages*) |
 | `rip` | select | `DVDRip BluRay BrRip BDRip HDRip WEB WEBRip WEB-DL` or empty |
 | `release` | text | free text (release group), e.g. `MA`, `YTS`, `KiSS` |
-| `author` | text | free text — **mandatory or not: unchecked**, see chapter 7 |
+| `author` | text | free text — **mandatory or not: unchecked**, see *What is not proven* |
 | `UFile` | file | file 1 |
 | `UFile2` | file | „only if 2 and more CD" |
 | `UFile3` | file | „only if 3 CD" |
@@ -146,8 +145,8 @@ literally those of the form (F-M506):
 form is a bare multipart form, and unlike tvsubtitles.net even the `hi` marker for hearing-impaired
 versions is missing; it names no permitted extension, no size specification and no moderation text. The
 three file fields are declared as „CD" parts, so the site thinks in parts, as the `parts` column shows.
-Whether `UFile` alone suffices, whether `.srt` and `.zip` both work and whether `author`/`comments` are
-mandatory can be settled **only by a real upload** (chapter 7).
+Whether `UFile` alone suffices and whether `author`/`comments` are mandatory can be settled **only by a real
+upload** (see *What is not proven*).
 
 ### How the upload payload is built (F-M508)
 
@@ -171,8 +170,8 @@ mappings stay separate from tvsubtitles.net: this page keeps `WEB-DL` where the 
 
 ### The answer without an identifier (F-M488)
 
-What the site says on acceptance is not proven (chapter 7), so the client invents neither an identifier
-nor a moderation:
+What the site says on acceptance is not proven (see *What is not proven*), so the client invents neither an
+identifier nor a moderation:
 
 - **HTTP 2xx** → accepted, identifier unknown; the text of the answer passes **unchanged**, only tags and
   whitespace collapsed. The pipeline then assigns `own:moviesubtitles:<time>:<8 hex>`, because
@@ -192,7 +191,7 @@ source moviesubtitles skipped: that source is switched off, nothing sent
 ```
 
 The lock is the operator's switch, not a promise about the site, and it opens only on proven language
-mapping (chapter 7). The client makes no POST against the site while it is closed, and the suite
+mapping (see *What is not proven*). The client makes no POST against the site while it is closed, and the suite
 exercises the upload path against recorded pages and a counting handler alone (F-M508).
 
 ### Creating a film
@@ -268,7 +267,7 @@ GET /add.php?tvid=24811
 `tvid=4`. The path therefore leads over the **core** of the title and then over the year comparison, not
 over the full TMDb title.
 
-## 5. Tables — language mapping and supported languages
+## Languages
 
 ### The 13 values of `<select name="lang">`
 
@@ -296,7 +295,7 @@ mapping of this site covers them completely, the deviations included: `gr` inste
 of `uk`, `br` for Brazilian Portuguese (F-M502). The number in the last column is the site's own
 self-report (block „Site statistics"), not counted by us.
 
-**Supported languages: a deliberately closed list** (F-M506). What is missing here and exists there —
+**Supported languages: a deliberately closed list** (F-M506, F-M735). What is missing here and exists there —
 `nl pt sv da fi ko cn jp bg cz ro` — is **not** offered; a language outside these 13 has no language on
 this site and is a **language refusal**: nothing is sent in its place, no fallback to English, no guess.
 `pt`/`por` falls under that because the site carries only the Brazilian version. Case does not count, and
@@ -337,7 +336,51 @@ empty; reliable is the title, which carries `(<Rip>.<Release>)` completely, if n
 agree. Unlike tvsubtitles.net, where the flag alone counts and the block boundary decides the assignment,
 there is redundancy here for cross-checking.
 
-## 6. Site peculiarities
+## The four jobs
+
+The source answers three of the four jobs — search, fetch and send — and it never pretends that the fourth
+one exists: there is no report path, so a broken entry cannot be reported here (F-M682, F-M685). A fetch
+needs the film record first, because the site's own film identifier leads to the form and to the entries,
+and without it there is nothing to ask. A send answers with an HTTP status, and when the status is a success
+the site's own identifier of our filing may still be unreadable; the engine passes the answer text through
+unchanged rather than inventing one (F-M685).
+
+## Capabilities
+
+| Capability | This source |
+|---|---|
+| short name | none set, so the key `moviesubtitles` stands in (F-M731) |
+| upload | yes |
+| report | no |
+| season packs | no, neither offered nor accepted |
+| hearing-impaired mark | no, the form has no `hi` field |
+| title creation | yes — a film the site does not know is looked up and created there (F-M734) |
+| quota | no |
+
+## The account ledger
+
+The source is absent from the ledger list rather than answering „cannot", because an absent source is never
+asked while a source that answered „cannot" would have to be remembered as a refusal (F-M729). Nothing here
+can be listed, nothing withdrawn, and no state of our own submissions is known from this side.
+
+## What it costs and what it limits
+
+It answers the inquiry contract with one light, the address itself, and no quota (F-M730): there is no
+allowance to read, the cost is page reads, one per film, and a letter list of 200–570 KB arrives uncompressed.
+The site does not document throttling and none was observed, so the general pause of the plugin applies to
+the client as well (`MinCallPauseSec`).
+
+A film cut into several parts is recognised on the site's side and handled as its own case instead of being
+mistaken for a broken entry (F-M506).
+
+## Where it fails and how we answer
+
+A missing or unreadable leading film record (`not-found`) skips the candidate with that reason, and the run
+keeps going with the other sources (F-M507). A film record that does not answer is a timeout, and the run
+continues with the other sources instead of failing as a whole. A language the site does not carry is a
+refusal before anything is read on the site (F-M735).
+
+## Site peculiarities
 
 The body is UTF-8 — `<meta … charset=utf-8>` says so — **except** individual fragments in **cp1251**: the
 LiveInternet counter (an `escape("Жж"+…)` in the JavaScript) and `/admin.php` (Ukrainian). The HTTP
@@ -350,9 +393,7 @@ without BOM in the three older ones (Matrix).
 `https://www.moviesubtitles.org/`. `/movies.html` is **no** redirect but the film list (569 KB for A),
 while `/tvshow-…`, `/episode-…`, `/login.php`, `/panel.php`, `/upload.php`, `/sitemap.xml`, `/rss.xml`
 and `/api.php` answer 302 to `/`. `robots.txt` answers HTTP 200 with 0 bytes: no rule, no prohibition and
-therefore no permission to pull more than necessary. Throttling was not observed and is not excluded;
-the site is slow and delivers uncompressed (a letter list 200–570 KB), which is the actual cost factor,
-and for the client the general pause of the plugin applies (`MinCallPauseSec`).
+therefore no permission to pull more than necessary.
 
 There is no login and no account, hence no „my uploads" page: what was uploaded is read **back from the
 film page** (`movie-<id>.html`) or at most on `/new.html` (latest subtitles), and there is no further
@@ -362,7 +403,7 @@ fetch. Several third-party scripts (`cognatesyringe.com`, `acint.net`, LiveInter
 of the content, so a parser may rely on **no** position in the document, only on classes and the table
 structure.
 
-## 7. What is not proven
+## What is not proven
 
 Everything here is **unchecked**, because a write access would have been necessary for it.
 
@@ -399,15 +440,14 @@ Everything here is **unchecked**, because a write access would have been necessa
 - **A third sentence of `add-movie.php`** (e.g. „year invalid") is not proven; the client treats
   everything outside the two markers as a rejection.
 
-## 8. The boundary
+## The boundary
 
 **What this source does not answer** (F-M507, F-M508): it keeps no account, so nothing of ours can be
 listed or withdrawn and no state of our own submissions is known from this side. No login exists either,
-so there is no account ledger and no inquiry about one. No report path, so a broken entry cannot be
-reported. No pack: a series never reaches this source, and the client refuses a request for one with a
-reason instead of attempting it. No quota, no hearing-impaired marker and no short name of its own. No
-language outside the 13 — a language refusal before anything is read on the site, with nothing sent in its
-place.
+so there is no account ledger and no inquiry about one. No report path, no pack, no quota, no
+hearing-impaired marker and no short name of its own: a series never reaches this source, and the client
+refuses a request for a pack with a reason instead of attempting it. No language outside the 13 — a language
+refusal before anything is read on the site, with nothing sent in its place.
 
 **What the client never asserts.** Not an identifier from an answer: where the site names none, the
 answer text passes through and the pipeline assigns `own:moviesubtitles:<time>:<8 hex>`, never a number
@@ -435,7 +475,13 @@ otherwise it would be invisible to every later run (F-M517).
 **A known origin is not uploaded elsewhere** (F-M507): what was found here is not sent to another source,
 and what was found elsewhere is not sent here as a second entry.
 
-## 9. The checks
+**Where the engine stops** (F-M682): it opens no connection of its own, receives network connection, archive
+cache, logger and settings from outside and writes nothing itself. It knows no plugin database, no
+identifier shape of ours and no row of our storage, and its film resolution uses the media identifiers the
+pipeline hands in. The pipeline names it nowhere; it reads the capabilities as an answer and receives a
+proposal with evidence — an identifier, a state, a plain text.
+
+## The checks
 
 The suite `scripts/tests/moviesubtitles/` drives the client and the upload endpoint against pages that
 the site really delivered, recorded as fixtures, and `--live` only reads. It counts **123** checks:
@@ -501,3 +547,9 @@ keeps **0** rows, with the note „holds for this run only"; a path carried by t
 nothing is chosen. The suite never posts to the site: the upload and the creation run against recorded
 pages and a counting handler, and the plugin database of the last block is a throwaway one in the
 scratch area.
+
+## Where the rules live
+
+[SPECIFICATION.md](SPECIFICATION.md), mainly F-M488, F-M506, F-M507, F-M508, F-M510, F-M511, F-M513,
+F-M515, F-M517, F-M682, F-M685, F-M729, F-M730 and F-M735. Guarded by `moviesubtitles`, `endpoints` and
+`sources`.

@@ -3362,7 +3362,7 @@ yields a source that silently does not run.
 
 This chapter governs how a subtitle source is attached. The rules of the two directions stand in chapter 3 and 4, the stored plugin database in chapter 14.
 
-**How the sources play together as a whole** — what is settled at one source and open at the other, how download and upload deal with several sources and which measurements prove it — stands drawn together in [`MULTI-SOURCE.md`](MULTI-SOURCE.md). This chapter remains the source of the requirements (F-M624…), that sheet is the reading view of the same rules.
+**How the sources play together as a whole** — what is settled at one source and open at the other, how download and upload deal with several sources and which measurements prove it — stands drawn together in [`CONTRACTS.md`](CONTRACTS.md). This chapter remains the source of the requirements (F-M624…), that sheet is the reading view of the same rules.
 
 **F-M624 [D]:** **Every source is attached through exactly one shared contract** — search, fetch, upload and duplicate check. The pipeline of both directions knows only this contract, not the source behind it.
 

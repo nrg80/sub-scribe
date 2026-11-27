@@ -3,10 +3,9 @@
 One concept, one word, in every document: a second word for the same thing is not a style question, it
 hides a second meaning, so the retired word is named below and cannot creep back in. English is the master
 and the German wording is retired; `SPECIFICATION.md`, `CONTRACTS.md`, `AUTOSYNC.md`, `DATABASE.md`,
-`TESTS.md`, `GUI.md`,
-`LOGGING.md`, `ENDPOINTS.md`, `MULTI-SOURCE.md`, `TVSUBTITLES.md`, `SEASON-PACK-CACHING.md`,
-`UPLOAD-EXTRACTION-CACHE.md`, `TMDB-CACHE.md`, `MOVIESUBTITLES.md`, `RELEASE.md`, `README.md` and the papers
-under `engines/` use these words and no synonyms.
+`CACHING.md`, `TESTS.md`, `GUI.md`, `GATES.md`, `RUNS.md`, `QUEUE.md`, `QUOTA.md`, `NAMING.md`, `EXTRACTION.md`,
+`TITLE-RESOLUTION.md`, `LOGGING.md`, `ENDPOINTS.md`, `SUBDL.md`, `TVSUBTITLES.md`, `MOVIESUBTITLES.md`,
+`RELEASE.md`, `README.md` use these words and no synonyms.
 
 ## The parties
 

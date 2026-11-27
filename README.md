@@ -120,7 +120,6 @@ Do not release by tagging and pushing alone: a release must carry exactly one as
 - What is kept between runs, and what is never kept: [docs/CACHING.md](docs/CACHING.md)
 - The tables, their keys and the file itself: [docs/DATABASE.md](docs/DATABASE.md)
 - The gates a subtitle has to pass, in order: [docs/GATES.md](docs/GATES.md)
-- The seven worker rows and who writes them: [docs/WORKERS.md](docs/WORKERS.md)
 - The names written to disk: [docs/NAMING.md](docs/NAMING.md)
 - How a file becomes a title identity: [docs/TITLE-RESOLUTION.md](docs/TITLE-RESOLUTION.md)
 - How a subtitle is cut out of a media file: [docs/EXTRACTION.md](docs/EXTRACTION.md)
@@ -133,9 +132,8 @@ Do not release by tagging and pushing alone: a release must carry exactly one as
 - How a single upload is formed: [docs/SINGLE-UPLOAD.md](docs/SINGLE-UPLOAD.md)
 - How a season pack download runs: [docs/SEASON-PACK-DOWNLOAD.md](docs/SEASON-PACK-DOWNLOAD.md)
 - How a single download runs: [docs/SINGLE-DOWNLOAD.md](docs/SINGLE-DOWNLOAD.md)
-- Who owns the times, and when a run defers: [docs/SCHEDULER.md](docs/SCHEDULER.md)
-- The five triggers, what an arrival covers, their direction and reach: [docs/RUN-TYPES.md](docs/RUN-TYPES.md)
-- How the two subtitle sources work together (marks, completion, parallel download and upload): [docs/MULTI-SOURCE.md](docs/MULTI-SOURCE.md)
+- Who owns the times, the five triggers, arrivals and the one lock: [docs/RUNS.md](docs/RUNS.md)
+- How the sources play together, and where the boundary runs: [docs/CONTRACTS.md](docs/CONTRACTS.md)
 - Release process: [docs/RELEASE.md](docs/RELEASE.md)
 - The plugin on one page, written for a person or an assistant answering one:
   [docs/briefings/short.md](docs/briefings/short.md).

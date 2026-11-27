@@ -1,7 +1,7 @@
 # Extracting the text out of a media file
 
 The plugin keeps no subtitle text: what it sends is read out of the media container first. The store of
-extracted tracks stands in [UPLOAD-EXTRACTION-CACHE.md](UPLOAD-EXTRACTION-CACHE.md).
+extracted tracks stands in [CACHING.md](CACHING.md).
 
 ## One pass, every text stream
 
