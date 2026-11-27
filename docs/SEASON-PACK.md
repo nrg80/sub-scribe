@@ -53,7 +53,8 @@ Four sentences follow from that, and they are the whole policy:
 - **Neither switch is a licence to overrule a check.** The switches say *may*, the checks say *whether*.
 
 A source that carries no packs has no pack switch at all — its card offers none, and the run asks its
-capability instead of a switch (F-M687). Upload and download are separate directions: the switch of one
+capability instead of a switch (F-M687). The **slot** of a pair is exactly the list of sources whose pack
+switch is on, so a switched-off source never waits for a container and never holds one off. Upload and download are separate directions: the switch of one
 direction never enables the other.
 
 ## 3. May a pack be formed — the seven checks without extraction
@@ -64,8 +65,9 @@ refusal costs seconds.
 
 1. **Is the season whole?** Every episode of the season lies on disk. A missing episode means wait, not
    refuse (F-M372).
-2. **Does a source already hold the container?** Asked per source. When every source of the slot has
-   it, there is nothing to do (F-M647).
+2. **Does a source already hold the container?** Asked per source, and only the sources that are cleared
+   for pack upload stand in the slot — a source with its pack switch off is not one of them. When every
+   source of the slot has it, there is nothing to do (F-M647, F-M682).
 3. **Is the refusal still valid?** The stored verdict carries a signature — episode count plus size and
    modification time of every file. Same signature, same verdict: nothing is extracted (F-M611,
    F-M650).
