@@ -1170,3 +1170,5 @@ bound to a suite in `scripts/tests/counts.json`, the rest are proven where they 
 **T445:** Ein bereits hochgeladener Einzel darf zusätzlich in den Pack (F-M585), in `endpoints`. **2 Prüfungen**. Beide Pack-Aufrufstellen fragen die Sperre mit `fuerPack: true`, und die Ausnahme deckt genau die beiden „liegt schon"-Gründe (`duplicate-self-echo`, `duplicate-content`) — alles andere bleibt gesperrt.
 
 **T446:** Der Pack als geschlossenes Papier (F-M800), in `endpoints`. **3 Prüfungen**. Das Papier nennt die sieben Prüfungen ohne Extraktion und beide Schalter; der Spezifikationseintrag zeigt darauf und verengt die Herkunft nicht mehr auf eine Quelle; `IsDownloadedFromAnySource` steht an der einen Stelle, und kein Aufrufort benutzt den alten Namen.
+
+**T447:** Die vier Wege als je ein geschlossenes Papier (F-M801), in `endpoints`. **2 Prüfungen**. Jedes der vier Papiere existiert, hält die Bauform (Inhaltsverzeichnis, „What the log says", „never does") und ist im README verlinkt; der Spezifikationseintrag nennt alle vier.

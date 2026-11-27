@@ -1236,6 +1236,12 @@
       "checks": 3,
       "requirement": "F-M800",
       "title": "Der Pack steht als geschlossenes Papier: sieben Vorpruefungen ohne Extraktion, beide Schalter, und F-M397 fragt jede Quelle"
+    },
+    "T447": {
+      "suite": "endpoints",
+      "checks": 2,
+      "requirement": "F-M801",
+      "title": "Die vier Wege (Einzelupload, Staffelpack-Upload, Staffelpack-Download, Einzeldownload) stehen je als geschlossenes Papier, im README verlinkt und im Spezifikationseintrag genannt"
     }
   }
 }

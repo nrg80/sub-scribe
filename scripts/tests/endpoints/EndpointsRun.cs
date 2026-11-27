@@ -4766,6 +4766,42 @@ internal static class Program
             && !hashQuelle800.Contains("IsSubdlOrigin(", StringComparison.Ordinal),
             "Name und Aufrufstelle geprueft");
 
+        // ---- 40. F-M801: die vier Wege stehen je als ein geschlossenes Papier --------------------------
+        string[] paare801 = { "SINGLE-UPLOAD", "SEASON-PACK", "SEASON-PACK-DOWNLOAD", "SINGLE-DOWNLOAD" };
+        var fehlend801 = new List<string>();
+        string readme801 = await File.ReadAllTextAsync(Path.Combine(root, "README.md"));
+        foreach (string name in paare801)
+        {
+            string pfad = Path.Combine(root, "docs", name + ".md");
+            if (!File.Exists(pfad))
+            {
+                fehlend801.Add(name + " (fehlt)");
+                continue;
+            }
+
+            string text801 = await File.ReadAllTextAsync(pfad);
+            if (!text801.Contains("## Contents", StringComparison.Ordinal)
+                || !text801.Contains("never does", StringComparison.Ordinal)
+                || !text801.Contains("What the log says", StringComparison.Ordinal))
+            {
+                fehlend801.Add(name + " (Bauform)");
+            }
+
+            if (!readme801.Contains("docs/" + name + ".md", StringComparison.Ordinal))
+            {
+                fehlend801.Add(name + " (nicht im README)");
+            }
+        }
+
+        Check(
+            "F-M801: the four papers exist, keep the same shape, and the README points at each of them",
+            fehlend801.Count == 0,
+            fehlend801.Count == 0 ? "vier Papiere geprueft" : string.Join(", ", fehlend801));
+        Check(
+            "F-M801: the spec entry names all four papers",
+            paare801.All(n => spec800.Contains("docs/" + n + ".md", StringComparison.Ordinal)),
+            "Eintrag geprueft");
+
         if (_failures > 0)
         {
             Console.WriteLine($">>> ENDPUNKTE: {_failures} von {_checks} Pruefungen fehlgeschlagen");
