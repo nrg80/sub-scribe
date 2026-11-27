@@ -1242,6 +1242,12 @@
       "checks": 2,
       "requirement": "F-M801",
       "title": "Die vier Wege (Einzelupload, Staffelpack-Upload, Staffelpack-Download, Einzeldownload) stehen je als geschlossenes Papier, im README verlinkt und im Spezifikationseintrag genannt"
+    },
+    "T448": {
+      "suite": "langcorrect",
+      "checks": 6,
+      "requirement": "F-M802",
+      "title": "Der Spracherkenner gibt die Hausform: DetectLanguage liefert DEU statt DE, die Familientabelle spricht T, und DEU gegen deutschen Text korrigiert nichts mehr"
     }
   }
 }
