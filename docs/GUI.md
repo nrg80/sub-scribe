@@ -89,8 +89,8 @@ Jellyfin client buffers the answer as text and the readout stays empty.
 
 The accent colour `#00a4dc` marks required fields, the marker in a heading and links. That marker in a
 heading is the same statement, only larger, and needs its own style rule, or it takes the heading's text
-colour and reads as just another word (F-M228, F-M229). Red stays reserved for destructive and failing states, because a required marker in red competes
-with a real warning.
+colour and reads as just another word (F-M228, F-M229). Red stays reserved for destructive and failing
+states, because a required marker in red competes with a real warning.
 
 One state, one word: the page uses the word of the log and the statistics, with no synonym and no second
 spelling (`LOGGING.md`, rule 3.7). A switch or button names the act, not the thing it touches (F-M385).
@@ -112,8 +112,8 @@ file from the GUI. `Reset` creates a timestamped copy and then starts from an em
 takes a copy back.
 
 Reset is the only path to an empty plugin database: structural changes are never migrated from the page,
-and the state is rebuilt from the media files. Only one backup survives a reset: all older copies are
-deleted, and only the copy that reset created remains (F-M181).
+and the state is rebuilt from the media files. Only one backup survives a reset: the older copies are
+deleted and the copy that reset created remains (F-M181).
 
 ## What the page never shows
 
