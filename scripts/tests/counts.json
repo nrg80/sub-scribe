@@ -1137,9 +1137,15 @@
     },
     "T430": {
       "suite": "endpoints",
-      "checks": 3,
+      "checks": 7,
       "requirement": "F-M769",
       "title": "Der Diagnose-Endpunkt nennt den eigenen Speicher: GC-Heap, Arbeitsseite, private Bytes, GC-Zähler und die Zeilen des geteilten Kontexts"
+    },
+    "T431": {
+      "suite": "endpoints",
+      "checks": 4,
+      "requirement": "F-M770",
+      "title": "Der Diagnose-Endpunkt liest ohne Verfolgung: eine Lese-Sicht ohne Identity Map, eine Zahl ohne Zeilen, und eine Debug-Zeile je Abruf"
     }
   }
 }

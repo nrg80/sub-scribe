@@ -4001,6 +4001,41 @@ internal static class Program
             && diagQuelle.Contains("GC.GetTotalMemory(false)", StringComparison.Ordinal),
             "kein GC.Collect im Endpunkt");
 
+        // ---- 23. F-M770: der Leser liest ohne Gedaechtnis --------------------------------------
+        // Anlass: der Diagnose-Endpunkt holte Tracks, Sidecars und Files ueber den Schreibweg, der die
+        // ganze Tabelle tracked und fuer die Lebensdauer des geteilten Kontexts haelt — rund 13.000
+        // Zeilen, die erst ein Neustart freigab. Ein Leser darf nichts hinterlassen; der Schreibweg
+        // bleibt, wo geschrieben wird.
+        string speicherQuelle = await File.ReadAllTextAsync(Path.Combine(
+            root, "Jellyfin.Plugin.SubdlSync", "Data", "ScribeDbContext.cs")).ConfigureAwait(false);
+        Check(
+            "F-M770: the store offers a read-only snapshot that neither tracks nor fills the row memory",
+            speicherQuelle.Contains("public List<TEntity> ReadOnlySnapshot()", StringComparison.Ordinal)
+            && speicherQuelle.Contains("return _db.Set<TEntity>().AsNoTracking().ToList();", StringComparison.Ordinal),
+            "ReadOnlySnapshot ohne Verfolgung");
+        Check(
+            "F-M770: and a count that does not pull the rows into the context at all",
+            speicherQuelle.Contains("public int CountReadOnly()", StringComparison.Ordinal)
+            && speicherQuelle.Contains("return _db.Set<TEntity>().Count();", StringComparison.Ordinal),
+            "CountReadOnly");
+        Check(
+            "F-M770: the diagnostics endpoint reads every big area through the read-only path",
+            !diagQuelle.Contains("db.Tracks.FindAll()", StringComparison.Ordinal)
+            && !diagQuelle.Contains("db.Sidecars.FindAll()", StringComparison.Ordinal)
+            && !diagQuelle.Contains("db.Files.FindAll()", StringComparison.Ordinal)
+            && !diagQuelle.Contains("db.Counters.FindAll()", StringComparison.Ordinal)
+            && diagQuelle.Contains("db.Tracks.ReadOnlySnapshot()", StringComparison.Ordinal)
+            && diagQuelle.Contains("db.Sidecars.ReadOnlySnapshot()", StringComparison.Ordinal)
+            && diagQuelle.Contains("db.Files.ReadOnlySnapshot()", StringComparison.Ordinal)
+            && diagQuelle.Contains("db.Oshashes.CountReadOnly()", StringComparison.Ordinal),
+            "kein FindAll mehr im Endpunkt");
+        Check(
+            "F-M770: and it says in the log what the read cost — rows, milliseconds, tracked rows afterwards",
+            diagQuelle.Contains("Stopwatch.StartNew()", StringComparison.Ordinal)
+            && diagQuelle.Contains("Pipeline.LogUtil.Detail(", StringComparison.Ordinal)
+            && diagQuelle.Contains("{Tracked} row(s) tracked after it (F-M770)", StringComparison.Ordinal),
+            "Debug-Zeile je Abruf");
+
         if (_failures > 0)
         {
             Console.WriteLine($">>> ENDPUNKTE: {_failures} von {_checks} Pruefungen fehlgeschlagen");

@@ -52,7 +52,15 @@ public class ScribeDiagnosticsController : ControllerBase
             }
 
             var db = plugin.SharedDbContext;
-            var counters = db.Counters.FindAll().ToList();
+
+            // F-M770: dieser Endpunkt LIEST nur. Deshalb nimmt er die Zeilen ohne Verfolgung — sonst
+            // haengt er rund 13.000 Zeilen dauerhaft in den geteilten Kontext (F-M769: 31.117 mitgefuehrte
+            // Zeilen gemessen). Die Uhr daneben ist fuer die Debug-Zeile am Ende.
+            var uhr = System.Diagnostics.Stopwatch.StartNew();
+            var gelesen = 0;
+
+            var counters = db.Counters.ReadOnlySnapshot();
+            gelesen += counters.Count;
             var notFoundCounters = counters
                 .Where(c => c.Key.StartsWith("not-found:", StringComparison.OrdinalIgnoreCase))
                 .OrderByDescending(c => c.Value)
@@ -66,12 +74,13 @@ public class ScribeDiagnosticsController : ControllerBase
                 })
                 .ToList();
 
-            var embeds = db.Tracks.FindAll().ToList();
-            var sidecars = db.Sidecars.FindAll().ToList();
-            var media = db.Files.FindAll().ToList();
-            var runs = db.Runs.FindAll().OrderByDescending(r => r.Started).Take(20).ToList();
-            var oshashes = db.Oshashes.Count();
-            var burnedCandidates = db.BadApples.Count();
+            var embeds = db.Tracks.ReadOnlySnapshot();
+            var sidecars = db.Sidecars.ReadOnlySnapshot();
+            var media = db.Files.ReadOnlySnapshot();
+            var runs = db.Runs.ReadOnlySnapshot().OrderByDescending(r => r.Started).Take(20).ToList();
+            var oshashes = db.Oshashes.CountReadOnly();
+            var burnedCandidates = db.BadApples.CountReadOnly();
+            gelesen += embeds.Count + sidecars.Count + media.Count + runs.Count;
 
             var mediaByUploadState = media
                 .GroupBy(m => m.SubtitlesUploadedAt != null)
@@ -161,6 +170,18 @@ public class ScribeDiagnosticsController : ControllerBase
                 },
                 Timestamp = DateTime.UtcNow.ToString("O", System.Globalization.CultureInfo.InvariantCulture)
             };
+
+            // F-M770: eine Debug-Zeile je Abruf — wie viele Zeilen gelesen wurden, wie lange es dauerte und
+            // wie viele Zeilen der Kontext danach mitfuehrt. Ohne sie steht im Log nur, DASS jemand berichtet
+            // hat, nicht was der Abruf gekostet hat.
+            uhr.Stop();
+            Pipeline.LogUtil.Detail(
+                plugin.Configuration.LogMode,
+                _logger,
+                "[Sub Scribe] diagnostics read — {Rows} row(s) in {Ms} ms, {Tracked} row(s) tracked after it (F-M770)",
+                gelesen,
+                uhr.ElapsedMilliseconds,
+                result.Memory.TrackedRows);
 
             return Ok(result);
         }

@@ -7,7 +7,8 @@ when the run ends. This paper describes keeping it, under the rules the download
 **Status: proposal.** None of this is built. The operator approved the shape on 2026-11-27: one store
 shared with the download cache, retention and ceiling included, one ZIP per track, a hit counts like a
 fresh extraction, and containers assembled from the stored single subtitles. Every rule below names the
-requirement it would become (§11). Nothing here is released, and the papers of the built system stay
+requirement it would become (§11); F-M770 itself is taken, because the diagnostics fix of 12.3.8.70 needed it
+first, so the proposals start one number higher. Nothing here is released, and the papers of the built system stay
 untouched until the first line of it exists.
 
 *The words are those of `TERMS.md`. A **pack** is the season container of one language. A container that
@@ -153,20 +154,20 @@ network, because the subtitle never left the host.
 These are proposals. Each one enters `SPECIFICATION.md` only when the code that carries it exists, and
 the numbers are free to move until then.
 
-- **F-M770 — the extracted track is kept.** A successfully extracted track is stored under the shared
+- **F-M771 — the extracted track is kept.** A successfully extracted track is stored under the shared
   cache folder, in its own key space, under the retention and ceiling of the download cache.
-- **F-M771 — the name is built without a hash.** The entry is named from the item identifier, the track
+- **F-M772 — the name is built without a hash.** The entry is named from the item identifier, the track
   number, the size, the last write and the change time of the media container. No hash is computed for
   the store; a stored hash may only be used when it already exists.
-- **F-M772 — one track, one ZIP, unpacked on access.** An entry holds exactly one subtitle under a fixed
+- **F-M773 — one track, one ZIP, unpacked on access.** An entry holds exactly one subtitle under a fixed
   name. It is unpacked into memory when read, and nothing is kept afterwards.
-- **F-M773 — a hit is byte-identical.** The entry is written deterministically, so a hit and a fresh
+- **F-M774 — a hit is byte-identical.** The entry is written deterministically, so a hit and a fresh
   extraction differ only in the work spent. A member whose checksum fails is removed and counts as a
   miss.
-- **F-M774 — containers are assembled, not re-extracted.** The upload container of a media file, and a
+- **F-M775 — containers are assembled, not re-extracted.** The upload container of a media file, and a
   pack over its episodes, are assembled from the stored subtitles; tracks without an entry are
   extracted as usual.
-- **F-M775 — a hit counts as an extraction.** The counters and the statistics count a hit exactly like
+- **F-M776 — a hit counts as an extraction.** The counters and the statistics count a hit exactly like
   a fresh pass, and the verdict of a pair is asked before the store.
 
 Once the first of these is built, this paper moves its status line and the rules take the place they

@@ -2055,6 +2055,44 @@ public sealed class ScribeSet<TEntity>
         }
     }
 
+    /// <summary>
+    /// F-M770: die Zeilen der Area fuer einen Leser, der nichts schreiben will — ohne Gedaechtnis.
+    /// <para>
+    /// WARUM ES DIESE METHODE GIBT: <see cref="FindAll"/> ist der Schreibweg. Es holt die ganze Tabelle in
+    /// die Identity Map, damit eine danach veraenderte Zeile genau die Instanz ist, die gespeichert wird,
+    /// und es haelt sie fuer die Lebensdauer des geteilten Kontexts. Fuer einen Endpunkt, der nur berichtet,
+    /// ist beides falsch: er braucht die Zeilen fuer einen Augenblick, und niemand wird sie je aendern.
+    /// Gemessen am 26.11.2026 hing der Diagnose-Endpunkt damit rund 13.000 Zeilen dauerhaft in den Kontext
+    /// (F-M769 zeigte 31.117 mitgefuehrte Zeilen), also 10 bis 30 MB, die erst ein Neustart freigab.
+    /// </para>
+    /// <para>
+    /// Diese Methode liest dieselben Zeilen ohne Verfolgung und ruehrt den Zeilenspeicher der Area nicht an:
+    /// ein Aufruf hinterlaesst nichts. Sie ist nur fuer LESER da — wer eine Zeile aendern will, nimmt
+    /// weiterhin <see cref="FindAll"/> oder <see cref="FindById"/>, denn nur dort ist die Instanz die, die
+    /// gespeichert wird.
+    /// </para>
+    /// </summary>
+    /// <returns>Detached copies of every row.</returns>
+    public List<TEntity> ReadOnlySnapshot()
+    {
+        lock (_db.Gate)
+        {
+            return _db.Set<TEntity>().AsNoTracking().ToList();
+        }
+    }
+
+    /// <summary>
+    /// F-M770: die Zahl der Zeilen, ohne die Zeilen selbst in den Kontext zu holen.
+    /// </summary>
+    /// <returns>The number of rows.</returns>
+    public int CountReadOnly()
+    {
+        lock (_db.Gate)
+        {
+            return _db.Set<TEntity>().Count();
+        }
+    }
+
     /// <summary>Rows matching a predicate, evaluated in memory.</summary>
     /// <param name="predicate">The condition.</param>
     /// <returns>The matching rows.</returns>

@@ -3,7 +3,7 @@
 **Owner: the rules.** This is the master document: every other paper is derived from it and cites its `F-M` tags. The contract boundaries stand in `CONTRACTS.md`, the vocabulary in `TERMS.md`.
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.69.
+**Status:** Implementation — v12.3.8.70.
 
 **A rule stands here with its ground: the decision behind it in one sentence, under `Concept decision`, and the
 check that proves it. The detailed measurement archive — what was measured, which run showed it, what happened —
@@ -39,7 +39,7 @@ states the rule, its constants, its ground and its test.**
 - [10. Scheduler, Quota and Timing](#10-scheduler-quota-and-timing) — 24 requirements
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
-- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 44 requirements
+- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 45 requirements
 - [14. Data Model and Persistence](#14-data-model-and-persistence) — 92 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 61 requirements
 - [16. Non-Goals](#16-non-goals)
@@ -2134,6 +2134,7 @@ the rule rather than a reason (F-M745). Checked in `gui-structure`.
 
 **F-M769 [S]:** **The plugin measures its own memory and names it in the diagnostics.** Concept decision: the diagnostics endpoint reports the heap the collector holds, the working set, the private bytes of the process, the three collection counters and the number of rows the shared context carries. The reading takes no forced collection, so asking does not change the answer; the tracked rows are the part the plugin holds itself, and they are the only figure that can grow with the library. Until 12.3.8.68 the endpoint described the store and said nothing about the process it lives in, so a claim about the plugin's memory could not be tested from the outside. Checked in `endpoints`.
 
+**F-M770 [S]:** **A reader reads without remembering, and says what the read cost.** Concept decision: the store offers a read-only look at an area. It tracks nothing there and leaves the row memory of the write path untouched. It also offers a count that does not pull the rows into the context at all. The diagnostics endpoint reads every big area only through those two: tracks, loose subtitles, media and counters. Per call it writes one Debug line naming the rows it read, the milliseconds that took and the rows the context carries afterwards. The write path stays as it is, because there the identity map is the save. Until 12.3.8.69 the endpoint read the three big areas through the write path and left roughly 13.000 rows in the shared context, 10 to 30 MB that only a restart freed (F-M769 showed 31.117 carried rows); a caller that only reports must leave nothing behind. Checked in `endpoints`.
 **F-M765 [S]:** **The upload endpoint carries no pack switch of its own.** Concept decision: whether a pack may go up is decided by the source (the switch **Packs**, `PackSlot`), never by the endpoint. The tvsubtitles upload endpoint still held a parameter that refused a pack with the reason `season packs are switched off in the settings (UploadSeasonPacks)` — a setting that fell away on 23.11.2026 (F-M719), so the refusal named a switch nobody could reach. The parameter is gone; the endpoint checks the container (a pack is one `.zip`) and nothing else. Checked in `endpoints`.
 
 **F-M764 [S]:** **The arrival question comes before the work, not after it.** Concept decision: an arrival run asks whether it builds a pack *before* the library is examined, so the completeness question is never put to it. Until 12.3.8.65 the scan ran first and the arrival branch then emptied the set. Measured in the arrival run of 26.11.2026: `pack phase done after 166343 ms` inside a 9 min 35 s run. In it stood 128 seasons with at least two episodes, 1,093 judgement lines over 124 seasons, 1,084 language pairs and 85 candidates — discarded two lines later. A guard that stands behind the work is not a guard. Checked in `packretry`.
