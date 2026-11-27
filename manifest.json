@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.89",
-        "changelog": "v12.3.8.89: A single already uploaded may go into the pack as well; the pack lock no longer stops at \"already there\".",
+        "version": "12.3.8.90",
+        "changelog": "v12.3.8.90: The pack now stands as one closed paper: when it may be formed, what is checked after extraction, and that two switches alone decide.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.89-dev/Jellyfin.Plugin.SubdlSync_12.3.8.89.zip",
-        "checksum": "e792a9a09324b6274c21c34578a035ac",
-        "timestamp": "2026-11-27T09:53:28Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.90-dev/Jellyfin.Plugin.SubdlSync_12.3.8.90.zip",
+        "checksum": "61c6572db5711d0e3bd2de26248a969e",
+        "timestamp": "2026-11-27T10:18:51Z"
       }
     ]
   }
