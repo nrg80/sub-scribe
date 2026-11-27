@@ -161,8 +161,9 @@ closes nothing.
 
 ## 9. What the cache says
 
-Every operation reports at the plugin's Debug mode, under one prefix, and the diagnostics endpoint names
-the state of both tables:
+**Every operation writes a Debug line** — the same level the archive cache reports on, switched by the
+plugin's own log mode, so nothing appears at Normal. All lines carry one prefix, so one search finds them
+all. The diagnostics endpoint names the state of both tables:
 
 - **on start** — file, both ceilings, rows and bytes per kind;
 - **a hit** — kind, subject, age, and whether it came from memory or from disk;
@@ -170,6 +171,9 @@ the state of both tables:
 - **a store** — kind, subject, bytes;
 - **a trim** — how many expired, how many evicted, bytes against the ceiling;
 - **the diagnostics** — rows and bytes per kind, so a ceiling can be checked from outside.
+
+A hit names its kind and subject and its age; a miss names the reason; a trim names both counts. That is
+the same shape as the cache lines of the download shelf, so one reading habit covers both.
 
 No key, no identifier and no body excerpt appears in a line. A question is named by its kind and its
 subject, never by its content.
@@ -199,8 +203,9 @@ These are proposals. Each one enters `SPECIFICATION.md` only when the code that 
   answer three days.
 - **F-M777 — the shelf never closes a title.** A hit counts as one attempt, and the retry ladder runs
   against the network only.
-- **F-M778 — the shelf reports itself:** rows and bytes per kind in the diagnostics, and one Debug line per
-  operation, without a key, an identifier or an excerpt.
+- **F-M778 — the shelf reports itself at Debug level:** one line per operation — start, hit, miss, store,
+  trim — under one prefix and switched by the plugin's log mode, plus rows and bytes per kind in the
+  diagnostics. No line carries a key, an identifier or an excerpt.
 
 ## 12. Where the limits are
 
