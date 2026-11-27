@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.69",
-        "changelog": "v12.3.8.69: the diagnostics report the plugin's own memory — heap, working set, private bytes, collection counters and the tracked rows of the shared context.",
+        "version": "12.3.8.70",
+        "changelog": "v12.3.8.70: the diagnostics endpoint reads without tracking and logs what the read cost — no more 13,000 rows left in the shared context per call.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.69-dev/Jellyfin.Plugin.SubdlSync_12.3.8.69.zip",
-        "checksum": "a1be66ac97a64395b31774ed52a56cfc",
-        "timestamp": "2026-11-26T18:12:17Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.70-dev/Jellyfin.Plugin.SubdlSync_12.3.8.70.zip",
+        "checksum": "985913f99c2b68678eb3591aa7a2138f",
+        "timestamp": "2026-11-27T02:57:30Z"
       }
     ]
   }
