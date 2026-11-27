@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.77",
-        "changelog": "v12.3.8.77: one language code inside the client — the pack plan speaks ISO and translates only at the sources.",
+        "version": "12.3.8.78",
+        "changelog": "v12.3.8.78: ISO 639-2/T everywhere — client, sidecar name and store speak one form, the sources keep theirs.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.77-dev/Jellyfin.Plugin.SubdlSync_12.3.8.77.zip",
-        "checksum": "3a43b61b750d8c25bfdc8da2dd9c6b47",
-        "timestamp": "2026-11-27T05:46:32Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.78-dev/Jellyfin.Plugin.SubdlSync_12.3.8.78.zip",
+        "checksum": "9643aca26e463328a7614716e676b3b7",
+        "timestamp": "2026-11-27T06:24:45Z"
       }
     ]
   }
