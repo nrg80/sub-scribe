@@ -166,7 +166,13 @@ public static class SeasonEpisodeIndex
             // vorbei — dieselbe Staffel wurde also zweimal geholt, einmal aus dem Regal und einmal am Regal
             // vorbei. Jetzt haengt die Kette am selben Handler (F-M555): Schluessel ist die Adresse ohne
             // api_key, abgelegt wird nur ein Status 200.
-            using var http = new HttpClient(new TmdbCacheHandler(new HttpClientHandler()))
+            // F-M547/F-M783: die Ablage sitzt AUSSEN, der Takt INNEN. Ein Treffer wird von der Ablage
+            // beantwortet, bevor die Kette den Takt ueberhaupt erreicht — er kostet also keine Pause. Erst
+            // ein echter Abruf geht durch PacingHandler und Retry, genau wie im Haupt-Client.
+            using var http = new HttpClient(
+                new TmdbCacheHandler(
+                    new TransientRetryHandler(
+                        new PacingHandler(new SocketsHttpHandler()))))
             {
                 Timeout = TimeSpan.FromSeconds(30)
             };

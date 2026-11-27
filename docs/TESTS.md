@@ -192,6 +192,8 @@ milliseconds it took and the rows the context carries afterwards.
 
 **T434:** Every question through the shelf (F-M779, F-M780, F-M781, F-M782), in `endpoints`. **6 checks**. The season index hangs on the same chain instead of fetching past it — one own client fewer, and the only one left is the IMDb path. The status probe stays the one exception, because a reachability light must not be answered from a shelf. An answer is written once: the old table is no longer filled, it is dropped once without any takeover, and it is not created at startup any more. And the database refresh folds the shelf with the same run, with `VACUUM` after a checkpoint, reporting bytes before and after — and folding really returns the pages a shelf gave up, so the file gets smaller.
 
+**T435:** The pause hangs on the real request (F-M783), in `endpoints`. **3 checks**. A miss pays the API pause and makes exactly one request; a hit costs no pause and makes no second request; and the season index and the status probe hang in the same order — the shelf outside, the pause inside.
+
 
 **T428:** The season archive is not remembered at all (F-M766/F-M768), in `tvsubtitles`. **2 checks**. The entry type has `Name` but no `Data`, and a member read after a run that already paid for the archive comes back byte-identical with **0** requests — from disk, not from memory.
 

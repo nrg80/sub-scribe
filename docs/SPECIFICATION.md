@@ -3,7 +3,7 @@
 **Owner: the rules.** This is the master document: every other paper is derived from it and cites its `F-M` tags. The contract boundaries stand in `CONTRACTS.md`, the vocabulary in `TERMS.md`.
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.74.
+**Status:** Implementation — v12.3.8.75.
 
 **A rule stands here with its ground: the decision behind it in one sentence, under `Concept decision`, and the
 check that proves it. The detailed measurement archive — what was measured, which run showed it, what happened —
@@ -35,7 +35,7 @@ states the rule, its constants, its ground and its test.**
 - [7. OSHash Refresh](#7-oshash-refresh) — 3 requirements
 - [8. Rules Shared by Both Directions](#8-rules-shared-by-both-directions) — 5 requirements
 
-- [9. SubDL/TMDb API, IDs and Credentials](#9-subdltmdb-api-ids-and-credentials) — 85 requirements
+- [9. SubDL/TMDb API, IDs and Credentials](#9-subdltmdb-api-ids-and-credentials) — 86 requirements
 - [10. Scheduler, Quota and Timing](#10-scheduler-quota-and-timing) — 24 requirements
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
@@ -1785,6 +1785,8 @@ Evidence on the image of the live plugin database (copy, only the copy written):
 **F-M781 [S]:** **The old answer table is dropped, not migrated.** Concept decision (operator order 2026-11-27: <!-- "Ich will keine Übernahme für den cache. Einfach einmal entfernen." --> “No takeover for the cache. Just remove it once.”): what still sits in that table is thrown away and the table is dropped, and it is no longer created at startup. The rows were written under lifetimes that no longer exist, and a takeover would carry that doubt into the new shelf. The cost is visible and small: the first run asks TMDb again for whatever it needs, and the shelf fills from those answers. Checked by T434.
 
 **F-M782 [S]:** **The database refresh folds the shelf too.** Concept decision: deleting rows frees pages inside a SQLite file but never releases them, so a shelf that meets both ceilings can still hold a file at its high-water mark. The refresh that already compacts the plugin database compacts the shelf in the same run — `VACUUM` after a journal checkpoint — and reports bytes before and after. The diagnostics endpoint reports the file together with its journal for the same reason. Checked by T434.
+
+**F-M783 [S]:** **The API pause hangs on the real request, not on the lookup.** Concept decision: the rate limit applies when TMDb is really asked, and not when the shelf answers. The chain is shelf, then retries, then the pause, then the network. A hit is answered by the shelf before the pause is reached, so it costs nothing; a miss pays exactly one pause. Measured in the test: a miss 500 ms with one real request, a hit under 200 ms with no second request. The season index and the status probe hang in the same order — the shelf outside, the pause inside — because the season index used to reach the network without any pause at all. Checked by T435. <!-- Operator order 2026-11-27, verbatim: "Ähnlich wie beim upload/download soll für tmdb das rate limit nur gelten, wenn tmdb tatsächlich angefragt wird, nicht wenn der cache benutzt wird" -->
 
 ## 10. Scheduler, Quota and Timing
 

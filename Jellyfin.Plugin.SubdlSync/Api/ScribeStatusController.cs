@@ -39,7 +39,24 @@ public class ScribeStatusController : ControllerBase
     // F-M343: this one client serves two probes — the SubDL search probe (a SubDL call like any
     // other, see below) and the TMDb configuration probe at the bottom of this file — so both
     // identify the plugin. TMDb seeing it is intended; see ScribeApiClient.DefaultUserAgent.
-    private static readonly HttpClient _httpClient = ScribeApiClient.NewHttpClient();
+    // F-M783: die Probe fragt wirklich — sie geht an der Ablage vorbei (F-M779) und zahlt dafuer den Takt,
+    // wie jede andere externe Anfrage auch.
+    private static readonly HttpClient _httpClient = BuildProbeClient();
+
+    /// <summary>
+    /// F-M783: der Client der Statusprobe — eigener Takt, eigener Handler, kein Regal. Die Probe fragt
+    /// "ist TMDb erreichbar", also muss sie wirklich fragen (F-M779) und dafuer den Takt zahlen (F-M547).
+    /// </summary>
+    /// <returns>The one client the status probes use.</returns>
+    private static HttpClient BuildProbeClient()
+    {
+        var client = new HttpClient(new PacingHandler(new SocketsHttpHandler()))
+        {
+            Timeout = TimeSpan.FromSeconds(100)
+        };
+        client.DefaultRequestHeaders.TryAddWithoutValidation("User-Agent", ScribeApiClient.DefaultUserAgent);
+        return client;
+    }
 
     public ScribeStatusController(ILogger<ScribeStatusController> logger, ILibraryManager libraryManager)
     {

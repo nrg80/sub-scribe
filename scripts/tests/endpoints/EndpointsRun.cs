@@ -4161,7 +4161,9 @@ internal static class Program
             @"new HttpClient\s*\{").Count;
         Check(
             "F-M779: the season index hangs on the same shelf instead of fetching past it",
-            index779.Contains("new HttpClient(new TmdbCacheHandler(new HttpClientHandler()))", StringComparison.Ordinal)
+            // F-M783 hat die Kette erweitert (Ablage aussen, Takt innen) — der Punkt bleibt: der
+            // Staffel-Index holt nicht mehr am Regal vorbei.
+            index779.Contains("new TmdbCacheHandler(", StringComparison.Ordinal)
             && eigeneTmdbClients == 1
             && status779.Contains("geht BEWUSST an der Ablage vorbei", StringComparison.Ordinal),
             $"{eigeneTmdbClients} nackte(r) Client(s) — nur der IMDb-Weg, die Statusprobe bleibt Ausnahme");
@@ -4222,6 +4224,57 @@ internal static class Program
             vorFalten > 0 && faltenNach < faltenVor && nachFalten <= faltenVor,
             $"{vorFalten} B vor dem Falten, {faltenNach} B danach");
 
+
+
+        // ---- 27. F-M783: der Takt haengt an der ECHTEN Anfrage, nicht am Nachschlagen ---------------
+        // Anlass (Operator-Anweisung 27.11.2026): „Aehnlich wie beim upload/download soll fuer tmdb das
+        // rate limit nur gelten, wenn tmdb tatsaechlich angefragt wird, nicht wenn der cache benutzt
+        // wird." Die Kette ist Ablage -> Retry -> Takt -> Netz, also beantwortet ein Treffer die Anfrage,
+        // BEVOR der Takt ueberhaupt erreicht wird. Gemessen statt behauptet.
+        string taktOrdner = Path.Combine(Path.GetTempPath(), "tmdbtakt-" + Guid.NewGuid().ToString("N"));
+        Jellyfin.Plugin.SubScribe.Api.TmdbCache.Attach(taktOrdner, null);
+        Jellyfin.Plugin.SubScribe.Api.ExternalApiPacer.Configure(0.5);
+        var zaehler = new CountingInnerHandler();
+        using var taktClient = new HttpClient(
+            new Jellyfin.Plugin.SubScribe.Api.TmdbCacheHandler(
+                new Jellyfin.Plugin.SubScribe.Api.PacingHandler(zaehler)));
+        const string TaktUrl = "https://api.themoviedb.org/3/tv/1416?api_key=egal&language=de-DE";
+
+        var uhr = System.Diagnostics.Stopwatch.StartNew();
+        using (var erste = await taktClient.GetAsync(TaktUrl))
+        {
+            uhr.Stop();
+        }
+
+        long msFehltreffer = uhr.ElapsedMilliseconds;
+        int aufrufeNachFehltreffer = zaehler.Calls;
+
+        var uhr2 = System.Diagnostics.Stopwatch.StartNew();
+        using (var zweite = await taktClient.GetAsync(TaktUrl))
+        {
+            uhr2.Stop();
+        }
+
+        long msTreffer = uhr2.ElapsedMilliseconds;
+        int aufrufeNachTreffer = zaehler.Calls;
+        Jellyfin.Plugin.SubScribe.Api.ExternalApiPacer.Configure(0);
+        Jellyfin.Plugin.SubScribe.Api.TmdbCache.Clear();
+
+        Check(
+            "F-M783: a miss pays the API pause — the pause hangs on the real request",
+            aufrufeNachFehltreffer == 1 && msFehltreffer >= 450,
+            $"1 echter Abruf, {msFehltreffer} ms (Takt 500 ms)");
+        Check(
+            "F-M783: a cache hit pays nothing — the shelf answers before the pause is reached",
+            aufrufeNachTreffer == 1 && msTreffer < 200,
+            $"kein zweiter Abruf, {msTreffer} ms statt >= 500");
+        Check(
+            "F-M783: the season index and the status probe hang in the same order — shelf outside, pause inside",
+            ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Api", "SeasonEpisodeIndex.cs"))
+                .Contains("new TmdbCacheHandler(\n                    new TransientRetryHandler(\n                        new PacingHandler(new SocketsHttpHandler())))", StringComparison.Ordinal)
+            && ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Api", "ScribeStatusController.cs"))
+                .Contains("new HttpClient(new PacingHandler(new SocketsHttpHandler()))", StringComparison.Ordinal),
+            "Ablage aussen, Takt innen — auch dort");
 
         if (_failures > 0)
         {
@@ -4634,5 +4687,26 @@ internal static class Program
         }
 
         return count;
+    }
+}
+
+/// <summary>
+/// F-M783: ein Handler, der zaehlt, wie oft die Kette wirklich hinausgeht — und der ohne Netz antwortet.
+/// </summary>
+internal sealed class CountingInnerHandler : HttpMessageHandler
+{
+    /// <summary>Gets how many requests reached the network.</summary>
+    public int Calls { get; private set; }
+
+    /// <inheritdoc />
+    protected override Task<HttpResponseMessage> SendAsync(HttpRequestMessage request, CancellationToken cancellationToken)
+    {
+        Calls++;
+        var antwort = new HttpResponseMessage(System.Net.HttpStatusCode.OK)
+        {
+            Content = new StringContent("{\"id\":1416}", System.Text.Encoding.UTF8, "application/json"),
+            RequestMessage = request
+        };
+        return Task.FromResult(antwort);
     }
 }
