@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.83",
-        "changelog": "v12.3.8.83: A finding without a name is no finding — the census names the form of a list when no member is at fault.",
+        "version": "12.3.8.84",
+        "changelog": "v12.3.8.84: The season verdicts whose tag was two letters move to the one form — the last store of names.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.83-dev/Jellyfin.Plugin.SubdlSync_12.3.8.83.zip",
-        "checksum": "0a36cc54985e4073fbc8fa2c9eb1f180",
-        "timestamp": "2026-11-27T07:07:27Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.84-dev/Jellyfin.Plugin.SubdlSync_12.3.8.84.zip",
+        "checksum": "10ee2ed308b46837289fa6acb7d7ca6f",
+        "timestamp": "2026-11-27T07:13:44Z"
       }
     ]
   }
