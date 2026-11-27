@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.76",
-        "changelog": "v12.3.8.76: an extracted subtitle track outlives the run — the extraction store replaces the run cache.",
+        "version": "12.3.8.77",
+        "changelog": "v12.3.8.77: one language code inside the client — the pack plan speaks ISO and translates only at the sources.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.76-dev/Jellyfin.Plugin.SubdlSync_12.3.8.76.zip",
-        "checksum": "1f4af3de50b8e65f562002dc29cab6dc",
-        "timestamp": "2026-11-27T05:12:54Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.77-dev/Jellyfin.Plugin.SubdlSync_12.3.8.77.zip",
+        "checksum": "3a43b61b750d8c25bfdc8da2dd9c6b47",
+        "timestamp": "2026-11-27T05:46:32Z"
       }
     ]
   }
