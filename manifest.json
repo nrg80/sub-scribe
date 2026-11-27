@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.72",
-        "changelog": "v12.3.8.72: one TMDb shelf of its own — facts instead of whole responses, lifetimes by kind, 16 MB per kind, and a cache that can no longer close a title.",
+        "version": "12.3.8.73",
+        "changelog": "v12.3.8.73: every TMDb question through the same shelf, one answer written once — the reachability probe stays the exception.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.72-dev/Jellyfin.Plugin.SubdlSync_12.3.8.72.zip",
-        "checksum": "16c7b43fff0ce2a3cfacaa29bd1f8ec3",
-        "timestamp": "2026-11-27T03:49:53Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.73-dev/Jellyfin.Plugin.SubdlSync_12.3.8.73.zip",
+        "checksum": "85e75bdc465e1b0bf3109c421469274a",
+        "timestamp": "2026-11-27T04:02:12Z"
       }
     ]
   }
