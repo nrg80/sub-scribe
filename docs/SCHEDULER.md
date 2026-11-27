@@ -61,24 +61,7 @@ the persisted queues, where retry counters and tombstones survive. On the event 
 the libraries of the changed items and scans only those, growing back to "all" above the targeted-set limit.
 Ordering is last in, first out by item creation time.
 
-## What an arrival covers
-
-An arrival cycle covers the items that arrived and nothing else. The dispatcher hands the seeder the ids its
-collector gathered (`F-M233`), and the seeder skips every item outside that set (`SkipForArrivalScope`). The
-libraries of the changed items travel along as a second bound, so the id set and the library set describe one
-and the same window. An arrival cycle that collected nothing does not run at all — `no arrivals collected — no
-run`.
-
-Arrivals that come in while a cycle is already running do not wait for the next anchor. They are latched with
-`Event during cycle — next seed round will include it`, and the follow-up trigger 90 seconds later runs on
-exactly those ids.
-
-Full coverage is reserved for the remaining three triggers: a scheduled run, a manual run and a recovery run
-pass no id set at all and scan every selected library. That is deliberate — the scheduled run is the net that
-catches what the arrivals missed.
-
-The difference is measurable. A full scheduled cycle spent 69 minutes in its pack phase before it reached the
-first of 1,477 items; an arrival cycle has eight episodes in front of it when eight episodes arrived.
+The arrival path has a paper of its own: [ARRIVAL-RUN.md](ARRIVAL-RUN.md).
 
 What it does not do: it does not run two directions at once, it does not fire a job twice for one slot, it
 does not fire at a fixed clock time, and it does not keep a timer in the dashboard. It also does not rescan
