@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.74",
-        "changelog": "v12.3.8.74: the retired answer table is dropped without a takeover, and the database refresh folds the TMDb shelf with the same run.",
+        "version": "12.3.8.75",
+        "changelog": "v12.3.8.75: the API pause hangs on the real request — a cache hit costs nothing, and the season index pays it too.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.74-dev/Jellyfin.Plugin.SubdlSync_12.3.8.74.zip",
-        "checksum": "3d6be416f6861aa5c3a5f5d68ed4e255",
-        "timestamp": "2026-11-27T04:18:34Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.75-dev/Jellyfin.Plugin.SubdlSync_12.3.8.75.zip",
+        "checksum": "2b65e5a3f91224630761dea6e9afa999",
+        "timestamp": "2026-11-27T04:46:09Z"
       }
     ]
   }
