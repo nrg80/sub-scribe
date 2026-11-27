@@ -61,7 +61,7 @@ the persisted queues, where retry counters and tombstones survive. On the event 
 the libraries of the changed items and scans only those, growing back to "all" above the targeted-set limit.
 Ordering is last in, first out by item creation time.
 
-The arrival path has a paper of its own: [ARRIVAL-RUN.md](ARRIVAL-RUN.md).
+The arrival path and the five triggers are told in [RUN-TYPES.md](RUN-TYPES.md).
 
 What it does not do: it does not run two directions at once, it does not fire a job twice for one slot, it
 does not fire at a fixed clock time, and it does not keep a timer in the dashboard. It also does not rescan

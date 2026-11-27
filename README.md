@@ -125,8 +125,7 @@ Do not release by tagging and pushing alone: a release must carry exactly one as
 - How a season pack download runs: [docs/SEASON-PACK-DOWNLOAD.md](docs/SEASON-PACK-DOWNLOAD.md)
 - How a single download runs: [docs/SINGLE-DOWNLOAD.md](docs/SINGLE-DOWNLOAD.md)
 - Who owns the times, and when a run defers: [docs/SCHEDULER.md](docs/SCHEDULER.md)
-- What an arrival covers, and what only a full run covers: [docs/ARRIVAL-RUN.md](docs/ARRIVAL-RUN.md)
-- The five triggers, their direction and their reach: [docs/RUN-TYPES.md](docs/RUN-TYPES.md)
+- The five triggers, what an arrival covers, their direction and reach: [docs/RUN-TYPES.md](docs/RUN-TYPES.md)
 - How the two subtitle sources work together (marks, completion, parallel download and upload): [docs/MULTI-SOURCE.md](docs/MULTI-SOURCE.md)
 - Release process: [docs/RELEASE.md](docs/RELEASE.md)
 - The plugin on one page, written for a person or an assistant answering one:
