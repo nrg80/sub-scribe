@@ -35,9 +35,11 @@ describes.
 
 ## Two things worth knowing
 
-The pack switch has no effect on the SubDL side today, because the search there never asks for a pack
-and the order comes from the ranking of the run. And the run marks an archive as counted before it
-knows whether the save succeeded, so a first save that is refused spends the one count of that archive.
+The preference works differently on the two sides. tvsubtitles asks for the season archive itself, so the
+archive is fetched before the episode page in the automatic run too. On the SubDL side the preference only
+sorts packs to the front when the run asks for an archive, and the automatic run never does; there the
+order comes from the ranking above. And the run marks an archive as counted before it knows whether the
+save succeeded, so a first save that is refused spends the one count of that archive.
 
 ## What a pack download never does
 
