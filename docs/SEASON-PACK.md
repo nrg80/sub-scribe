@@ -1,6 +1,6 @@
 # Season Pack — how one is formed, and when it may be formed
 
-**Owner: the container.** One season, one language, one variant, one release — packed into one ZIP by
+**Owner: the container built.** One season, one language, one variant, one release — packed into one ZIP by
 the plugin and handed to a source. This paper states the whole way: which two switches decide, which
 checks run before the first extraction, which run after it, how the container is built, and what a pack
 never does.

@@ -1,6 +1,6 @@
 # Season pack download — how an archive arrives, and when it is taken
 
-**Owner: the way in.** One archive for one series, one season, one language: how the run decides to
+**Owner: the archive taken in.** One archive for one series, one season, one language: how the run decides to
 take it, what it checks before the first byte leaves the source, how it takes exactly one member out
 of it, and what it books when the text holds. The other direction — how a pack is formed out of files
 on disk — stands in `docs/SEASON-PACK.md` and answers the opposite question.

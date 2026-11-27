@@ -1,6 +1,6 @@
-# Single Download — how one is fetched, and when it is taken
+# Single download — how one is fetched, and when it is taken
 
-**Owner: the pair.** One media file, one language, one variant, one source — one subtitle written
+**Owner: the one file fetched.** One media file, one language, one variant, one source — one subtitle written
 beside the file and one row in the plugin database. This paper states the whole way: which switches
 decide, which files are candidates, in what order the sources are asked, which checks run before the
 fetch, which run after it, how the file is named, and what a single download never does.

@@ -1,6 +1,6 @@
 # Single upload — how one is formed, and when it may go up
 
-**Owner: one file, one language, one variant.** One text track of one language, or one loose subtitle
+**Owner: the one file sent.** One text track of one language, or one loose subtitle
 beside the file, for one source: screened, gated, named and sent. This paper states the whole way —
 which switch lets it out, which checks run before the text is read, which judge the text, what the
 request carries, what the answer returns, and what a single upload never does.
