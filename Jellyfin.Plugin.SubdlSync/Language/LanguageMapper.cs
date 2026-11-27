@@ -117,6 +117,17 @@ public static class LanguageMapper
     }
 
     /// <summary>
+    /// F-M791: kennt die Tabelle diesen zweistelligen Code? Wenn nicht, kann <see cref="Canonical"/>
+    /// ihn nicht in die dreistellige Form bringen und gibt ihn zurueck, wie er kam — lieber ein
+    /// sichtbarer Zweisteller als ein erfundenes Kennzeichen. Der Startlauf zaehlt solche Werte und
+    /// nennt sie im Protokoll.
+    /// </summary>
+    /// <param name="code">Zweistelliger Code, z. B. <c>de</c>.</param>
+    /// <returns>True, wenn die Tabelle ihn uebersetzen kann.</returns>
+    public static bool KnowsTwoLetter(string? code)
+        => !string.IsNullOrWhiteSpace(code) && code.Trim().Length == 2 && ToIso6392Map.ContainsKey(code.Trim());
+
+    /// <summary>
     /// F-M790: eine gespeicherte Sprachliste ("AR, EN, DE") in die eine Form bringen — jedes Glied
     /// einzeln, Dubletten fallen weg, die Reihenfolge bleibt die alte (OrdinalIgnoreCase). Der Store
     /// haelt damit auch in Textspalten nur den Kanon.

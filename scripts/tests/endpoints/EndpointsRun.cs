@@ -4589,6 +4589,21 @@ internal static class Program
 
         try { Directory.Delete(ganzOrdner, true); } catch { }
 
+        // ---- 33. F-M791: was die Tabelle nicht kennt, wird benannt statt erfunden ------------------------
+        Check(
+            "F-M791: the table knows de and does not know eu — an unknown code is echoed, never invented",
+            Jellyfin.Plugin.SubScribe.Language.LanguageMapper.KnowsTwoLetter("de")
+            && !Jellyfin.Plugin.SubScribe.Language.LanguageMapper.KnowsTwoLetter("eu")
+            && Jellyfin.Plugin.SubScribe.Language.LanguageMapper.Canonical("eu") == "EU",
+            Jellyfin.Plugin.SubScribe.Language.LanguageMapper.Canonical("eu") ?? "null");
+        Check(
+            "F-M791: two letters is never the canon — such a value and such a list member are counted and named",
+            Jellyfin.Plugin.SubScribe.Data.ScribeDbContext.SpracheAusserKanon("EU")
+            && !Jellyfin.Plugin.SubScribe.Data.ScribeDbContext.SpracheAusserKanon("DEU")
+            && Jellyfin.Plugin.SubScribe.Data.ScribeDbContext.SpracheAusserKanon("ger")
+            && Jellyfin.Plugin.SubScribe.Data.ScribeDbContext.ListeAusserKanon("ARA,EU,DEU")
+            && !Jellyfin.Plugin.SubScribe.Data.ScribeDbContext.ListeAusserKanon("ARA,DEU"));
+
         if (_failures > 0)
         {
             Console.WriteLine($">>> ENDPUNKTE: {_failures} von {_checks} Pruefungen fehlgeschlagen");

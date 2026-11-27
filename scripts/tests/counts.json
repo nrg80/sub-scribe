@@ -1200,6 +1200,12 @@
       "checks": 3,
       "requirement": "F-M790",
       "title": "Keine halbe Wanderung: alle sechs Stellen im Kanon (Spur, Seitendatei, Pack, Bad Apple, Abdeckungs- und Stempelliste, Urteilsschluessel), zweiter Start aendert nichts, Liste gliedweise mit Dublettenfall"
+    },
+    "T441": {
+      "suite": "endpoints",
+      "checks": 2,
+      "requirement": "F-M791",
+      "title": "Was die Tabelle nicht kennt, wird benannt statt erfunden: de ist bekannt, eu nicht und wird zurueckgegeben; zweistellig gilt nie als Kanon, weder als Wert noch als Listenglied"
     }
   }
 }

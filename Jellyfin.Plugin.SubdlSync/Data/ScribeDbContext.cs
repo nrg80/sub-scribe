@@ -908,11 +908,18 @@ public sealed class ScribeDbContext : IDisposable
     /// F-M790: steht dieser gespeicherte Wert schon im Kanon? Leer gilt als in Ordnung (die Zeile sagt
     /// nichts ueber eine Sprache).
     /// </summary>
-    private static bool SpracheAusserKanon(string? wert)
+    public static bool SpracheAusserKanon(string? wert)
     {
         if (string.IsNullOrWhiteSpace(wert))
         {
             return false;
+        }
+
+        // F-M791: ein zweistelliger Wert ist NIE der Kanon — auch dann nicht, wenn die Tabelle ihn
+        // nicht uebersetzen kann (etwa eu, gl). Er wird nicht erfunden, sondern gemeldet.
+        if (wert.Trim().Length == 2)
+        {
+            return true;
         }
 
         return !string.Equals(Language.LanguageMapper.Canonical(wert), wert, StringComparison.Ordinal);
@@ -921,14 +928,21 @@ public sealed class ScribeDbContext : IDisposable
     /// <summary>
     /// F-M790: dasselbe fuer eine gespeicherte Liste.
     /// </summary>
-    private static bool ListeAusserKanon(string? liste)
+    public static bool ListeAusserKanon(string? liste)
     {
         if (string.IsNullOrWhiteSpace(liste))
         {
             return false;
         }
 
-        return !string.Equals(Language.LanguageMapper.CanonicalList(liste), liste, StringComparison.Ordinal);
+        if (!string.Equals(Language.LanguageMapper.CanonicalList(liste), liste, StringComparison.Ordinal))
+        {
+            return true;
+        }
+
+        // F-M791: auch eine Liste kann ein Glied tragen, das die Tabelle nicht kennt.
+        return liste.Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Any(glied => glied.Length == 2);
     }
 
     private void EnsureAiredSeasonsTable()
@@ -1146,10 +1160,77 @@ public sealed class ScribeDbContext : IDisposable
 
             if (ausserKanon > 0)
             {
+                // F-M791: die Zahl allein hilft niemandem — der Befund nennt Ort, Wert und Haeufigkeit,
+                // damit ein Rest, der nicht wandern kann, benannt ist statt vermutet.
+                var befund = new SortedDictionary<string, int>(StringComparer.Ordinal);
+                void Merke(string ort, string? wert)
+                {
+                    if (string.IsNullOrWhiteSpace(wert))
+                    {
+                        return;
+                    }
+
+                    string schluessel = ort + "=" + wert;
+                    befund[schluessel] = befund.TryGetValue(schluessel, out int n) ? n + 1 : 1;
+                }
+
+                foreach (var row in _db.TrackRows.ToList())
+                {
+                    if (SpracheAusserKanon(row.Language))
+                    {
+                        Merke("track", row.Language);
+                    }
+                }
+
+                foreach (var row in _db.SidecarRows.ToList())
+                {
+                    if (SpracheAusserKanon(row.Language))
+                    {
+                        Merke("sidecar", row.Language);
+                    }
+                }
+
+                foreach (var row in _db.PackRows.ToList())
+                {
+                    if (SpracheAusserKanon(row.Language))
+                    {
+                        Merke("pack", row.Language);
+                    }
+                }
+
+                foreach (var row in _db.BadAppleRows.ToList())
+                {
+                    if (SpracheAusserKanon(row.Language))
+                    {
+                        Merke("badapple", row.Language);
+                    }
+                }
+
+                foreach (var row in _db.FileRows.ToList())
+                {
+                    if (ListeAusserKanon(row.LanguagesAvailable))
+                    {
+                        Merke("file.languages", row.LanguagesAvailable);
+                    }
+
+                    if (ListeAusserKanon(row.LastSearchLanguages))
+                    {
+                        Merke("file.stamp", row.LastSearchLanguages);
+                    }
+                }
+
                 LogUtil.Normal(
                     _logger,
-                    "[Sub Scribe] data file: {Count} stored language value(s) still outside the canon — the migration is incomplete (F-M790).",
-                    ausserKanon);
+                    "[Sub Scribe] data file: {Count} stored language value(s) still outside the canon, in {Places} value(s) — the migration is incomplete (F-M790).",
+                    ausserKanon,
+                    befund.Count);
+                foreach (var eintrag in befund.OrderByDescending(x => x.Value).Take(8))
+                {
+                    LogUtil.Normal(
+                        _logger,
+                        "[Sub Scribe] data file:   {Place} (F-M791).",
+                        eintrag.Key + " ×" + eintrag.Value.ToString(CultureInfo.InvariantCulture));
+                }
             }
             else
             {
