@@ -1146,6 +1146,12 @@
       "checks": 4,
       "requirement": "F-M770",
       "title": "Der Diagnose-Endpunkt liest ohne Verfolgung: eine Lese-Sicht ohne Identity Map, eine Zahl ohne Zeilen, und eine Debug-Zeile je Abruf"
+    },
+    "T432": {
+      "suite": "endpoints",
+      "checks": 4,
+      "requirement": "F-M771",
+      "title": "Eine geschlossene Sperre ist eine Pause: sieben Tage, dann genau eine Probe mit gestreutem Versatz, danach wieder geschlossen"
     }
   }
 }

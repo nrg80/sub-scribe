@@ -186,6 +186,8 @@ count that does not pull the rows into the context. The endpoint reaches Tracks,
 through that path and keeps no `FindAll`. Per call it writes one Debug line naming the rows read, the
 milliseconds it took and the rows the context carries afterwards.
 
+**T432:** A closed title is a pause, not an end (F-M771), in `endpoints`. **4 checks**. The pause is seven days, and the probe never opens earlier. The offset comes from the lock key, so the same key yields the same moment on every read. Two hundred keys spread over the whole window instead of one minute. A probe is exactly one attempt, with a line in the log when it opens and the reopening date in the line that closes it again.
+
 
 **T428:** The season archive is not remembered at all (F-M766/F-M768), in `tvsubtitles`. **2 checks**. The entry type has `Name` but no `Data`, and a member read after a run that already paid for the archive comes back byte-identical with **0** requests — from disk, not from memory.
 

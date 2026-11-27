@@ -121,8 +121,8 @@ pack, handle, verdict, capability, light, inquiry. Three words are used in this 
   the pipeline.
 - **What the source returns is a proposal with evidence:** an identifier, a state, a plain text. Only
   the pipeline decides whether and where it enters the plugin database (F-M508, F-M734).
-- **A lock is pipeline knowledge.** That a title stays closed for good after four failed attempts
-  (F-M608) is known only to the pipeline; the source never sees any of it.
+- **A lock is pipeline knowledge.** That a title stays closed after four failed attempts — for seven days,
+  then open for exactly one probe (F-M608, F-M771) — is known only to the pipeline; the source never sees any of it.
 
 ## 8. Allocation: which question belongs where
 

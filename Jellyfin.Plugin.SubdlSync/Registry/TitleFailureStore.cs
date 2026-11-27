@@ -11,7 +11,7 @@ namespace Jellyfin.Plugin.SubScribe.Registry;
 /// F-M608 (Operator-Anweisung 18.11.2026: „Anlegen, nachsuchen, fail 1: 2 Sekunden pause, fail 2: 4
 /// sekunden pause, fail 3: 8 Sekunden pause. Fail4: alles pairs des movies der serie dauerhaft
 /// schließen" — und „Bei tvst und mst natürlich nur"): das **Anlegen und Nachsuchen** eines Titels wird
-/// gestaffelt wiederholt, und nach dem vierten Fehlschlag ist der Titel **dauerhaft** geschlossen.
+/// gestaffelt wiederholt, und nach dem vierten Fehlschlag ist der Titel **geschlossen**.
 /// <para>
 /// Warum nur die zwei Adressen mit Anlage: subdl hat keinen solchen Schritt — dort wird ein Untertitel
 /// eingereicht und fertig. Bei tvsubtitles und moviesubtitles muss dagegen erst die Serie bzw. der Film
@@ -20,14 +20,32 @@ namespace Jellyfin.Plugin.SubScribe.Registry;
 /// </para>
 /// <para>
 /// Die Sperre haengt am **Titel** (IMDb-Kennung, sonst TMDb-Kennung), nicht am Inhalt: sie schliesst
-/// damit alle Paare dieses Films bzw. dieser Serie auf einmal — genau wie angewiesen. Sie faellt nur
-/// durch <see cref="Clear"/> weg, also wenn ein Versuch gelingt.
+/// damit alle Paare dieses Films bzw. dieser Serie auf einmal — genau wie angewiesen. Sie faellt durch
+/// <see cref="Clear"/> weg, also wenn ein Versuch gelingt.
+/// </para>
+/// <para>
+/// F-M771 (Bediener 27.11.2026: „Naja, nach 7 Tagen könnte man erneut schauen."): die Sperre ist eine
+/// **Pause, kein Ende**. Nach <see cref="ProbePause"/> oeffnet der Titel sich fuer **einen** Versuch, mit
+/// einem aus dem Schluessel abgeleiteten Versatz von wenigen Stunden, damit nicht alle geschlossenen
+/// Titel im selben Moment anklopfen. Gelingt die Probe, faellt die Sperre; scheitert sie, wird sofort
+/// wieder geschlossen und der Anker neu geschrieben. Vorher hielt die Sperre fuer immer, und weil ein
+/// geschlossener Titel die Leiter ueberspringt, konnte ihn ausser einem Reset nichts mehr oeffnen.
 /// </para>
 /// </summary>
 public static class TitleFailureStore
 {
-    /// <summary>Number of failed attempts after which a title is closed for good.</summary>
+    /// <summary>Number of failed attempts after which a title is closed.</summary>
     public const int ClosingAttempt = 4;
+
+    /// <summary>F-M771: how long a closed title stays closed before it gets its one probe.</summary>
+    public static readonly TimeSpan ProbePause = TimeSpan.FromDays(7);
+
+    /// <summary>
+    /// F-M771: the window the probe is spread over, so that closed titles do not all ask in the same
+    /// minute. The offset is derived from the lock key, so it stays the same for a title instead of
+    /// wandering on every read.
+    /// </summary>
+    public const int ProbeSpreadHours = 6;
 
     private static readonly object Gate = new();
 
@@ -141,9 +159,20 @@ public static class TitleFailureStore
                     return false;
                 }
 
+                // F-M771: die Sperre ist eine Pause. Ist sie abgelaufen, gilt der Titel als offen und
+                // bekommt genau einen Versuch — die Leiter fragt dafuer IsProbe.
+                if (DateTime.UtcNow >= ReopenAt(row.Written, id))
+                {
+                    _log?.LogInformation(
+                        "[Sub Scribe] title store: {Key} reopened for a probe after {Days:0} day(s) — one attempt, not four (F-M771)",
+                        id, (DateTime.UtcNow - row.Written).TotalDays);
+                    reason = row.Reason ?? string.Empty;
+                    return false;
+                }
+
                 _log?.LogInformation(
-                    "[Sub Scribe] title store: {Key} is closed ({Reason}, attempts {Attempts}) — the ladder is skipped (F-M615)",
-                    id, row.Reason, row.Attempts);
+                    "[Sub Scribe] title store: {Key} is closed ({Reason}, attempts {Attempts}) until {Until:yyyy-MM-dd HH:mm} — the ladder is skipped (F-M615, F-M771)",
+                    id, row.Reason, row.Attempts, ReopenAt(row.Written, id));
                 reason = row.Reason ?? string.Empty;
                 return true;
             }
@@ -228,7 +257,9 @@ public static class TitleFailureStore
                 row.Reason = Trunc(reason, 200);
                 row.Written = DateTime.UtcNow;
                 db.SaveChanges();
-                _log?.LogInformation("[Sub Scribe] title store: {Key} closed and written ({Reason}) (F-M615)", id, reason);
+                _log?.LogInformation(
+                    "[Sub Scribe] title store: {Key} closed and written until {Until:yyyy-MM-dd HH:mm} ({Reason}) (F-M615, F-M771)",
+                    id, ReopenAt(row.Written, id), reason);
             }
         }
         catch (Exception ex)
@@ -273,6 +304,74 @@ public static class TitleFailureStore
 
     private static string Trunc(string? text, int max)
         => string.IsNullOrEmpty(text) ? string.Empty : (text.Length <= max ? text : text[..max]);
+
+    /// <summary>
+    /// F-M771: der Moment, an dem eine zu <paramref name="closedAt"/> geschlossene Sperre ihre Probe
+    /// bekommt — die Pause plus ein Versatz aus dem Schluessel.
+    /// <para>
+    /// WARUM DER VERSATZ AUS DEM SCHLUESSEL KOMMT: ein Zufallswert je Aufruf wuerde bei jedem Lesen
+    /// springen, und ein fester Versatz wuerde alle Titel im selben Moment oeffnen. Aus dem Schluessel
+    /// gerechnet ist er fuer einen Titel immer gleich und ueber die Titel gestreut.
+    /// </para>
+    /// </summary>
+    /// <param name="closedAt">Wann geschlossen wurde (UTC).</param>
+    /// <param name="lockKey">Der Schluessel der Sperre.</param>
+    /// <returns>Der Zeitpunkt (UTC), ab dem die Probe laeuft.</returns>
+    public static DateTime ReopenAt(DateTime closedAt, string lockKey)
+    {
+        int minuten = ProbeSpreadHours <= 0 ? 0 : (int)(StableHash(lockKey ?? string.Empty) % (uint)(ProbeSpreadHours * 60));
+        return closedAt.Add(ProbePause).AddMinutes(minuten);
+    }
+
+    /// <summary>
+    /// F-M771: wahr, wenn dieser Titel gerade seine Probe bekommt — dann laeuft die Leiter <b>einen</b>
+    /// Zug statt vier. Ohne diese Antwort wuerde eine abgelaufene Sperre wieder die vollen vier Zuege
+    /// fahren, und die Probe waere keine Probe.
+    /// </summary>
+    /// <param name="source">The address.</param>
+    /// <param name="titleId">The title's id.</param>
+    /// <returns>True when the title is open for exactly one attempt.</returns>
+    public static bool IsProbe(string source, string titleId)
+    {
+        ScribeSqliteContext? db = Store();
+        if (db == null || string.IsNullOrWhiteSpace(titleId))
+        {
+            return false;
+        }
+
+        string id = KeyOf(source, titleId);
+        try
+        {
+            lock (Gate)
+            {
+                var row = db.TitleFailureRows.AsNoTracking().FirstOrDefault(r => r.Id == id);
+                return row != null && row.Closed && DateTime.UtcNow >= ReopenAt(row.Written, id);
+            }
+        }
+        catch (Exception ex)
+        {
+            _log?.LogWarning("[Sub Scribe] title store: probing {Key} failed: {Type}: {Msg} (F-M771)", id, ex.GetType().Name, ex.Message);
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// F-M771: ein stabiler Hash ueber den Schluessel. <c>string.GetHashCode</c> ist es nicht — der
+    /// wechselt zwischen Prozessen, und der Versatz soll beim naechsten Start derselbe sein.
+    /// </summary>
+    /// <param name="text">The lock key.</param>
+    /// <returns>The hash.</returns>
+    private static uint StableHash(string text)
+    {
+        uint h = 2166136261;
+        foreach (char c in text)
+        {
+            h ^= c;
+            h *= 16777619;
+        }
+
+        return h;
+    }
 
     private static ScribeSqliteContext? Store()
     {

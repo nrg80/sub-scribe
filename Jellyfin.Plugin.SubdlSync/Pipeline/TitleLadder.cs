@@ -59,9 +59,15 @@ internal static class TitleLadder
         T ergebnis = default!;
         string? letzterGrund = null;
         bool letzteStoerung = false;
+
+        // F-M771: ist die Sperre abgelaufen und laeuft die Probe, dann genau EIN Zug. Sonst wuerde eine
+        // Probe wieder die vollen vier Zuege fahren, und der Titel waere nach einer Woche genauso
+        // geschlossen wie vorher — nur mit mehr Aufwand.
         int zuege = trockenlauf
             ? 1
-            : Jellyfin.Plugin.SubScribe.Registry.TitleFailureStore.ClosingAttempt;
+            : Jellyfin.Plugin.SubScribe.Registry.TitleFailureStore.IsProbe(quelle, titelId)
+                ? 1
+                : Jellyfin.Plugin.SubScribe.Registry.TitleFailureStore.ClosingAttempt;
 
         for (int zug = 1; zug <= zuege; zug++)
         {

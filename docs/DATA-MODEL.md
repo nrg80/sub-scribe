@@ -83,7 +83,7 @@ create.
 **The side tables**
 - `tmdb_answers` has `Id` and `Value`: the answers a title question already got.
 - `aired_seasons` has `Id` and `Value`: how many seasons a series has aired.
-- `title_failures` has `Id`, `Attempts`, `Closed` and `Reason`: the title lock (F-M198).
+- `title_failures` has `Id`, `Attempts`, `Closed` and `Reason`: the title lock (F-M198). Its write date is the anchor of the pause (F-M771) — the moment the title opens for its one probe is computed from it, so no column is added for a date that can be computed.
 - `source_refusals` has `Id`, `Signature` and `Reason`: a refusal that a changed content no longer matches.
 - `pack_seasons` has `Id`, `Signature`, `Verdict` and `Reason`: the per-season refusal, keyed on the
   fingerprint of the content.
@@ -151,7 +151,7 @@ history — but nothing reads them any more, and its marks are never read as ano
   fingerprint of what was refused decides whether a changed content may try again (`upload`, the
   refusal triple, `pack_seasons`, `source_refusals`).
 - A **lock** closes a title after repeated failure (`title_failures`); it is the only row whose
-  `Closed` flag makes the pipeline stop asking.
+  `Closed` flag makes the pipeline stop asking — and the only one that stops asking only for a while, because the pause is read from its write date (F-M771).
 - **Evidence beats a refusal and a refusal beats evidence**: a success clears the refusal, a refusal
   clears the success — the two live in the same row and exclude each other.
 

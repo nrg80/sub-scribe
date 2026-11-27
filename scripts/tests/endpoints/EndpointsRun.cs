@@ -4036,6 +4036,48 @@ internal static class Program
             && diagQuelle.Contains("{Tracked} row(s) tracked after it (F-M770)", StringComparison.Ordinal),
             "Debug-Zeile je Abruf");
 
+        // ---- 24. F-M771: die Sperre ist eine Pause, kein Ende --------------------------------
+        // Anlass: der Bediener sagte am 27.11.2026 „Naja, nach 7 Tagen könnte man erneut schauen." Bis
+        // dahin hielt eine Titelsperre fuer immer, und weil ein geschlossener Titel die Leiter
+        // ueberspringt, konnte ihn ausser einem Reset nichts mehr oeffnen. Die Pause wird gerechnet,
+        // nicht geplant: kein Timer, keine zweite Tabelle.
+        var sperrPause = Jellyfin.Plugin.SubScribe.Registry.TitleFailureStore.ProbePause;
+        var geschlossen = new DateTime(2026, 11, 27, 12, 0, 0, DateTimeKind.Utc);
+        var beiSchluesselA = Jellyfin.Plugin.SubScribe.Registry.TitleFailureStore.ReopenAt(geschlossen, "tvsubtitles|tt0133093");
+        var nochmalA = Jellyfin.Plugin.SubScribe.Registry.TitleFailureStore.ReopenAt(geschlossen, "tvsubtitles|tt0133093");
+        int versatzMinuten = (int)(beiSchluesselA - geschlossen - sperrPause).TotalMinutes;
+        Check(
+            "F-M771: a closed title stays closed for seven days, and the probe never opens before that",
+            sperrPause == TimeSpan.FromDays(7) && beiSchluesselA >= geschlossen + sperrPause,
+            $"{sperrPause.TotalDays:0} Tag(e), frueheste Probe {beiSchluesselA:HH:mm}");
+        Check(
+            "F-M771: the probe is spread over a few hours, and the offset is derived from the lock key so it does not wander",
+            versatzMinuten >= 0
+            && versatzMinuten < Jellyfin.Plugin.SubScribe.Registry.TitleFailureStore.ProbeSpreadHours * 60
+            && beiSchluesselA == nochmalA,
+            $"Versatz {versatzMinuten} min, zweimal gelesen = gleich");
+        var versaetze = new HashSet<int>();
+        for (int i = 0; i < 200; i++)
+        {
+            var zeit = Jellyfin.Plugin.SubScribe.Registry.TitleFailureStore.ReopenAt(geschlossen, "tvsubtitles|tt" + i.ToString("D7", System.Globalization.CultureInfo.InvariantCulture));
+            versaetze.Add((int)(zeit - geschlossen - sperrPause).TotalMinutes);
+        }
+
+        Check(
+            "F-M771: closed titles do not all ask in the same minute — the spread really spreads",
+            versaetze.Count >= 150 && versaetze.Max() - versaetze.Min() > 180,
+            $"{versaetze.Count} verschiedene Versaetze ueber {versaetze.Max() - versaetze.Min()} min");
+
+        string leiter771 = ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Pipeline", "TitleLadder.cs"));
+        string store771 = ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Registry", "TitleFailureStore.cs"));
+        Check(
+            "F-M771: a probe is one attempt and not four, and both ends say so in the log",
+            leiter771.Contains("TitleFailureStore.IsProbe(quelle, titelId)", StringComparison.Ordinal)
+            && store771.Contains("public static bool IsProbe(string source, string titleId)", StringComparison.Ordinal)
+            && store771.Contains("reopened for a probe after {Days:0} day(s)", StringComparison.Ordinal)
+            && store771.Contains("closed and written until {Until:yyyy-MM-dd HH:mm}", StringComparison.Ordinal),
+            "ein Zug bei der Probe, zwei Logzeilen");
+
         if (_failures > 0)
         {
             Console.WriteLine($">>> ENDPUNKTE: {_failures} von {_checks} Pruefungen fehlgeschlagen");
