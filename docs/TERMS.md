@@ -7,6 +7,7 @@ and the German wording is retired. Every document — `SPECIFICATION.md`, `CONTR
 `DATA-MODEL.md`, `TESTS.md`, `GUI.md`, `LOGGING.md`, `ENDPOINTS.md`, `MULTI-SOURCE.md`, `TVSUBTITLES.md`,
 `SEASON-PACK-CACHING.md`,
 `UPLOAD-EXTRACTION-CACHE.md`,
+`TMDB-CACHE.md`,
 `MOVIESUBTITLES.md`, `RELEASE.md`, `README.md` and the papers under `engines/` — uses these words and
 no synonyms.
 
@@ -30,6 +31,11 @@ the retired one is named below so it cannot creep back in.
 
 ## What we keep
 
+- **fact** — one small, stable statement about a title or an episode, taken from a source and kept:
+  which identifier belongs to which, a runtime, a year, how many seasons and episodes there are, when
+  something first aired. A fact is an answer, not a response. Retired: —
+- **raw answer** — the complete response a source sent to one address, kept for a short while as a
+  fallback for addresses that carry no rule yet. Retired: —
 - **plugin database** — our own database and its rows: identifiers, marks, locks, counters. Retired:
   Bestand, Store.
 - **files area** — where files live on disk: media, saved subtitles, archives, backups and evidence.
