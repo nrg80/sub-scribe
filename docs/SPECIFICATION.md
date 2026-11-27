@@ -3,7 +3,7 @@
 **Owner: the rules.** This is the master document: every other paper is derived from it and cites its `F-M` tags. The contract boundaries stand in `CONTRACTS.md`, the vocabulary in `TERMS.md`.
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.83.
+**Status:** Implementation — v12.3.8.84.
 
 **A rule stands here with its ground: the decision behind it in one sentence, under `Concept decision`, and the
 check that proves it. The detailed measurement archive — what was measured, which run showed it, what happened —
@@ -270,7 +270,7 @@ New episode, newly ripped episode or replaced episode → different signature �
 
 **F-M793 [U]:** **A finding without a name is no finding.** The census of 12.3.8.82 counted 1249 values outside the canon and named none of them: no member of a stored list was to blame, so the form of the list itself was — order, a duplicate, a stray space. A list is named by its members when a member is at fault, and by its form when no member is. Checked by T441.**F-M69:** **One media item costs one search, not one search per track.** The upload works in three stages: first all tracks and loose subtitles are checked locally (extraction, quality, duplicates), then one search with a comma-separated language list asks for all open languages, then what is missing at SubDL goes up.
 
-**F-M71:** **An SDH variant goes up with the SDH flag set.** The flag is `sdh`; `hi` is no mark but the language code for Hindi. Both directions read the SDH statement from the same two sources: the language flag first, the track title as fallback.
+**F-M794 [U]:** **A verdict whose tag was two letters moves too.** The censuses of 12.3.8.82 and .83 counted 1249 values outside the canon and named none — they were the season verdicts, and the census had no section for them. Their tags were written before the client spoke one code: `EN non-HI`, `DE HI`. The earlier pass skipped them, because it only took tags of three letters for a language. It takes two as well now, so the last store of names follows the same rule as the rest. Checked by T442.**F-M71:** **An SDH variant goes up with the SDH flag set.** The flag is `sdh`; `hi` is no mark but the language code for Hindi. Both directions read the SDH statement from the same two sources: the language flag first, the track title as fallback.
 
 **F-M85:** **The track selection carries the optional marker.** A track index that does not exist does not abort the extraction and yields no duplicate track; the caller repeats the empty tracks one by one and books one that stays empty as a real failure.
 ### 3.1 Quality Gates — Upload

@@ -4619,6 +4619,42 @@ internal static class Program
             && !Jellyfin.Plugin.SubScribe.Data.ScribeDbContext.SpracheAusserKanon("DEU")
             && Jellyfin.Plugin.SubScribe.Language.LanguageMapper.CanonicalList("ENG,DEU") == "DEU,ENG");
 
+        // ---- 35. F-M794: auch ein ZWEISTELLIGER Urteils-Tag wandert -------------------------------------
+        string zweiOrdner = Path.Combine(Path.GetTempPath(), "urteil2-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(zweiOrdner);
+        using (var anlegen = new Jellyfin.Plugin.SubScribe.Data.ScribeDbContext(zweiOrdner, null))
+        {
+            _ = anlegen.Context.PackSeasonRows.Count();
+        }
+
+        using (var roh = new Jellyfin.Plugin.SubScribe.Data.ScribeSqliteContext(Path.Combine(zweiOrdner, "sub-scribe.sqlite")))
+        {
+            roh.PackSeasonRows.Add(new Jellyfin.Plugin.SubScribe.Registry.PackSeasonEntity
+            {
+                Id = "tt794|1|EN non-HI", Signature = "sig", Verdict = "pack", Reason = "oben", Written = alt
+            });
+            roh.PackSeasonRows.Add(new Jellyfin.Plugin.SubScribe.Registry.PackSeasonEntity
+            {
+                Id = "tt794|1|DE HI", Signature = "sig", Verdict = "no-pack", Reason = "keine Quelle", Written = alt
+            });
+            roh.PackSeasonRows.Add(new Jellyfin.Plugin.SubScribe.Registry.PackSeasonEntity
+            {
+                Id = "tt794|1|", Signature = "sig", Verdict = "no-pack", Reason = "Staffel", Written = alt
+            });
+            await roh.SaveChangesAsync();
+        }
+
+        using (var db = new Jellyfin.Plugin.SubScribe.Data.ScribeDbContext(zweiOrdner, null))
+        {
+            var ids794 = db.Context.PackSeasonRows.ToList().Select(r => r.Id).OrderBy(x => x, StringComparer.Ordinal).ToList();
+            Check(
+                "F-M794: a verdict whose tag was two letters moves to the three-letter form — ENG and DEU, season level untouched",
+                ids794.SequenceEqual(new[] { "tt794|1|", "tt794|1|DEU HI", "tt794|1|ENG non-HI" }),
+                string.Join(",", ids794));
+        }
+
+        try { Directory.Delete(zweiOrdner, true); } catch { }
+
         if (_failures > 0)
         {
             Console.WriteLine($">>> ENDPUNKTE: {_failures} von {_checks} Pruefungen fehlgeschlagen");

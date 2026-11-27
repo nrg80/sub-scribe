@@ -1078,7 +1078,10 @@ public sealed class ScribeDbContext : IDisposable
                 int leer = tag.IndexOf(' ', StringComparison.Ordinal);
                 string sprache = leer < 0 ? tag : tag[..leer];
                 string variante = leer < 0 ? string.Empty : tag[leer..];
-                if (sprache.Length != 3)
+                // F-M794: die alten Urteile tragen den Tag ZWEISTELLIG ("EN non-HI") — geschrieben, bevor
+                // der Client auf einen Code umgestellt wurde. Die Wanderung zieht sie mit; nur ein Tag ohne
+                // Sprache (Staffelebene) bleibt liegen.
+                if (sprache.Length < 2)
                 {
                     continue;
                 }
@@ -1203,6 +1206,18 @@ public sealed class ScribeDbContext : IDisposable
                     if (SpracheAusserKanon(row.Language))
                     {
                         Merke("badapple", row.Language);
+                    }
+                }
+
+                // F-M794: die Urteile fehlten im Befund — 1249 gezaehlte Werte blieben darum ohne Namen.
+                foreach (var row in _db.PackSeasonRows.ToList())
+                {
+                    int zweiter = row.Id.IndexOf('|', row.Id.IndexOf('|', StringComparison.Ordinal) + 1);
+                    string tag = zweiter > 0 && zweiter + 1 < row.Id.Length ? row.Id[(zweiter + 1)..] : string.Empty;
+                    int leer = tag.IndexOf(' ', StringComparison.Ordinal);
+                    if (SpracheAusserKanon(leer < 0 ? tag : tag[..leer]))
+                    {
+                        Merke("packseason", tag);
                     }
                 }
 

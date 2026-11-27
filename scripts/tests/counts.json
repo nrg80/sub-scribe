@@ -1206,6 +1206,12 @@
       "checks": 4,
       "requirement": "F-M791",
       "title": "Was die Tabelle nicht kennt, wird benannt statt erfunden: de bekannt, zz nicht; zweistellig nie Kanon; eu/gl/mn erreichen ihre Form; eine nur unsortierte Liste gilt als Form"
+    },
+    "T442": {
+      "suite": "endpoints",
+      "checks": 1,
+      "requirement": "F-M794",
+      "title": "Auch ein zweistelliger Urteils-Tag wandert: EN non-HI wird ENG non-HI, DE HI wird DEU HI, die Staffelebene bleibt"
     }
   }
 }
