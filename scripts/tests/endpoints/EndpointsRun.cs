@@ -4740,11 +4740,11 @@ internal static class Program
         // ---- 39. F-M800: der Pack steht als ein geschlossenes Papier ------------------------------------
         string packDoc = await File.ReadAllTextAsync(Path.Combine(root, "docs", "SEASON-PACK.md"));
         Check(
-            "F-M800: the pack paper names the seven checks without extraction and both switches",
-            packDoc.Contains("seven checks without extraction", StringComparison.Ordinal)
-            && packDoc.Contains("`uploadEnabled`", StringComparison.Ordinal)
+            "F-M800: the pack paper names the seven checks before any unpacking and both switches",
+            packDoc.Contains("Seven checks before anything is unpacked", StringComparison.Ordinal)
+            && packDoc.Contains("`Upload enabled`", StringComparison.Ordinal)
             && packDoc.Contains("`preferSeasonZip`", StringComparison.Ordinal)
-            && packDoc.Contains("Neither switch is a licence to overrule a check", StringComparison.Ordinal),
+            && packDoc.Contains("A switch is only a permission", StringComparison.Ordinal),
             "Papier gelesen: " + packDoc.Length + " Zeichen");
         string spec800 = await File.ReadAllTextAsync(Path.Combine(root, "docs", "SPECIFICATION.md"));
         Check(

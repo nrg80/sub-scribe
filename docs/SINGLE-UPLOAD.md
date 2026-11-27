@@ -1,190 +1,163 @@
-# Single upload — how one is formed, and when it may go up
+# Single upload
 
-**Owner: the one file sent.** One text track of one language, or one loose subtitle
-beside the file, for one source: screened, gated, named and sent. This paper states the whole way —
-which switch lets it out, which checks run before the text is read, which judge the text, what the
-request carries, what the answer returns, and what a single upload never does.
-
-*Derived document: the rules are stated normatively in `SPECIFICATION.md` (F-M284, F-M375, F-M429,
-F-M487, F-M489, F-M500, F-M539, F-M541, F-M546, F-M556, F-M576, F-M577, F-M581, F-M585, F-M586,
-F-M587, F-M588, F-M605, F-M609, F-M763, F-M799). This paper describes how those rules work together.
-The words are those of `TERMS.md`.*
+A single upload is one file that the plugin sends to one subtitle site. It carries the text of one
+language in one variant and belongs to one source. The plugin screens it before it leaves and judges
+the text again afterwards, and every one of those steps has a rule behind it. This page follows a
+single upload from the track list to the mark in the plugin database, in the order the plugin walks it.
 
 ## Contents
 
-- [1. What this is about](#1-what-this-is-about)
-- [2. What a single upload is](#2-what-a-single-upload-is)
-- [3. The one switch that lets it out](#3-the-one-switch-that-lets-it-out)
-- [4. Which file is upload material at all](#4-which-file-is-upload-material-at-all)
-- [5. What is settled before any text is read](#5-what-is-settled-before-any-text-is-read)
-- [6. What is judged once the text exists](#6-what-is-judged-once-the-text-exists)
-- [7. What is sent, and what comes back](#7-what-is-sent-and-what-comes-back)
-- [8. What a single upload never does](#8-what-a-single-upload-never-does)
-- [9. What the log says](#9-what-the-log-says)
-- [10. The checks](#10-the-checks)
+- [1. What a single upload is](#1-what-a-single-upload-is)
+- [2. The switches](#2-the-switches)
+- [3. What is checked before anything is unpacked](#3-what-is-checked-before-anything-is-unpacked)
+- [4. What is checked after unpacking](#4-what-is-checked-after-unpacking)
+- [5. What is sent and what comes back](#5-what-is-sent-and-what-comes-back)
+- [6. What a single upload never does](#6-what-a-single-upload-never-does)
+- [7. What the log says](#7-what-the-log-says)
+- [8. Where these rules live](#8-where-these-rules-live)
 
-## 1. What this is about
+## 1. What a single upload is
 
-A source takes a subtitle in two shapes: as a **single upload**, one file at a time, and as a **pack**,
-one container over a whole season. The pack has its own paper (`SEASON-PACK.md`). This one follows a
-single from the track list to the mark in the plugin database.
+A single carries one file, one language, one variant and one source, and nothing else belongs to it.
+The file is a film or exactly one episode of a series. The variant says whether the text carries the
+hearing-impaired markers, and plain and SDH are two uploads, never one. The variant is part of the
+identity on both sides of the plugin database, so a plain upload never blocks an SDH upload of the
+same text (F-M489).
 
-The unit of the whole paper is the **slot**: one file, one language, one variant, one source. A media
-file usually holds several slots at once, one per text track, and every one of them is decided on its
-own. A slot never mixes two languages, two episodes or two variants.
+One media file usually holds several of these at once, because every text track inside it is decided
+on its own, and a loose subtitle may lie beside it as well. No single ever mixes two languages, two
+episodes or two variants.
 
-Two sources mean two slots over the same text, and the run asks both in one pass. The checks per source
-run in chain order before anything is sent, and one transfer slot pays for the track once, not once per
-source (F-M587).
+Only text can go up, so only two kinds of thing come into question. A text track inside the container
+is one, and it is counted by its position among all subtitle streams, bitmap tracks included, because
+that is the number the extraction pass addresses. A loose subtitle beside the video is the other, and
+its language comes from its file name, or from the text itself when the name carries no language. A
+bitmap track is never one, because there is no text to read, to hash or to judge.
 
-## 2. What a single upload is
+A forced track never goes up either. An embedded forced stream is dropped by the one predicate that
+asks for dialogue, and a loose forced subtitle is written to the log as seen but never sent (F-M284).
 
-A single consists of exactly five statements:
+Two sources over the same text are two attempts, not one. Both are asked in the same run, and the
+waiting time of a track is paid once, not once per source (F-M587).
 
-| Part | What it names |
-|---|---|
-| one file | a film, or exactly one episode of a series |
-| one language | the ISO code the text speaks |
-| one variant | plain, or hearing-impaired (SDH) — they are two slots, never one |
-| one source | the site the slot belongs to; another source is another slot |
-| one text | a text track inside the container, or one loose subtitle beside it |
+## 2. The switches
 
-Nothing else belongs to it. It carries no second language, no second episode and no container. The
-variant is part of the identity on both sides of the plugin database, so a normal upload never blocks
-an SDH upload of the same track (F-M489).
+One switch decides about singles and another decides about packs. Both belong to the source and not
+to the file, and they work independently of each other.
 
-## 3. The one switch that lets it out
+| What may go up | Switch | Where it sits |
+|---|---|---|
+| one episode on its own | `Upload enabled` (`uploadEnabled`) | the source's own settings |
+| the whole season as one ZIP | `Prefer season pack` (`preferSeasonZip`) | the source's card in the settings page |
 
-One switch decides, and it belongs to the source, not to the file:
+Both may be on at the same time, and neither one narrows the other (F-M585). A run builds its packs
+first and works the singles afterwards, and a position that a pack of this run already carries still
+goes up as a single beside it (F-M429, F-M585). A pack never holds a single back, and a single that is
+already up never keeps a text out of a pack.
 
-| Direction | Switch | Where | Effect |
-|---|---|---|---|
-| single upload | `uploadEnabled` | the source's own settings | the slot may go up as a single |
-| season pack | `Prefer season pack` | the source's card in the settings page | the slot may go up as a pack |
+A switch is only a permission: it says that something may go up, and the checks below decide whether
+it really does. A source that is switched off is not asked at all, and the log says so instead of
+staying silent. A source whose access data is missing falls out of the chain, and the other source
+keeps going. A dry run reads the switch and nothing else, because it makes no call and needs no access
+data.
 
-The two switches are independent, and neither narrows the other (F-M585). Three sentences follow:
+## 3. What is checked before anything is unpacked
 
-- **A single goes up when the upload switch of its source is on.** Nothing else is needed for a single.
-- **A pack does not stop a single.** A run builds its packs first and then works the singles, and a
-  position a pack of this run already carries still goes up as a single beside it (F-M429, F-M585).
-- **Neither switch is a licence to overrule a check.** The switch says *may*, the checks say *whether*.
+These checks answer one question: is there anything to send at all? They read the plugin database, the
+stream list and the language tables, and none of them starts ffmpeg, so a refusal costs a second
+instead of minutes. The run asks them in the order given here.
 
-A source that is switched off is not asked at all, and the line says so instead of staying silent. A
-source whose access data is missing falls out of the chain as well, and the other source keeps going.
-A run in dry mode asks only the switch, because it makes no call and needs no access data.
+1. **Is the file done for every source?** The media row carries a completion stamp per source, and one
+   look at it ends the file, provided that no loose subtitle beside it still needs a source
+   (F-M576, F-M556).
+2. **Is the item settled already?** Every text track has to hold its end state and no source may want a
+   pair any more. When both hold, the file ends before the one extraction pass (F-M539).
+3. **Was every text track rejected earlier?** A discarded track can no longer be uploaded by anyone, so
+   the file ends here as well (F-M541).
+4. **Is a track parked after a failed extraction?** The reason sits on the track and counts for seven
+   days, and after that the track gets its next attempt without anyone deleting a row (F-M577).
+5. **Did this source queue the item?** The queue is kept per source, so a source that never wanted the
+   file does not hold it open (F-M546).
+6. **Does any source still want this pair?** That question reads the switch, the media type and the
+   proof only. When the answer is no, the log names it and no verdict is written (F-M581). The stored
+   marks answer the same question per source: a pair that this source already holds is a self-echo and
+   is not sent twice, while a text that one source holds and the other still misses goes on
+   (F-M489, F-M500).
+7. **Does the site carry this language at all?** A source that does not carry it cannot want it, so the
+   pair is closed for it with a language refusal (F-M586).
 
-## 4. Which file is upload material at all
+A no at any of these ends the file for this run. Everything that survives is read in one extraction
+pass over all text tracks of the file, and that pass is the expensive step.
 
-Only text can be uploaded, so only text is a candidate:
+## 4. What is checked after unpacking
 
-- **A text track inside the media container.** It is counted by its position among all subtitle
-  streams, bitmap tracks included, because that is the number an extraction pass addresses.
-- **A loose subtitle beside the file.** Its language comes from its name; a name without a language
-  token is detected from its own text.
-- **A bitmap track is no candidate.** There is no text to read, to hash or to judge, so it never
-  becomes a slot.
+Once the text exists, it has to pass these gates, in the order in which the code asks them. None of
+them costs a second read of the container.
 
-A **forced** track is no candidate either, and that holds on both sides: an embedded forced stream is
-dropped by the one predicate that asks for dialogue, and a loose forced subtitle is named in the log
-as observed but never uploaded (F-M284).
+The text is first brought into one canonical form with normalised line endings, so the same text
+always hashes to the same value. Then the language of the tag is settled: a tag without a language is
+resolved by detection on the text, and a tag that the table cannot translate is stored as a rejection
+rather than guessed.
 
-## 5. What is settled before any text is read
+- **Size.** Text under 2 KB is not a subtitle worth publishing, and the floor is hard and always on.
+- **Language.** The detected language is compared with the language of the single. A tag that lies is
+  corrected here, so the text goes up under the detected language and the log names the tag that was
+  wrong (F-M375).
+- **Cues.** Fewer than 30 cues means the track is not a full subtitle.
+- **Timings.** They have to parse, they have to run forward, and every cue has to last between 0.1
+  seconds and 10 minutes.
+- **Sync.** The last cue must not end more than 5 minutes after the runtime, and the cues must not sit
+  in less than a tenth of the runtime.
 
-The questions below cost no extraction: a database look, a stream list, a language table. In this
-order:
+The two duplicate verdicts, already there at this source and already known content, are not quality
+judgements. They are stored on their own and never count as a failed gate.
 
-1. **Is every source already done with this file?** The media row carries a completion stamp per
-   source, and one look at it ends the file — provided no loose subtitle beside it still needs a
-   source (F-M576, F-M556).
-2. **Does every text track have its end state, and does no source want a pair any more?** Then the
-   file ends before the extraction pass (F-M539).
-3. **Is every text track already rejected?** A discarded track can no longer be uploaded by anyone,
-   so the file ends here too (F-M541).
-4. **Is the track parked after an extraction failure?** The reason is stored on the track and counts
-   for seven days; after that the track gets its next attempt without anyone deleting a row (F-M577).
-5. **Did this source queue this item?** The queue is kept per source, so a source that never wanted
-   the file does not hold it open (F-M546).
-6. **Does any source still want this pair?** The question reads the proof only — the stored verdict
-   per source and the mark of this position — and it says *no source wants it* only when that is true
-   (F-M581).
-7. **Does the source carry this language at all?** A source that does not carry it is not one that
-   still wants it, and the pair is closed for it with a language refusal (F-M586).
+## 5. What is sent and what comes back
 
-A **no** at any of the seven ends the file for this run, and the log names the question that said it.
-
-What survives all seven is read in **one extraction pass over all text tracks** of the file. That pass
-is the expensive step, so nothing below it is allowed to run before it.
-
-## 6. What is judged once the text exists
-
-The per-track questions come next, in this order, and every one of them costs no second read of the
-container:
-
-- **The canonical form.** Line endings are normalised before hashing, so the same text always hashes
-  to the same value and two payloads of one text cannot differ.
-- **The language of the tag.** A tag without a language is resolved by detection on the text; a tag
-  the table cannot translate is a stored rejection, not a guess.
-- **The pair, per position.** A pair one source already holds is a self-echo for that source only, and
-  the position is recorded as rejected-by-self-echo rather than uploaded twice (F-M489).
-- **A stored reject for this position.** A text that is demonstrably up settles the position instead
-  of being rejected again; a text that is up at one source and open at the other goes on to the chain
-  (F-M500).
-
-Then the content gates, in the order the code asks them:
-
-1. **Size.** Below the 2 KB floor the text is not a subtitle worth publishing. The floor is hard and
-   always on.
-2. **Language.** With the check switched on, the detected language of the text is compared with the
-   language of the slot. A tag that lies is corrected here and the text goes up under the detected
-   language (F-M375).
-3. **Cues.** Fewer than 30 cues means the track is not a full subtitle.
-4. **Timings.** The timings must parse, must rise monotonically, and every cue must stay between
-   0.1 s and 10 min.
-5. **Sync.** The cue span must not reach more than five minutes past the runtime, and the cues must
-   not sit in less than a tenth of it.
-
-The two duplicate verdicts — already up at this source, already known content — are not quality
-judgements. They are stored separately and never count as a gate failure.
-
-## 7. What is sent, and what comes back
-
-The name is built **per source**: each source reads its own language code in the file name
-(F-M799, F-M735). A series name reads `<imdb>.S01E02.<content hash>.CS.srt` for SubDL, and the same
-text goes to the series site as `…CZ.srt`. A film name carries no episode number.
+The plugin builds the name per source, because the sites do not spell every language the same way:
+SubDL reads `CS` where the series site reads `cz`, and `PT` where the film site writes `br`
+(F-M799, F-M735). A series name reads `<imdb>.S01E02.<content hash>.CS.srt`, and a film name carries no
+episode number.
 
 The request carries the bytes of the text, that name, the language in ISO form, the variant flag, the
-release name, the quality, the frame rate and the target — series or film, both identifiers, season
-and episode. It carries no pack.
+release name, the quality, the frame rate and the target. The target says whether this is a series or
+a film, and it names the two identifiers together with season and episode. No request carries a pack.
 
-The answer has exactly four outcomes: **accepted**, **rejected**, **busy**, **failed**. Only the first
-two are verdicts. A busy answer carries its wait and writes nothing; a failure is logged and the pair
-stays open for the next run (F-M609).
+The answer ends in one of four cases: accepted, refused, busy or no answer. Only the first two are
+verdicts. A busy answer names its wait and writes nothing, while a connection fault or a timeout is
+logged and leaves the pair open for the next run (F-M609). The checks per source still run before
+dispatch and in chain order, and the two sources are then started together, the second with a small
+offset so that the two writes do not land at the same moment (F-M587).
 
 An answer may carry the source's own identifier for the submission. SubDL's single answer usually
-names none, so the upload is remembered and its identifier is read back once at the end of the run
-(F-M588). A site that names none at all gets a mark of our own instead, so an upload without an
-identifier is still distinguishable from one that never happened.
+names none, so the upload is remembered without an id and the id is read back once at the end of the
+run (F-M588). A site that names none at all gets a mark of our own, so an upload without an identifier
+stays distinguishable from one that never happened.
 
-Stored afterwards, on the row of the pair: the state, the content hash, the identifier and the moment
-per source. Two sources that both accepted produce two marks, not one shared mark (F-M489). A
-substantive no is remembered as well, per track, source and content, so the same text is not offered
-again (F-M605). A run that delivers to two sources counts two deliveries (F-M763).
+Afterwards the row of the pair stores the state, the content hash, the identifier and the moment, and
+it stores all of them per source. Two sources that both accepted therefore leave two marks, not one
+shared mark (F-M489). A substantive no is remembered per track, per source and per content, so the
+same text is not offered again (F-M605), and a run that delivers to two sources counts two deliveries
+(F-M763).
 
-## 8. What a single upload never does
+## 6. What a single upload never does
 
-- It never deletes anything at a source. A single is an addition, never a replacement.
+- It never deletes anything at a source, because a single is an addition and never a replacement.
 - It never sends the same pair to the same source twice (F-M489).
-- It never sends a text of known origin. A subtitle that came out of a download goes nowhere (F-M487).
-- It never sends a language the source does not carry (F-M586).
-- It never invents an identifier. A mark of our own says it is ours, and a missing one stays missing.
-- It never carries a forced track, and never a bitmap track.
-- It never runs because a switch is on — it runs because the checks agreed.
+- It never sends a text of known origin, so a subtitle that came out of a download goes nowhere
+  (F-M487).
+- It never sends a language that the source does not carry (F-M586).
+- It never invents an identifier. A mark of our own says that the upload is ours, and a missing
+  identifier stays missing.
+- It never carries a forced track, and it never carries a bitmap track.
+- It never runs because a switch is on; it runs because the checks agreed.
 - It does **not** hold a position back because a pack carries it. A pack member goes up as a single
   beside the pack, just as the pack runs beside a single that is already up (F-M585).
 
-## 9. What the log says
+## 7. What the log says
 
-One line per step, in the order the run takes them:
+The run writes one line per step, in the order in which it takes them, and all of them stand at the
+normal level.
 
 - `SKIP {File} — stamped complete for every source, no stream read (F-M576)`
 - `SKIP {File} — item settled before extraction (every text stream has its end state, no source still wants a pair, F-M539)`
@@ -199,13 +172,17 @@ One line per step, in the order the run takes them:
 
 A single that appears in the statistics but never in the log is not a single that was sent.
 
-## 10. The checks
+## 8. Where these rules live
 
-`endpoints` guards most of this paper. T286 holds the cheap head exit, T287 the parked extraction
-failure, T290 the stored verdict, T291 the pair question on the proof. T292 and T294 hold the verdict
-per source, T295 that pack and single no longer exclude each other. T296 covers the language a source
-does not carry, T297 the two sends in one pass, T298 the identifier read back once. T299 holds the
-pause on the track and T300 the mark written immediately (F-M576, F-M577, F-M581, F-M585, F-M586,
-F-M588). T444 covers the name per source (F-M799). `dupskip` holds T391, the remembered no; `spec-doc`
-holds T403, the hygiene rule this paper obeys. The name itself is checked by
-`scripts/tests/uploadname/check.py`, the catalogue entry of every test stands in `TESTS.md`.
+The rules themselves stand in [SPECIFICATION.md](SPECIFICATION.md), under F-M284, F-M375, F-M429,
+F-M487, F-M489, F-M500, F-M539, F-M541, F-M546, F-M556, F-M576, F-M577, F-M581, F-M585, F-M586,
+F-M587, F-M588, F-M605, F-M609, F-M735, F-M763 and F-M799. This page only tells how they work
+together, and its wording follows [TERMS.md](TERMS.md).
+
+Four suites guard the behaviour. Most of it sits in `endpoints`. T286 holds the cheap head exit and
+T287 the parked failure. T290 holds the stored verdict, T291 the pair question, and T292 and T294 the
+verdict per source. T295 holds the pack beside the single, T296 the language that a source does not
+carry, and T297 the two sends in one pass. T298 holds the id that is read back once, T299 the pause
+on the track, and T300 the mark that is written at once. The name per source sits in `uploadname` as
+T444, the remembered no in `dupskip` as T391, and the hygiene rule that this page obeys in `spec-doc`
+as T403. The catalogue entry of every test stands in [TESTS.md](TESTS.md).

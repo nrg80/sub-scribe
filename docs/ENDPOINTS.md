@@ -1,6 +1,6 @@
 # Endpoints — two sources, one path
 
-**Owner: the seam.** How another source is attached, in detail: the catalogue, the marks, the order. The checklist and its pitfalls stand normatively in §21 of `SPECIFICATION.md`, the boundary in `CONTRACTS.md`.
+How another source is attached, in detail: the catalogue, the marks, the order. The checklist and its pitfalls stand normatively in §21 of `SPECIFICATION.md`, the boundary in `CONTRACTS.md`.
 
 Applies to the endpoints of the client (F-M483, F-M484).
 

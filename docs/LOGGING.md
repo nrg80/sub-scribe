@@ -1,6 +1,6 @@
 # Logging — the standard for every line and every text
 
-**Owner: the log and text standard.** Every line the plugin writes and every text the operator reads follows it.
+Every line the plugin writes and every text the operator reads follows it.
 
 *Paper: this document states the house standard for the log and for every text the operator reads in
 the GUI. It is not derived — it is the rule the log code implements, and where the requirements own a

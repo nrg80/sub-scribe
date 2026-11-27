@@ -1,10 +1,10 @@
 # Season Pack Caching — what is kept, where and what it says
 
-**Owner: the path of an archive.** How a season archive travels from a source to the run: the one
+How a season archive travels from a source to the run: the one
 cache on disk, the key spaces per source, the read, the fetch, the unpack — and the log lines that
 make every step visible.
 
-*Derived document: the rules are stated normatively in `SPECIFICATION.md` (F-M370, F-M663, F-M665,
+This paper is derived from the rules in the rules are stated normatively in `SPECIFICATION.md` (F-M370, F-M663, F-M665,
 F-M719, F-M766, F-M767, F-M768). This paper describes how those rules work together: what is kept,
 where it lies, who reads it and what the cache says while doing it. The words are those of
 `TERMS.md`.*

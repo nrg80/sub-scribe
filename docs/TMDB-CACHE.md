@@ -1,6 +1,6 @@
 # TMDb Cache — one shelf for every question, facts instead of responses
 
-**Owner: the answer to a question asked of TMDb.** Every question the plugin asks TMDb is answered from one
+Every question the plugin asks TMDb is answered from one
 shelf on disk. What is kept is a fact; what is kept beside it, for a short while, is the raw answer as a
 fallback. This paper replaces the three half-caches of today with one.
 

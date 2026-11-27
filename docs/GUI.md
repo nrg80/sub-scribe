@@ -1,11 +1,11 @@
 # The GUI — the settings page and what it shows
 
-*Derived document: the rules stand in §13 of `SPECIFICATION.md`, the per-source fields in §22. This paper
+This paper is derived from the rules in the rules stand in §13 of `SPECIFICATION.md`, the per-source fields in §22. This paper
 describes the page as the operator meets it — the tabs, the fields, the switches, the readouts, the
 colours and the wording. Every statement carries its `F-M` tag; where the rule itself is meant, the
 chapter is named. The words are those of `TERMS.md`.*
 
-**Owner: the page.** What the operator sees and may press. The normative rules stand in §13 (page and
+What the operator sees and may press. The normative rules stand in §13 (page and
 readouts) and §22 (fields per source); the wording of a log line stands in `LOGGING.md`, the data model
 in `DATA-MODEL.md`.
 

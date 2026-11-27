@@ -1,8 +1,8 @@
 # Data Model — the plugin database
 
-**Owner: the shape.** The tables, their keys and what each one carries; the normative rules stand in §14 of `SPECIFICATION.md`.
+The tables, their keys and what each one carries; the normative rules stand in §14 of `SPECIFICATION.md`.
 
-*Derived document: the rules are stated normatively in `§14` of `SPECIFICATION.md`. This paper describes
+This paper is derived from the rules in the rules are stated normatively in `§14` of `SPECIFICATION.md`. This paper describes
 the shape those rules produce: the tables, their keys, what each one carries and what it never carries.
 The words are those of `TERMS.md`. Where a table name and a level name are the same word, that is the
 rule, not a coincidence (F-M671).*

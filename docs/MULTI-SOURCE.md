@@ -1,6 +1,6 @@
 # Multi-Source Architecture — SubDL and the tvst family
 
-**Owner: the two-source architecture.** What two sources do to one pair; how a pair is allocated to a slot stands in §8 of `CONTRACTS.md`.
+What two sources do to one pair; how a pair is allocated to a slot stands in §8 of `CONTRACTS.md`.
 
 This sheet pulls together what is
 spread across many numbers in [`SPECIFICATION.md`](SPECIFICATION.md): how the sources

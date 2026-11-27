@@ -1,6 +1,6 @@
 # moviesubtitles.org — the film source
 
-**Owner: the source at a glance.** The detailed site material stands in `../MOVIESUBTITLES.md`: paths, tables, peculiarities.
+The detailed site material stands in `../MOVIESUBTITLES.md`: paths, tables, peculiarities.
 
 ## 1. What it is
 

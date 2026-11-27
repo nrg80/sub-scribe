@@ -1,6 +1,6 @@
 # Upload Extraction Cache — one pass per track, not per run
 
-**Owner: the extracted subtitle of a track.** A track has to leave the media container before it can be
+A track has to leave the media container before it can be
 sent anywhere. Today that extraction is repeated for every run, and what came out of it is thrown away
 when the run ends. This paper describes keeping it, under the rules the download cache already follows.
 

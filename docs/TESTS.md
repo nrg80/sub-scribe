@@ -1,12 +1,12 @@
 # Test Library — every requirement carries a test
 
-*Derived document: the rule stands in §19 of `SPECIFICATION.md`: a functional requirement carries at
+This paper is derived from the rules in the rule stands in §19 of `SPECIFICATION.md`: a functional requirement carries at
 least one automated test, a unit test where possible and an integration test where the behaviour needs
 one. This paper is the catalogue itself: one entry per test, grouped by the chapter of the
 specification the entry proves. Every entry is verbatim, because its number is its identity and a
 number is never reused.*
 
-**Owner: the catalogue.** The tests and what each one proves; the rule that every requirement needs one
+The tests and what each one proves; the rule that every requirement needs one
 stands in §19 of `SPECIFICATION.md`, and the binding of a test to its suite in `scripts/tests/counts.json`.
 
 ## Contents

@@ -1,167 +1,143 @@
-# Season Pack — how one is formed, and when it may be formed
+# Season pack upload
 
-**Owner: the container built.** One season, one language, one variant, one release — packed into one ZIP by
-the plugin and handed to a source. This paper states the whole way: which two switches decide, which
-checks run before the first extraction, which run after it, how the container is built, and what a pack
-never does.
-
-*Derived document: the rules are stated normatively in `SPECIFICATION.md` (F-M372, F-M397, F-M429,
-F-M431, F-M442, F-M443, F-M487, F-M585, F-M600, F-M611, F-M647, F-M650, F-M687, F-M800). This paper
-describes how those rules work together. The words are those of `TERMS.md`.*
+A season pack is one ZIP that holds every episode of a season in one language, using the same variant
+for all of them. The plugin builds that ZIP from the files on your disk and hands it to a subtitle
+site. This page describes how that works, in the order the plugin does it.
 
 ## Contents
 
-- [1. What this is about](#1-what-this-is-about)
-- [2. Two switches, and nothing else](#2-two-switches-and-nothing-else)
-- [3. May a pack be formed — the seven checks without extraction](#3-may-a-pack-be-formed--the-seven-checks-without-extraction)
-- [4. What is still checked after the extraction](#4-what-is-still-checked-after-the-extraction)
-- [5. How the container is built and sent](#5-how-the-container-is-built-and-sent)
+- [1. What a pack is](#1-what-a-pack-is)
+- [2. The switches](#2-the-switches)
+- [3. Seven checks before anything is unpacked](#3-seven-checks-before-anything-is-unpacked)
+- [4. What is checked after unpacking](#4-what-is-checked-after-unpacking)
+- [5. How the archive is built and sent](#5-how-the-archive-is-built-and-sent)
 - [6. What a pack never does](#6-what-a-pack-never-does)
-- [7. The record, and what a new attempt needs](#7-the-record-and-what-a-new-attempt-needs)
-- [8. What the log says](#8-what-the-log-says)
-- [9. The checks](#9-the-checks)
+- [7. What the log says](#7-what-the-log-says)
+- [8. Where these rules live](#8-where-these-rules-live)
 
-## 1. What this is about
+## 1. What a pack is
 
-A source sells a season twice: as **single uploads**, one episode at a time, and as a **season pack**,
-one ZIP that carries every episode of the season in one language. The second is worth more to the
-source, so the plugin offers it whenever it may.
+One pack carries exactly one season, one language and one variant. The variant means whether the
+subtitle includes the hearing-impaired markers or not. So a season with 26 languages makes 26 packs,
+not one big archive.
 
-A pack is only ever formed from files that lie on disk and from text that lies inside those files. It
-is never assembled out of anything the plugin downloaded, and it is never assembled out of a mixed set
-of releases. Both sentences are checked, not assumed.
+All members of a pack come from the same release, with the same quality and the same frame rate. A
+season that mixes releases is not a pack, and the plugin never sends it as one. A pack is only ever
+built from files that lie on your disk; the plugin never puts together a pack out of something it
+downloaded.
 
-The unit of the whole paper is the **slot**: one season, one language, one variant, one source. A pair
-is the same slot for both sources at once — the container is built once and offered to each source
-that wants it (F-M647).
+## 2. The switches
 
-## 2. Two switches, and nothing else
+Two switches decide, and they work independently of each other:
 
-Two switches decide, and they are independent:
+| What may go up | Switch | Where it sits |
+|---|---|---|
+| one episode on its own | `Upload enabled` | the source's own settings |
+| the whole season as one ZIP | `Prefer season pack` (`preferSeasonZip`) | the source's card in the settings page |
 
-| Direction | Switch | Where | Effect |
-|---|---|---|---|
-| single upload | `uploadEnabled` | the source's own settings | the pair may go up as a single |
-| season pack | `Prefer season pack` (`preferSeasonZip`) | the source's card in the settings page | the pair may go up as a pack |
+Both switches may be on at the same time. A subtitle that already went up as a single may still go
+into a pack afterwards, so the pack steps beside the single instead of replacing it.
 
-Four sentences follow from that, and they are the whole policy:
+A switch is only a permission: it says that something may go up, and the checks below decide whether it
+really does. A site that never takes packs has no pack switch on its card at all.
 
-- **Single when the upload switch is on.** Nothing else is needed for a single.
-- **Pack when the pack switch is on.** Nothing else is needed for a pack.
-- **Both may be on.** A single that is already up does not stop the pack, and a pack does not stop a
-  single. The pack steps beside the single (F-M585).
-- **Neither switch is a licence to overrule a check.** The switches say *may*, the checks say *whether*.
+## 3. Seven checks before anything is unpacked
 
-A source that carries no packs has no pack switch at all — its card offers none, and the run asks its
-capability instead of a switch (F-M687). The **slot** of a pair is exactly the list of sources whose pack
-switch is on, so a switched-off source never waits for a container and never holds one off. Upload and download are separate directions: the switch of one
-direction never enables the other.
+These seven checks answer one question: can a pack be formed at all? They only read what the plugin
+already knows, which is the folder on disk, the stream lists and the database. None of them starts
+ffmpeg, so a refusal costs a few seconds instead of minutes.
 
-## 3. May a pack be formed — the seven checks without extraction
+1. **Is the season complete?** Every episode of that season has to lie on disk. When one is missing,
+   the run waits instead of refusing for good.
+2. **Does a site already have the pack?** The question is asked per site, and only sites with their
+   pack switch on are counted here. When every one of them already has it, there is nothing to do.
+3. **Is the old refusal still valid?** A stored "no pack" carries a signature: the number of episodes
+   plus size and modification time of every file. The same signature means the same answer, so nothing
+   is unpacked again.
+4. **Is any site still open?** A site that refused this season stays closed as long as the signature
+   holds. When no site is left open, the season is done for this run.
+5. **Can every episode join?** The answer comes out of the database, per episode. A track that was
+   refused because of its content stops the pack here: text that is too small, a track that failed a
+   gate, a language the file does not carry. A track that was only *already uploaded* does not stop
+   it.
+6. **One release, one quality, one frame rate?** The run reads this from the file names and from the
+   stream lists, without unpacking anything. Mixed values end the pack.
+7. **Is there a text track of this language, and is one of them still open?** The run reads the stream
+   list and asks the rejection records track by track. When every track of that language was already
+   refused, nothing is unpacked.
 
-The question *can a pack be formed* is answered **before any extraction**. Each check reads what the
-plugin already knows: the folder, the stream lists, the database. None of them calls ffmpeg, so a
-refusal costs seconds.
+If one of the seven answers no, the run writes the reason to the log and, when the reason concerns the
+whole season, stores it together with the signature. If all seven answer yes, unpacking starts.
 
-1. **Is the season whole?** Every episode of the season lies on disk. A missing episode means wait, not
-   refuse (F-M372).
-2. **Does a source already hold the container?** Asked per source, and only the sources that are cleared
-   for pack upload stand in the slot — a source with its pack switch off is not one of them. When every
-   source of the slot has it, there is nothing to do (F-M647, F-M682).
-3. **Is the refusal still valid?** The stored verdict carries a signature — episode count plus size and
-   modification time of every file. Same signature, same verdict: nothing is extracted (F-M611,
-   F-M650).
-4. **Is any source still open?** A source that refused this season stays closed while the signature
-   holds. When no source is left open, the slot is done (F-M644, F-M650).
-5. **Can every episode join?** Asked per episode out of the store. A track that is refused for a reason
-   of content — too small, a failed gate, a language the file does not carry — stops the pack here.
-   A track that is only *already uploaded* does not stop it (F-M600, F-M585).
-6. **One source, one quality, one frame rate?** Read from the path and the stream list. A season of
-   mixed releases is not a pack and is never sent as one (F-M442).
-7. **Is there a text track of this language at all, and is one of them still open?** The stream list is
-   read by id, and the rejection store is asked per track. When every track of the language is already
-   refused, nothing is extracted (F-M443, F-M468).
+## 4. What is checked after unpacking
 
-A **no** at any of these seven ends the slot for this run. The reason is written to the log and, where
-it belongs to the season, stored with the signature. A **yes** at all seven leads to the extraction.
+Unpacking is the expensive step, so it only starts after those seven checks agreed. The text that comes
+out of the file then has to pass these gates. A failure still ends the pack for this run.
 
-## 4. What is still checked after the extraction
+Every track of the wanted language is tried, one after another in file order, and each of them has to
+pass all five gates:
 
-Extraction is the expensive step, so it is only taken when the seven checks above agreed. After it the
-text itself is judged, and here a **no** still ends the slot.
+- **Size.** Text under 2 KB is not a subtitle worth publishing.
+- **Language.** The text has to speak the language of the pack. On the single path a tag that lies is
+  corrected and the text goes up under the detected language. In a pack a correction counts as a
+  refusal, because the archive carries one language and cannot claim another.
+- **Cues.** Fewer than 30 cues means the track is not a full subtitle.
+- **Timings.** They have to parse, they have to run forward, and each cue has to last between 0.1
+  seconds and 10 minutes.
+- **Sync.** The last cue must not end more than 5 minutes after the runtime, and the cues must not sit
+  in less than a tenth of the runtime.
 
-Per track, in file order, every track of the requested language is tried (F-M431):
+Two kinds of track never become a candidate. A forced track is not dialogue, so it is not offered and
+is never unpacked for a pack. A loose subtitle file beside the video is no candidate either, because a
+pack is built from what is inside the container.
 
-- **Size.** Under the floor the text is not a subtitle worth publishing.
-- **Language.** The detected language of the text must be the language of the slot. On the single path
-  a lying tag is corrected and the text goes up under the detected language (F-M375). In a pack a
-  correction is a refusal, because a container carries one language and cannot claim another.
-- **Cues.** Too few cues means the track is not a full subtitle.
-- **Timings.** The timings must parse, must be monotonic, and their durations must stay in a plausible
-  band.
-- **Sync.** The cue span must fit the runtime, and the cues must not sit in a small corner of it.
+Two more checks look at the season as a whole:
 
-Forced tracks are no candidate at all: they are not dialogue, they are not offered, and they are never
-extracted for a pack. Loose subtitles beside the file are no candidate either — a pack is built from
-the container.
+- **Equality.** All members must share one quality and one frame rate.
+- **Origin.** Not one member may come from a download of any of our sources, whether it was downloaded
+  directly or unpacked out of a downloaded pack. A single such member and no pack is built for that
+  season, because such an archive would be a re-upload by construction.
 
-Per season, twice:
+## 5. How the archive is built and sent
 
-- **Equality.** All members must share one quality and one frame rate (F-M442).
-- **Origin.** Not one member may come from a download of any of our sources — downloaded or unpacked
-  out of a downloaded pack. One such member and no pack is built for that season, because such a
-  container would be a re-upload by construction (F-M397, F-M487).
+The plugin writes the members under names the site can read, and it builds that name per site: each
+site reads its own language code in the file name, because the sites do not spell every language the
+same way. The archive itself is one ZIP over the season, in the language and the variant that the pack
+carries.
 
-## 5. How the container is built and sent
-
-The members are written under names the source can read, and the name is built **per source**: each
-source reads its own language code in the file name (F-M799). The archive itself is one ZIP over the
-season, in the slot's language and variant.
-
-Sending is an order to the source's engine, not a call past it (F-M687). The engine answers the
-question that only the run can answer: which series title, which year, which season number. Two forms
-exist, and the capability of the source decides which one is used:
-
-- the **prebuilt container** — the ZIP is handed over as it is,
-- the **members** — the finished texts are handed over as one set.
-
-An answer that carries an id is stored on the pack row. An answer without one is not invented.
+Sending is an order to that site's engine, not a call past it. The engine answers what only the run
+knows: which series title, which year and which season number apply. Depending on what the site
+accepts, the engine hands over the finished ZIP or the finished texts as one set. When the answer
+carries an id, the plugin stores it on the pack row; when it carries none, none is invented.
 
 ## 6. What a pack never does
 
-- It never deletes anything at a source. A pack is an addition, never a replacement.
-- It never re-sends a pair that this source already holds (F-M647).
-- It never carries a subtitle that came out of a download (F-M397).
-- It never mixes two releases, two qualities or two frame rates (F-M442).
-- It never carries a forced track, and never a loose sidecar.
-- It never carries a language the file does not speak (F-M375).
-- It never runs because a switch is on — it runs because the seven checks agreed.
+- It never deletes anything at a site, because a pack is an addition and never a replacement.
+- It never re-sends something that this site already holds.
+- It never carries a subtitle that came out of a download.
+- It never mixes releases, qualities or frame rates.
+- It never carries a forced track and never a loose subtitle file.
+- It never carries a language that the file does not speak.
+- It never runs only because a switch is on; it runs because the seven checks agreed.
 
-## 7. The record, and what a new attempt needs
+## 7. What the log says
 
-The pack row carries title ids, season, language, variant, release, the members, the source ids and a
-signature. A refusal is stored the same way, with the reason and the same signature.
+Every step writes one line, and all of them stand at the normal level:
 
-That signature is what makes the second run cheap: as long as the files keep their size and their
-modification time, the verdict holds and nothing is unpacked. A new attempt therefore needs a changed
-file, a changed member set, or a cleared verdict. Deleting rows is the last way, not the first: it
-throws away what the run has already learned and pays the extraction again.
+- `season pack candidate` says that the season is whole and that one release covers it.
+- `season pack skipped before any extraction` says that one of the seven checks said no.
+- `season pack filler` says which track was tried, which one did not qualify, and why.
+- `season pack built` says that the archive exists.
+- `season pack sent` says what became of the send, and so does the line
+  `season pack — {Have} of {Rest} source(s) already hold the container`.
 
-## 8. What the log says
+A pack that shows up in the statistics but never in the log was not formed.
 
-One line per step, all of them at the normal level:
+## 8. Where these rules live
 
-- `season pack candidate` — the season is whole, and one release covers it.
-- `season pack skipped before any extraction` — one of the seven checks said no.
-- `season pack filler` — which track was tried, which did not qualify, and why.
-- `season pack built` — the container exists.
-- `season pack sent`, `season pack — {Have} of {Rest} source(s) already hold the container` — what
-  became of the send.
+The rules themselves stand in [SPECIFICATION.md](SPECIFICATION.md), mainly under F-M372, F-M397,
+F-M442, F-M443, F-M585, F-M600, F-M611, F-M647, F-M650, F-M687, F-M799 and F-M800. This page only tells
+how they work together, and the wording follows [TERMS.md](TERMS.md).
 
-A pack that appears in the statistics but never in the log is not a pack that was formed.
-
-## 9. The checks
-
-`endpoints` and `seasonpack` guard this paper: T445 holds that a pack asks its lock with the pack in
-mind, and T446 holds that this document, the specification entry and the switch names agree. The
-catalogue entry of every test stands in `TESTS.md`.
+Three suites guard the behaviour: `endpoints`, `seasonpack` and `packretry`. Their catalogue entries
+stand in [TESTS.md](TESTS.md).

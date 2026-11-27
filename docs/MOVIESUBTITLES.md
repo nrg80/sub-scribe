@@ -3,7 +3,7 @@
 *Paper: the site's own paths, tables and peculiarities, derived from the rules in `SPECIFICATION.md`
 and `CONTRACTS.md`; every statement carries its `F-M` tag. The words are those of `TERMS.md`.*
 
-**Owner: the site.** Paths, tables, peculiarities and methods of moviesubtitles.org; the contract view of the same source stands in `engines/moviesubtitles.md`.
+Paths, tables, peculiarities and methods of moviesubtitles.org; the contract view of the same source stands in `engines/moviesubtitles.md`.
 
 ## Contents
 

@@ -1,6 +1,6 @@
 # Terms — one word per concept
 
-**Owner: the vocabulary.** One word per concept, for every document.
+One word per concept, for every document.
 
 This file is the vocabulary of the documentation. **English is the master** (operator decision),
 and the German wording is retired. Every document — `SPECIFICATION.md`, `CONTRACTS.md`, `AUTOSYNC.md`,

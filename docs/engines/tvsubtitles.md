@@ -1,6 +1,6 @@
 # tvsubtitles.net — the page-based source
 
-**Owner: the source at a glance.** The detailed site material stands in `../TVSUBTITLES.md`: paths, tables, peculiarities, methods.
+The detailed site material stands in `../TVSUBTITLES.md`: paths, tables, peculiarities, methods.
 
 ## 1. What it is
 
