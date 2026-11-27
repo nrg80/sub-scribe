@@ -18,6 +18,25 @@ A due job takes the global run lock. If the lock is busy, the job is not dropped
 defers by `JobSpacingMinutes` (15 on the measured host) and tries again. Nothing overlaps, nothing is lost,
 and the deferral carries its reason so the dashboard shows why a run is waiting.
 
+The lock is one lock for all six parts that write state: the seeder, the download run, the upload run, the
+postprocessing run, the database refresh and the hash refresh. They all touch the same store, so one mutual
+exclusion is what the design needs — a second lock would only describe which of two writers wins.
+
+Nobody waits for the lock. A caller that cannot take it gets `false` at once and reschedules itself by
+`JobSpacingMinutes`. The earlier version polled a block file every five seconds for up to ten minutes: that
+produced 36 identical "already active" lines and a three-and-a-half minute stall, and it prevented no run at
+all. Inside one cycle the three steps seed, download and upload hand over to each other with a 20-second
+grace, which absorbs thread scheduling without opening a gap.
+
+The file `pipeline.block` in the plugin folder carries the holder as `PID|UTC timestamp`. It exists for one
+reason: a run that died without cleaning up has to be recognised instead of waited out. Three rules take it
+over — the holder's process is gone, or its process lives but the stamp is older than six hours and the
+holder is therefore wedged rather than busy, or the file itself is older than a day. At startup any leftover
+file is deleted, because no previous run can still be alive.
+
+The lock fails open. A malformed or unreadable block file never wedges the plugin: the worst case is one
+overlapping run, not a plugin that stops working.
+
 The slot markers live in two files beside the plugin database, `anchor-fires.json` and `recovery-fires.json`.
 They have to, because the dedup test compares a marker against the current slot: kept in memory only, every
 Jellyfin restart inside the same slot re-claimed it. Measured before the fix: 23 restarts on one anchor day
@@ -50,5 +69,5 @@ What it costs, measured on the host: an upload run takes about 30 minutes, the w
 minutes, the hash refresh and the download run under a minute each. The 30-second tick and the deferral
 spacing cost nothing measurable; the jobs themselves dominate.
 
-[SPECIFICATION.md](SPECIFICATION.md), F-M25, F-M48, F-M65, F-M111, F-M116, F-M119, F-M152, F-M156, F-M445.
+[SPECIFICATION.md](SPECIFICATION.md), F-M25, F-M48, F-M65, F-M94h, F-M111, F-M116, F-M119, F-M152, F-M156, F-M445.
 Guarded by `endpoints` (T436 runs and triggers) and by the dashboard structure test.
