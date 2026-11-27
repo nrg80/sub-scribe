@@ -4591,11 +4591,18 @@ internal static class Program
 
         // ---- 33. F-M791: was die Tabelle nicht kennt, wird benannt statt erfunden ------------------------
         Check(
-            "F-M791: the table knows de and does not know eu — an unknown code is echoed, never invented",
+            "F-M791: the table knows de, it never knows zz — an unknown code is echoed, never invented",
             Jellyfin.Plugin.SubScribe.Language.LanguageMapper.KnowsTwoLetter("de")
-            && !Jellyfin.Plugin.SubScribe.Language.LanguageMapper.KnowsTwoLetter("eu")
-            && Jellyfin.Plugin.SubScribe.Language.LanguageMapper.Canonical("eu") == "EU",
-            Jellyfin.Plugin.SubScribe.Language.LanguageMapper.Canonical("eu") ?? "null");
+            && !Jellyfin.Plugin.SubScribe.Language.LanguageMapper.KnowsTwoLetter("zz")
+            && Jellyfin.Plugin.SubScribe.Language.LanguageMapper.Canonical("zz") == "ZZ",
+            Jellyfin.Plugin.SubScribe.Language.LanguageMapper.Canonical("zz") ?? "null");
+        Check(
+            "F-M792: the three codes the store was carrying reach their three-letter form — eu, gl and mn",
+            Jellyfin.Plugin.SubScribe.Language.LanguageMapper.Canonical("eu") == "EUS"
+            && Jellyfin.Plugin.SubScribe.Language.LanguageMapper.Canonical("gl") == "GLG"
+            && Jellyfin.Plugin.SubScribe.Language.LanguageMapper.Canonical("mn") == "MON",
+            string.Join("/", new[] { "eu", "gl", "mn" }
+                .Select(c => c + "=" + (Jellyfin.Plugin.SubScribe.Language.LanguageMapper.Canonical(c) ?? "null"))));
         Check(
             "F-M791: two letters is never the canon — such a value and such a list member are counted and named",
             Jellyfin.Plugin.SubScribe.Data.ScribeDbContext.SpracheAusserKanon("EU")

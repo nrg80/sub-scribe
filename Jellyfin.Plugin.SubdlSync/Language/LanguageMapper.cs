@@ -80,6 +80,10 @@ public static class LanguageMapper
         ["ZH"] = "chi", ["TA"] = "tam", ["TE"] = "tel", ["KA"] = "geo", ["SQ"] = "alb",
         ["CA"] = "cat", ["HR"] = "hrv", ["SR"] = "srp", ["LT"] = "lit", ["LV"] = "lav",
         ["ET"] = "est", ["IS"] = "ice", ["MK"] = "mac", ["AF"] = "afr", ["BN"] = "ben",
+        // F-M792: am 27.11.2026 im Prod-Bestand gefunden — die Tabelle kannte sie nicht, also blieben
+        // sie zweistellig (57 x EU, 57 x GL, 13 x MN). Baskisch und Galatisch sind B/T-Paare bzw.
+        // unveraendert, Mongolisch hat in beiden Listen dieselbe Form.
+        ["EU"] = "baq", ["GL"] = "glg", ["MN"] = "mon",
         ["GU"] = "guj", ["KN"] = "kan", ["ML"] = "mal", ["MR"] = "mar", ["NE"] = "nep",
         ["PA"] = "pan", ["SI"] = "sin", ["SO"] = "som", ["AZ"] = "aze", ["KK"] = "kaz",
         ["KY"] = "kir", ["UZ"] = "uzb", ["HY"] = "arm", ["BE"] = "bel", ["BS"] = "bos",

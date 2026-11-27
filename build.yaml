@@ -10,7 +10,7 @@
 # See the GNU General Public License for more details.
 name: "Sub Scribe"
 guid: "7d1c5a2e-3f4b-4d6e-9a8b-5c2f8e1d4a9b"
-version: "12.3.8.81"
+version: "12.3.8.82"
 targetAbi: "12.1.0.0"
 framework: "net10.0"
 owner: "nrg80"
@@ -26,6 +26,7 @@ artifacts:
 - "Jellyfin.Plugin.SubdlSync.dll"
 - "LanguageDetection.dll"
 changelog: >
+  v12.3.8.82: Basque, Galician and Mongolian are in the table — the census named them, now they resolve.
   v12.3.8.81: The counter names what it cannot translate — place, value and count instead of a bare number.
   v12.3.8.80: No half migration — the two language lists of a file row move too, and a counter proves the store is one form.
   v12.3.8.79: The stored season verdicts move to the one language form as well — nothing is forgotten.

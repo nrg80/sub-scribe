@@ -1208,14 +1208,30 @@ public sealed class ScribeDbContext : IDisposable
 
                 foreach (var row in _db.FileRows.ToList())
                 {
+                    // F-M792: in einer Liste wird GLIEDWEISE gezaehlt. Eine ganze Liste als ein Befund
+                    // nennt nur, dass etwas fehlt; das Glied nennt, WAS fehlt.
                     if (ListeAusserKanon(row.LanguagesAvailable))
                     {
-                        Merke("file.languages", row.LanguagesAvailable);
+                        foreach (string glied in (row.LanguagesAvailable ?? string.Empty)
+                            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                        {
+                            if (SpracheAusserKanon(glied))
+                            {
+                                Merke("file.languages", glied);
+                            }
+                        }
                     }
 
                     if (ListeAusserKanon(row.LastSearchLanguages))
                     {
-                        Merke("file.stamp", row.LastSearchLanguages);
+                        foreach (string glied in (row.LastSearchLanguages ?? string.Empty)
+                            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
+                        {
+                            if (SpracheAusserKanon(glied))
+                            {
+                                Merke("file.stamp", glied);
+                            }
+                        }
                     }
                 }
 
@@ -1224,7 +1240,7 @@ public sealed class ScribeDbContext : IDisposable
                     "[Sub Scribe] data file: {Count} stored language value(s) still outside the canon, in {Places} value(s) — the migration is incomplete (F-M790).",
                     ausserKanon,
                     befund.Count);
-                foreach (var eintrag in befund.OrderByDescending(x => x.Value).Take(8))
+                foreach (var eintrag in befund.OrderByDescending(x => x.Value).Take(24))
                 {
                     LogUtil.Normal(
                         _logger,
