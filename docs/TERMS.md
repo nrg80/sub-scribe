@@ -6,6 +6,7 @@ This file is the vocabulary of the documentation. **English is the master** (ope
 and the German wording is retired. Every document — `SPECIFICATION.md`, `CONTRACTS.md`, `AUTOSYNC.md`,
 `DATA-MODEL.md`, `TESTS.md`, `GUI.md`, `LOGGING.md`, `ENDPOINTS.md`, `MULTI-SOURCE.md`, `TVSUBTITLES.md`,
 `SEASON-PACK-CACHING.md`,
+`UPLOAD-EXTRACTION-CACHE.md`,
 `MOVIESUBTITLES.md`, `RELEASE.md`, `README.md` and the papers under `engines/` — uses these words and
 no synonyms.
 
