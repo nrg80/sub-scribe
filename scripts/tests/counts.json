@@ -1203,9 +1203,9 @@
     },
     "T441": {
       "suite": "endpoints",
-      "checks": 3,
+      "checks": 4,
       "requirement": "F-M791",
-      "title": "Was die Tabelle nicht kennt, wird benannt statt erfunden: de bekannt, zz nicht und wird zurueckgegeben; zweistellig gilt nie als Kanon; die drei gefundenen Codes eu/gl/mn erreichen ihre dreistellige Form"
+      "title": "Was die Tabelle nicht kennt, wird benannt statt erfunden: de bekannt, zz nicht; zweistellig nie Kanon; eu/gl/mn erreichen ihre Form; eine nur unsortierte Liste gilt als Form"
     }
   }
 }

@@ -3,7 +3,7 @@
 **Owner: the rules.** This is the master document: every other paper is derived from it and cites its `F-M` tags. The contract boundaries stand in `CONTRACTS.md`, the vocabulary in `TERMS.md`.
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.82.
+**Status:** Implementation — v12.3.8.83.
 
 **A rule stands here with its ground: the decision behind it in one sentence, under `Concept decision`, and the
 check that proves it. The detailed measurement archive — what was measured, which run showed it, what happened —
@@ -268,7 +268,7 @@ New episode, newly ripped episode or replaced episode → different signature �
 
 **F-M792 [U]:** **The three codes the store was carrying are in the table now.** The census of 12.3.8.81 named them: `EU` fifty-seven times and `GL` fifty-seven times as a track language, `MN` thirteen times, and the same three inside sixteen file lists — 1448 values in nineteen distinct shapes. Basque, Galician and Mongolian were simply absent from the seventy-line table. They are mapped now (`eu`→`baq`→`EUS`, `gl`→`glg`, `mn`→`mon`), and the census counts the members of a stored list one by one, because a whole list only says that something is missing while the member says what. Checked by T441.**F-M68:** **The rejection record is persistent and keyed per (file content hash, track).** A track that the quality check rejected or that dropped out as a duplicate is not extracted again; the single and the pack path read the same record.
 
-**F-M69:** **One media item costs one search, not one search per track.** The upload works in three stages: first all tracks and loose subtitles are checked locally (extraction, quality, duplicates), then one search with a comma-separated language list asks for all open languages, then what is missing at SubDL goes up.
+**F-M793 [U]:** **A finding without a name is no finding.** The census of 12.3.8.82 counted 1249 values outside the canon and named none of them: no member of a stored list was to blame, so the form of the list itself was — order, a duplicate, a stray space. A list is named by its members when a member is at fault, and by its form when no member is. Checked by T441.**F-M69:** **One media item costs one search, not one search per track.** The upload works in three stages: first all tracks and loose subtitles are checked locally (extraction, quality, duplicates), then one search with a comma-separated language list asks for all open languages, then what is missing at SubDL goes up.
 
 **F-M71:** **An SDH variant goes up with the SDH flag set.** The flag is `sdh`; `hi` is no mark but the language code for Hindi. Both directions read the SDH statement from the same two sources: the language flag first, the track title as fallback.
 

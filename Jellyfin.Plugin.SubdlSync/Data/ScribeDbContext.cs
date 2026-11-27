@@ -1212,25 +1212,42 @@ public sealed class ScribeDbContext : IDisposable
                     // nennt nur, dass etwas fehlt; das Glied nennt, WAS fehlt.
                     if (ListeAusserKanon(row.LanguagesAvailable))
                     {
+                        // F-M793: erst die Glieder benennen; ist kein Glied schuld, ist es die FORM der
+                        // Liste selbst (Reihenfolge, Dublette, Leerzeichen) — dann wird die Liste genannt,
+                        // damit kein Befund ohne Namen bleibt.
+                        bool gliedSchuld = false;
                         foreach (string glied in (row.LanguagesAvailable ?? string.Empty)
                             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                         {
                             if (SpracheAusserKanon(glied))
                             {
                                 Merke("file.languages", glied);
+                                gliedSchuld = true;
                             }
+                        }
+
+                        if (!gliedSchuld)
+                        {
+                            Merke("file.languages", "Form: " + row.LanguagesAvailable);
                         }
                     }
 
                     if (ListeAusserKanon(row.LastSearchLanguages))
                     {
+                        bool gliedSchuld = false;
                         foreach (string glied in (row.LastSearchLanguages ?? string.Empty)
                             .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
                         {
                             if (SpracheAusserKanon(glied))
                             {
                                 Merke("file.stamp", glied);
+                                gliedSchuld = true;
                             }
+                        }
+
+                        if (!gliedSchuld)
+                        {
+                            Merke("file.stamp", "Form: " + row.LastSearchLanguages);
                         }
                     }
                 }

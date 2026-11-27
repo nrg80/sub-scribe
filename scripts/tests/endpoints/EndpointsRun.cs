@@ -4611,6 +4611,14 @@ internal static class Program
             && Jellyfin.Plugin.SubScribe.Data.ScribeDbContext.ListeAusserKanon("ARA,EU,DEU")
             && !Jellyfin.Plugin.SubScribe.Data.ScribeDbContext.ListeAusserKanon("ARA,DEU"));
 
+        // ---- 34. F-M793: bleibt ein Befund ohne Namen, ist die FORM der Liste schuld ------------------------
+        Check(
+            "F-M793: a list of canonical members that is merely unsorted is counted as form, not as a language",
+            Jellyfin.Plugin.SubScribe.Data.ScribeDbContext.ListeAusserKanon("ENG,DEU")
+            && !Jellyfin.Plugin.SubScribe.Data.ScribeDbContext.SpracheAusserKanon("ENG")
+            && !Jellyfin.Plugin.SubScribe.Data.ScribeDbContext.SpracheAusserKanon("DEU")
+            && Jellyfin.Plugin.SubScribe.Language.LanguageMapper.CanonicalList("ENG,DEU") == "DEU,ENG");
+
         if (_failures > 0)
         {
             Console.WriteLine($">>> ENDPUNKTE: {_failures} von {_checks} Pruefungen fehlgeschlagen");
