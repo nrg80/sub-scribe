@@ -2,7 +2,7 @@
 
 One concept, one word, in every document: a second word for the same thing is not a style question, it
 hides a second meaning, so the retired word is named below and cannot creep back in. English is the master
-and the German wording is retired; `SPECIFICATION.md`, `CONTRACTS.md`, `AUTOSYNC.md`, `DATA-MODEL.md`,
+and the German wording is retired; `SPECIFICATION.md`, `CONTRACTS.md`, `AUTOSYNC.md`, `DATABASE.md`,
 `TESTS.md`, `GUI.md`,
 `LOGGING.md`, `ENDPOINTS.md`, `MULTI-SOURCE.md`, `TVSUBTITLES.md`, `SEASON-PACK-CACHING.md`,
 `UPLOAD-EXTRACTION-CACHE.md`, `TMDB-CACHE.md`, `MOVIESUBTITLES.md`, `RELEASE.md`, `README.md` and the papers

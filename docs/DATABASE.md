@@ -1,11 +1,8 @@
-# Data Model — the plugin database
+# The database
 
-The tables, their keys and what each one carries; the normative rules stand in §14 of `SPECIFICATION.md`.
-
-This paper is derived from the rules in the rules are stated normatively in `§14` of `SPECIFICATION.md`. This paper describes
-the shape those rules produce: the tables, their keys, what each one carries and what it never carries.
-The words are those of `TERMS.md`. Where a table name and a level name are the same word, that is the
-rule, not a coincidence (F-M671).*
+§14 of `SPECIFICATION.md` states the rules; this paper describes the shape they produce — the tables, their keys,
+what each one carries and what it never carries. The words are those of `TERMS.md`. Where a table name and a level
+name are the same word, that is the rule and not a coincidence (F-M671).
 
 ## Contents
 
@@ -218,6 +215,27 @@ four cases:
   half-read one is not.
 - **Backups** carry their timestamp in the name and live in the files area; a migration never deletes
   the copy it took.
+
+## The file itself
+
+The database is one SQLite file named `sub-scribe.sqlite`, opened through the host's own provider with a 30-second
+command timeout. An older build wrote `subdl-scribe.sqlite`, which is why a file of either name may be found. It
+runs in WAL mode, so the committed state lies in the main file and in its write-ahead log together: a file-level
+copy is taken only after a checkpoint, otherwise the copy misses the last commits.
+
+Compaction is one statement. `VACUUM` rewrites the file and shrinks it, `ANALYZE` fills `sqlite_stat1` — the row
+count and the rows-per-key of every index — and that is what the query planner reads. `VACUUM` cannot run inside a
+transaction, so compaction runs outside one and reports the size before and after, which collections were
+rebuilt, and whether the file really became smaller. A file that was rewritten without shrinking is reported as
+exactly that, not as compacted.
+
+Every migration takes a timestamped copy first and never deletes it, so two migrations in one day leave two
+files. The names carry the time; the copies live in the plugin folder beside the database.
+
+**A change to the form of a stored key needs a migration in the same release.** The language form moved from two
+letters to three, and the season verdicts were carried over while the uploaded pairs were not — every full run
+since then re-sends pairs it had already uploaded, because those keys cannot be found under the new form. A key
+is not an internal detail: it is the address at which a decision was filed.
 
 ## 14. What the plugin database never holds
 

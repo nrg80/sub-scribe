@@ -117,6 +117,7 @@ Do not release by tagging and pushing alone: a release must carry exactly one as
 - How the documentation is written: [docs/STYLE.md](docs/STYLE.md)
 - Specification and acceptance criteria: [docs/SPECIFICATION.md](docs/SPECIFICATION.md)
 - The test catalogue, one entry per test: [docs/TESTS.md](docs/TESTS.md)
+- The tables, their keys and the file itself: [docs/DATABASE.md](docs/DATABASE.md)
 - The settings page as the operator meets it: [docs/GUI.md](docs/GUI.md)
 - How a season pack is formed, and when it may be formed: [docs/SEASON-PACK-UPLOAD.md](docs/SEASON-PACK-UPLOAD.md)
 - The three sites, one paper each: [docs/SUBDL.md](docs/SUBDL.md),

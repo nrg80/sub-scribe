@@ -4,7 +4,7 @@ One settings page, one tab per concern, no second place for the same setting (F-
 the only surface the operator works on: it switches the directions, picks the libraries, collects the
 credentials and shows what the last runs did. Everything it displays comes from the plugin, so no readout
 is computed in the page itself. The normative rules stand in §13 (page and readouts) and §22 (fields per
-source), the log wording in `LOGGING.md`, the data model in `DATA-MODEL.md`.
+source), the log wording in `LOGGING.md`, the data model in `DATABASE.md`.
 
 ## The tabs
 
