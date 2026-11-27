@@ -3,7 +3,7 @@
 **Owner: the rules.** This is the master document: every other paper is derived from it and cites its `F-M` tags. The contract boundaries stand in `CONTRACTS.md`, the vocabulary in `TERMS.md`.
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.71.
+**Status:** Implementation — v12.3.8.72.
 
 **A rule stands here with its ground: the decision behind it in one sentence, under `Concept decision`, and the
 check that proves it. The detailed measurement archive — what was measured, which run showed it, what happened —
@@ -35,7 +35,7 @@ states the rule, its constants, its ground and its test.**
 - [7. OSHash Refresh](#7-oshash-refresh) — 3 requirements
 - [8. Rules Shared by Both Directions](#8-rules-shared-by-both-directions) — 5 requirements
 
-- [9. SubDL/TMDb API, IDs and Credentials](#9-subdltmdb-api-ids-and-credentials) — 75 requirements
+- [9. SubDL/TMDb API, IDs and Credentials](#9-subdltmdb-api-ids-and-credentials) — 81 requirements
 - [10. Scheduler, Quota and Timing](#10-scheduler-quota-and-timing) — 24 requirements
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
@@ -1765,6 +1765,18 @@ Rule: (1) **One write path, two addresses.** `ContentHashRegistry.SetMsubMovieId
 (5) **The log line says HOW**. One text for both addresses (`Api/Endpoints/MediaNumberNote`): „stored (via the media hash).", „stored via the path (no media hash known)." or „not stored: no media hash and no unambiguous path line in the plugin database — the number holds only for this run."
 
 Evidence on the image of the live plugin database (copy, only the copy written): 31 lines, **0** lines with the film's path → `None`, 31 → 31. Line present, hash not → `ByPath`, `MsubMovieId = 13392`, 32 → 32 (the +1 came from creating the line for the evidence). The same write again → 32 → 32; read via path and hash 13392 each. Honestly: for *this* film it stays at „not stored" on the test instance as long as no line with its path exists — the symlink points into the void, so no hash arises either. The fix works where the line is there and only the hash is missing. Verified by T239 and T240.
+
+**F-M772 [S]:** **Every answer from TMDb lives in one shelf, on disk, in its own file.** Concept decision: the shelf is a file of its own beside the plugin database, with a ceiling of 16 MB over its facts and 16 MB over its raw answers. It is its own file for one reason. In SQLite, removing rows does not shrink the file they live in, so a ceiling in the plugin database would be a calculation while the file stays large. In its own file the ceiling is the file, and "keep nothing" is a file to remove. A reset of the plugin database removes the shelf with it. Until 12.3.8.71 the answers sat in the plugin database, in one table, under lifetimes that knew no kind. Checked by T433.
+
+**F-M773 [S]:** **A fact is kept, the raw answer only as a net.** Concept decision: what the shelf keeps is the answer the plugin reads — an identifier, a runtime, a year, a season and an episode count, an air date. The whole response is kept only as a fallback, for addresses that carry no rule and for the burst of repeats inside a run. Measured on 2026-11-27: a search answer 2.327 B, a film detail 1.749 B, the same with release dates 19.823 B, a series with appended blocks 55.963 B — and the fact read out of it 64 to 66 B. The HTTP chain cuts the fact out of the response in the same pass in which it stores it, so the fact outlives the response. Every operation writes one line at the plugin's Debug mode. Checked by T433.
+
+**F-M775 [S]:** **Two kinds of identifier, two lifetimes.** Concept decision: an identifier TMDb stated — asked by number, answered by number — lives 365 days. An identifier the plugin guessed from a title and a year lives 30 days, and its key carries the title and the year as evidence, so a different question is a different key and therefore a miss. An answer that found nothing lives one day, and every other fact 180 days. The kind follows from the shape of the question key and not from the caller, so no call site can forget it. A guess can be old or wrong — a 2024 series once matched its 2003 namesake — and thirty days is how long such an error may last. Checked by T433.
+
+**F-M776 [S]:** **A raw answer lives three days, a search answer one.** Concept decision: a raw answer is kept three days and an answer to a search one day, because a search is a guess about a title and TMDb's answer improves as titles are added. What the short life has to catch are the repeats inside a run and the run after it — measured 2026-11-16: 1.221 requests, 305 different addresses, 916 repeats, the same series twenty-one times a day, sometimes twice in one second. A title that only the weekly run touches pays one extra request; that is the price of not carrying stale answers. Checked by T433.
+
+**F-M777 [S]:** **The shelf never closes a title.** Concept decision: the HTTP chain counts how often the shelf answered and how often TMDb was really asked; if every attempt of a ladder run was answered from the shelf, the attempts are counted but the title is not closed. Without this rule one cached "nothing found" would close a title with pauses of two, four and eight seconds and without a single question asked — the lock would become cheaper to trigger than it was before the shelf existed. Checked by T433.
+
+**F-M778 [S]:** **The shelf reports itself.** Concept decision: the diagnostics endpoint reports rows and bytes per kind and the size of the file, so both ceilings can be checked from outside instead of being taken on trust. Every operation — start, hit, miss, store, refused store, trim, purge — writes one line under one prefix at the plugin's Debug mode. No line carries a key, an identifier or an excerpt. Checked by T433.
 
 ## 10. Scheduler, Quota and Timing
 

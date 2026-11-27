@@ -95,7 +95,11 @@ public sealed class TmdbCacheHandler : DelegatingHandler
         }
 
         string key = KeyOf(request.RequestUri);
-        if (Registry.TmdbAnswerStore.TryGet((key, true), out string? stored) && !string.IsNullOrEmpty(stored))
+
+        // F-M773: die Rohantwort liegt in der eigenen Ablage, nicht mehr unter den Antworten des Resolvers.
+        // Sie lebt kurz (Suche ein Tag, sonst drei), damit sie den Schwung der Wiederholungen faengt und
+        // nicht zum Sammelbecken wird.
+        if (TmdbCache.TryGetBody(key, out string? stored) && !string.IsNullOrEmpty(stored))
         {
             return new HttpResponseMessage(HttpStatusCode.OK)
             {
@@ -104,6 +108,9 @@ public sealed class TmdbCacheHandler : DelegatingHandler
             };
         }
 
+        // F-M777: eine echte Frage an TMDb — die Leiter unterscheidet daran eine Probe von einer Antwort
+        // aus der Ablage.
+        TmdbCache.NoteNetworkRequest();
         HttpResponseMessage response = await base.SendAsync(request, cancellationToken).ConfigureAwait(false);
         if (response.StatusCode != HttpStatusCode.OK)
         {
@@ -115,7 +122,7 @@ public sealed class TmdbCacheHandler : DelegatingHandler
         string body = await response.Content.ReadAsStringAsync(cancellationToken).ConfigureAwait(false);
         if (body.Length > 0)
         {
-            Registry.TmdbAnswerStore.Put((key, true), body);
+            TmdbCache.PutBody(key, body);
             response.Content = new StringContent(body, Encoding.UTF8, "application/json");
         }
 

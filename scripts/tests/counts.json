@@ -1152,6 +1152,12 @@
       "checks": 4,
       "requirement": "F-M771",
       "title": "Eine geschlossene Sperre ist eine Pause: sieben Tage, dann genau eine Probe mit gestreutem Versatz, danach wieder geschlossen"
+    },
+    "T433": {
+      "suite": "endpoints",
+      "checks": 6,
+      "requirement": "F-M772",
+      "title": "Die eine TMDb-Ablage: eigene Datei, Tatsachen und Rohantworten, Fristen nach Art, Decken, Selbstauskunft — und sie schliesst keinen Titel"
     }
   }
 }

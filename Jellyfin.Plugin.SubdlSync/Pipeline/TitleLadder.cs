@@ -69,6 +69,12 @@ internal static class TitleLadder
                 ? 1
                 : Jellyfin.Plugin.SubScribe.Registry.TitleFailureStore.ClosingAttempt;
 
+        // F-M777: die Ablage darf keinen Titel schliessen. Wurde waehrend der Zuege kein einziges Mal
+        // wirklich gefragt — alle Antworten kamen aus der Ablage —, dann ist das kein Urteil ueber den
+        // Titel, sondern eine alte Auskunft. Dann wird gezaehlt, aber nicht geschlossen.
+        long ausDerAblageVorher = Api.TmdbCache.ServedFromShelf;
+        long anfragenVorher = Api.TmdbCache.NetworkRequests;
+
         for (int zug = 1; zug <= zuege; zug++)
         {
             if (zug > 1)
@@ -100,7 +106,17 @@ internal static class TitleLadder
             }
         }
 
-        if (!trockenlauf && !letzteStoerung)
+        bool nurAusDerAblage = !trockenlauf
+            && Api.TmdbCache.ServedFromShelf > ausDerAblageVorher
+            && Api.TmdbCache.NetworkRequests == anfragenVorher;
+        if (nurAusDerAblage)
+        {
+            LogUtil.PerItem(logMode, logger,
+                "[Sub Scribe] {Source} title {Title}: every attempt was answered from the shelf, not by TMDb — counted, not closed (F-M777)",
+                quelle, titelId);
+        }
+
+        if (!trockenlauf && !letzteStoerung && !nurAusDerAblage)
         {
             Jellyfin.Plugin.SubScribe.Registry.TitleFailureStore.Close(quelle, titelId, letzterGrund ?? "?");
             LogUtil.Normal(logger,

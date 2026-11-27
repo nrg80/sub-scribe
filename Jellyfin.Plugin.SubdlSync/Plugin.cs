@@ -503,7 +503,7 @@ public class Plugin : BasePlugin<Configuration.PluginConfiguration>, IHasWebPage
         var logger = _loggerFactory?.CreateLogger<ScribeDbContext>();
         _sharedDbContext = new ScribeDbContext(DataFolderPath, logger);
 
-        AttachStores(_sharedDbContext.Context, logger);
+        AttachStores(_sharedDbContext.Context, logger, DataFolderPath, Configuration.LogMode);
     }
 
     /// <summary>
@@ -514,9 +514,12 @@ public class Plugin : BasePlugin<Configuration.PluginConfiguration>, IHasWebPage
     /// </summary>
     /// <param name="db">Der Datenkontext.</param>
     /// <param name="logger">Das Protokoll (F-M615).</param>
-    private static void AttachStores(Data.ScribeSqliteContext? db, Microsoft.Extensions.Logging.ILogger? logger)
+    private static void AttachStores(Data.ScribeSqliteContext? db, Microsoft.Extensions.Logging.ILogger? logger, string? dataFolder, Configuration.LogLevelMode logMode)
     {
-        // F-M542: the TMDb answers live in the store now, so a restart does not re-ask them.
+        // F-M772: die eine Ablage fuer alle Antworten von TMDb — eigene Datei, zwei Decken, Fristen nach Art.
+        Api.TmdbCache.Attach(dataFolder, logger, logMode);
+
+        // F-M542: die Fragen des Resolvers sind Tatsachen und liegen in derselben Ablage.
         Jellyfin.Plugin.SubScribe.Registry.TmdbAnswerStore.Attach(db);
 
         // F-M601: the aired episode numbers of a season live in the store too.
@@ -638,7 +641,7 @@ public class Plugin : BasePlugin<Configuration.PluginConfiguration>, IHasWebPage
                         // angehaengt — also nach einem Reset. Im normalen Start hatte die Titelsperre
                         // deshalb KEINE Datenbank: Close und IsClosed liefen ins Leere, und dieselben
                         // acht Titel liefen in 482–487 in jedem Lauf erneut durch die Leiter.
-                        AttachStores(_sharedDbContext.Context, logger);
+                        AttachStores(_sharedDbContext.Context, logger, DataFolderPath, Configuration.LogMode);
                     }
                 }
             }

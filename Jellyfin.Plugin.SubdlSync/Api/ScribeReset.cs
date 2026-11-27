@@ -119,6 +119,10 @@ public class ScribeReset : ControllerBase
                 // would mean the next run serves files from a state that no longer exists anywhere.
                 int purgedArchives = ArchiveDiskCache.PurgeDirectory(dataDir, _logger);
 
+                // F-M772: ein Reset heisst "alles vergessen" — die TMDb-Ablage ist eine Datei und wird
+                // mitgeloescht.
+                TmdbCache.Clear();
+
 
                 Plugin.Instance.RecreateDbContext();
 

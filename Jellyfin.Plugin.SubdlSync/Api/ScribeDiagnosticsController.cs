@@ -150,6 +150,9 @@ public class ScribeDiagnosticsController : ControllerBase
                     r.ItemsTotal,
                     r.ItemsDone
                 }),
+                // F-M778: der Zustand der TMDb-Ablage — Zeilen und Bytes je Art und die Groesse der Datei.
+                // Ohne diese Zahlen waere eine Decke eine Behauptung.
+                TmdbCache = DescribeTmdbCache(),
                 OshashCacheEntries = oshashes,
                 RejectedCandidateEntries = burnedCandidates,
                 // F-M769: der eigene Speicher, aus dem Prozess heraus gemessen. Ohne diese vier Zahlen
@@ -190,6 +193,29 @@ public class ScribeDiagnosticsController : ControllerBase
             _logger.LogError(ex, "[Sub Scribe] diagnostics endpoint failed");
             return StatusCode(500, new { error = ex.Message, stack = ex.StackTrace });
         }
+    }
+
+    /// <summary>
+    /// F-M778: rows, bytes and file size of the TMDb shelf, so its ceilings can be checked from outside.
+    /// </summary>
+    /// <returns>The state as the endpoint reports it.</returns>
+    private static object DescribeTmdbCache()
+    {
+        var stats = TmdbCache.Stats();
+        return new
+        {
+            stats.Enabled,
+            stats.FactRows,
+            stats.FactBytes,
+            stats.BodyRows,
+            stats.BodyBytes,
+            stats.FileBytes,
+            stats.FactCeilingBytes,
+            stats.BodyCeilingBytes,
+            ByKind = stats.FactsByKind.ToDictionary(
+                e => e.Key,
+                e => new { Rows = e.Value.Rows, Bytes = e.Value.Bytes })
+        };
     }
 
     private static long? GetDbSize(string dataFolderPath)

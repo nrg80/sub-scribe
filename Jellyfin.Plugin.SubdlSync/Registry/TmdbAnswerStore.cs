@@ -51,7 +51,69 @@ public static class TmdbAnswerStore
             _db = db;
         }
 
+        MigrateIntoTheShelf();
         Prune();
+    }
+
+    /// <summary>
+    /// F-M772: hebt den Altbestand der Tabelle <c>tmdb_answers</c> in die Ablage und raeumt die Tabelle.
+    /// <para>
+    /// WARUM: die Zeilen sind mit Fristen geschrieben worden, die es nicht mehr gibt. Sie einfach liegen zu
+    /// lassen hiesse, dass ein Deploy eine Lawine von TMDb-Anfragen ausloest, weil die Ablage leer ist und
+    /// jede Frage neu gestellt wird. Die Art der Frage steht im Schluessel (F-M775), also laesst sich jede
+    /// Zeile mit ihrer richtigen Frist uebernehmen.
+    /// </para>
+    /// </summary>
+    private static void MigrateIntoTheShelf()
+    {
+        ScribeSqliteContext? db = Store();
+        if (db == null || !Api.TmdbCache.Enabled)
+        {
+            return;
+        }
+
+        try
+        {
+            lock (Gate)
+            {
+                var rows = db.TmdbAnswerRows.AsNoTracking().ToList();
+                if (rows.Count == 0)
+                {
+                    return;
+                }
+
+                int uebernommen = 0;
+                foreach (var row in rows)
+                {
+                    if (row.Id.StartsWith("url:", StringComparison.Ordinal))
+                    {
+                        // Eine Rohantwort gehoert in die zweite Tabelle, nicht zu den Tatsachen.
+                        Api.TmdbCache.PutBody(row.Id, row.Value);
+                    }
+                    else
+                    {
+                        Api.TmdbCache.PutFact(
+                            Api.TmdbCache.KindOfQuestion(row.Id),
+                            row.Id,
+                            row.Value.Length == 0 ? null : row.Value,
+                            row.Written);
+                    }
+
+                    uebernommen++;
+                }
+
+                var alte = db.TmdbAnswerRows.ToList();
+                db.TmdbAnswerRows.RemoveRange(alte);
+                db.SaveChanges();
+                // Die Ablage protokolliert selbst; hier bleibt nur der Zaehler fuer den Fall, dass
+                // jemand die Zeile sehen will (F-M772).
+                System.Diagnostics.Debug.WriteLine($"[Sub Scribe] tmdb answers: {uebernommen} row(s) moved into the shelf (F-M772)");
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[Sub Scribe] tmdb answers: moving the old rows failed: {ex.GetType().Name}: {ex.Message} (F-M772)");
+        }
     }
 
     /// <summary>
@@ -64,6 +126,16 @@ public static class TmdbAnswerStore
     public static bool TryGet((string, bool) key, out string? value)
     {
         value = null;
+
+        // F-M772/F-M775: die Antwort des Resolvers ist eine TATSAACHE und liegt seit 12.3.8.72 in der
+        // eigenen Ablage — mit der Frist ihrer Art: eine von TMDb belegte Kennung 365 Tage, eine aus Titel
+        // und Jahr geratene 30, eine Niete einen Tag. Der Schluessel traegt bei den geratenen Fragen Titel
+        // und Jahr, also ist der Beleg schon im Schluessel.
+        if (Api.TmdbCache.TryGetFact(Api.TmdbCache.KindOfQuestion(key.Item1), KeyOf(key), out value))
+        {
+            return true;
+        }
+
         ScribeSqliteContext? db = Store();
 
         if (db == null)
@@ -107,6 +179,10 @@ public static class TmdbAnswerStore
     /// <param name="value">The answer, <c>null</c> for "asked and found nothing".</param>
     public static void Put((string, bool) key, string? value)
     {
+        // F-M772: die Ablage ist der Ort, an dem die Antwort liegt. Sie wird VOR dem alten Weg
+        // geschrieben, damit ein fehlender Datenkontext die Antwort nicht verschluckt.
+        Api.TmdbCache.PutFact(Api.TmdbCache.KindOfQuestion(key.Item1), KeyOf(key), value);
+
         ScribeSqliteContext? db = Store();
 
         if (db == null)

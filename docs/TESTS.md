@@ -188,6 +188,8 @@ milliseconds it took and the rows the context carries afterwards.
 
 **T432:** A closed title is a pause, not an end (F-M771), in `endpoints`. **4 checks**. The pause is seven days, and the probe never opens earlier. The offset comes from the lock key, so the same key yields the same moment on every read. Two hundred keys spread over the whole window instead of one minute. A probe is exactly one attempt, with a line in the log when it opens and the reopening date in the line that closes it again.
 
+**T433:** The one TMDb shelf (F-M772, F-M773, F-M775, F-M776, F-M777, F-M778), in `endpoints`. **6 checks**. The lifetimes follow the kind of answer — a year for an identifier TMDb stated, a month for a guessed one, a day for a miss, half a year for anything else, three days for a raw answer and one for a search. The kind follows from the shape of the question key. A real round trip against a file of its own writes a fact, reads it back, records a miss and removes the file on a purge. The state is reported with rows, bytes, file size and both ceilings. And the raw answers, the resolver's answers, the ladder and the start all hang on that one shelf.
+
 
 **T428:** The season archive is not remembered at all (F-M766/F-M768), in `tvsubtitles`. **2 checks**. The entry type has `Name` but no `Data`, and a member read after a run that already paid for the archive comes back byte-identical with **0** requests — from disk, not from memory.
 

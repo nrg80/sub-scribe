@@ -1101,7 +1101,7 @@ internal static class Program
         // --- F-M616: alle Stores haengen an beiden Startwegen -----------------------------------------
         var pl616 = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Plugin.cs"));
         Check("F-M616: es gibt genau eine Stelle, die alle Stores anhaengt",
-            System.Text.RegularExpressions.Regex.Matches(pl616, @"\bAttachStores\(_sharedDbContext\.Context, logger\);").Count == 2
+            System.Text.RegularExpressions.Regex.Matches(pl616, @"\bAttachStores\(_sharedDbContext\.Context, logger, DataFolderPath, Configuration\.LogMode\);").Count == 2
             && pl616.Contains("private static void AttachStores(", StringComparison.Ordinal));
         Check("F-M616: Verweigerungen und Titelsperre sind dabei, nicht nur die drei alten",
             pl616.Contains("SourceRefusalStore.Attach(db);", StringComparison.Ordinal)
@@ -1279,7 +1279,7 @@ internal static class Program
         Check("F-M610: eine Stoerung zaehlt nicht als Fehlschlag und schliesst nichts",
             leiter610.Contains("Func<T, bool>? stoerung,", StringComparison.Ordinal)
             && leiter610.Contains("if (!letzteStoerung)", StringComparison.Ordinal)
-            && leiter610.Contains("if (!trockenlauf && !letzteStoerung)", StringComparison.Ordinal)
+            && leiter610.Contains("if (!trockenlauf && !letzteStoerung && !nurAusDerAblage)", StringComparison.Ordinal)
             && leiter610.Contains("attempts without a verdict ({Reason}) — nothing closed, the next run asks again (F-M610)", StringComparison.Ordinal));
         Check("F-M610: 'existiert, Kennung nicht lesbar' gilt als Beleg, nicht als Fehlschlag der Leiter",
             leiter610.Contains("Func<T, bool>? schonBelegt,", StringComparison.Ordinal)
@@ -1458,7 +1458,7 @@ internal static class Program
             && upload601.Contains("AiredSeasonStore.Put(entry.Key.Item1, entry.Key.Item2, aired);", StringComparison.Ordinal));
         Check("F-M601: der Store haengt an BEIDEN Stellen, an denen ein Kontext entsteht (F-M545, seit F-M616 ueber den Helfer)",
             plugin601.Contains("AiredSeasonStore.Attach(db);", StringComparison.Ordinal)
-            && plugin601.Split("AttachStores(_sharedDbContext.Context, logger);").Length - 1 == 2);
+            && plugin601.Split("AttachStores(_sharedDbContext.Context, logger, DataFolderPath, Configuration.LogMode);").Length - 1 == 2);
         Check("F-M601: die Planungszeile nennt, wie viele Antworten aus dem Store kamen",
             upload601.Contains("({FromStore} from the store)", StringComparison.Ordinal)
             && upload601.Contains("airedAusStore++", StringComparison.Ordinal));
@@ -1882,8 +1882,10 @@ internal static class Program
         Check("F-M555: ein Handler in der Kette beantwortet jede TMDb-Adresse aus dem Speicher",
             cacheHandler != null
             && cacheHandler.Contains("public sealed class TmdbCacheHandler : DelegatingHandler", StringComparison.Ordinal)
-            && cacheHandler.Contains("Registry.TmdbAnswerStore.TryGet((key, true), out string? stored)", StringComparison.Ordinal)
-            && cacheHandler.Contains("Registry.TmdbAnswerStore.Put((key, true), body)", StringComparison.Ordinal));
+            // F-M773: seit 12.3.8.72 liegt die Rohantwort in der eigenen Ablage, nicht mehr unter den
+            // Antworten des Resolvers.
+            && cacheHandler.Contains("TmdbCache.TryGetBody(key, out string? stored)", StringComparison.Ordinal)
+            && cacheHandler.Contains("TmdbCache.PutBody(key, body)", StringComparison.Ordinal));
         Check("F-M555: der Handler fasst nur TMDb an, und der Schluessel traegt keinen api_key",
             cacheHandler != null
             && cacheHandler.Contains("private const string TmdbHost = \"api.themoviedb.org\";", StringComparison.Ordinal)
@@ -2423,9 +2425,9 @@ internal static class Program
                 // F-M616: die Anhaenge stehen jetzt in einem Helfer, den beide Startwege rufen. Der Check
                 // zaehlt deshalb die Aufrufe des Helfers und prueft, dass der Store darin haengt.
                 Check("F-M545: the TMDb store is attached where the shared context is created",
-                    pluginQuelle.Split("AttachStores(_sharedDbContext.Context, logger);").Length - 1 == 2
+                    pluginQuelle.Split("AttachStores(_sharedDbContext.Context, logger, DataFolderPath, Configuration.LogMode);").Length - 1 == 2
                     && pluginQuelle.Contains("TmdbAnswerStore.Attach(db);", StringComparison.Ordinal),
-                    (pluginQuelle.Split("AttachStores(_sharedDbContext.Context, logger);").Length - 1).ToString(System.Globalization.CultureInfo.InvariantCulture) + " Stelle(n)");
+                    (pluginQuelle.Split("AttachStores(_sharedDbContext.Context, logger, DataFolderPath, Configuration.LogMode);").Length - 1).ToString(System.Globalization.CultureInfo.InvariantCulture) + " Stelle(n)");
                 string storeQuelle = await File.ReadAllTextAsync(Path.Combine(
                     root, "Jellyfin.Plugin.SubdlSync", "Registry", "TmdbAnswerStore.cs")).ConfigureAwait(false);
                 Check("F-M545: and the store fetches a missing context itself instead of silently staying in memory",
@@ -4077,6 +4079,76 @@ internal static class Program
             && store771.Contains("reopened for a probe after {Days:0} day(s)", StringComparison.Ordinal)
             && store771.Contains("closed and written until {Until:yyyy-MM-dd HH:mm}", StringComparison.Ordinal),
             "ein Zug bei der Probe, zwei Logzeilen");
+
+        // ---- 25. F-M772 bis F-M778: die eine TMDb-Ablage -------------------------------------
+        // Anlass: drei halbe Speicher (Resolver-Fragen, HTTP-Kette, Staffel-Index) mit einer Tabelle und
+        // globalen Fristen. Gemessen am 27.11.2026: eine Suche 2.327 B, ein Serien-Detail 55.963 B, die
+        // Tatsache daraus 66 B. Jetzt: eigene Datei, Tatsachen und Rohantworten getrennt, Fristen nach Art.
+        Check(
+            "F-M775: an identifier TMDb stated lives a year, a guessed one a month, a miss a day, anything else half a year",
+            Jellyfin.Plugin.SubScribe.Api.TmdbCache.LifetimeOfFact(Jellyfin.Plugin.SubScribe.Api.TmdbCache.Kinds.IdentifierStated, "tt0133093") == TimeSpan.FromDays(365)
+            && Jellyfin.Plugin.SubScribe.Api.TmdbCache.LifetimeOfFact(Jellyfin.Plugin.SubScribe.Api.TmdbCache.Kinds.IdentifierGuessed, "603") == TimeSpan.FromDays(30)
+            && Jellyfin.Plugin.SubScribe.Api.TmdbCache.LifetimeOfFact(Jellyfin.Plugin.SubScribe.Api.TmdbCache.Kinds.Details, "136") == TimeSpan.FromDays(180)
+            && Jellyfin.Plugin.SubScribe.Api.TmdbCache.LifetimeOfFact(Jellyfin.Plugin.SubScribe.Api.TmdbCache.Kinds.IdentifierStated, null) == TimeSpan.FromDays(1),
+            "365 / 30 / 180 Tage, Niete 1");
+        Check(
+            "F-M776: a search answer is kept one day, every other raw answer three",
+            Jellyfin.Plugin.SubScribe.Api.TmdbCache.LifetimeOfBody("url:https://api.themoviedb.org/3/search/tv?query=x") == TimeSpan.FromDays(1)
+            && Jellyfin.Plugin.SubScribe.Api.TmdbCache.LifetimeOfBody("url:https://api.themoviedb.org/3/tv/1416?language=de-DE") == TimeSpan.FromDays(3),
+            "Suche 1 Tag, sonst 3");
+        Check(
+            "F-M775: a question by number counts as stated, a question carrying a title as guessed",
+            Jellyfin.Plugin.SubScribe.Api.TmdbCache.KindOfQuestion("id:1416|S") == Jellyfin.Plugin.SubScribe.Api.TmdbCache.Kinds.IdentifierStated
+            && Jellyfin.Plugin.SubScribe.Api.TmdbCache.KindOfQuestion("imdb:tt0133093|S") == Jellyfin.Plugin.SubScribe.Api.TmdbCache.Kinds.IdentifierStated
+            && Jellyfin.Plugin.SubScribe.Api.TmdbCache.KindOfQuestion("movie:603|M") == Jellyfin.Plugin.SubScribe.Api.TmdbCache.Kinds.IdentifierStated
+            && Jellyfin.Plugin.SubScribe.Api.TmdbCache.KindOfQuestion("multi:CUNK ON CINEMA|2026|strict|S") == Jellyfin.Plugin.SubScribe.Api.TmdbCache.Kinds.IdentifierGuessed
+            && Jellyfin.Plugin.SubScribe.Api.TmdbCache.KindOfQuestion("q:CUNK ON CINEMA|2026|M") == Jellyfin.Plugin.SubScribe.Api.TmdbCache.Kinds.IdentifierGuessed,
+            "Schluessel entscheidet, nicht der Aufrufer");
+
+        // Echter Durchlauf gegen eine eigene Datei: schreiben, lesen, Niete, putzen.
+        string ablageOrdner773 = Path.Combine(Path.GetTempPath(), "tmdbcache-" + Guid.NewGuid().ToString("N"));
+        Jellyfin.Plugin.SubScribe.Api.TmdbCache.Attach(ablageOrdner773, null);
+        bool angelegt773 = Jellyfin.Plugin.SubScribe.Api.TmdbCache.Enabled
+            && File.Exists(Path.Combine(ablageOrdner773, Jellyfin.Plugin.SubScribe.Api.TmdbCache.FileName));
+        Jellyfin.Plugin.SubScribe.Api.TmdbCache.PutFact(Jellyfin.Plugin.SubScribe.Api.TmdbCache.Kinds.IdentifierStated, "id:1416|S", "tt0133093");
+        bool treffer = Jellyfin.Plugin.SubScribe.Api.TmdbCache.TryGetFact(Jellyfin.Plugin.SubScribe.Api.TmdbCache.Kinds.IdentifierStated, "id:1416|S", out string? gelesen773);
+        Jellyfin.Plugin.SubScribe.Api.TmdbCache.PutFact(Jellyfin.Plugin.SubScribe.Api.TmdbCache.Kinds.IdentifierStated, "id:999999999|S", null);
+        bool niete773 = Jellyfin.Plugin.SubScribe.Api.TmdbCache.TryGetFact(Jellyfin.Plugin.SubScribe.Api.TmdbCache.Kinds.IdentifierStated, "id:999999999|S", out string? leer773);
+        var stand773 = Jellyfin.Plugin.SubScribe.Api.TmdbCache.Stats();
+        Jellyfin.Plugin.SubScribe.Api.TmdbCache.Clear();
+        bool geputzt773 = !Jellyfin.Plugin.SubScribe.Api.TmdbCache.Enabled
+            && !File.Exists(Path.Combine(ablageOrdner773, Jellyfin.Plugin.SubScribe.Api.TmdbCache.FileName));
+        Check(
+            "F-M772: the shelf is one file of its own, it keeps a fact, it knows a miss, and a purge removes the file",
+            angelegt773 && treffer && gelesen773 == "tt0133093" && niete773 && leer773 == null && geputzt773,
+            $"angelegt {angelegt773}, Treffer \"{gelesen773}\", Niete {niete773}, geputzt {geputzt773}");
+        Check(
+            "F-M778: it reports its state — rows and bytes per kind, file size, both ceilings",
+            stand773.Enabled
+            && stand773.FactRows >= 2
+            && stand773.FactBytes > 0
+            && stand773.FileBytes > 0
+            && stand773.FactCeilingBytes == 16L * 1024 * 1024
+            && stand773.BodyCeilingBytes == 16L * 1024 * 1024
+            && stand773.FactsByKind.ContainsKey(Jellyfin.Plugin.SubScribe.Api.TmdbCache.Kinds.IdentifierStated)
+            && Jellyfin.Plugin.SubScribe.Api.TmdbCache.MemoryMirrorCap == 5000,
+            $"{stand773.FactRows} Zeile(n), {stand773.FactBytes} B, Datei {stand773.FileBytes} B");
+
+        string handler773 = ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Api", "TmdbCacheHandler.cs"));
+        string antwortStore = ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Registry", "TmdbAnswerStore.cs"));
+        string leiter777 = ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Pipeline", "TitleLadder.cs"));
+        string plugin772 = ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Plugin.cs"));
+        Check(
+            "F-M773/F-M777: raw answers go through the shelf, the resolver's answers become facts, and the shelf never closes a title",
+            handler773.Contains("TmdbCache.TryGetBody(key", StringComparison.Ordinal)
+            && handler773.Contains("TmdbCache.PutBody(key, body)", StringComparison.Ordinal)
+            && handler773.Contains("TmdbCache.NoteNetworkRequest()", StringComparison.Ordinal)
+            && antwortStore.Contains("Api.TmdbCache.TryGetFact(", StringComparison.Ordinal)
+            && antwortStore.Contains("Api.TmdbCache.PutFact(", StringComparison.Ordinal)
+            && leiter777.Contains("Api.TmdbCache.NetworkRequests == anfragenVorher", StringComparison.Ordinal)
+            && leiter777.Contains("counted, not closed (F-M777)", StringComparison.Ordinal)
+            && plugin772.Contains("Api.TmdbCache.Attach(dataFolder, logger, logMode)", StringComparison.Ordinal),
+            "Handler, Resolver, Leiter und Start haengen an der Ablage");
 
         if (_failures > 0)
         {

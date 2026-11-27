@@ -4,9 +4,11 @@
 shelf on disk. What is kept is a fact; what is kept beside it, for a short while, is the raw answer as a
 fallback. This paper replaces the three half-caches of today with one.
 
-**Status: proposal.** The shape was approved on 2026-11-27: own file, facts and raw answers side by side,
-ceiling per kind, no hash work for a lookup, and a lock that is no longer driven by a cached answer. No rule
-of this paper is in force until the code carries it (§11).
+**Status: built in 12.3.8.72, one rule still open.** The shape was approved on 2026-11-27: own file, facts
+and raw answers side by side, ceiling per kind, no hash work for a lookup, and a lock that is no longer driven by
+a cached answer. In force are F-M772, F-M773, F-M775, F-M776, F-M777 and F-M778 (§11). **F-M774 is not built**:
+the call sites still ask with a language and still append blocks, so the shelf is small today but not as small
+as this paper wants it.
 
 *The words are those of `TERMS.md`: a **fact** is an answer, a **raw answer** is a response.*
 
