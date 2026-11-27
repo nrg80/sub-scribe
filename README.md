@@ -134,6 +134,7 @@ Do not release by tagging and pushing alone: a release must carry exactly one as
 - How a season pack download runs: [docs/SEASON-PACK-DOWNLOAD.md](docs/SEASON-PACK-DOWNLOAD.md)
 - How a single download runs: [docs/SINGLE-DOWNLOAD.md](docs/SINGLE-DOWNLOAD.md)
 - Who owns the times, the five triggers, arrivals and the one lock: [docs/RUNS.md](docs/RUNS.md)
+- The four maintenance jobs, the reset and its five scopes: [docs/MAINTENANCE.md](docs/MAINTENANCE.md)
 - How the sources play together, and where the boundary runs: [docs/CONTRACTS.md](docs/CONTRACTS.md)
 - Release process: [docs/RELEASE.md](docs/RELEASE.md)
 - The plugin on one page, written for a person or an assistant answering one:
