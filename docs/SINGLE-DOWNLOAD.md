@@ -30,7 +30,9 @@ The last cue must also fit the runtime.
 
 The subtitle is written next to the video as `<name>.<language>.<slot>.srt`, with the language in three
 lower-case letters. Slots 01 to 49 are free places, and 51 to 99 keep an original that a correction is
-working from. The database then carries one row per site with the language, the slot and the origin.
+working from. Such an original is locked against upload: it is booked like any other download, keyed on
+the hash of its content, so the uploader refuses it as a duplicate and the seeder leaves it alone. The
+database then carries one row per site with the language, the slot and the origin.
 
 ## What a single download never does
 

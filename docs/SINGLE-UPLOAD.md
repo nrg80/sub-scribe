@@ -35,8 +35,10 @@ id.
 
 ## What a single upload never does
 
-It deletes nothing, it never sends the same subtitle to the same site twice, it never invents an id,
-and it never sends a forced track.
+It deletes nothing, it never invents an id, and it never sends a forced track. It also never sends the
+same subtitle to the same site twice. Whether a site already holds it is read from that site's own
+submission id, not from a shared "uploaded" flag, and that holds for an embedded track and for a loose
+sidecar beside the video alike.
 
 ## What the log says
 
