@@ -80,7 +80,9 @@ three-letter tag was false and silent.
 One pair stays deliberately outside the family list: Japanese and Chinese. A track tagged `jpn` whose text
 is heavy on kanji and short on kana is read as `zho`. An exception would be a two-way door: the same entry
 that lets Japanese pass as Chinese lets any Chinese text pass as Japanese. Nobody can tell the two apart
-from the text alone. Concept decision: the pair is never treated as relatives. A `JPN` pack is
+from the text alone. Concept decision: the pair is never treated as relatives, and an
+exception would only be justified by a detector that separates the two scripts reliably. The one in use
+does not, so no entry is written on the strength of a library that cannot prove it. A `JPN` pack is
 therefore not built for a season whose Japanese text the detector reads as Chinese, and that single goes up
 under the Chinese code. Everything else is packed, which is what the measurement of 27.11.2026 shows:
 32 of 33 languages as one container, `JPN` the only one missing.
