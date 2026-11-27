@@ -4200,6 +4200,28 @@ internal static class Program
             && cache782.Contains("-wal", StringComparison.Ordinal),
             "Compact im Refresh, VACUUM in der Ablage, Groesse inkl. Journal");
 
+        // F-M782 am echten Fall: eine Ablage, die Zeilen abgibt, haelt die Seiten — erst das Falten gibt sie zurueck.
+        string kompaktOrdner = Path.Combine(Path.GetTempPath(), "tmdbcompact-" + Guid.NewGuid().ToString("N"));
+        Jellyfin.Plugin.SubScribe.Api.TmdbCache.Attach(kompaktOrdner, null);
+        for (int n = 0; n < 200; n++)
+        {
+            Jellyfin.Plugin.SubScribe.Api.TmdbCache.PutFact(
+                Jellyfin.Plugin.SubScribe.Api.TmdbCache.Kinds.IdentifierStated,
+                "id:" + n.ToString(System.Globalization.CultureInfo.InvariantCulture) + "|S",
+                "tt" + n.ToString(System.Globalization.CultureInfo.InvariantCulture),
+                DateTime.UtcNow.AddDays(-400));
+        }
+
+        Jellyfin.Plugin.SubScribe.Api.TmdbCache.Trim();
+        long vorFalten = Jellyfin.Plugin.SubScribe.Api.TmdbCache.Stats().FileBytes;
+        var (faltenVor, faltenNach) = Jellyfin.Plugin.SubScribe.Api.TmdbCache.Compact();
+        long nachFalten = Jellyfin.Plugin.SubScribe.Api.TmdbCache.Stats().FileBytes;
+        Jellyfin.Plugin.SubScribe.Api.TmdbCache.Clear();
+        Check(
+            "F-M782: folding really returns the pages a shelf gave up — the file gets smaller",
+            vorFalten > 0 && faltenNach < faltenVor && nachFalten <= faltenVor,
+            $"{vorFalten} B vor dem Falten, {faltenNach} B danach");
+
 
         if (_failures > 0)
         {
