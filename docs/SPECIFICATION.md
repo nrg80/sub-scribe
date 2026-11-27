@@ -3,7 +3,7 @@
 **Owner: the rules.** This is the master document: every other paper is derived from it and cites its `F-M` tags. The contract boundaries stand in `CONTRACTS.md`, the vocabulary in `TERMS.md`.
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.85.
+**Status:** Implementation — v12.3.8.86.
 
 **A rule stands here with its ground: the decision behind it in one sentence, under `Concept decision`, and the
 check that proves it. The detailed measurement archive — what was measured, which run showed it, what happened —
@@ -18,8 +18,8 @@ states the rule, its constants, its ground and its test.**
 
 - [1. Objective and Scope](#1-objective-and-scope) — 2 requirements
 - [2. Seeder — what enters the queue](#2-seeder-what-enters-the-queue) — 13 requirements
-- [3. Upload Pipeline](#3-upload-pipeline) — 129 requirements
- - [3.1 Quality Gates — Upload](#31-quality-gates-upload) — 9 requirements
+- [3. Upload Pipeline](#3-upload-pipeline) — 130 requirements
+ - [3.1 Quality Gates — Upload](#31-quality-gates-upload) — 10 requirements
  - [3.2 Dry Run — Upload](#32-dry-run-upload) — 3 requirements
  - [3.3 Season Packs — Upload](#33-season-packs-upload) — cross-cutting, cites F-M379–F-M448 and F-M475, F-M476
  - [3.4 Upload completion criteria](#34-upload-completion-criteria) — 26 requirements (F-M557–F-M563, F-M571–F-M577, F-M580–F-M592)
@@ -275,7 +275,7 @@ New episode, newly ripped episode or replaced episode → different signature �
 **F-M795 [U]:** **The counter reads after the write.** It ran before the commit and therefore reported the state of the previous start — the numbers were not wrong, they came too early, and a finding that cannot see its own work is no proof. It is a pass of its own now: it runs once the file is written and reads with no tracking, so what it prints is what the store holds.**F-M85:** **The track selection carries the optional marker.** A track index that does not exist does not abort the extraction and yields no duplicate track; the caller repeats the empty tracks one by one and books one that stays empty as a real failure.
 ### 3.1 Quality Gates — Upload
 
-The upload chain, in the order the code applies it. Each switchable gate names its own switch and default.
+**F-M796 [U]:** **Case counts.** The verdict pass compared the stored tag with the canon while ignoring case, so a row written as `spa non-hi` counted as done and stayed — three hundred and forty-nine of them, and the counter kept naming them because it compares character by character. The pass compares the same way now. A spelling that differs only in case is still a second spelling to everything that looks it up. Checked by T442.The upload chain, in the order the code applies it. Each switchable gate names its own switch and default.
 
 **F-M16 [B2]:** **Minimum size and minimum cue count.** The 2 KB size floor applies to UPLOADS only and is always on. The cue count (30) applies in BOTH directions and is switchable per direction, default on. Below either, the stream is skipped as "too small".
 

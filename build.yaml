@@ -10,7 +10,7 @@
 # See the GNU General Public License for more details.
 name: "Sub Scribe"
 guid: "7d1c5a2e-3f4b-4d6e-9a8b-5c2f8e1d4a9b"
-version: "12.3.8.85"
+version: "12.3.8.86"
 targetAbi: "12.1.0.0"
 framework: "net10.0"
 owner: "nrg80"
@@ -26,6 +26,7 @@ artifacts:
 - "Jellyfin.Plugin.SubdlSync.dll"
 - "LanguageDetection.dll"
 changelog: >
+  v12.3.8.86: Case counts — the verdict pass compares character by character, like the counter always did.
   v12.3.8.85: The counter reads after the write — a finding that cannot see its own work is no proof.
   v12.3.8.84: The season verdicts whose tag was two letters move to the one form — the last store of names.
   v12.3.8.83: A finding without a name is no finding — the census names the form of a list when no member is at fault.

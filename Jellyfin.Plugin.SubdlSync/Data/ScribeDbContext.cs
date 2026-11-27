@@ -1087,7 +1087,10 @@ public sealed class ScribeDbContext : IDisposable
                 }
 
                 string? kanon = Language.LanguageMapper.Canonical(sprache);
-                if (kanon == null || string.Equals(kanon, sprache, StringComparison.OrdinalIgnoreCase))
+                // F-M796: hier stand OrdinalIgnoreCase — damit war "spa" gegen "SPA" gleich und die Zeile
+                // blieb stehen. Die Wanderung vergleicht jetzt wie der Befund: Ordinal, also Zeichen fuer
+                // Zeichen. Genau daran hingen die letzten 349 Urteile.
+                if (kanon == null || string.Equals(kanon, sprache, StringComparison.Ordinal))
                 {
                     continue;
                 }

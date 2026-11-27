@@ -1161,4 +1161,4 @@ Counting happens in T205: the same suite carries both.
 These entries carry no `F-M` reference: they are older than the tagging discipline. 33 of them are
 bound to a suite in `scripts/tests/counts.json`, the rest are proven where they stand.
 
-**T442:** A verdict tag that was two letters moves too (F-M794), in `endpoints`. **1 check**. `tt794|1|EN non-HI` becomes `tt794|1|ENG non-HI`, `tt794|1|DE HI` becomes `tt794|1|DEU HI`, and the season-level verdict keeps its place without a language.
+**T442:** A verdict tag that was two letters moves too (F-M794), in `endpoints`. **1 check**. `tt794|1|EN non-HI` becomes `tt794|1|ENG non-HI`, `tt794|1|DE HI` becomes `tt794|1|DEU HI`, `tt794|1|spa non-hi` becomes `tt794|1|SPA non-hi`, and the season-level verdict keeps its place without a language.

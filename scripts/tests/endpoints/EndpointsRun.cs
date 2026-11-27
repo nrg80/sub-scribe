@@ -4639,6 +4639,10 @@ internal static class Program
             });
             roh.PackSeasonRows.Add(new Jellyfin.Plugin.SubScribe.Registry.PackSeasonEntity
             {
+                Id = "tt794|1|spa non-hi", Signature = "sig", Verdict = "pack", Reason = "oben", Written = alt
+            });
+            roh.PackSeasonRows.Add(new Jellyfin.Plugin.SubScribe.Registry.PackSeasonEntity
+            {
                 Id = "tt794|1|", Signature = "sig", Verdict = "no-pack", Reason = "Staffel", Written = alt
             });
             await roh.SaveChangesAsync();
@@ -4648,8 +4652,8 @@ internal static class Program
         {
             var ids794 = db.Context.PackSeasonRows.ToList().Select(r => r.Id).OrderBy(x => x, StringComparer.Ordinal).ToList();
             Check(
-                "F-M794: a verdict whose tag was two letters moves to the three-letter form — ENG and DEU, season level untouched",
-                ids794.SequenceEqual(new[] { "tt794|1|", "tt794|1|DEU HI", "tt794|1|ENG non-HI" }),
+                "F-M794: a verdict tag written two-letter or in lower case moves to the one form — ENG, DEU and SPA, season level untouched",
+                ids794.SequenceEqual(new[] { "tt794|1|", "tt794|1|DEU HI", "tt794|1|ENG non-HI", "tt794|1|SPA non-hi" }),
                 string.Join(",", ids794));
         }
 
