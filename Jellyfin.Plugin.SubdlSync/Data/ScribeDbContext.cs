@@ -1126,34 +1126,65 @@ public sealed class ScribeDbContext : IDisposable
             // sechs Stellen, an denen der Store eine Sprache haelt. Die Zahl gehoert ins Protokoll, weil
             // ein halb gewanderter Bestand schlimmer ist als ein alter: die eine Haelfte findet die andere
             // nicht mehr.
+            if (urteile > 0)
+            {
+                LogUtil.Normal(
+                    _logger,
+                    "[Sub Scribe] data file: {Count} stored season verdict(s) moved to the one language form (F-M790).",
+                    urteile);
+            }
+
+            int n = _db.SaveChanges();
+            if (geaendert > 0)
+            {
+                LogUtil.Normal(_logger, "[Sub Scribe] data file: {Count} language tag(s) rewritten to ISO 639-2/T (F-M790).", geaendert);
+            }
+
+            ZaehleSprachbefund();
+        }
+        catch (Exception ex)
+        {
+            _logger?.LogWarning("[Sub Scribe] could not rewrite the language tags (continuing): {Msg}", ex.Message);
+        }
+    }
+
+    /// <summary>
+    /// F-M795: die Gegenprobe NACH dem Schreiben. Sie liest mit <c>AsNoTracking</c> aus der Datei; vorher
+    /// lief sie vor dem Commit und meldete damit den Stand von gestern — die Zahlen waren nicht falsch,
+    /// sie kamen zu frueh, und ein Befund, der die eigene Arbeit nicht sieht, taugt nicht als Beweis.
+    /// </summary>
+    private void ZaehleSprachbefund()
+    {
+        try
+        {
             int ausserKanon = 0;
-            foreach (var row in _db.TrackRows.ToList())
+            foreach (var row in _db.Set<TrackEntity>().AsNoTracking().ToList())
             {
                 ausserKanon += SpracheAusserKanon(row.Language) ? 1 : 0;
             }
 
-            foreach (var row in _db.SidecarRows.ToList())
+            foreach (var row in _db.Set<SidecarEntity>().AsNoTracking().ToList())
             {
                 ausserKanon += SpracheAusserKanon(row.Language) ? 1 : 0;
             }
 
-            foreach (var row in _db.PackRows.ToList())
+            foreach (var row in _db.Set<PackEntity>().AsNoTracking().ToList())
             {
                 ausserKanon += SpracheAusserKanon(row.Language) ? 1 : 0;
             }
 
-            foreach (var row in _db.BadAppleRows.ToList())
+            foreach (var row in _db.Set<BadAppleEntity>().AsNoTracking().ToList())
             {
                 ausserKanon += SpracheAusserKanon(row.Language) ? 1 : 0;
             }
 
-            foreach (var row in _db.FileRows.ToList())
+            foreach (var row in _db.Set<FileEntity>().AsNoTracking().ToList())
             {
                 ausserKanon += ListeAusserKanon(row.LanguagesAvailable) ? 1 : 0;
                 ausserKanon += ListeAusserKanon(row.LastSearchLanguages) ? 1 : 0;
             }
 
-            foreach (var row in _db.PackSeasonRows.ToList())
+            foreach (var row in _db.Set<Registry.PackSeasonEntity>().AsNoTracking().ToList())
             {
                 int zweiter = row.Id.IndexOf('|', row.Id.IndexOf('|', StringComparison.Ordinal) + 1);
                 string tag = zweiter > 0 && zweiter + 1 < row.Id.Length ? row.Id[(zweiter + 1)..] : string.Empty;
@@ -1177,7 +1208,7 @@ public sealed class ScribeDbContext : IDisposable
                     befund[schluessel] = befund.TryGetValue(schluessel, out int n) ? n + 1 : 1;
                 }
 
-                foreach (var row in _db.TrackRows.ToList())
+                foreach (var row in _db.Set<TrackEntity>().AsNoTracking().ToList())
                 {
                     if (SpracheAusserKanon(row.Language))
                     {
@@ -1185,7 +1216,7 @@ public sealed class ScribeDbContext : IDisposable
                     }
                 }
 
-                foreach (var row in _db.SidecarRows.ToList())
+                foreach (var row in _db.Set<SidecarEntity>().AsNoTracking().ToList())
                 {
                     if (SpracheAusserKanon(row.Language))
                     {
@@ -1193,7 +1224,7 @@ public sealed class ScribeDbContext : IDisposable
                     }
                 }
 
-                foreach (var row in _db.PackRows.ToList())
+                foreach (var row in _db.Set<PackEntity>().AsNoTracking().ToList())
                 {
                     if (SpracheAusserKanon(row.Language))
                     {
@@ -1201,7 +1232,7 @@ public sealed class ScribeDbContext : IDisposable
                     }
                 }
 
-                foreach (var row in _db.BadAppleRows.ToList())
+                foreach (var row in _db.Set<BadAppleEntity>().AsNoTracking().ToList())
                 {
                     if (SpracheAusserKanon(row.Language))
                     {
@@ -1210,7 +1241,7 @@ public sealed class ScribeDbContext : IDisposable
                 }
 
                 // F-M794: die Urteile fehlten im Befund — 1249 gezaehlte Werte blieben darum ohne Namen.
-                foreach (var row in _db.PackSeasonRows.ToList())
+                foreach (var row in _db.Set<Registry.PackSeasonEntity>().AsNoTracking().ToList())
                 {
                     int zweiter = row.Id.IndexOf('|', row.Id.IndexOf('|', StringComparison.Ordinal) + 1);
                     string tag = zweiter > 0 && zweiter + 1 < row.Id.Length ? row.Id[(zweiter + 1)..] : string.Empty;
@@ -1221,7 +1252,7 @@ public sealed class ScribeDbContext : IDisposable
                     }
                 }
 
-                foreach (var row in _db.FileRows.ToList())
+                foreach (var row in _db.Set<FileEntity>().AsNoTracking().ToList())
                 {
                     // F-M792: in einer Liste wird GLIEDWEISE gezaehlt. Eine ganze Liste als ein Befund
                     // nennt nur, dass etwas fehlt; das Glied nennt, WAS fehlt.
@@ -1285,27 +1316,15 @@ public sealed class ScribeDbContext : IDisposable
                 LogUtil.Debug(_logger, "[Sub Scribe-DB] language values: all inside the canon (F-M790)");
             }
 
-            if (urteile > 0)
-            {
-                LogUtil.Normal(
-                    _logger,
-                    "[Sub Scribe] data file: {Count} stored season verdict(s) moved to the one language form (F-M790).",
-                    urteile);
-            }
 
             // F-M668: der Block, der die Zugeh-Stempel der Medienzeile leerte (Schema-16-Wanderung), ist
             // mit den Spalten selbst entfallen — die Stempel stehen jetzt als `file`-Zeilen in der
             // Marken-Matrix. Die Sprachumstellung selbst bleibt unangetastet (bekanntes Verhalten).
 
-            int n = _db.SaveChanges();
-            if (geaendert > 0)
-            {
-                LogUtil.Normal(_logger, "[Sub Scribe] data file: {Count} language tag(s) rewritten to ISO 639-2/T (F-M790).", geaendert);
-            }
         }
         catch (Exception ex)
         {
-            _logger?.LogWarning("[Sub Scribe] could not rewrite the language tags (continuing): {Msg}", ex.Message);
+            _logger?.LogWarning("[Sub Scribe] could not count the language values (continuing): {Msg}", ex.Message);
         }
     }
 
