@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.73",
-        "changelog": "v12.3.8.73: every TMDb question through the same shelf, one answer written once — the reachability probe stays the exception.",
+        "version": "12.3.8.74",
+        "changelog": "v12.3.8.74: the retired answer table is dropped without a takeover, and the database refresh folds the TMDb shelf with the same run.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.73-dev/Jellyfin.Plugin.SubdlSync_12.3.8.73.zip",
-        "checksum": "85e75bdc465e1b0bf3109c421469274a",
-        "timestamp": "2026-11-27T04:02:12Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.74-dev/Jellyfin.Plugin.SubdlSync_12.3.8.74.zip",
+        "checksum": "3d6be416f6861aa5c3a5f5d68ed4e255",
+        "timestamp": "2026-11-27T04:18:34Z"
       }
     ]
   }
