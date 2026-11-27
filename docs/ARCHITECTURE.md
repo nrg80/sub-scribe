@@ -1,105 +1,103 @@
-# Architecture — who decides, who may ask whom
+# Architecture — the map
 
-This paper does not list folders; it answers the four questions a new contributor gets wrong at first. **Who owns
-the time?** **Who owns the decision about a subtitle?** **Who owns the memory?** And **which arrow may point which
-way?** Everything else in the plugin follows from those four answers, and every one of them was paid for with a
-measured defect.
-
-## Decision one — one owner of the time
-
-Nothing in the plugin starts itself. The five Jellyfin tasks carry empty trigger lists, a coordinator owns every due
-time, and it queues a task when a slot falls due. The price is that a missed slot must be caught up and that a job
-which cannot take the lock must reschedule itself; the gain is that two owners of one time can never double-fire.
-
-## Decision two — one boundary, and the source is a value
-
-The pipeline knows four methods — search, fetch, send, report — and never a website. The name of a source is data
-that arrives from the registry, an engine is constructed behind that name, and no pipeline file branches on a site.
-The price is that anything a site needs must fit those four answers; the gain is that a fourth site is a folder and
-a settings file, with no schema migration and no change to a pipeline.
-
-The registry does not hand out the raw engine. It wraps it in an auditing decorator that records what a source
-answered, so the counters and the report are produced at the same place for every site.
-
-## Decision three — one memory, two directions
-
-Both directions read and write the same store, so they may never run at the same time. One lock covers the seeder,
-both pipelines, the postprocessing, the database refresh and the hash refresh; whoever cannot take it gets a refusal
-and comes back after the job spacing. The price is that a slow upload delays a download; the gain is that the store
-has exactly one writer at any moment, which is why a verdict cannot be written twice for the same pair by accident.
-
-## Decision four — a cache is not a memory
-
-The store holds decisions: a verdict about a pair of content and language, a mark per source, a refusal with its
-signature. A cache holds things that can be recomputed: TMDb answers, extracted texts, downloaded archives. The two
-live in different places on purpose — a cache is deletable at any time and the plugin only pays again, while a
-verdict that vanished would change what the plugin believes. That single distinction decides where a new value
-belongs.
-
-## The path of one run
+One plugin, four bands. The band on top decides what work exists, the band below it talks to the world, the third
+keeps what was decided, and the last one shows it. Nothing skips a band: a decision never reaches a website without
+passing the gates, and a website never writes into the memory.
 
 ```
-   time ─────────────────────────────► coordinator (owns every due time)
-                                             │ queues a Jellyfin task
-                                             ▼
-   watcher ──► dispatcher ──► seeder ──► queues (one file, two lists)
-                   │                          │
-                   │                ┌─────────┴──────────┐
-                   │                ▼                    ▼
-                   │        download pipeline      upload pipeline
-                   │                │                    │
-                   │                └──► gates ◄──────────┘
-                   │                        │
-                   │                source registry
-                   │                 │            │
-                   │           engine            engine      (one per site)
-                   │                 │            │
-                   └────────────► worker rows ──► page (reads, never decides)
-                                        │
-        both pipelines ──► registry (verdicts, marks) ──► database
-                        └► caches (disk) — deletable at any time
+WHO DECIDES
+
+   Zeit (Koordinator) ──► Dispatcher ──► Seeder ──► Warteschlange
+                              ▲                         │
+   Ankunft (Wächter) ────────┘                         ▼
+                                        ┌──────────────┴──────────────┐
+                                        ▼                             ▼
+                                 Download-Pipeline            Upload-Pipeline
+                                        │                             │
+                                        └──────────►  Tore  ◄──────────┘
+THE WORLD                                            │
+                                                     ▼
+                                   Quellen-Registry ──► Engine SubDL
+                                                     ──► Engine tvst
+                                                     ──► Engine mst
+WHAT REMAINS                                         │
+                                                     ▼
+                    Bestand: Urteile, Marken, Signaturen ──► Datenbank
+                    Speicher: TMDb-Antworten, Texte, Archive ──► Platte
+WHO SHOWS IT                                         │
+                                                     ▼
+                             Arbeiterzeilen ──► Seite (liest, entscheidet nichts)
 ```
 
-A run collects before it decides. The dispatcher and the seeder only gather candidates; the decision starts in the
-pipeline, passes the gates, and ends in a store write. That is why an arrival run can be narrowed to the arrived
-items without changing any rule: narrowing removes candidates, never decisions.
+## The band that decides
 
-## The seams, and what never crosses them
+The **coordinator** owns every due time. The five Jellyfin tasks carry empty trigger lists, so nothing fires beside
+its clock; a due job is queued through the task manager so it stays visible in the dashboard and can still be
+started by hand.
 
-| Seam | What crosses | What never crosses |
+The **watcher** feeds the dispatcher when a file appears. It does not start work; it hands over the changed items,
+and the collector waits until nothing more comes. The **dispatcher** turns that into a cycle: it asks the seeder,
+runs both directions, and reports the cycle line under the worker list.
+
+The **seeder** is the producer and only the producer. It walks the selected libraries and turns every movie and
+episode with a media file on disk into a queue candidate; it writes no verdict and sends nothing. The **queue** is
+one file with two lists, one per direction, ordered last in first out by item creation time, with retry counters and
+tombstones that survive a restart.
+
+The two **pipelines** are where a decision starts. Download asks for a missing language, picks a candidate, moves it
+onto the audio, writes the file and books the answer. Upload reads the text tracks out of the container, weighs each
+stream, builds a container and sends it. Neither knows a website by name, and neither writes without the lock.
+
+The **gates** are the only place that refuses. They receive text and a track, never a promise, and their refusal
+names its cause. **Auto-Sync** is a worker of its own beside them: it is handed a subtitle, measures it against the
+audio and hands back a status.
+
+## The band with the world
+
+The **registry** turns a source name into an engine and wraps it in an auditing decorator, so every site is counted
+at the same place. The three **engines** answer four things and nothing else: search, fetch, send, report. Each has
+its own settings file, its own language bridge and its own idea of what a daily allowance means.
+
+## The band that remains
+
+The **store** holds what was decided and is the only thing that survives a restart: a verdict per pair of content
+and language, a mark per source, a refusal with the signature of what was refused. It writes through the
+**database**, and its keys are identifiers, not row numbers.
+
+A **cache** holds what can be recomputed: TMDb answers, extracted texts, downloaded archives. It may be emptied at
+any time and the plugin only pays again. That is the whole difference from the store, and it decides where a new
+value belongs.
+
+## The band that shows
+
+The **worker rows** are written by the workers themselves, one row per worker, and each row reports only its own
+result. The **page** reads facts and rows and never decides anything; the API end that serves it is read-only for
+everything the plugin believes.
+
+## If you want to change something, touch this
+
+| You want to … | Touch | Read first |
 | --- | --- | --- |
-| dispatcher → pipeline | a direction, an item, a scope | a source, a verdict, a container |
-| pipeline → contract | a search request, a fetch request, a send request | a site name, a table name, a row |
-| contract → engine | the site's own parameters and answers | our identifiers, our verdicts |
-| pipeline → gates | subtitle text and its track | a promise about the audio |
-| pipeline → store | a verdict with its signature and time | media bytes, credentials |
-| store → database | rows whose keys are identifiers | a decision the store has not made |
-| api → page | facts and rows, read only | a decision, a write, a switch |
+| change when a run happens | the coordinator's anchors and the job spacing | [RUNS.md](RUNS.md) |
+| change what an arrival covers | the dispatcher's scope and the seeder's filter | [RUNS.md](RUNS.md) |
+| add or change a refusal | the gates, and the reason string where it is raised | [GATES.md](GATES.md) |
+| add a fourth site | a folder under `Sources`, a settings file, a language bridge | [CONTRACTS.md](CONTRACTS.md), §21 of the specification |
+| change a file name | `SidecarNaming` and every writer that builds one | [NAMING.md](NAMING.md) |
+| change what a run says | the line's wording and the debug level it needs | [LOGGING.md](LOGGING.md) |
+| add a stored value | the store if it is a decision, a cache if it can be recomputed | [DATABASE.md](DATABASE.md), [CACHING.md](CACHING.md) |
+| change a column or a key | the schema, the migration, and every stored key of that form | [DATABASE.md](DATABASE.md) |
+| change the page | the settings object, the HTML, the structure test | [GUI.md](GUI.md) |
+| change a quota stop | the quota snapshot and the stop decision | [QUOTA.md](QUOTA.md) |
+| change how many tracks are extracted | the extraction pass and its look-ahead | [EXTRACTION.md](EXTRACTION.md) |
+| change the queue's behaviour | the item states and the retry ceiling | [QUEUE.md](QUEUE.md) |
+| change how a subtitle is aligned | the drift gate, the fit and the worker | [AUTOSYNC.md](AUTOSYNC.md) |
+| change a title lookup | the ladder and its pause | [TITLE-RESOLUTION.md](TITLE-RESOLUTION.md) |
 
-## The truth about the folders
+## Three rules that hold the whole map
 
-The folders are topics, not layers. A dependency graph built from `using` lines shows cycles, and the cause is a
-handful of cross-cutting types rather than careless design: `LogUtil` sits in `Pipeline` and is called from eight
-files in `ScheduledTasks`, seven in `Api`, four in `Registry` and one in `Data`. What is a real layer is the type,
-not the folder — the engine contract, the store interfaces and the gate entry points. A new file belongs where its
-topic lives, and the arrows above are what it must keep.
-
-## What a new feature has to touch
-
-Five steps, in this order: name the decision and put it in the pipeline or the gates, never in a store. Write the
-requirement in `SPECIFICATION.md` and the test in `TESTS.md` before the code. Put a new value in the store if it is
-a decision and in a cache if it can be recomputed. Take the lock if the run writes anything. And let the worker row
-report only its own result.
-
-## Where the rest is written
-
-The parts themselves each have a paper. The time and the triggers stand in [RUNS.md](RUNS.md), the queue in
-[QUEUE.md](QUEUE.md). The two directions are told four times, once per way: [SINGLE-DOWNLOAD.md](SINGLE-DOWNLOAD.md),
-[SINGLE-UPLOAD.md](SINGLE-UPLOAD.md), [SEASON-PACK-DOWNLOAD.md](SEASON-PACK-DOWNLOAD.md),
-[SEASON-PACK-UPLOAD.md](SEASON-PACK-UPLOAD.md). The gates stand in [GATES.md](GATES.md), the boundary in
-[CONTRACTS.md](CONTRACTS.md), and each site has one paper of its own. The two kinds of memory are
-[DATABASE.md](DATABASE.md) and [CACHING.md](CACHING.md), the page is [GUI.md](GUI.md), and what a run says while it
-works is [LOGGING.md](LOGGING.md).
+One writer at a time: the lock covers everything that writes, because both directions and all the background work
+share one store. One decision per place: a store never decides, a page never writes, an engine never books. And one
+arrow direction: a pipeline may call the contract, the store and the gates; nothing calls back up into a pipeline.
 
 [SPECIFICATION.md](SPECIFICATION.md), §1, §2, §3, §4, §14, §21; F-M94h, F-M194, F-M233, F-M624, F-M668, F-M669,
 F-M682, F-M683. Guarded by `coverage`, `storex`, `endpoints` and `gui-structure`.
