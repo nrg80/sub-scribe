@@ -2275,8 +2275,10 @@ internal static class Program
                     && uploadSource.Contains("SourceOrder.KeyOf(Configuration.SubtitleProvider.TvSubtitles), plan.Lang", StringComparison.Ordinal)
                     && uploadSource.Contains("SourceOrder.KeyOf(Configuration.SubtitleProvider.TvSubtitles), lang", StringComparison.Ordinal)
                     && uploadSource.Contains("SourceOrder.KeyOf(Configuration.SubtitleProvider.MovieSubtitles), lang", StringComparison.Ordinal)
-                    && !uploadSource.Contains("Api.TvSubtitlesClient.SiteLanguage(", StringComparison.Ordinal)
-                    && !uploadSource.Contains("Api.MovieSubtitlesClient.SiteLanguage(", StringComparison.Ordinal));
+                    // F-M799: die Sprachbruecke der Seite wird seit 12.3.8.88 fuer den DATEINAMEN gefragt,
+                    // nie fuer das Tor — das Tor fragt NimmtSprache (Zeilen oben). Der Name je Quelle ist
+                    // damit der zweite, eigene Beleg.
+                    && uploadSource.Contains("SourceFileName(quelle,", StringComparison.Ordinal));
                 Check("F-M538: a language the site does not carry is a skip with its own reason, not a failure",
                     uploadSource.Contains("return UploadResult.Skipped(\"second-source-no-language\")", StringComparison.Ordinal)
                     && uploadSource.Contains("the site has no such language (F-M538)", StringComparison.Ordinal));
@@ -4695,6 +4697,29 @@ internal static class Program
             && !Jellyfin.Plugin.SubScribe.Data.ScribeDbContext.SpracheUnbekannt("EU")
             && Jellyfin.Plugin.SubScribe.Data.ScribeDbContext.SpracheUnbekannt("YUE"),
             "XYZ known? " + Jellyfin.Plugin.SubScribe.Data.ScribeDbContext.SpracheUnbekannt("XYZ"));
+
+        // ---- 37. F-M799: jede Quelle hört ihren eigenen Code im Dateinamen -----------------------------
+        string hash799 = "0123456789abcdef0123456789abcdef";
+        Check(
+            "F-M799: the same subtitle is named CS for SubDL and CZ for tvsubtitles.net",
+            Jellyfin.Plugin.SubScribe.Language.LanguageMapper.MapToSubdl("CES") == "CS"
+            && Jellyfin.Plugin.SubScribe.Api.TvSubtitlesClient.SiteLanguage("CES") == "cz"
+            && Jellyfin.Plugin.SubScribe.Sources.SourceNeutral.SendFileName(true, "tt1", 1, 2, "CS", hash799) == "tt1.S01E02." + hash799 + ".CS.srt"
+            && Jellyfin.Plugin.SubScribe.Sources.SourceNeutral.SendFileName(true, "tt1", 1, 2, "CZ", hash799) == "tt1.S01E02." + hash799 + ".CZ.srt",
+            Jellyfin.Plugin.SubScribe.Api.TvSubtitlesClient.SiteLanguage("CES") ?? "null");
+        Check(
+            "F-M799: Greek, Chinese and Japanese differ the same way, and a movie name carries no episode",
+            Jellyfin.Plugin.SubScribe.Api.TvSubtitlesClient.SiteLanguage("ELL") == "gr"
+            && Jellyfin.Plugin.SubScribe.Api.TvSubtitlesClient.SiteLanguage("ZHO") == "cn"
+            && Jellyfin.Plugin.SubScribe.Api.TvSubtitlesClient.SiteLanguage("JPN") == "jp"
+            && Jellyfin.Plugin.SubScribe.Sources.SourceNeutral.SendFileName(false, "tt9", 0, 0, "GR", hash799) == "tt9." + hash799 + ".GR.srt",
+            Jellyfin.Plugin.SubScribe.Api.TvSubtitlesClient.SiteLanguage("JPN") ?? "null");
+        Check(
+            "F-M799: moviesubtitles.org writes br where SubDL writes PT, and takes no European Portuguese",
+            Jellyfin.Plugin.SubScribe.Api.MovieSubtitlesClient.SiteLanguage("pt-BR") == "br"
+            && Jellyfin.Plugin.SubScribe.Api.MovieSubtitlesClient.SiteLanguage("POR") is null
+            && Jellyfin.Plugin.SubScribe.Language.LanguageMapper.MapToSubdl("POR") == "PT",
+            Jellyfin.Plugin.SubScribe.Api.MovieSubtitlesClient.SiteLanguage("POR") ?? "null");
 
         if (_failures > 0)
         {

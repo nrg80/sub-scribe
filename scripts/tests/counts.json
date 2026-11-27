@@ -1218,6 +1218,12 @@
       "checks": 5,
       "requirement": "F-M797",
       "title": "Die Bruecke kommt aus der amtlichen Liste (Fidschi erreicht FJ statt FI), beide dreistelligen Formen treffen sich im Kanon, und geraten wird nichts: unbekannt, ohne Zweisteller und und ergeben null"
+    },
+    "T444": {
+      "suite": "endpoints",
+      "checks": 3,
+      "requirement": "F-M799",
+      "title": "Jede Quelle liest im Dateinamen ihren eigenen Code: CS gegen cz, ELL gegen gr, ZHO gegen cn, JPN gegen jp, und br statt PT bei moviesubtitles.org"
     }
   }
 }

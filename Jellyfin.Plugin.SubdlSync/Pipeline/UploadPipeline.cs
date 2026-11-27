@@ -3359,11 +3359,45 @@ public sealed class UploadPipeline : IPackFiller
         }
     }
 
+    /// <summary>
+    /// F-M799: der Dateiname, den EINE Quelle bekommt — mit dem Kennzeichen, das DIESE Quelle führt.
+    /// </summary>
+    /// <remarks>
+    /// Bis 12.3.8.87 wurde der Name einmal gebaut, mit dem SubDL-Zweisteller, und an alle drei Quellen
+    /// geschickt: tvsubtitles.net und moviesubtitles.org lasen im Dateinamen eine Kennung, die sie
+    /// selbst anders schreiben (<c>CS</c> gegen <c>cz</c>, <c>EL</c> gegen <c>gr</c>, <c>ZH</c> gegen
+    /// <c>cn</c>, <c>JA</c> gegen <c>jp</c>). Jetzt fragt der Name die Brücke der Quelle, an die er
+    /// geht. Führt die Quelle die Sprache nicht, bleibt der Name bei der Kennung des Clients — der
+    /// Versand verweigert dann ohnehin, und ein Name ohne Sprache wäre schlechter als einer mit.
+    /// </remarks>
+    /// <param name="quelle">Die Quelle, an die der Name geht.</param>
+    /// <param name="isSeries">Wahr für eine Folge, falsch für einen Film.</param>
+    /// <param name="imdbId">Die IMDb-Kennung, wie sie im Namen steht.</param>
+    /// <param name="season">Die Staffel.</param>
+    /// <param name="episode">Die Folge.</param>
+    /// <param name="language">Die Sprache, gleich in welcher Schreibweise.</param>
+    /// <param name="contentHash">Der Inhalts-Hash des Untertitels.</param>
+    /// <param name="hearingImpaired">Wahr für die gehörlosenfreundliche Fassung.</param>
+    /// <returns>Der Dateiname mit dem Kennzeichen dieser Quelle.</returns>
+    private static string SourceFileName(
+        Configuration.SubtitleProvider quelle, bool isSeries, string imdbId, int season, int episode,
+        string language, string contentHash, bool hearingImpaired)
+    {
+        // F-M735: gefragt wird die SPRACHAUSKUNFT DER QUELLE, nicht die Tafel eines HTTP-Clients. Jede
+        // Quelle sagt selbst, wie ein ISO-Kennzeichen auf ihrer Seite heisst.
+        string schluessel = Api.Endpoints.SourceOrder.KeyOf(quelle);
+        string? kennung = Sources.SourceLanguages.Voice(schluessel)?.ToSite(language);
+
+        return BuildNeutralName(
+            isSeries, imdbId, season, episode,
+            kennung ?? LanguageMapper.MapToSubdl(language) ?? (language ?? string.Empty).Trim().ToUpperInvariant(),
+            contentHash,
+            hearingImpaired);
+    }
+
     private static string BuildNeutralName(
         bool isSeries, string imdbId, int season, int episode, string lang, string contentHash, bool hi = false)
-        => isSeries
-            ? $"{imdbId}.S{season:00}E{episode:00}.{contentHash}.{lang}{SeasonPack.HiMarker(hi)}.srt"
-            : $"{imdbId}.{contentHash}.{lang}{SeasonPack.HiMarker(hi)}.srt";
+        => Sources.SourceNeutral.SendFileName(isSeries, imdbId, season, episode, lang, contentHash, hi);
 
     /// <summary>
     /// F-M71:
@@ -3668,6 +3702,11 @@ public sealed class UploadPipeline : IPackFiller
 
         foreach (var quelle in quellenReihenfolge)
         {
+            // F-M799: JEDE Zeile dieses Durchgangs nennt den Namen, der an DIESE Quelle geht — mit dem
+            // Sprachkennzeichen, das DIESE Quelle fuehrt (tvst: cz/gr/cn/jp, mst: br/ua, SubDL: CS/EL/ZH/JA).
+            string quellName = SourceFileName(
+                quelle, isSeries, imdbId ?? string.Empty, season, episode, lang, contentHashEarly, hearingImpaired);
+
             // Der Toggle der Quelle, ueber denselben Pruefpunkt wie Gate und Sammelstufe. Aus heisst
             // UEBERSPRINGEN, nicht abbrechen: die andere Quelle kann den Untertitel noch nehmen.
             // F-M508: die Film-Adresse ist standardmaessig aus — DASS sie deshalb nicht sendet, steht
@@ -3677,7 +3716,7 @@ public sealed class UploadPipeline : IPackFiller
             {
                 LogUtil.PerItem(_config.LogMode, _logger,
                     "[Sub Scribe] {Name} [{Lang}] — source {Source} skipped: that source is switched off, nothing sent",
-                    neutralName, lang, Api.Endpoints.Provenance.Name(quelle));
+                    quellName, lang, Api.Endpoints.Provenance.Name(quelle));
                 continue;
             }
 
@@ -3691,7 +3730,7 @@ public sealed class UploadPipeline : IPackFiller
             {
                 LogUtil.PerItem(_config.LogMode, _logger,
                     "[Sub Scribe] {Name} [{Lang}] — source {Source} skipped — not configured (required for SubDL only)",
-                    neutralName, lang, Api.Endpoints.Provenance.Name(quelle));
+                    quellName, lang, Api.Endpoints.Provenance.Name(quelle));
                 continue;
             }
 
@@ -3703,7 +3742,7 @@ public sealed class UploadPipeline : IPackFiller
             {
                 LogUtil.PerItem(_config.LogMode, _logger,
                     "[Sub Scribe] {Name} [{Lang}] — source {Source} skipped: {Reason}",
-                    neutralName, lang, Api.Endpoints.Provenance.Name(quelle),
+                    quellName, lang, Api.Endpoints.Provenance.Name(quelle),
                     Api.Endpoints.Provenance.MayUpload(herkunft)
                         ? "already-uploaded:" + Api.Endpoints.Provenance.Name(quelle)
                         : Api.Endpoints.Provenance.OriginBlockedReason(herkunft)
@@ -3723,7 +3762,7 @@ public sealed class UploadPipeline : IPackFiller
             {
                 LogUtil.PerItem(_config.LogMode, _logger,
                     "[Sub Scribe] {Name} [{Lang}] — source {Source} skipped: remembered refusal ({Reason}) (F-M605)",
-                    neutralName, lang, Api.Endpoints.Provenance.Name(quelle), gemerktesNein);
+                    quellName, lang, Api.Endpoints.Provenance.Name(quelle), gemerktesNein);
                 ergebnisse[quelle] = UploadResult.Skipped(gemerktesNein);
                 continue;
             }
@@ -3736,6 +3775,11 @@ public sealed class UploadPipeline : IPackFiller
 
         async Task<UploadResult> Versand(Configuration.SubtitleProvider quelle, int index)
         {
+            // F-M799: auch hier der Name DIESER Quelle — die lokale Funktion steht ausserhalb der
+            // Schleife und hat die Kennung darum selbst zu bilden.
+            string quellName = SourceFileName(
+                quelle, isSeries, imdbId ?? string.Empty, season, episode, lang, contentHashEarly, hearingImpaired);
+
             // F-M587: kleiner Versatz statt Gleichstart — die erste Quelle geht sofort raus, jede
             // weitere nach 0-5 % des Takts. Bei einer einzigen Quelle passiert hier nichts.
             if (index > 0)
@@ -3757,8 +3801,9 @@ public sealed class UploadPipeline : IPackFiller
                 // Anbieter braucht damit eine Methode und einen Eintrag in der Ablage, keine neue
                 // Fallunterscheidung hier.
                 var versand = await SendToSourceAsync(
-                        quelle, srtContent, neutralName, lang, releaseName, quality, imdbId, tmdbId,
-                        isSeries, season, episode, hearingImpaired, mediaHash, mediaPath, framerate, ct)
+                        quelle, srtContent, quellName, lang, releaseName, quality, imdbId, tmdbId,
+                        isSeries, season, episode, hearingImpaired, mediaHash, mediaPath, framerate,
+                        contentHashEarly, ct)
                     .ConfigureAwait(false);
 
                 // F-M590: sofort notieren, was DIESE Quelle angenommen hat — bevor die andere Quelle
@@ -3784,7 +3829,7 @@ public sealed class UploadPipeline : IPackFiller
                 // Regel wie F-M592 im Download; der naechste Lauf fragt sie wieder.
                 _logger.LogWarning(
                     "[Sub Scribe] source {Source} did not answer for {Name} [{Lang}] (client timeout) — the other source keeps going.",
-                    Api.Endpoints.Provenance.Name(quelle), neutralName, lang);
+                    Api.Endpoints.Provenance.Name(quelle), quellName, lang);
                 if (_quellenAus.Add(quelle))
                 {
                     _logger.LogWarning(
@@ -3808,7 +3853,7 @@ public sealed class UploadPipeline : IPackFiller
                 // geworfen: sonst risse ihn Task.WhenAll mitten in den Versand der anderen Quelle.
                 _logger.LogWarning(
                     "[Sub Scribe] upload to {Source} failed for {Name} [{Lang}]: {Msg} — the other source is still tried.",
-                    Api.Endpoints.Provenance.Name(quelle), neutralName, lang, ex.Message);
+                    Api.Endpoints.Provenance.Name(quelle), quellName, lang, ex.Message);
                 // F-M609: eine Ausnahme ist KEINE Antwort — kein Urteil, Paar bleibt offen.
                 return UploadResult.NoVerdict(ex.Message);
             }
@@ -3892,13 +3937,13 @@ public sealed class UploadPipeline : IPackFiller
                     gemerkt.Verdict);
                 LogUtil.PerItem(_config.LogMode, _logger,
                     "[Sub Scribe] {Name} [{Lang}] — source {Source} said no ({Reason}), remembered for this content (F-M605/F-M609)",
-                    neutralName, lang, Api.Endpoints.Provenance.Name(gemerkteQuelle), gemerkt.Reason);
+                    SourceFileName(gemerkteQuelle, isSeries, imdbId ?? string.Empty, season, episode, lang, contentHashEarly, hearingImpaired), lang, Api.Endpoints.Provenance.Name(gemerkteQuelle), gemerkt.Reason);
             }
             else if (gemerkt.Verdict == Api.UploadVerdict.NoVerdict)
             {
                 LogUtil.PerItem(_config.LogMode, _logger,
                     "[Sub Scribe] {Name} [{Lang}] — source {Source} gave no verdict ({Reason}); the pair stays open, the next run asks again (F-M609)",
-                    neutralName, lang, Api.Endpoints.Provenance.Name(gemerkteQuelle), gemerkt.Reason);
+                    SourceFileName(gemerkteQuelle, isSeries, imdbId ?? string.Empty, season, episode, lang, contentHashEarly, hearingImpaired), lang, Api.Endpoints.Provenance.Name(gemerkteQuelle), gemerkt.Reason);
             }
         }
 
@@ -3915,7 +3960,7 @@ public sealed class UploadPipeline : IPackFiller
         {
             LogUtil.PerItem(_config.LogMode, _logger,
                 "[moviesubtitles] {Name} [{Lang}] — accepted, id unknown: the site names none (own mark minted)",
-                neutralName, lang);
+                SourceFileName(Configuration.SubtitleProvider.MovieSubtitles, isSeries, imdbId ?? string.Empty, season, episode, lang, contentHashEarly, hearingImpaired), lang);
         }
 
         // Was der Rest der Methode liest: die Fassung, die genommen hat — in Kettenreihenfolge, denn dort
@@ -7019,7 +7064,7 @@ public sealed class UploadPipeline : IPackFiller
         Configuration.SubtitleProvider quelle, string srtContent, string neutralName, string lang,
         string releaseName, string quality, string? imdbId, string? tmdbId, bool isSeries,
         int season, int episode, bool hearingImpaired, string? mediaHash, string? mediaPath,
-        string? framerate, CancellationToken ct) => quelle switch
+        string? framerate, string contentHash, CancellationToken ct) => quelle switch
     {
         // SubDL braucht keine Vorprüfung außer denen, die die Kette schon gestellt hat (IMDb-Kennung,
         // Schalter, Herkunft). Der Auftrag trägt den dokumentierten Qualitätscode und die Bildrate, die
@@ -7041,10 +7086,14 @@ public sealed class UploadPipeline : IPackFiller
             },
             ct),
         Configuration.SubtitleProvider.TvSubtitles => SendToTvSubtitlesAsync(
-            srtContent, neutralName, lang, releaseName, quality, imdbId, tmdbId, isSeries, season,
+            srtContent,
+            SourceFileName(quelle, isSeries, imdbId ?? string.Empty, season, episode, lang, contentHash, hearingImpaired),
+            lang, releaseName, quality, imdbId, tmdbId, isSeries, season,
             episode, hearingImpaired, mediaHash, mediaPath, ct),
         Configuration.SubtitleProvider.MovieSubtitles => SendToMovieSubtitlesAsync(
-            srtContent, neutralName, lang, releaseName, quality, imdbId, tmdbId, isSeries, mediaHash,
+            srtContent,
+            SourceFileName(quelle, isSeries, imdbId ?? string.Empty, season, episode, lang, contentHash, hearingImpaired),
+            lang, releaseName, quality, imdbId, tmdbId, isSeries, mediaHash,
             mediaPath, ct),
         _ => Task.FromResult(UploadResult.Skipped("no-upload-path")),
     };

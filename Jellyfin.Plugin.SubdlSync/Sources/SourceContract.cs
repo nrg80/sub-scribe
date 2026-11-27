@@ -978,6 +978,37 @@ public static class SourceNeutral
     }
 
     /// <summary>
+    /// F-M799: der Dateiname, den eine Quelle bekommt — der neutrale Name mit dem Kennzeichen, das
+    /// DIESE Quelle führt.
+    /// </summary>
+    /// <remarks>
+    /// Der Name nennt keinen Menschen und keine Bibliothek: er trägt die Kennung des Titels, den
+    /// Inhalts-Hash des Untertitels und den Sprachcode der Quelle, an die er geht. Bis 12.3.8.87 wurde
+    /// er einmal gebaut, mit dem SubDL-Zweisteller, und an alle drei Quellen geschickt — tvsubtitles.net
+    /// und moviesubtitles.org lasen darin eine Kennung, die sie selbst anders schreiben (<c>CS</c> gegen
+    /// <c>cz</c>, <c>EL</c> gegen <c>gr</c>, <c>ZH</c> gegen <c>cn</c>, <c>JA</c> gegen <c>jp</c>).
+    /// </remarks>
+    /// <param name="isSeries">Wahr für eine Folge, falsch für einen Film.</param>
+    /// <param name="imdbId">Die Kennung des Titels, wie sie im Namen steht.</param>
+    /// <param name="season">Die Staffel.</param>
+    /// <param name="episode">Die Folge.</param>
+    /// <param name="code">Das Sprachkennzeichen der Quelle.</param>
+    /// <param name="contentHash">Der Inhalts-Hash des Untertitels.</param>
+    /// <param name="hearingImpaired">Wahr für die gehörlosenfreundliche Fassung.</param>
+    /// <returns>Der Dateiname, z. B. <c>tt1.S01E02.abc.CZ.srt</c>.</returns>
+    public static string SendFileName(
+        bool isSeries, string imdbId, int season, int episode, string code, string contentHash, bool hearingImpaired = false)
+    {
+        // Dieselbe Marke wie Pipeline.SeasonPack.HiMarker — der Name ist die einzige Stelle, an der ein
+        // Leser die gehörlosenfreundliche Fassung sieht, und sie steht hier als Zeichenkette, weil die
+        // Grenze nicht in die Pipeline greift.
+        string marker = hearingImpaired ? ".SDH" : string.Empty;
+        return isSeries
+            ? $"{imdbId}.S{season.ToString("00", CultureInfo.InvariantCulture)}E{episode.ToString("00", CultureInfo.InvariantCulture)}.{contentHash}.{code}{marker}.srt"
+            : $"{imdbId}.{contentHash}.{code}{marker}.srt";
+    }
+
+    /// <summary>
     /// F-M682: die Sprachliste einer Anfrage in der Schreibweise einer Quelle — über deren eigene
     /// Sprachbrücke, nie über eine zweite Tabelle.
     /// </summary>

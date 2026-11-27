@@ -3,7 +3,7 @@
 **Owner: the rules.** This is the master document: every other paper is derived from it and cites its `F-M` tags. The contract boundaries stand in `CONTRACTS.md`, the vocabulary in `TERMS.md`.
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.87.
+**Status:** Implementation — v12.3.8.88.
 
 **A rule stands here with its ground: the decision behind it in one sentence, under `Concept decision`, and the
 check that proves it. The detailed measurement archive — what was measured, which run showed it, what happened —
@@ -281,7 +281,7 @@ New episode, newly ripped episode or replaced episode → different signature �
 
 **F-M798 [U]:** **Nothing is guessed.** A code the table does not know, a language without a two-letter form, and the four codes that name no language at all — undetermined, multiple, no linguistic content, uncoded — all answer with nothing. The caller decides: the source refuses the job, or the search runs without a language. Until 12.3.8.86 the bridge cut the first two letters of anything it did not know, so Fijian was searched as Finnish and `und` became `UN`; a valid code for the wrong language is worse than no code, because the search runs and reports nothing. The startup census names such values instead of counting them as the canon. Checked by T443.**F-M16 [B2]:** **Minimum size and minimum cue count.** The 2 KB size floor applies to UPLOADS only and is always on. The cue count (30) applies in BOTH directions and is switchable per direction, default on. Below either, the stream is skipped as "too small".
 
-**F-M13 [B2]:** **SRT parser validation (switchable, default on):** ≥1 cue, monotonically increasing timestamps, plausible cue duration (>0.1 s, <10 min — long music cues stay legal)
+**F-M799 [U]:** **Each source reads its own code in the file name.** A subtitle travels to a source under a neutral name: the title, the content hash and a language code. Until 12.3.8.88 that name was built once, with the SubDL two-letter code, and handed to all three sources. The two sites then read a code they spell differently: `CS` against `cz`, `EL` against `gr`, `ZH` against `cn`, `JA` against `jp`, and `PT` where the second site writes `br`. The name asks the language answer of the source it is going to, not a table of a client (F-M735). A source that does not carry the language gets the client's code in the name and refuses the job on its own; there is no name without a language. Checked by T444.**F-M13 [B2]:** **SRT parser validation (switchable, default on):** ≥1 cue, monotonically increasing timestamps, plausible cue duration (>0.1 s, <10 min — long music cues stay legal)
 
 **F-M14 [B2]:** **Sync plausibility (switchable, default on):** cue span vs. media runtime (+5 min tolerance; all cues concentrated in <10 % of runtime = reject)
 
