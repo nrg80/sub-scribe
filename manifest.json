@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.86",
-        "changelog": "v12.3.8.86: Case counts — the verdict pass compares character by character, like the counter always did.",
+        "version": "12.3.8.87",
+        "changelog": "v12.3.8.87: The language bridge is generated from the official ISO 639-2 list, and nothing is guessed any more.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.86-dev/Jellyfin.Plugin.SubdlSync_12.3.8.86.zip",
-        "checksum": "a611b4fb2f9698372534facca99cb0ea",
-        "timestamp": "2026-11-27T07:30:23Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.87-dev/Jellyfin.Plugin.SubdlSync_12.3.8.87.zip",
+        "checksum": "15b56c421dbab28781904bef0cc70d62",
+        "timestamp": "2026-11-27T07:58:25Z"
       }
     ]
   }
