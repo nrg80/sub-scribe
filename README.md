@@ -119,6 +119,8 @@ Do not release by tagging and pushing alone: a release must carry exactly one as
 - The test catalogue, one entry per test: [docs/TESTS.md](docs/TESTS.md)
 - The settings page as the operator meets it: [docs/GUI.md](docs/GUI.md)
 - How a season pack is formed, and when it may be formed: [docs/SEASON-PACK-UPLOAD.md](docs/SEASON-PACK-UPLOAD.md)
+- The three sites, one paper each: [docs/SUBDL.md](docs/SUBDL.md),
+  [docs/TVSUBTITLES.md](docs/TVSUBTITLES.md), [docs/MOVIESUBTITLES.md](docs/MOVIESUBTITLES.md)
 - How a single upload is formed: [docs/SINGLE-UPLOAD.md](docs/SINGLE-UPLOAD.md)
 - How a season pack download runs: [docs/SEASON-PACK-DOWNLOAD.md](docs/SEASON-PACK-DOWNLOAD.md)
 - How a single download runs: [docs/SINGLE-DOWNLOAD.md](docs/SINGLE-DOWNLOAD.md)
