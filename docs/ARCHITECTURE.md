@@ -1,103 +1,107 @@
-# Architecture — the map
+# Architecture — two trees and what they share
 
-One plugin, four bands. The band on top decides what work exists, the band below it talks to the world, the third
-keeps what was decided, and the last one shows it. Nothing skips a band: a decision never reaches a website without
-passing the gates, and a website never writes into the memory.
+Every piece of work in this plugin can be located by three questions. **Which run is it** — manual, scheduled or
+arrival? **Which direction** — download or upload? **Which unit** — one file or a whole season? The two graphs below
+answer those questions for each direction, and everything outside them is shared by all four leaves.
+
+## The download tree
 
 ```
-WHO DECIDES
-
-   Zeit (Koordinator) ──► Dispatcher ──► Seeder ──► Warteschlange
-                              ▲                         │
-   Ankunft (Wächter) ────────┘                         ▼
-                                        ┌──────────────┴──────────────┐
-                                        ▼                             ▼
-                                 Download-Pipeline            Upload-Pipeline
-                                        │                             │
-                                        └──────────►  Tore  ◄──────────┘
-THE WORLD                                            │
-                                                     ▼
-                                   Quellen-Registry ──► Engine SubDL
-                                                     ──► Engine tvst
-                                                     ──► Engine mst
-WHAT REMAINS                                         │
-                                                     ▼
-                    Bestand: Urteile, Marken, Signaturen ──► Datenbank
-                    Speicher: TMDb-Antworten, Texte, Archive ──► Platte
-WHO SHOWS IT                                         │
-                                                     ▼
-                             Arbeiterzeilen ──► Seite (liest, entscheidet nichts)
+                       DOWNLOAD
+                          │
+   manuell ───────────────┼─────────────── Zeitplan ────────────── Ankunft
+   (ganze Auswahl)        │                (ganze Auswahl)          (nur die angekommenen IDs)
+                          ▼
+            Seeder füllt die Download-Liste der Warteschlange
+                          │
+        ┌─────────────────┴─────────────────┐
+        ▼                                   ▼
+     EINZELN                            STAFELPACK
+  eine Sprache, eine Datei          ein Archiv für die Staffel
+        │                                   │
+  Kandidat suchen, holen             Staffel-ZIP zuerst, dann die Folgeseite
+        │                                   │
+  auf die Tonspur legen              Mitglieder entpacken und ablegen
+        │                                   │
+        └─────────────────┬─────────────────┘
+                          ▼
+        Tore: Größe, Sprache, Cues, SRT, Sync, Herkunft
+                          ▼
+        Bestand: Urteil je (Inhalt, Sprache) ──► Datenbank
 ```
 
-## The band that decides
+## The upload tree
 
-The **coordinator** owns every due time. The five Jellyfin tasks carry empty trigger lists, so nothing fires beside
-its clock; a due job is queued through the task manager so it stays visible in the dashboard and can still be
-started by hand.
+```
+                        UPLOAD
+                          │
+   manuell ───────────────┼─────────────── Zeitplan ────────────── Ankunft
+   (ganze Auswahl)        │                (ganze Auswahl)          (nur die angekommenen IDs)
+                          ▼
+            Seeder füllt die Upload-Liste der Warteschlange
+                          │
+        ┌─────────────────┴─────────────────┐
+        ▼                                   ▼
+     EINZELN                            STAFELPACK
+  die Spuren EINER Datei          eine Sprache, alle Folgen
+        │                                   │
+  Textspuren in einem Lauf           Vorprüfungen ohne Extraktion:
+        │                            Staffel vollständig, je Quelle offen,
+  Tore je Spur                      Urteils-Signatur, eine Sprache
+        │                                   │
+  Container aus den Spuren           Füllen aus dem Speicher,
+  bauen und senden                   Lücken einzeln extrahieren
+        │                                   │
+        └─────────────────┬─────────────────┘
+                          ▼
+        Bestand: Buchung je Quelle ──► Datenbank, Pack-Urteil je Staffel
+```
 
-The **watcher** feeds the dispatcher when a file appears. It does not start work; it hands over the changed items,
-and the collector waits until nothing more comes. The **dispatcher** turns that into a cycle: it asks the seeder,
-runs both directions, and reports the cycle line under the worker list.
+## The four leaves, and the paper that owns them
 
-The **seeder** is the producer and only the producer. It walks the selected libraries and turns every movie and
-episode with a media file on disk into a queue candidate; it writes no verdict and sends nothing. The **queue** is
-one file with two lists, one per direction, ordered last in first out by item creation time, with retry counters and
-tombstones that survive a restart.
+| Run | Direction | Unit | Paper |
+| --- | --- | --- | --- |
+| any | download | one language of one file | [SINGLE-DOWNLOAD.md](SINGLE-DOWNLOAD.md) |
+| any | download | one season archive | [SEASON-PACK-DOWNLOAD.md](SEASON-PACK-DOWNLOAD.md) |
+| any | upload | the tracks of one file | [SINGLE-UPLOAD.md](SINGLE-UPLOAD.md) |
+| any | upload | one language of one season | [SEASON-PACK-UPLOAD.md](SEASON-PACK-UPLOAD.md) |
 
-The two **pipelines** are where a decision starts. Download asks for a missing language, picks a candidate, moves it
-onto the audio, writes the file and books the answer. Upload reads the text tracks out of the container, weighs each
-stream, builds a container and sends it. Neither knows a website by name, and neither writes without the lock.
+The run type never changes what a leaf does; it changes only how much arrives at the leaf. A manual run and a
+scheduled run hand over the whole selection, an arrival run hands over the ids that arrived, and the leaf cannot
+tell the difference because the narrowing happened before it.
 
-The **gates** are the only place that refuses. They receive text and a track, never a promise, and their refusal
-names its cause. **Auto-Sync** is a worker of its own beside them: it is handed a subtitle, measures it against the
-audio and hands back a status.
+## What all four leaves share
 
-## The band with the world
+The **coordinator** owns every due time, so no leaf starts itself; the five Jellyfin tasks carry empty trigger lists
+on purpose. The **dispatcher** turns a trigger into a cycle and hands the scope down. The **seeder** turns libraries
+into candidates and decides nothing else. All of that is told in [RUNS.md](RUNS.md).
 
-The **registry** turns a source name into an engine and wraps it in an auditing decorator, so every site is counted
-at the same place. The three **engines** answer four things and nothing else: search, fetch, send, report. Each has
-its own settings file, its own language bridge and its own idea of what a daily allowance means.
+The **queue** is one file with one list per direction, filled by the seeder and drained by the pipelines, with retry
+counters and tombstones. It is the only thing between collecting and deciding: [QUEUE.md](QUEUE.md).
 
-## The band that remains
+The **gates** are the single place that refuses, and they are shared by both directions: [GATES.md](GATES.md). The
+**source registry** turns a source name into an engine and wraps it in a counter, so both directions talk to every
+site the same way: [CONTRACTS.md](CONTRACTS.md).
 
-The **store** holds what was decided and is the only thing that survives a restart: a verdict per pair of content
-and language, a mark per source, a refusal with the signature of what was refused. It writes through the
-**database**, and its keys are identifiers, not row numbers.
+The **store** keeps what was decided and survives a restart; a **cache** keeps what can be recomputed and may be
+emptied at any time. Where a new value belongs is decided by that one distinction: [DATABASE.md](DATABASE.md) and
+[CACHING.md](CACHING.md).
 
-A **cache** holds what can be recomputed: TMDb answers, extracted texts, downloaded archives. It may be emptied at
-any time and the plugin only pays again. That is the whole difference from the store, and it decides where a new
-value belongs.
+The **worker rows** report what a worker did, painted by the page; neither of them decides anything:
+[GUI.md](GUI.md). And one **lock** covers every part that writes, which is why no two leaves ever run at the same
+time.
 
-## The band that shows
+## Finding your way from a symptom
 
-The **worker rows** are written by the workers themselves, one row per worker, and each row reports only its own
-result. The **page** reads facts and rows and never decides anything; the API end that serves it is read-only for
-everything the plugin believes.
-
-## If you want to change something, touch this
-
-| You want to … | Touch | Read first |
+| If you see … | It belongs to | Paper |
 | --- | --- | --- |
-| change when a run happens | the coordinator's anchors and the job spacing | [RUNS.md](RUNS.md) |
-| change what an arrival covers | the dispatcher's scope and the seeder's filter | [RUNS.md](RUNS.md) |
-| add or change a refusal | the gates, and the reason string where it is raised | [GATES.md](GATES.md) |
-| add a fourth site | a folder under `Sources`, a settings file, a language bridge | [CONTRACTS.md](CONTRACTS.md), §21 of the specification |
-| change a file name | `SidecarNaming` and every writer that builds one | [NAMING.md](NAMING.md) |
-| change what a run says | the line's wording and the debug level it needs | [LOGGING.md](LOGGING.md) |
-| add a stored value | the store if it is a decision, a cache if it can be recomputed | [DATABASE.md](DATABASE.md), [CACHING.md](CACHING.md) |
-| change a column or a key | the schema, the migration, and every stored key of that form | [DATABASE.md](DATABASE.md) |
-| change the page | the settings object, the HTML, the structure test | [GUI.md](GUI.md) |
-| change a quota stop | the quota snapshot and the stop decision | [QUOTA.md](QUOTA.md) |
-| change how many tracks are extracted | the extraction pass and its look-ahead | [EXTRACTION.md](EXTRACTION.md) |
-| change the queue's behaviour | the item states and the retry ceiling | [QUEUE.md](QUEUE.md) |
-| change how a subtitle is aligned | the drift gate, the fit and the worker | [AUTOSYNC.md](AUTOSYNC.md) |
-| change a title lookup | the ladder and its pause | [TITLE-RESOLUTION.md](TITLE-RESOLUTION.md) |
+| a run that scans 1.477 items after a file arrived | the run type, not the leaf | [RUNS.md](RUNS.md) |
+| a pair that is sent twice | the pair lock in the store | [SINGLE-UPLOAD.md](SINGLE-UPLOAD.md) |
+| a language that never reaches a site | the gates or the source's language list | [GATES.md](GATES.md), the site's paper |
+| a season that never becomes a pack | the pre-checks, before any extraction | [SEASON-PACK-UPLOAD.md](SEASON-PACK-UPLOAD.md) |
+| a subtitle that sits wrong on the audio | Auto-Sync, after the fetch | [AUTOSYNC.md](AUTOSYNC.md) |
+| a row that stays yellow | the worker row and its deferral | [GUI.md](GUI.md) |
+| a name nobody can parse back | `SidecarNaming` and its writers | [NAMING.md](NAMING.md) |
 
-## Three rules that hold the whole map
-
-One writer at a time: the lock covers everything that writes, because both directions and all the background work
-share one store. One decision per place: a store never decides, a page never writes, an engine never books. And one
-arrow direction: a pipeline may call the contract, the store and the gates; nothing calls back up into a pipeline.
-
-[SPECIFICATION.md](SPECIFICATION.md), §1, §2, §3, §4, §14, §21; F-M94h, F-M194, F-M233, F-M624, F-M668, F-M669,
-F-M682, F-M683. Guarded by `coverage`, `storex`, `endpoints` and `gui-structure`.
+[SPECIFICATION.md](SPECIFICATION.md), §2, §3, §4, §14, §21; F-M233, F-M624, F-M668, F-M669, F-M682, F-M683, F-M801.
+Guarded by `coverage`, `storex`, `endpoints` and `gui-structure`.
