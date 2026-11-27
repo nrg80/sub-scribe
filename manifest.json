@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.82",
-        "changelog": "v12.3.8.82: Basque, Galician and Mongolian are in the table — the census named them, now they resolve.",
+        "version": "12.3.8.83",
+        "changelog": "v12.3.8.83: A finding without a name is no finding — the census names the form of a list when no member is at fault.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.82-dev/Jellyfin.Plugin.SubdlSync_12.3.8.82.zip",
-        "checksum": "be9a8e71e51c7d9e7745eed446f93663",
-        "timestamp": "2026-11-27T06:59:33Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.83-dev/Jellyfin.Plugin.SubdlSync_12.3.8.83.zip",
+        "checksum": "0a36cc54985e4073fbc8fa2c9eb1f180",
+        "timestamp": "2026-11-27T07:07:27Z"
       }
     ]
   }
