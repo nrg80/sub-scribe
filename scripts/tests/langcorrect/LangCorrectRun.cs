@@ -88,10 +88,10 @@ internal static class LangCorrectRun
 
         // ── 1. the verdict ──────────────────────────────────────────────────────
         Console.WriteLine("1. The verdict");
-        Check(QaGates.CorrectedLanguage("DE", french) == "FR",
-            "a German tag on French text corrects to FR");
-        Check(QaGates.CorrectedLanguage("FR", german) == "DE",
-            "a French tag on German text corrects to DE");
+        Check(QaGates.CorrectedLanguage("DE", french) == "FRA",
+            "a German tag on French text corrects to FRA (house form, F-M802)");
+        Check(QaGates.CorrectedLanguage("FR", german) == "DEU",
+            "a French tag on German text corrects to DEU (house form, F-M802)");
         Check(QaGates.CorrectedLanguage("EN", english) == null,
             "a tag that holds corrects nothing");
         Check(QaGates.CorrectedLanguage("DE", german) == null,
@@ -166,6 +166,20 @@ internal static class LangCorrectRun
             "the download switch is labelled as a REJECT — it discards the candidate");
         Check(downloadGate.Contains("is discarded and the next candidate is tried"),
             "… and its description says what happens instead of claiming an upload");
+
+        // ── 7. F-M802: der Erkenner spricht die Hausform ─────────────────────────
+        Console.WriteLine();
+        Console.WriteLine("7. F-M802: the detector answers in the house form");
+        Check(QaGates.DetectLanguage(german) == "DEU", "German text is detected as DEU, not DE");
+        Check(QaGates.DetectLanguage(english) == "ENG", "English text is detected as ENG, not EN");
+        Check(QaGates.IsFamilyMatch("DEU", "DE"), "a two-letter code is translated before it is compared");
+        Check(QaGates.IsFamilyMatch("MSA", "IND"), "the family list speaks T (Malay vs Indonesian)");
+        Check(QaGates.CorrectedLanguage("DEU", german) == null,
+            "the failure that refused every pack is closed: DEU against German text corrects nothing");
+        Check(QaGates.CorrectedLanguage("POR", Cues(
+                "Anteriormente em Foundation, o Império já estava a desmoronar-se sem que ninguém o travasse.",
+                "Temos de fazer o salto, ou morremos todos aqui esta noite, disse ela.")) == null,
+            "a correct Portuguese track keeps its POR");
 
         Console.WriteLine();
         Console.WriteLine(Failures.Count == 0

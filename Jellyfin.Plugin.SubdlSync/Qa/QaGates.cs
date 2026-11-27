@@ -14,6 +14,8 @@ using System.Linq;
 using System.Collections.Generic;
 using System.Text.RegularExpressions;
 
+using Jellyfin.Plugin.SubScribe.Language;
+
 namespace Jellyfin.Plugin.SubScribe.Qa;
 
 /// <summary>
@@ -104,7 +106,9 @@ public static class QaGates
     /// Returns null when no confident verdict is possible — gate stays silent.
     /// </summary>
     /// <param name="content">Subtitle text.</param>
-    /// <returns>2-letter code (e.g. "DE", "EN") or null when undetectable.</returns>
+    /// <returns>The house form of the detected language (ISO 639-2/T, e.g. "DEU", "ENG"), or null
+    /// when undetectable. F-M802: the library speaks ISO 639-1 and nothing else, so its answer is
+    /// translated at this seam before any consumer compares it.</returns>
     public static string? DetectLanguage(string content)
     {
         if (string.IsNullOrWhiteSpace(content))
@@ -127,10 +131,14 @@ public static class QaGates
 
             // Normalize the few multi-variant codes the stream tags use as a single family:
             // pt-pt/pt-br both compare against PT-tagged streams; zh-cn/zh-tw → ZH.
-            if (upper.StartsWith("PT", StringComparison.Ordinal)) { return "PT"; }
-            if (upper.StartsWith("ZH", StringComparison.Ordinal)) { return "ZH"; }
+            if (upper.StartsWith("PT", StringComparison.Ordinal)) { upper = "PT"; }
+            else if (upper.StartsWith("ZH", StringComparison.Ordinal)) { upper = "ZH"; }
 
-            return upper;
+            // F-M802: the library answers in ISO 639-1 ("DE", "SV"); the house speaks ISO 639-2/T
+            // ("DEU", "SWE"). Translating HERE is what keeps every comparison downstream true — the
+            // pack join, the single upload's file name, the download gate, untagged tracks and loose
+            // sidecars all read one form. An unknown code comes back upper-cased, never invented.
+            return LanguageMapper.Canonical(upper);
         }
         catch
         {
@@ -152,22 +160,25 @@ public static class QaGates
     /// </summary>
     private static readonly FrozenDictionary<string, string[]> LangFamilyMap = new Dictionary<string, string[]>
     {
-        // CLD2 cannot emit these at all — accept the neighbouring attribution:
-        ["MS"] = new[] { "ID" },                       // Malay ≈ Indonesian (Bahasa family)
-        ["EU"] = new[] { "ES", "PT", "FR", "ID", "IT" }, // Basque unsupported by CLD2
-        ["GL"] = new[] { "ES", "PT" },                 // Galician unsupported by CLD2
+        // F-M802: keys and values speak ISO 639-2/T like every other table in the house. Before
+        // 12.3.8.92 they were two-letter codes while the tag was three — the exception never fired,
+        // and every tagged track looked like a mismatch.
+        // The detector cannot emit these at all — accept the neighbouring attribution:
+        ["MSA"] = new[] { "IND" },                          // Malay ≈ Indonesian (Bahasa family)
+        ["EUS"] = new[] { "SPA", "POR", "FRA", "IND", "ITA" }, // Basque unsupported by the detector
+        ["GLG"] = new[] { "SPA", "POR" },                   // Galician unsupported by the detector
         // Genuine close relatives the detector mixes up:
-        ["CA"] = new[] { "ES", "PT", "IT", "FR" },     // Catalan vs Iberian neighbours
-        ["DA"] = new[] { "NO", "SV" },                 // Scandinavian congruence
-        ["NO"] = new[] { "DA", "SV" },
-        ["SV"] = new[] { "DA", "NO" },
-        ["HR"] = new[] { "SR", "BS", "SL" },           // Serbo-Croatian cluster
-        ["SR"] = new[] { "HR", "BS", "SL" },
-        ["BS"] = new[] { "HR", "SR", "SL" },
-        ["SL"] = new[] { "HR", "SR", "BS" },
-        ["CS"] = new[] { "SK" },                       // Czech vs Slovak
-        ["SK"] = new[] { "CS" },
-        ["ID"] = new[] { "MS" },
+        ["CAT"] = new[] { "SPA", "POR", "ITA", "FRA" },     // Catalan vs Iberian neighbours
+        ["DAN"] = new[] { "NOR", "SWE" },                   // Scandinavian congruence
+        ["NOR"] = new[] { "DAN", "SWE" },
+        ["SWE"] = new[] { "DAN", "NOR" },
+        ["HRV"] = new[] { "SRP", "BOS", "SLV" },            // Serbo-Croatian cluster
+        ["SRP"] = new[] { "HRV", "BOS", "SLV" },
+        ["BOS"] = new[] { "HRV", "SRP", "SLV" },
+        ["SLV"] = new[] { "HRV", "SRP", "BOS" },
+        ["CES"] = new[] { "SLK" },                          // Czech vs Slovak
+        ["SLK"] = new[] { "CES" },
+        ["IND"] = new[] { "MSA" },
     }.ToFrozenDictionary(StringComparer.OrdinalIgnoreCase);
 
     /// <summary>
@@ -194,13 +205,22 @@ public static class QaGates
     /// of the tagged <paramref name="lang"/> (or identical).</summary>
     public static bool IsFamilyMatch(string lang, string detected)
     {
-        if (string.Equals(lang, detected, StringComparison.OrdinalIgnoreCase))
+        // F-M802: both sides are translated before they are compared. A caller may still hand in a
+        // two-letter tag or a library code; without this the comparison is false and silent.
+        string? links = LanguageMapper.Canonical(lang);
+        string? rechts = LanguageMapper.Canonical(detected);
+        if (links == null || rechts == null)
+        {
+            return false;
+        }
+
+        if (string.Equals(links, rechts, StringComparison.Ordinal))
         {
             return true;
         }
 
-        return LangFamilyMap.TryGetValue((lang ?? string.Empty).ToUpperInvariant(), out var fam)
-            && fam.Contains(detected ?? string.Empty, StringComparer.OrdinalIgnoreCase);
+        return LangFamilyMap.TryGetValue(links, out var fam)
+            && fam.Contains(rechts, StringComparer.Ordinal);
     }
 
     /// <summary>
