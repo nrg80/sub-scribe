@@ -18,7 +18,7 @@ states the rule, its constants, its ground and its test.**
 
 - [1. Objective and Scope](#1-objective-and-scope) — 2 requirements
 - [2. Seeder — what enters the queue](#2-seeder-what-enters-the-queue) — 13 requirements
-- [3. Upload Pipeline](#3-upload-pipeline) — 133 requirements
+- [3. Upload Pipeline](#3-upload-pipeline) — 134 requirements
  - [3.1 Quality Gates — Upload](#31-quality-gates-upload) — 11 requirements
  - [3.2 Dry Run — Upload](#32-dry-run-upload) — 3 requirements
  - [3.3 Season Packs — Upload](#33-season-packs-upload) — cross-cutting, cites F-M379–F-M448 and F-M475, F-M476
