@@ -482,7 +482,6 @@ public sealed class ScribeDbContext : IDisposable
         _db.Logger = logger;
         _db.Database.EnsureCreated();
         IdModel.EnsureTables(_db, logger);
-        EnsureTmdbAnswersTable();
         EnsureAiredSeasonsTable();
         EnsurePackSeasonsTable();
         EnsureSourceRefusalsTable();
@@ -797,29 +796,8 @@ public sealed class ScribeDbContext : IDisposable
     }
 
     /// <summary>
-    /// F-M542: creates the <c>tmdb_answers</c> table on a data file that predates it. Same reason and
-    /// same shape as <see cref="IdModel.EnsureTables"/>: <c>EnsureCreated</c> builds a schema only when the
-    /// FILE is new, and a missing table would throw on the first TMDb answer instead of at startup.
-    /// </summary>
-    private void EnsureTmdbAnswersTable()
-    {
-        try
-        {
-            _db.Database.ExecuteSqlRaw(
-                "CREATE TABLE IF NOT EXISTS tmdb_answers ("
-                + "Id TEXT NOT NULL PRIMARY KEY, "
-                + "Value TEXT NOT NULL DEFAULT '', "
-                + "Written TEXT NOT NULL DEFAULT '');");
-        }
-        catch (Exception ex)
-        {
-            _logger?.LogWarning("[Sub Scribe] could not create the tmdb_answers table (continuing): {Msg}", ex.Message);
-        }
-    }
-
-    /// <summary>
     /// F-M601: creates the <c>aired_seasons</c> table on a data file that predates it. Same shape and
-    /// same reason as <see cref="EnsureTmdbAnswersTable"/>: <c>EnsureCreated</c> builds a schema only
+    /// same reason as the other ensured tables: <c>EnsureCreated</c> builds a schema only
     /// when the FILE is new, and a missing table would throw on the first stored answer instead of at
     /// startup. Name and mapping are identical on purpose (<c>aired_seasons</c> both here and in
     /// <c>OnModelCreating</c>) — a table that is created under one name and read under another is
@@ -1710,7 +1688,6 @@ public sealed class ScribeSqliteContext : DbContext
     public DbSet<PipelineRunEntity> RunRows => Set<PipelineRunEntity>();
 
     /// <summary>F-M542: TMDb answers, so a restart does not re-ask the same questions.</summary>
-    public DbSet<TmdbAnswerEntity> TmdbAnswerRows => Set<TmdbAnswerEntity>();
 
     /// <summary>Area 5: cumulative GUI counters.</summary>
     public DbSet<StatusStatsEntity> StatusRows => Set<StatusStatsEntity>();

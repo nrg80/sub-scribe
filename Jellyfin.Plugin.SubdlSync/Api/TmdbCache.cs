@@ -411,6 +411,46 @@ public static class TmdbCache
     }
 
     /// <summary>
+    /// F-M781: one line when the retired answer table has been dropped.
+    /// </summary>
+    public static void NoteRetiredTable()
+        => Log("old table tmdb_answers dropped for good — nothing was taken over (F-M781)");
+
+    /// <summary>
+    /// F-M782: folds the shelf into a dense file, like <c>ScribeDbContext.Compact</c> does for the plugin
+    /// database. Deleting rows frees pages inside the file but never releases them, so without this step
+    /// the file would keep its high-water mark while the ceilings are met.
+    /// </summary>
+    /// <returns>Bytes before and after, over the file and its journal.</returns>
+    public static (long Before, long After) Compact()
+    {
+        lock (Gate)
+        {
+            if (_db == null)
+            {
+                return (0, 0);
+            }
+
+            long before = FileBytesLocked();
+            try
+            {
+                Exec("PRAGMA wal_checkpoint(TRUNCATE);");
+                Exec("VACUUM;");
+                Exec("PRAGMA wal_checkpoint(TRUNCATE);");
+            }
+            catch (Exception ex)
+            {
+                _log?.LogWarning("{Prefix}compaction failed: {Type}: {Msg} (F-M782)", LogPrefix, ex.GetType().Name, ex.Message);
+                return (before, FileBytesLocked());
+            }
+
+            long after = FileBytesLocked();
+            Log("compacted — {Before} B before, {After} B after, {Freed} B freed (F-M782)", before, after, before - after);
+            return (before, after);
+        }
+    }
+
+    /// <summary>
     /// Removes everything that is too old and then the oldest rows until both ceilings are met.
     /// </summary>
     public static void Trim()
@@ -490,14 +530,7 @@ public static class TmdbCache
                 }
             }
 
-            try
-            {
-                stats.FileBytes = _path != null && File.Exists(_path) ? new FileInfo(_path).Length : 0;
-            }
-            catch (Exception)
-            {
-                stats.FileBytes = 0;
-            }
+            stats.FileBytes = FileBytesLocked();
 
             stats.Enabled = _db != null;
             stats.FactCeilingBytes = FactCeilingBytes;
@@ -567,6 +600,32 @@ public static class TmdbCache
 
         /// <summary>Any other statement about a title: runtime, year, counts, air dates.</summary>
         public const string Details = "details";
+    }
+
+    /// <summary>
+    /// F-M782: the size of the shelf as it sits on disk — main file plus journal. Reporting the main file
+    /// alone would understate it exactly like the data file's size was understated before F-M214.
+    /// </summary>
+    /// <returns>Bytes on disk.</returns>
+    private static long FileBytesLocked()
+    {
+        try
+        {
+            long bytes = 0;
+            foreach (string pfad in new[] { _path, _path == null ? null : _path + "-wal", _path == null ? null : _path + "-shm" })
+            {
+                if (pfad != null && File.Exists(pfad))
+                {
+                    bytes += new FileInfo(pfad).Length;
+                }
+            }
+
+            return bytes;
+        }
+        catch (Exception)
+        {
+            return 0;
+        }
     }
 
     private static bool IsFresh(string kind, string value, DateTime written)

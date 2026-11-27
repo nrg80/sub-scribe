@@ -3,7 +3,7 @@
 **Owner: the rules.** This is the master document: every other paper is derived from it and cites its `F-M` tags. The contract boundaries stand in `CONTRACTS.md`, the vocabulary in `TERMS.md`.
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.73.
+**Status:** Implementation — v12.3.8.74.
 
 **A rule stands here with its ground: the decision behind it in one sentence, under `Concept decision`, and the
 check that proves it. The detailed measurement archive — what was measured, which run showed it, what happened —
@@ -35,7 +35,7 @@ states the rule, its constants, its ground and its test.**
 - [7. OSHash Refresh](#7-oshash-refresh) — 3 requirements
 - [8. Rules Shared by Both Directions](#8-rules-shared-by-both-directions) — 5 requirements
 
-- [9. SubDL/TMDb API, IDs and Credentials](#9-subdltmdb-api-ids-and-credentials) — 83 requirements
+- [9. SubDL/TMDb API, IDs and Credentials](#9-subdltmdb-api-ids-and-credentials) — 85 requirements
 - [10. Scheduler, Quota and Timing](#10-scheduler-quota-and-timing) — 24 requirements
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
@@ -1780,7 +1780,11 @@ Evidence on the image of the live plugin database (copy, only the copy written):
 
 **F-M779 [S]:** **Every question to TMDb goes through the shelf, except the reachability probe.** Concept decision: the season index used to build its own HTTP client and fetched each season a second time, past the shelf the resolver used. It now hangs on the same chain, so one season is one request and one entry. The status probe on `/configuration` stays the single exception, and on purpose: it does not ask for a fact but whether TMDb answers at all, and a probe answered from the shelf would stay green for days after the key expired. The log names both. Checked by T434.
 
-**F-M780 [S]:** **An answer is written once.** Concept decision: until 12.3.8.72 every answer was written twice — into the shelf and into the plugin database's own answer table under different lifetimes — so the database kept growing while nothing read it any more. The old write is gone. What still sits in that table is taken over when the store is attached and the table is emptied in the same move; from then on it stays empty. Checked by T434.
+**F-M780 [S]:** **An answer is written once.** Concept decision: until 12.3.8.72 every answer was written twice — into the shelf and into the plugin database's own answer table under different lifetimes — so the database kept growing while nothing read it any more. The old write is gone. Checked by T434.
+
+**F-M781 [S]:** **The old answer table is dropped, not migrated.** Concept decision (operator order 2026-11-27: <!-- "Ich will keine Übernahme für den cache. Einfach einmal entfernen." --> “No takeover for the cache. Just remove it once.”): what still sits in that table is thrown away and the table is dropped, and it is no longer created at startup. The rows were written under lifetimes that no longer exist, and a takeover would carry that doubt into the new shelf. The cost is visible and small: the first run asks TMDb again for whatever it needs, and the shelf fills from those answers. Checked by T434.
+
+**F-M782 [S]:** **The database refresh folds the shelf too.** Concept decision: deleting rows frees pages inside a SQLite file but never releases them, so a shelf that meets both ceilings can still hold a file at its high-water mark. The refresh that already compacts the plugin database compacts the shelf in the same run — `VACUUM` after a journal checkpoint — and reports bytes before and after. The diagnostics endpoint reports the file together with its journal for the same reason. Checked by T434.
 
 ## 10. Scheduler, Quota and Timing
 

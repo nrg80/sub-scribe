@@ -349,6 +349,22 @@ public class ScribeDatabaseRefreshTask : IScheduledTask
                     compactNote = $"compaction skipped ({ex.Message})";
                     _logger.LogWarning("[Sub Scribe-Refresh] compaction skipped ({Msg}).", ex.Message);
                 }
+
+                // F-M782: dieselbe Behandlung fuer die TMDb-Ablage. Sie ist eine eigene Datei, also
+                // braucht sie ihr eigenes Falten — sonst haelt sie Zeilen weg, die laengst geloescht sind.
+                try
+                {
+                    var (cacheBefore, cacheAfter) = Api.TmdbCache.Compact();
+                    LogUtil.Normal(
+                        _logger,
+                        "[Sub Scribe-Refresh] TMDb shelf compacted: {Before} -> {After} bytes.",
+                        cacheBefore,
+                        cacheAfter);
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning("[Sub Scribe-Refresh] TMDb shelf compaction skipped ({Msg}).", ex.Message);
+                }
             }
             catch (Exception ex)
             {

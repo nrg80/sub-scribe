@@ -600,45 +600,44 @@ using (var db = new ScribeDbContext(workdir, null))
 var frageSerie = ("multi:CUNK ON CINEMA|2022|loose", true);
 var frageFilm = ("multi:CUNK ON CINEMA|2022|loose", false);
 var frageLeer = ("multi:GIBTSNICHT|0|loose", true);
-using (var db = new ScribeDbContext(workdir, null))
-{
-    TmdbAnswerStore.Attach(db.Context);
-    Check(!TmdbAnswerStore.TryGet(frageSerie, out _), "F-M542: eine unbekannte Frage hat keine Antwort im Store");
-    TmdbAnswerStore.Put(frageSerie, "tt2130442|102348|1|1");
-    Check(TmdbAnswerStore.TryGet(frageSerie, out var sofort) && sofort == "tt2130442|102348|1|1",
-        "F-M542: die Antwort kommt im selben Prozess zurueck");
-    TmdbAnswerStore.Put(frageLeer, null);
-}
 
-// Neustart: neuer Kontext, leerer Speicher-Cache.
-using (var db = new ScribeDbContext(workdir, null))
-{
-    TmdbAnswerStore.Attach(db.Context);
-    Check(TmdbAnswerStore.TryGet(frageSerie, out var nachNeustart) && nachNeustart == "tt2130442|102348|1|1",
-        "F-M542: die Antwort ueberlebt den Neustart — genau dafuer ist sie im Store");
-    Check(!TmdbAnswerStore.TryGet(frageFilm, out _),
-        "F-M542: der Serien-Schalter gehoert zum Schluessel, die Filmfrage ist eine andere Frage");
-    Check(TmdbAnswerStore.TryGet(frageLeer, out var leer) && leer == null,
-        "F-M542: ein gespeicherter Nichttreffer ist eine echte Antwort, kein Fehlschlag");
+// F-M772: die Antwort des Resolvers liegt in der eigenen Ablage, nicht mehr in der Plugin-Datenbank.
+Jellyfin.Plugin.SubScribe.Api.TmdbCache.Attach(workdir, null);
+Check(!TmdbAnswerStore.TryGet(frageSerie, out _), "F-M542: eine unbekannte Frage hat keine Antwort im Store");
+TmdbAnswerStore.Put(frageSerie, "tt2130442|102348|1|1");
+Check(TmdbAnswerStore.TryGet(frageSerie, out var sofort) && sofort == "tt2130442|102348|1|1",
+    "F-M542: die Antwort kommt im selben Prozess zurueck");
+TmdbAnswerStore.Put(frageLeer, null);
 
-    // Haltbarkeit: eine Id-Antwort nach 200 Tagen, ein Nichttreffer nach 8 Tagen.
-    var zeilen = db.Context.TmdbAnswerRows.ToList();
-    foreach (var zeile in zeilen)
-    {
-        zeile.Written = DateTime.UtcNow.AddDays(zeile.Id.StartsWith("multi:GIBTSNICHT", StringComparison.Ordinal) ? -8 : -200);
-    }
+// Neustart: Ablage neu anhaengen, der Speicher-Merker ist weg.
+Jellyfin.Plugin.SubScribe.Api.TmdbCache.Attach(workdir, null);
+Check(TmdbAnswerStore.TryGet(frageSerie, out var nachNeustart) && nachNeustart == "tt2130442|102348|1|1",
+    "F-M542: die Antwort ueberlebt den Neustart — genau dafuer liegt sie auf der Platte");
+Check(!TmdbAnswerStore.TryGet(frageFilm, out _),
+    "F-M542: der Serien-Schalter gehoert zum Schluessel, die Filmfrage ist eine andere Frage");
+Check(TmdbAnswerStore.TryGet(frageLeer, out var leerAntwort) && leerAntwort == null,
+    "F-M542: ein gespeicherter Nichttreffer ist eine echte Antwort, kein Fehlschlag");
 
-    db.Context.SaveChanges();
-    TmdbAnswerStore.Attach(db.Context);
-    Check(!TmdbAnswerStore.TryGet(frageSerie, out _),
-        "F-M542: eine 200 Tage alte Id-Antwort gilt nicht mehr");
-    Check(!TmdbAnswerStore.TryGet(frageLeer, out _),
-        "F-M542: ein 8 Tage alter Nichttreffer gilt nicht mehr (TMDb traegt Titel nach)");
-    TmdbAnswerStore.Prune();
-    Check(db.Context.TmdbAnswerRows.Count() == 0,
-        "F-M542: das Aufraeumen entfernt die abgelaufenen Zeilen",
-        db.Context.TmdbAnswerRows.Count().ToString(System.Globalization.CultureInfo.InvariantCulture));
-}
+// F-M775: die Frist haengt an der ART der Frage — eine geratene Kennung lebt 30 Tage, eine Niete einen Tag.
+Jellyfin.Plugin.SubScribe.Api.TmdbCache.PutFact(
+    Jellyfin.Plugin.SubScribe.Api.TmdbCache.Kinds.IdentifierGuessed,
+    "multi:CUNK ON CINEMA|2022|loose|S",
+    "tt2130442|102348|1|1",
+    DateTime.UtcNow.AddDays(-200));
+Check(!TmdbAnswerStore.TryGet(frageSerie, out _),
+    "F-M775: eine 200 Tage alte, geratene Kennung gilt nicht mehr (30 Tage)");
+Jellyfin.Plugin.SubScribe.Api.TmdbCache.PutFact(
+    Jellyfin.Plugin.SubScribe.Api.TmdbCache.Kinds.IdentifierGuessed,
+    "multi:GIBTSNICHT|0|loose|S",
+    null,
+    DateTime.UtcNow.AddDays(-8));
+Check(!TmdbAnswerStore.TryGet(frageLeer, out _),
+    "F-M775: ein 8 Tage alter Nichttreffer gilt nicht mehr (1 Tag, TMDb traegt Titel nach)");
+TmdbAnswerStore.Prune();
+Check(Jellyfin.Plugin.SubScribe.Api.TmdbCache.Stats().FactRows == 0,
+    "F-M772: das Aufraeumen entfernt die abgelaufenen Zeilen",
+    Jellyfin.Plugin.SubScribe.Api.TmdbCache.Stats().FactRows.ToString(System.Globalization.CultureInfo.InvariantCulture));
+Jellyfin.Plugin.SubScribe.Api.TmdbCache.Clear();
 
 // ---- F-M644: eine abgelehnte Pack-Zeile wird GEMERKT, und ein durchgegangener Beleg ist ihr Gegenteil --
 //

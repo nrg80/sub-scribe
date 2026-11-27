@@ -1,49 +1,50 @@
 using System;
+using System.Collections.Generic;
+using System.Data;
 using System.Globalization;
-using System.Linq;
 using Jellyfin.Plugin.SubScribe.Data;
 using Microsoft.EntityFrameworkCore;
 
 namespace Jellyfin.Plugin.SubScribe.Registry;
 
 /// <summary>
-/// F-M542 (Operator-Anweisung 16.11.2026: „Ok. In den store damit"): die TMDb-Antworten liegen im
-/// Store statt nur im Speicher.
+/// Die Antworten des Resolvers — der Name ist geblieben, der Ort ist ein anderer.
 /// <para>
-/// Gemessen am 16.11.2026: 555 TMDb-Anfragen an einem Tag, davon 272 verschiedene — die Wiederholungen
-/// kamen nicht aus einem Lauf (ein Zyklus fragte 24 verschiedene, 2 doppelt), sondern aus den 31
-/// Plugin-Starts des Tages. <see cref="Api.TmdbImdbResolver"/> hielt seine Antworten in einem statischen
-/// Wörterbuch; jeder Neustart warf sie weg und dieselben Titel, Ids und Serien wurden erneut bei TMDb
-/// erfragt.
+/// F-M542 (Operator-Anweisung 16.11.2026: „Ok. In den store damit"): die TMDb-Antworten liegen im Store
+/// statt nur im Speicher. Gemessen am 16.11.2026: 555 TMDb-Anfragen an einem Tag, davon 272 verschiedene —
+/// die Wiederholungen kamen nicht aus einem Lauf, sondern aus den 31 Plugin-Starts des Tages.
+/// <see cref="Api.TmdbImdbResolver"/> hielt seine Antworten in einem statischen Wörterbuch; jeder Neustart
+/// warf sie weg und dieselben Titel, Ids und Serien wurden erneut bei TMDb erfragt.
 /// </para>
 /// <para>
-/// Hier steht deshalb genau das, was vorher nur im Wörterbuch stand: die FRAGE als Schlüssel und die
-/// ANTWORT als Wert, unverändert die Pipe-Zeile des Resolvers (<c>imdb|tmdb|gefunden|istSerie</c> usw.).
-/// Kein Film, kein Untertitel, keine Metadaten — nur „was hat TMDb auf diese Frage geantwortet".
+/// F-M772 (seit 12.3.8.72): der Ort ist die eigene TMDb-Ablage, nicht mehr eine Tabelle in der
+/// Plugin-Datenbank. Diese Klasse ist deshalb nur noch die Übersetzung zwischen der Frage des Resolvers
+/// und einer Tatsache der Ablage: der Schlüssel ist die Frage, die Art der Tatsache folgt aus ihrem
+/// Aussehen (F-M775), und die Frist bringt die Ablage mit.
 /// </para>
 /// <para>
-/// Haltbarkeit: Ids ändern sich nicht, ein Treffer bleibt 180 Tage stehen. Ein Nichttreffer dagegen
-/// veraltet, weil TMDb Titel nachträgt — er gilt 7 Tage. Das ist der Unterschied, der eine Serie nicht
-/// für immer „nicht gefunden" sein lässt.
+/// F-M781 (seit 12.3.8.74): die alte Tabelle <c>tmdb_answers</c> gibt es nicht mehr. Was beim Anhängen noch
+/// darin steht, wird in die Ablage gehoben und die Tabelle danach fallen gelassen; angelegt wird sie nicht
+/// mehr. Bis dahin wurde sie bei jedem Start erzeugt, obwohl niemand mehr hineinschrieb — eine leere
+/// Tabelle, die nur Platz in der Datei hielt.
 /// </para>
 /// </summary>
 public static class TmdbAnswerStore
 {
-    /// <summary>Shelf life of an answer that names an id.</summary>
-    private static readonly TimeSpan HitLifetime = TimeSpan.FromDays(180);
-
-    /// <summary>Shelf life of an answer that found nothing — TMDb adds titles over time.</summary>
-    private static readonly TimeSpan MissLifetime = TimeSpan.FromDays(7);
+    /// <summary>Name of the table that is being retired.</summary>
+    private const string OldTable = "tmdb_answers";
 
     private static readonly object Gate = new();
 
     private static ScribeSqliteContext? _db;
 
+    private static bool _oldTableGone;
+
     /// <summary>
     /// Attaches the store. Called once when the plugin builds its data context; without it the resolver
     /// keeps working exactly as before, memory only.
     /// </summary>
-    /// <param name="db">The plugin's data context.</param>
+    /// <param name="db">The plugin's data context — needed only to retire the old table.</param>
     public static void Attach(ScribeSqliteContext? db)
     {
         lock (Gate)
@@ -51,181 +52,81 @@ public static class TmdbAnswerStore
             _db = db;
         }
 
-        MigrateIntoTheShelf();
-        Prune();
+        RetireOldTable();
     }
 
     /// <summary>
-    /// F-M772: hebt den Altbestand der Tabelle <c>tmdb_answers</c> in die Ablage und raeumt die Tabelle.
-    /// <para>
-    /// WARUM: die Zeilen sind mit Fristen geschrieben worden, die es nicht mehr gibt. Sie einfach liegen zu
-    /// lassen hiesse, dass ein Deploy eine Lawine von TMDb-Anfragen ausloest, weil die Ablage leer ist und
-    /// jede Frage neu gestellt wird. Die Art der Frage steht im Schluessel (F-M775), also laesst sich jede
-    /// Zeile mit ihrer richtigen Frist uebernehmen.
-    /// </para>
+    /// Reads an answer — memory first, then the shelf. An expired fact is removed by the shelf and answers
+    /// <c>false</c>, so a stale answer never counts as one.
     /// </summary>
-    private static void MigrateIntoTheShelf()
-    {
-        ScribeSqliteContext? db = Store();
-        if (db == null || !Api.TmdbCache.Enabled)
-        {
-            return;
-        }
-
-        try
-        {
-            lock (Gate)
-            {
-                var rows = db.TmdbAnswerRows.AsNoTracking().ToList();
-                if (rows.Count == 0)
-                {
-                    return;
-                }
-
-                int uebernommen = 0;
-                foreach (var row in rows)
-                {
-                    if (row.Id.StartsWith("url:", StringComparison.Ordinal))
-                    {
-                        // Eine Rohantwort gehoert in die zweite Tabelle, nicht zu den Tatsachen.
-                        Api.TmdbCache.PutBody(row.Id, row.Value);
-                    }
-                    else
-                    {
-                        Api.TmdbCache.PutFact(
-                            Api.TmdbCache.KindOfQuestion(row.Id),
-                            row.Id,
-                            row.Value.Length == 0 ? null : row.Value,
-                            row.Written);
-                    }
-
-                    uebernommen++;
-                }
-
-                var alte = db.TmdbAnswerRows.ToList();
-                db.TmdbAnswerRows.RemoveRange(alte);
-                db.SaveChanges();
-                // Die Ablage protokolliert selbst; hier bleibt nur der Zaehler fuer den Fall, dass
-                // jemand die Zeile sehen will (F-M772).
-                System.Diagnostics.Debug.WriteLine($"[Sub Scribe] tmdb answers: {uebernommen} row(s) moved into the shelf (F-M772)");
-            }
-        }
-        catch (Exception ex)
-        {
-            System.Diagnostics.Debug.WriteLine($"[Sub Scribe] tmdb answers: moving the old rows failed: {ex.GetType().Name}: {ex.Message} (F-M772)");
-        }
-    }
-
-    /// <summary>
-    /// Reads an answer. Unknown or expired keys answer <c>false</c> and are forgotten, so the caller asks
-    /// TMDb again.
-    /// </summary>
-    /// <param name="key">Question key <c>(text, isSeries)</c> of the resolver.</param>
-    /// <param name="value">The stored answer.</param>
+    /// <param name="key">The resolver's question and its series flag.</param>
+    /// <param name="value">The answer, or null for "asked and found nothing".</param>
     /// <returns>True when a fresh answer exists.</returns>
     public static bool TryGet((string, bool) key, out string? value)
     {
-        value = null;
-
-        // F-M772/F-M775: die Antwort des Resolvers ist eine TATSAACHE und liegt seit 12.3.8.72 in der
-        // eigenen Ablage — mit der Frist ihrer Art: eine von TMDb belegte Kennung 365 Tage, eine aus Titel
-        // und Jahr geratene 30, eine Niete einen Tag. Der Schluessel traegt bei den geratenen Fragen Titel
-        // und Jahr, also ist der Beleg schon im Schluessel.
-        if (Api.TmdbCache.TryGetFact(Api.TmdbCache.KindOfQuestion(key.Item1), KeyOf(key), out value))
-        {
-            return true;
-        }
-
-        ScribeSqliteContext? db = Store();
-
-        if (db == null)
-        {
-            return false;
-        }
-
-        string id = KeyOf(key);
-        try
-        {
-            lock (Gate)
-            {
-                var row = db.TmdbAnswerRows.AsNoTracking().FirstOrDefault(r => r.Id == id);
-                if (row == null)
-                {
-                    return false;
-                }
-
-                if (IsStale(row.Value, row.Written))
-                {
-                    return false;
-                }
-
-                // Leer heisst "gefragt und nichts gefunden" — im Speicher ist das null, hier ist es
-                // die leere Zeichenkette. Der Aufrufer bekommt dieselbe Antwort wie vorher.
-                value = row.Value.Length == 0 ? null : row.Value;
-                return true;
-            }
-        }
-        catch (Exception)
-        {
-            // A cache that cannot answer must never stop a lookup.
-            return false;
-        }
+        // F-M775: die Art der Tatsache folgt aus dem Aussehen der Frage, nicht aus dem Aufrufer. Eine von
+        // TMDb belegte Kennung lebt 365 Tage, eine aus Titel und Jahr geratene 30, eine Niete einen Tag.
+        return Api.TmdbCache.TryGetFact(Api.TmdbCache.KindOfQuestion(key.Item1), KeyOf(key), out value);
     }
 
     /// <summary>
-    /// Writes an answer. A write failure is swallowed: the memory tier still holds it for this process.
+    /// Writes an answer. There is exactly one place an answer lands: the shelf.
     /// </summary>
-    /// <param name="key">Question key <c>(text, isSeries)</c> of the resolver.</param>
-    /// <param name="value">The answer, <c>null</c> for "asked and found nothing".</param>
+    /// <param name="key">The resolver's question and its series flag.</param>
+    /// <param name="value">The answer, or null for "found nothing".</param>
     public static void Put((string, bool) key, string? value)
     {
-        // F-M772/F-M780: die Ablage ist der einzige Ort, an dem eine Antwort landet. Der alte Weg in die
-        // Tabelle tmdb_answers ist stillgelegt: bis 12.3.8.72 schrieb jede Antwort ZWEIMAL — einmal in die
-        // Ablage und einmal in die Tabelle, die dieselbe Auskunft unter anderen Fristen hielt. Die
-        // Plugin-Datenbank wuchs also weiter mit, obwohl niemand mehr daraus las. Was noch in der Tabelle
-        // steht, wird beim Anhaengen uebernommen (MigrateIntoTheShelf) und danach nicht mehr gefuellt.
+        // F-M780: bis 12.3.8.72 schrieb jede Antwort ZWEIMAL — in die Ablage und in die Tabelle
+        // tmdb_answers, die dieselbe Auskunft unter anderen Fristen hielt. Die Plugin-Datenbank wuchs also
+        // weiter mit, obwohl niemand mehr daraus las.
         Api.TmdbCache.PutFact(Api.TmdbCache.KindOfQuestion(key.Item1), KeyOf(key), value);
     }
 
     /// <summary>
-    /// Deletes rows that can no longer be used by either shelf life. Called on attach; cheap and guarded.
+    /// F-M772: räumt die Ablage auf — abgelaufene Zeilen und beide Decken. Der Name ist der alte; die
+    /// Arbeit macht die Ablage.
     /// </summary>
-    public static void Prune()
+    public static void Prune() => Api.TmdbCache.Trim();
+
+    /// <summary>
+    /// F-M781: removes the old answer table once and for all — no takeover.
+    /// <para>
+    /// Concept decision (operator order 27.11.2026: „Ich will keine Übernahme für den cache. Einfach
+    /// einmal entfernen."): what still sits in <c>tmdb_answers</c> is thrown away, not lifted into the
+    /// shelf. The rows are answers written under lifetimes that no longer exist, and a takeover would carry
+    /// that doubt into the new shelf. The cost is visible and small: the first run after this asks TMDb
+    /// again for whatever it needs, and the shelf fills itself from those answers.
+    /// </para>
+    /// </summary>
+    private static void RetireOldTable()
     {
         ScribeSqliteContext? db = Store();
-
-        if (db == null)
+        if (db == null || _oldTableGone)
         {
             return;
         }
 
         try
         {
-            lock (Gate)
+            var conn = db.Database.GetDbConnection();
+            if (conn.State != ConnectionState.Open)
             {
-                DateTime hitCut = DateTime.UtcNow - HitLifetime;
-                DateTime missCut = DateTime.UtcNow - MissLifetime;
-                var alte = db.TmdbAnswerRows.Where(r => r.Written < missCut).ToList();
-                bool changed = false;
-                foreach (var row in alte)
-                {
-                    if (IsStale(row.Value, row.Written))
-                    {
-                        db.TmdbAnswerRows.Remove(row);
-                        changed = true;
-                    }
-                }
-
-                _ = hitCut;
-                if (changed)
-                {
-                    db.SaveChanges();
-                }
+                conn.Open();
             }
+
+            using (var drop = conn.CreateCommand())
+            {
+                drop.CommandText = $"DROP TABLE IF EXISTS {OldTable};";
+                drop.ExecuteNonQuery();
+            }
+
+            _oldTableGone = true;
+            Api.TmdbCache.NoteRetiredTable();
         }
-        catch (Exception)
+        catch (Exception ex)
         {
-            // pruning is housekeeping
+            // Ein Fehler darf den Start nicht verhindern — dann steht die Tabelle bis zum nächsten Mal.
+            System.Diagnostics.Debug.WriteLine($"[Sub Scribe] dropping {OldTable} failed: {ex.GetType().Name}: {ex.Message} (F-M781)");
         }
     }
 
@@ -257,62 +158,9 @@ public static class TmdbAnswerStore
 
     /// <summary>
     /// The store key: the resolver's question plus whether the answer was asked for a series. Kept as a
-    /// readable string so the table can be inspected in a plain SQLite viewer.
+    /// readable string so the shelf can be inspected in a plain SQLite viewer.
     /// </summary>
     /// <param name="key">Question key of the resolver.</param>
-    /// <returns>Primary key.</returns>
+    /// <returns>Subject inside the shelf.</returns>
     private static string KeyOf((string, bool) key) => string.Concat(key.Item1, key.Item2 ? "|S" : "|M");
-
-    /// <summary>
-    /// "Found nothing" answers expire after seven days, answers with an id after 180.
-    /// </summary>
-    /// <param name="value">Stored answer.</param>
-    /// <param name="written">When it was written (UTC).</param>
-    /// <returns>True when the row is too old to be used.</returns>
-    private static bool IsStale(string? value, DateTime written)
-    {
-        var age = DateTime.UtcNow - written;
-        return IsNegative(value) ? age > MissLifetime : age > HitLifetime;
-    }
-
-    /// <summary>
-    /// True when the answer carries no id at all. The resolver writes <c>imdb|tmdb|found|series</c>,
-    /// <c>imdb</c>, <c>tmdb</c> or <c>1</c>/<c>0</c> — all of them are checked here by shape.
-    /// </summary>
-    /// <param name="value">Stored answer.</param>
-    /// <returns>True when no id came back.</returns>
-    private static bool IsNegative(string? value)
-    {
-        if (string.IsNullOrWhiteSpace(value))
-        {
-            return true;
-        }
-
-        string[] parts = value.Split('|');
-        return parts.All(part => part.Length == 0
-            || part == "0"
-            || part.Equals("false", StringComparison.OrdinalIgnoreCase));
-    }
-}
-
-/// <summary>
-/// F-M542: one TMDb answer, exactly as the resolver keeps it in memory.
-/// </summary>
-public class TmdbAnswerEntity
-{
-    /// <summary>
-    /// Primary key: the resolver's question plus the series flag — e.g.
-    /// <c>multi:CUNK ON CINEMA|2022|loose|S</c>, <c>imdb:tt1234567|S</c>.
-    /// </summary>
-    public string Id { get; set; } = string.Empty;
-
-    /// <summary>
-    /// The answer, unchanged from the memory dictionary: <c>imdb|tmdb|found|isSeries</c> for a title
-    /// search, the bare id for a conversion, <c>1</c>/<c>0</c> for an existence test. Never a subtitle,
-    /// never a title of ours.
-    /// </summary>
-    public string Value { get; set; } = string.Empty;
-
-    /// <summary>When the answer was written (UTC) — the age decides whether it is still used.</summary>
-    public DateTime Written { get; set; } = DateTime.UtcNow;
 }

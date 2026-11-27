@@ -4167,7 +4167,7 @@ internal static class Program
             $"{eigeneTmdbClients} nackte(r) Client(s) — nur der IMDb-Weg, die Statusprobe bleibt Ausnahme");
         string store780 = ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Registry", "TmdbAnswerStore.cs"));
         int putBlock = store780.IndexOf("public static void Put((string, bool) key", StringComparison.Ordinal);
-        int putEnde = store780.IndexOf("Deletes rows that can no longer be used", putBlock, StringComparison.Ordinal);
+        int putEnde = store780.IndexOf("private static void RetireOldTable()", putBlock, StringComparison.Ordinal);
         string put780 = store780[putBlock..putEnde];
         Check(
             "F-M780: an answer is written once — the old table is no longer filled",
@@ -4176,10 +4176,29 @@ internal static class Program
             && !put780.Contains("SaveChanges", StringComparison.Ordinal),
             "nur noch die Ablage, kein zweiter Schreibweg");
         Check(
-            "F-M780: what still sits in the old table is taken over when the store is attached",
-            store780.Contains("MigrateIntoTheShelf()", StringComparison.Ordinal)
-            && store780.Contains("db.TmdbAnswerRows.RemoveRange(alte)", StringComparison.Ordinal),
-            "Uebernahme beim Anhaengen, danach leer");
+            "F-M781: the old answer table is dropped once — and nothing is taken over from it",
+            store780.Contains("RetireOldTable()", StringComparison.Ordinal)
+            && store780.Contains("DROP TABLE IF EXISTS {OldTable}", StringComparison.Ordinal)
+            && !store780.Contains("SELECT Id, Value, Written", StringComparison.Ordinal)
+            && !store780[store780.IndexOf("private static void RetireOldTable()", StringComparison.Ordinal)..].Contains("PutFact(", StringComparison.Ordinal),
+            "nur DROP, keine Uebernahme in die Ablage");
+        string db781 = ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Data", "ScribeDbContext.cs"));
+        Check(
+            "F-M781: the retired table is no longer created at startup",
+            !db781.Contains("EnsureTmdbAnswersTable", StringComparison.Ordinal)
+            && !db781.Contains("DbSet<TmdbAnswerEntity>", StringComparison.Ordinal)
+            && !store780.Contains("TmdbAnswerEntity", StringComparison.Ordinal),
+            "kein CREATE TABLE, kein DbSet, keine Entity");
+        string refresh782 = ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "ScheduledTasks", "ScribeDatabaseRefreshTask.cs"));
+        string cache782 = ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Api", "TmdbCache.cs"));
+        Check(
+            "F-M782: the refresh folds the TMDb shelf with the same run, and the shelf reports file plus journal",
+            refresh782.Contains("Api.TmdbCache.Compact()", StringComparison.Ordinal)
+            && refresh782.Contains("TMDb shelf compacted", StringComparison.Ordinal)
+            && cache782.Contains("VACUUM;", StringComparison.Ordinal)
+            && cache782.Contains("PRAGMA wal_checkpoint(TRUNCATE)", StringComparison.Ordinal)
+            && cache782.Contains("-wal", StringComparison.Ordinal),
+            "Compact im Refresh, VACUUM in der Ablage, Groesse inkl. Journal");
 
 
         if (_failures > 0)
