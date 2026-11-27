@@ -77,6 +77,14 @@ anything else, so its answer is translated where it arrives (`DetectLanguage`) a
 uses it translates both sides as well. Before 12.3.8.92 it did neither, and every comparison against a
 three-letter tag was false and silent.
 
+One pair stays deliberately outside the family list: Japanese and Chinese. A track tagged `jpn` whose text
+is heavy on kanji and short on kana is read as `zho`. An exception would be a two-way door: the same entry
+that lets Japanese pass as Chinese lets any Chinese text pass as Japanese. Nobody can tell the two apart
+from the text alone. Concept decision: the pair is never treated as relatives. A `JPN` pack is
+therefore not built for a season whose Japanese text the detector reads as Chinese, and that single goes up
+under the Chinese code. Everything else is packed, which is what the measurement of 27.11.2026 shows:
+32 of 33 languages as one container, `JPN` the only one missing.
+
 Names and the store never translate anything new: the token in a sidecar name is written from the house
 form and read back through `Canonical`, and the store, the verdict keys and the signatures carry the house
 form as it is. The settings page is the one place where a human types a wish, and the wish is two letters
