@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.80",
-        "changelog": "v12.3.8.80: No half migration — the two language lists of a file row move too, and a counter proves the store is one form.",
+        "version": "12.3.8.81",
+        "changelog": "v12.3.8.81: The counter names what it cannot translate — place, value and count instead of a bare number.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.80-dev/Jellyfin.Plugin.SubdlSync_12.3.8.80.zip",
-        "checksum": "e99b3049a20d3901e96a10570488b4e6",
-        "timestamp": "2026-11-27T06:46:33Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.81-dev/Jellyfin.Plugin.SubdlSync_12.3.8.81.zip",
+        "checksum": "109f3dca3ec91f04ee72a9f1ad3f2277",
+        "timestamp": "2026-11-27T06:53:55Z"
       }
     ]
   }
