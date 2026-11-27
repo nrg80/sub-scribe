@@ -4150,6 +4150,38 @@ internal static class Program
             && plugin772.Contains("Api.TmdbCache.Attach(dataFolder, logger, logMode)", StringComparison.Ordinal),
             "Handler, Resolver, Leiter und Start haengen an der Ablage");
 
+        // ---- 26. F-M779/F-M780: die zwei Eigenwege und der Doppelschreiber ----------------------
+        // Anlass (Befund vom 27.11.2026): der Staffel-Index baute sich einen eigenen HttpClient und ging an
+        // der Ablage vorbei, und der Antwort-Store schrieb jede Auskunft ZWEIMAL — in die Ablage und in die
+        // alte Tabelle. Beides ist jetzt gerade gezogen; die Statusprobe bleibt die eine Ausnahme.
+        string index779 = ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Api", "SeasonEpisodeIndex.cs"));
+        string status779 = ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Api", "ScribeStatusController.cs"));
+        int eigeneTmdbClients = System.Text.RegularExpressions.Regex.Matches(
+            index779,
+            @"new HttpClient\s*\{").Count;
+        Check(
+            "F-M779: the season index hangs on the same shelf instead of fetching past it",
+            index779.Contains("new HttpClient(new TmdbCacheHandler(new HttpClientHandler()))", StringComparison.Ordinal)
+            && eigeneTmdbClients == 1
+            && status779.Contains("geht BEWUSST an der Ablage vorbei", StringComparison.Ordinal),
+            $"{eigeneTmdbClients} nackte(r) Client(s) — nur der IMDb-Weg, die Statusprobe bleibt Ausnahme");
+        string store780 = ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Registry", "TmdbAnswerStore.cs"));
+        int putBlock = store780.IndexOf("public static void Put((string, bool) key", StringComparison.Ordinal);
+        int putEnde = store780.IndexOf("Deletes rows that can no longer be used", putBlock, StringComparison.Ordinal);
+        string put780 = store780[putBlock..putEnde];
+        Check(
+            "F-M780: an answer is written once — the old table is no longer filled",
+            put780.Contains("Api.TmdbCache.PutFact(", StringComparison.Ordinal)
+            && !put780.Contains("TmdbAnswerRows.Add", StringComparison.Ordinal)
+            && !put780.Contains("SaveChanges", StringComparison.Ordinal),
+            "nur noch die Ablage, kein zweiter Schreibweg");
+        Check(
+            "F-M780: what still sits in the old table is taken over when the store is attached",
+            store780.Contains("MigrateIntoTheShelf()", StringComparison.Ordinal)
+            && store780.Contains("db.TmdbAnswerRows.RemoveRange(alte)", StringComparison.Ordinal),
+            "Uebernahme beim Anhaengen, danach leer");
+
+
         if (_failures > 0)
         {
             Console.WriteLine($">>> ENDPUNKTE: {_failures} von {_checks} Pruefungen fehlgeschlagen");

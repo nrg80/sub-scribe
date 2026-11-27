@@ -179,42 +179,12 @@ public static class TmdbAnswerStore
     /// <param name="value">The answer, <c>null</c> for "asked and found nothing".</param>
     public static void Put((string, bool) key, string? value)
     {
-        // F-M772: die Ablage ist der Ort, an dem die Antwort liegt. Sie wird VOR dem alten Weg
-        // geschrieben, damit ein fehlender Datenkontext die Antwort nicht verschluckt.
+        // F-M772/F-M780: die Ablage ist der einzige Ort, an dem eine Antwort landet. Der alte Weg in die
+        // Tabelle tmdb_answers ist stillgelegt: bis 12.3.8.72 schrieb jede Antwort ZWEIMAL — einmal in die
+        // Ablage und einmal in die Tabelle, die dieselbe Auskunft unter anderen Fristen hielt. Die
+        // Plugin-Datenbank wuchs also weiter mit, obwohl niemand mehr daraus las. Was noch in der Tabelle
+        // steht, wird beim Anhaengen uebernommen (MigrateIntoTheShelf) und danach nicht mehr gefuellt.
         Api.TmdbCache.PutFact(Api.TmdbCache.KindOfQuestion(key.Item1), KeyOf(key), value);
-
-        ScribeSqliteContext? db = Store();
-
-        if (db == null)
-        {
-            return;
-        }
-
-        string id = KeyOf(key);
-        string stored = value ?? string.Empty;
-        try
-        {
-            lock (Gate)
-            {
-                var row = db.TmdbAnswerRows.FirstOrDefault(r => r.Id == id);
-                if (row == null)
-                {
-                    row = new TmdbAnswerEntity { Id = id, Value = stored, Written = DateTime.UtcNow };
-                    db.TmdbAnswerRows.Add(row);
-                }
-                else
-                {
-                    row.Value = stored;
-                    row.Written = DateTime.UtcNow;
-                }
-
-                db.SaveChanges();
-            }
-        }
-        catch (Exception)
-        {
-            // see above — the run must not fail on a cache write
-        }
     }
 
     /// <summary>

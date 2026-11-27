@@ -162,7 +162,14 @@ public static class SeasonEpisodeIndex
 
         try
         {
-            using var http = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+            // F-M779: der Staffel-Index baute sich einen EIGENEN HttpClient und ging damit an der Ablage
+            // vorbei — dieselbe Staffel wurde also zweimal geholt, einmal aus dem Regal und einmal am Regal
+            // vorbei. Jetzt haengt die Kette am selben Handler (F-M555): Schluessel ist die Adresse ohne
+            // api_key, abgelegt wird nur ein Status 200.
+            using var http = new HttpClient(new TmdbCacheHandler(new HttpClientHandler()))
+            {
+                Timeout = TimeSpan.FromSeconds(30)
+            };
             string url = $"{TmdbBase}/tv/{tmdbId}/season/{season}?api_key={Uri.EscapeDataString(tmdbApiKey)}";
             using var resp = await http.GetAsync(url, ct).ConfigureAwait(false);
             if (!resp.IsSuccessStatusCode)

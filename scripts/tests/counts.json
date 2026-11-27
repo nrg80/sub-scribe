@@ -1158,6 +1158,12 @@
       "checks": 6,
       "requirement": "F-M772",
       "title": "Die eine TMDb-Ablage: eigene Datei, Tatsachen und Rohantworten, Fristen nach Art, Decken, Selbstauskunft — und sie schliesst keinen Titel"
+    },
+    "T434": {
+      "suite": "endpoints",
+      "checks": 3,
+      "requirement": "F-M779",
+      "title": "Jede TMDb-Frage haengt an der Ablage ausser der Erreichbarkeitsprobe — und eine Antwort wird einmal geschrieben"
     }
   }
 }

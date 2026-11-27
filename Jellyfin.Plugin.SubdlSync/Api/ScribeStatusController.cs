@@ -399,6 +399,10 @@ public class ScribeStatusController : ControllerBase
         {
             using var cts = CancellationTokenSource.CreateLinkedTokenSource(ct);
             cts.CancelAfter(TimeSpan.FromSeconds(15));
+            // F-M779: diese Anfrage geht BEWUSST an der Ablage vorbei. Sie ist keine Frage nach einer
+            // Auskunft, sondern die Frage "ist TMDb gerade erreichbar" — eine aus der Ablage beantwortete
+            // Probe waere tagelang gruen, auch wenn der Schluessel laengst nicht mehr gilt. Der eigene
+            // HttpClient bleibt hier also richtig; er ist die einzige Stelle, die das Regal ueberspringt.
             var url = $"https://api.themoviedb.org/3/configuration?api_key={WebUtility.UrlEncode(cfg.TmdbApiKey)}";
             using var resp = await _httpClient.GetAsync(url, cts.Token).ConfigureAwait(false);
             if (resp.StatusCode == HttpStatusCode.Unauthorized)
