@@ -983,33 +983,72 @@ public sealed class ScribeDbContext : IDisposable
             }
 
             // F-M790: die Urteile der Pack-Phase tragen die Sprache im SCHLUESSEL ("imdb|staffel|GER
-            // non-HI"). Sie sind aus den Dateien neu bildbar, also werden sie nicht umgeschrieben,
-            // sondern vergessen — die Staffel wird einmal neu angesehen, und danach steht der Schluessel
-            // in der einen Form. Die Pruefung ist idempotent: ein zweiter Start findet nichts mehr.
+            // non-HI"). Sie werden MITGENOMMEN, nicht vergessen: der Schluessel ist Text, der Tag traegt
+            // Sprache und Variante und sonst nichts, also laesst er sich sauber umschreiben. Die Staffel
+            // bleibt damit angesehen. Steht unter dem neuen Schluessel schon eine Zeile, gilt die juengere
+            // Aussage — sie ist die ueber den heutigen Mitgliederstand.
             int urteile = 0;
-            foreach (var row in _db.PackSeasonRows.ToList())
+            var urteilsZeilen = _db.PackSeasonRows.ToList();
+            var urteileNachId = urteilsZeilen.ToDictionary(r => r.Id, StringComparer.Ordinal);
+            foreach (var row in urteilsZeilen)
             {
                 int zweiter = row.Id.IndexOf('|', row.Id.IndexOf('|', StringComparison.Ordinal) + 1);
-                string tag = zweiter > 0 && zweiter + 1 < row.Id.Length ? row.Id[(zweiter + 1)..] : string.Empty;
-                string sprache = tag.Split(' ')[0];
+                if (zweiter <= 0 || zweiter + 1 >= row.Id.Length)
+                {
+                    continue;
+                }
+
+                string kopf = row.Id[..(zweiter + 1)];
+                string tag = row.Id[(zweiter + 1)..];
+                int leer = tag.IndexOf(' ', StringComparison.Ordinal);
+                string sprache = leer < 0 ? tag : tag[..leer];
+                string variante = leer < 0 ? string.Empty : tag[leer..];
                 if (sprache.Length != 3)
                 {
                     continue;
                 }
 
                 string? kanon = Language.LanguageMapper.Canonical(sprache);
-                if (kanon != null && !string.Equals(kanon, sprache, StringComparison.OrdinalIgnoreCase))
+                if (kanon == null || string.Equals(kanon, sprache, StringComparison.OrdinalIgnoreCase))
                 {
-                    _db.PackSeasonRows.Remove(row);
-                    urteile++;
+                    continue;
                 }
+
+                string neuerSchluessel = kopf + kanon.ToUpperInvariant() + variante;
+                _db.PackSeasonRows.Remove(row);
+                if (urteileNachId.TryGetValue(neuerSchluessel, out var ziel))
+                {
+                    if (row.Written > ziel.Written)
+                    {
+                        ziel.Signature = row.Signature;
+                        ziel.Verdict = row.Verdict;
+                        ziel.Reason = row.Reason;
+                        ziel.Written = row.Written;
+                        _db.PackSeasonRows.Update(ziel);
+                    }
+                }
+                else
+                {
+                    var umgezogen = new Registry.PackSeasonEntity
+                    {
+                        Id = neuerSchluessel,
+                        Signature = row.Signature,
+                        Verdict = row.Verdict,
+                        Reason = row.Reason,
+                        Written = row.Written
+                    };
+                    _db.PackSeasonRows.Add(umgezogen);
+                    urteileNachId[neuerSchluessel] = umgezogen;
+                }
+
+                urteile++;
             }
 
             if (urteile > 0)
             {
                 LogUtil.Normal(
                     _logger,
-                    "[Sub Scribe] data file: {Count} stored season verdict(s) dropped — their key carried the older language spelling (F-M790).",
+                    "[Sub Scribe] data file: {Count} stored season verdict(s) moved to the one language form (F-M790).",
                     urteile);
             }
 

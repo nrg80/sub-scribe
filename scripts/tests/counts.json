@@ -1188,6 +1188,12 @@
       "checks": 4,
       "requirement": "F-M790",
       "title": "Eine Form ueberall: Seitendatei traegt T klein, Leser antwortet in T fuer deu/de/ger, alte Form wird beim Lesen uebersetzt, Abdeckung haengt am Kanon"
+    },
+    "T439": {
+      "suite": "endpoints",
+      "checks": 3,
+      "requirement": "F-M790",
+      "title": "Staffelurteile wandern in die eine Sprachform: Schluessel GER non-HI wird DEU non-HI mit Signatur/Urteil/Datum, alte Zeile weg, ENG und Staffelebene unberuehrt, bei Kollision gilt die juengere Aussage"
     }
   }
 }

@@ -200,6 +200,8 @@ milliseconds it took and the rows the context carries afterwards.
 
 **T438:** One form everywhere (F-M790), in `endpoints`. **4 checks**. The sidecar name carries T in lower case, whichever spelling the caller hands in. The reader answers in that same form for `deu`, `de` and `ger`, and the markers survive. The old spelling is translated on reading — `ger` becomes `DEU`, `cze` becomes `CES`, `dut` becomes `NLD`. And coverage keys on the canon, so a sidecar, a store row and a wish list meet under one key.
 
+**T439:** Stored season verdicts move to the one language form (F-M790), in `endpoints`. **3 checks**. A verdict filed under `GER non-HI` sits under `DEU non-HI` afterwards, with signature, verdict and date carried over. The old spelling is gone while `ENG` and the season-level verdict stay untouched — four rows, four keys. Two spellings meeting on one key leave one row, and the younger statement wins.
+
 
 **T428:** The season archive is not remembered at all (F-M766/F-M768), in `tvsubtitles`. **2 checks**. The entry type has `Name` but no `Data`, and a member read after a run that already paid for the archive comes back byte-identical with **0** requests — from disk, not from memory.
 

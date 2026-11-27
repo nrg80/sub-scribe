@@ -4433,6 +4433,86 @@ internal static class Program
             abdeckung.Language == "DEU" && abdeckung.Equals(abdeckungDeu),
             $"ger -> {abdeckung.Language}");
 
+        // ---- 31. F-M790: die Sprachform der Staffelurteile wandert, sie verschwindet nicht ----------------
+        string urteilOrdner = Path.Combine(Path.GetTempPath(), "urteilmig-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(urteilOrdner);
+        var alt = new DateTime(2026, 11, 20, 5, 0, 0, DateTimeKind.Utc);
+        using (var anlegen = new Jellyfin.Plugin.SubScribe.Data.ScribeDbContext(urteilOrdner, null))
+        {
+            // einmal oeffnen, damit die Datei samt Tabellen da ist; die alten Zeilen kommen darunter rein
+            _ = anlegen.Context.PackSeasonRows.Count();
+        }
+
+        using (var roh = new Jellyfin.Plugin.SubScribe.Data.ScribeSqliteContext(Path.Combine(urteilOrdner, "sub-scribe.sqlite")))
+        {
+            roh.PackSeasonRows.Add(new Jellyfin.Plugin.SubScribe.Registry.PackSeasonEntity
+            {
+                Id = "tt790|1|GER non-HI", Signature = "sig-nonhi", Verdict = "no-pack",
+                Reason = "keine Quelle", Written = alt
+            });
+            roh.PackSeasonRows.Add(new Jellyfin.Plugin.SubScribe.Registry.PackSeasonEntity
+            {
+                Id = "tt790|1|GER HI", Signature = "sig-hi", Verdict = "pack", Reason = "oben", Written = alt
+            });
+            roh.PackSeasonRows.Add(new Jellyfin.Plugin.SubScribe.Registry.PackSeasonEntity
+            {
+                Id = "tt790|1|ENG non-HI", Signature = "sig-eng", Verdict = "pack", Reason = "oben", Written = alt
+            });
+            roh.PackSeasonRows.Add(new Jellyfin.Plugin.SubScribe.Registry.PackSeasonEntity
+            {
+                Id = "tt790|1|", Signature = "sig-staffel", Verdict = "no-pack", Reason = "Staffel", Written = alt
+            });
+            await roh.SaveChangesAsync();
+        }
+
+        using (var db = new Jellyfin.Plugin.SubScribe.Data.ScribeDbContext(urteilOrdner, null))
+        {
+            // Der Konstruktor laesst den Startlauf laufen — geprueft wird, was er hinterlaesst.
+            var zeilen = db.Context.PackSeasonRows.ToList();
+            var nachId = zeilen.ToDictionary(r => r.Id, StringComparer.Ordinal);
+            Check(
+                "F-M790: a verdict filed under GER non-HI sits under DEU non-HI afterwards — signature, verdict and date carried over",
+                nachId.ContainsKey("tt790|1|DEU non-HI") && nachId.ContainsKey("tt790|1|DEU HI")
+                && nachId["tt790|1|DEU non-HI"].Signature == "sig-nonhi"
+                && nachId["tt790|1|DEU HI"].Verdict == "pack"
+                && nachId["tt790|1|DEU HI"].Written == alt,
+                string.Join(",", zeilen.Select(r => r.Id).OrderBy(x => x, StringComparer.Ordinal)));
+            Check(
+                "F-M790: the old spelling is gone, ENG and the season-level verdict stay — four rows, four keys",
+                !nachId.ContainsKey("tt790|1|GER non-HI") && !nachId.ContainsKey("tt790|1|GER HI")
+                && nachId.ContainsKey("tt790|1|ENG non-HI") && nachId.ContainsKey("tt790|1|")
+                && zeilen.Count == 4,
+                zeilen.Count + " row(s)");
+        }
+
+        using (var roh = new Jellyfin.Plugin.SubScribe.Data.ScribeSqliteContext(Path.Combine(urteilOrdner, "sub-scribe.sqlite")))
+        {
+            roh.PackSeasonRows.Add(new Jellyfin.Plugin.SubScribe.Registry.PackSeasonEntity
+            {
+                Id = "tt791|2|GER non-HI", Signature = "sig-juengst", Verdict = "pack",
+                Reason = "inzwischen oben", Written = new DateTime(2026, 11, 26, 5, 0, 0, DateTimeKind.Utc)
+            });
+            roh.PackSeasonRows.Add(new Jellyfin.Plugin.SubScribe.Registry.PackSeasonEntity
+            {
+                Id = "tt791|2|DEU non-HI", Signature = "sig-aelter", Verdict = "no-pack",
+                Reason = "damals keine Quelle", Written = new DateTime(2026, 11, 21, 5, 0, 0, DateTimeKind.Utc)
+            });
+            await roh.SaveChangesAsync();
+        }
+
+        using (var db = new Jellyfin.Plugin.SubScribe.Data.ScribeDbContext(urteilOrdner, null))
+        {
+            var kollision = db.Context.PackSeasonRows.ToList()
+                .Where(r => r.Id.StartsWith("tt791|2|", StringComparison.Ordinal)).ToList();
+            Check(
+                "F-M790: two spellings meeting on one key leave one row — and the younger statement wins",
+                kollision.Count == 1 && kollision[0].Id == "tt791|2|DEU non-HI"
+                && kollision[0].Verdict == "pack" && kollision[0].Signature == "sig-juengst",
+                string.Join(",", kollision.Select(r => r.Id + "=" + r.Verdict)));
+        }
+
+        try { Directory.Delete(urteilOrdner, true); } catch { }
+
         if (_failures > 0)
         {
             Console.WriteLine($">>> ENDPUNKTE: {_failures} von {_checks} Pruefungen fehlgeschlagen");
