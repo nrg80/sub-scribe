@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.88",
-        "changelog": "v12.3.8.88: Each source reads its own language code in the file name it receives.",
+        "version": "12.3.8.89",
+        "changelog": "v12.3.8.89: A single already uploaded may go into the pack as well; the pack lock no longer stops at \"already there\".",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.88-dev/Jellyfin.Plugin.SubdlSync_12.3.8.88.zip",
-        "checksum": "d37a16326e81a7b944cca6d75f72388e",
-        "timestamp": "2026-11-27T08:31:41Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.89-dev/Jellyfin.Plugin.SubdlSync_12.3.8.89.zip",
+        "checksum": "e792a9a09324b6274c21c34578a035ac",
+        "timestamp": "2026-11-27T09:53:28Z"
       }
     ]
   }
