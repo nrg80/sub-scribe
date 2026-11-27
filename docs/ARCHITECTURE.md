@@ -1,107 +1,83 @@
-# Architecture — two trees and what they share
+# Architecture — three zooms
 
-Every piece of work in this plugin can be located by three questions. **Which run is it** — manual, scheduled or
-arrival? **Which direction** — download or upload? **Which unit** — one file or a whole season? The two graphs below
-answer those questions for each direction, and everything outside them is shared by all four leaves.
+The plugin can be read at three depths, and each depth answers one question. **What starts a run?** **Which direction
+does it go?** **What unit does it work on?** The three diagrams are the same system, zoomed in once more each time.
 
-## The download tree
-
-```
-                       DOWNLOAD
-                          │
-   manuell ───────────────┼─────────────── Zeitplan ────────────── Ankunft
-   (ganze Auswahl)        │                (ganze Auswahl)          (nur die angekommenen IDs)
-                          ▼
-            Seeder füllt die Download-Liste der Warteschlange
-                          │
-        ┌─────────────────┴─────────────────┐
-        ▼                                   ▼
-     EINZELN                            STAFELPACK
-  eine Sprache, eine Datei          ein Archiv für die Staffel
-        │                                   │
-  Kandidat suchen, holen             Staffel-ZIP zuerst, dann die Folgeseite
-        │                                   │
-  auf die Tonspur legen              Mitglieder entpacken und ablegen
-        │                                   │
-        └─────────────────┬─────────────────┘
-                          ▼
-        Tore: Größe, Sprache, Cues, SRT, Sync, Herkunft
-                          ▼
-        Bestand: Urteil je (Inhalt, Sprache) ──► Datenbank
-```
-
-## The upload tree
+## Zoom 1 — the trigger, and nothing else
 
 ```
-                        UPLOAD
-                          │
-   manuell ───────────────┼─────────────── Zeitplan ────────────── Ankunft
-   (ganze Auswahl)        │                (ganze Auswahl)          (nur die angekommenen IDs)
-                          ▼
-            Seeder füllt die Upload-Liste der Warteschlange
-                          │
-        ┌─────────────────┴─────────────────┐
-        ▼                                   ▼
-     EINZELN                            STAFELPACK
-  die Spuren EINER Datei          eine Sprache, alle Folgen
-        │                                   │
-  Textspuren in einem Lauf           Vorprüfungen ohne Extraktion:
-        │                            Staffel vollständig, je Quelle offen,
-  Tore je Spur                      Urteils-Signatur, eine Sprache
-        │                                   │
-  Container aus den Spuren           Füllen aus dem Speicher,
-  bauen und senden                   Lücken einzeln extrahieren
-        │                                   │
-        └─────────────────┬─────────────────┘
-                          ▼
-        Bestand: Buchung je Quelle ──► Datenbank, Pack-Urteil je Staffel
+Auslöser
+   │   manuell · Zeitplan · Ankunft
+   ▼
+Dispatcher
+   │
+   ▼
+Seeder
+   │
+   ▼
+Warteschlange
 ```
 
-## The four leaves, and the paper that owns them
+A run exists because something asked for it: a person pressed a button, a slot fell due, or a file appeared. The
+dispatcher turns that into a cycle, the seeder turns libraries into candidates, and the queue holds them. Nothing in
+this zoom decides anything about a subtitle. The whole of it is [RUNS.md](RUNS.md) and [QUEUE.md](QUEUE.md).
 
-| Run | Direction | Unit | Paper |
+The three triggers differ in one way only: a manual or scheduled run looks at the whole selection, an arrival run
+looks at the ids that arrived. That is why the trigger does not appear again in the next two zooms.
+
+## Zoom 2 — the direction
+
+```
+Warteschlange
+   │        │
+   ▼        ▼
+Download  Upload
+```
+
+The queue has one list per direction, and a pipeline drains its own list. Download fetches and places a subtitle,
+upload reads and sends one. They share the store, the gates and the lock, and they never run at the same time
+because both write into the same store.
+
+## Zoom 3 — the unit
+
+```
+Download            Upload
+   │                   │
+ ┌─┴──┐            ┌───┴──┐
+ ▼    ▼            ▼      ▼
+Einzel Pack      Einzel  Pack
+```
+
+Inside a direction there are exactly two units. **Einzel** works on one file: one language to fetch, or the text
+tracks of one file to send. **Pack** works on a whole season: one archive to unpack, or one container per language
+carrying all episodes. That is the last branch — deeper there is only the leaf itself.
+
+| Direction | Unit | What it works on | Paper |
 | --- | --- | --- | --- |
-| any | download | one language of one file | [SINGLE-DOWNLOAD.md](SINGLE-DOWNLOAD.md) |
-| any | download | one season archive | [SEASON-PACK-DOWNLOAD.md](SEASON-PACK-DOWNLOAD.md) |
-| any | upload | the tracks of one file | [SINGLE-UPLOAD.md](SINGLE-UPLOAD.md) |
-| any | upload | one language of one season | [SEASON-PACK-UPLOAD.md](SEASON-PACK-UPLOAD.md) |
+| Download | Einzel | one language of one media file | [SINGLE-DOWNLOAD.md](SINGLE-DOWNLOAD.md) |
+| Download | Pack | one season archive of a site | [SEASON-PACK-DOWNLOAD.md](SEASON-PACK-DOWNLOAD.md) |
+| Upload | Einzel | the text tracks of one media file | [SINGLE-UPLOAD.md](SINGLE-UPLOAD.md) |
+| Upload | Pack | one language across one season | [SEASON-PACK-UPLOAD.md](SEASON-PACK-UPLOAD.md) |
 
-The run type never changes what a leaf does; it changes only how much arrives at the leaf. A manual run and a
-scheduled run hand over the whole selection, an arrival run hands over the ids that arrived, and the leaf cannot
-tell the difference because the narrowing happened before it.
+## What is the same in all three zooms
 
-## What all four leaves share
+The **lock**: one mutex over every part that writes, so no two leaves of the tree ever run together. The **store**:
+verdicts, marks and refusals, the only thing that survives a restart. The **cache**: texts, archives and TMDb
+answers, deletable at any time. The **sources**: a registry that turns a name into an engine, asked with four
+methods, never by name inside a pipeline. The **worker rows**: each worker reports only its own result, and the page
+only reads. None of these belongs to a zoom because all of them are used by every zoom.
 
-The **coordinator** owns every due time, so no leaf starts itself; the five Jellyfin tasks carry empty trigger lists
-on purpose. The **dispatcher** turns a trigger into a cycle and hands the scope down. The **seeder** turns libraries
-into candidates and decides nothing else. All of that is told in [RUNS.md](RUNS.md).
-
-The **queue** is one file with one list per direction, filled by the seeder and drained by the pipelines, with retry
-counters and tombstones. It is the only thing between collecting and deciding: [QUEUE.md](QUEUE.md).
-
-The **gates** are the single place that refuses, and they are shared by both directions: [GATES.md](GATES.md). The
-**source registry** turns a source name into an engine and wraps it in a counter, so both directions talk to every
-site the same way: [CONTRACTS.md](CONTRACTS.md).
-
-The **store** keeps what was decided and survives a restart; a **cache** keeps what can be recomputed and may be
-emptied at any time. Where a new value belongs is decided by that one distinction: [DATABASE.md](DATABASE.md) and
-[CACHING.md](CACHING.md).
-
-The **worker rows** report what a worker did, painted by the page; neither of them decides anything:
-[GUI.md](GUI.md). And one **lock** covers every part that writes, which is why no two leaves ever run at the same
-time.
-
-## Finding your way from a symptom
+## From a symptom to the right place
 
 | If you see … | It belongs to | Paper |
 | --- | --- | --- |
-| a run that scans 1.477 items after a file arrived | the run type, not the leaf | [RUNS.md](RUNS.md) |
-| a pair that is sent twice | the pair lock in the store | [SINGLE-UPLOAD.md](SINGLE-UPLOAD.md) |
-| a language that never reaches a site | the gates or the source's language list | [GATES.md](GATES.md), the site's paper |
-| a season that never becomes a pack | the pre-checks, before any extraction | [SEASON-PACK-UPLOAD.md](SEASON-PACK-UPLOAD.md) |
-| a subtitle that sits wrong on the audio | Auto-Sync, after the fetch | [AUTOSYNC.md](AUTOSYNC.md) |
-| a row that stays yellow | the worker row and its deferral | [GUI.md](GUI.md) |
-| a name nobody can parse back | `SidecarNaming` and its writers | [NAMING.md](NAMING.md) |
+| a run that examines the whole library after one arrival | zoom 1, the run's scope | [RUNS.md](RUNS.md) |
+| a pair sent twice | the store's pair lock | [SINGLE-UPLOAD.md](SINGLE-UPLOAD.md) |
+| a language that reaches no site | the gates or the site's language list | [GATES.md](GATES.md) |
+| a season that never becomes a pack | zoom 3, the pre-checks before any extraction | [SEASON-PACK-UPLOAD.md](SEASON-PACK-UPLOAD.md) |
+| a subtitle sitting wrong on the audio | the Auto-Sync worker after the fetch | [AUTOSYNC.md](AUTOSYNC.md) |
+| a worker row that stays yellow | the row and its deferral | [GUI.md](GUI.md) |
+| a name that cannot be parsed back | `SidecarNaming` and its writers | [NAMING.md](NAMING.md) |
 
 [SPECIFICATION.md](SPECIFICATION.md), §2, §3, §4, §14, §21; F-M233, F-M624, F-M668, F-M669, F-M682, F-M683, F-M801.
 Guarded by `coverage`, `storex`, `endpoints` and `gui-structure`.
