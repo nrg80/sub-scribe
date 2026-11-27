@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.85",
-        "changelog": "v12.3.8.85: The counter reads after the write — a finding that cannot see its own work is no proof.",
+        "version": "12.3.8.86",
+        "changelog": "v12.3.8.86: Case counts — the verdict pass compares character by character, like the counter always did.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.85-dev/Jellyfin.Plugin.SubdlSync_12.3.8.85.zip",
-        "checksum": "0dbc0cd2d96988e0ee33a942cb61903e",
-        "timestamp": "2026-11-27T07:20:03Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.86-dev/Jellyfin.Plugin.SubdlSync_12.3.8.86.zip",
+        "checksum": "a611b4fb2f9698372534facca99cb0ea",
+        "timestamp": "2026-11-27T07:30:23Z"
       }
     ]
   }
