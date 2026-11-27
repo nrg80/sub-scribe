@@ -1,6 +1,6 @@
 # One language code inside the client
 
-**Status:** concept, implemented in 12.3.8.77 (F-M789).
+**Status:** concept, implemented in 12.3.8.78 (F-M789, F-M790).
 **Applies to:** upload pipeline, download pipeline, store, every source adapter.
 
 ## 1. The rule
@@ -23,6 +23,24 @@ them quietly used the source spelling.
   moviesubtitles take names. A file name may carry either.
 - **The operator** reads the log. There the language appears as the ISO form with its variant, `ENG HI` or
   `ENG non-HI`, so that one glance compares.
+- **The sidecar file** next to a media file carries the same form, lower case and three letters:
+  `Movie.deu.01.srt`. Jellyfin accepts two letters, the T form and the old spelling alike: its own file name
+  reader checks the token against the two-letter code, both three-letter codes and the display name. The
+  choice was therefore free, and it fell on the form the client itself speaks. Files written before this
+  decision keep their two-letter names and stay readable.
+
+## 2a. Which form the client speaks
+
+The client delivers ISO 639-2/**T**, lower case: `deu`, `ces`, `nld`, `fra`, `ron`, `ell`, `msa`, `zho`.
+Jellyfin's own canonical form is the same one — its `GetLanguageCode` returns T, which is why the API
+reports `deu` for a file named `.de.srt`. The older bibliographic form (`ger`, `cze`, `dut`) is only ever
+an **input**: it is translated on reading, so no stored row and no file name becomes unreadable.
+
+## 2b. What the container tag keeps
+
+The Matroska tag written into a media file stays on the old spelling. Containers carry `ger`, `fre`, `chi`
+in practice and ffprobe prints them back that way; rewriting tags across the library would be a change with
+no reader to gain. It is a seam like the sources, and it is named as one.
 
 ## 3. Where translation happens
 

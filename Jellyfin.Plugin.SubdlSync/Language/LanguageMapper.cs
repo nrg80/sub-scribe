@@ -106,8 +106,28 @@ public static class LanguageMapper
         string iso = trimmed.Length == 2
             ? ToIso6392(trimmed) ?? trimmed
             : trimmed;
+        if (BtoTMap.TryGetValue(iso, out string? terminologisch))
+        {
+            iso = terminologisch;
+        }
+
         return iso.ToUpperInvariant();
     }
+
+    /// <summary>
+    /// F-M790: die Uebersetzung von der alten (bibliografischen) auf die neue (terminologische) Form.
+    /// Nur diese Sprachen haben zwei Kennzeichen; alle anderen sind in beiden Listen gleich. Der Client
+    /// spricht T (<c>deu</c>), Matroska traegt in der Praxis B (<c>ger</c>) — der Kanon ist T, und B wird
+    /// beim Lesen hierueber uebersetzt.
+    /// </summary>
+    private static readonly Dictionary<string, string> BtoTMap = new(StringComparer.OrdinalIgnoreCase)
+    {
+        ["ger"] = "deu", ["fre"] = "fra", ["dut"] = "nld", ["cze"] = "ces", ["slo"] = "slk",
+        ["rum"] = "ron", ["gre"] = "ell", ["may"] = "msa", ["chi"] = "zho", ["geo"] = "kat",
+        ["alb"] = "sqi", ["baq"] = "eus", ["ice"] = "isl", ["arm"] = "hye", ["bur"] = "mya",
+        ["per"] = "fas", ["mac"] = "mkd", ["wel"] = "cym", ["mao"] = "mri", ["tib"] = "bod",
+        ["mol"] = "ron"
+    };
 
     /// <summary>
     /// F-M261: maps a SubDL two-letter code to the ISO 639-2 tag to write into a container.

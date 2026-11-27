@@ -183,7 +183,12 @@ public static class SidecarNaming
         // reserved originals after them (51…99), exactly as F-M315 intends.
         string slotSuffix = "."
             + slot.ToString("D2", System.Globalization.CultureInfo.InvariantCulture);
-        return Path.Combine(dir, $"{baseName}.{lang.ToLowerInvariant()}{suffix}{slotSuffix}.srt");
+        // F-M790: der Name traegt die EINE Form, die auch innen gilt — ISO 639-2/T, klein
+        // ("Movie.deu.01.srt"). Jellyfin nimmt zweistellig, T und B gleichermassen an (gemessen an
+        // seinem Dateinamen-Leser, der gegen TwoLetter, beide ThreeLetter und den Namen prueft);
+        // gewaehlt ist T, damit Platte, Speicher und Client dasselbe sagen.
+        string code = (LanguageMapper.Canonical(lang) ?? lang).ToLowerInvariant();
+        return Path.Combine(dir, $"{baseName}.{code}{suffix}{slotSuffix}.srt");
     }
 
     /// <summary>
@@ -506,8 +511,9 @@ public static class SidecarNaming
                 continue;
             }
 
-            found.TryGetValue(lang, out var current);
-            found[lang] = (true, current.Hi || hi);
+            string key = LanguageMapper.Canonical(lang) ?? lang;
+            found.TryGetValue(key, out var current);
+            found[key] = (true, current.Hi || hi);
         }
 
         return found;
@@ -525,7 +531,9 @@ public static class SidecarNaming
         var missing = new List<string>();
         foreach (var lang in languages)
         {
-            if (!present.ContainsKey(lang))
+            // F-M790: gefragt wird in der eigenen Schreibweise, verglichen im Kanon — sonst meldet
+            // eine zweistellige Wunschliste jede vorhandene dreistellige Datei als fehlend.
+            if (!present.ContainsKey(LanguageMapper.Canonical(lang) ?? lang))
             {
                 missing.Add(lang);
             }
@@ -679,14 +687,12 @@ public static class SidecarNaming
             return null;
         }
 
-        if (token.Length == 2)
+        // F-M790: der Leser gibt dieselbe Form zurueck, die der Schreiber schreibt — den Kanon.
+        // Vorher kam hier der Quellcode heraus (zweistellig), und jeder Vergleich mit dem Speicher
+        // lief ueber zwei Schreibweisen. Zweistellig, T und B werden alle angenommen.
+        if (token.Length is 2 or 3)
         {
-            return token.ToUpperInvariant();
-        }
-
-        if (token.Length == 3)
-        {
-            return LanguageMapper.MapToSubdl(token);
+            return LanguageMapper.Canonical(token);
         }
 
         return null;

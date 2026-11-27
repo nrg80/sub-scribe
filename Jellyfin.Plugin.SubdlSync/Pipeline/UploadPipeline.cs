@@ -5033,8 +5033,8 @@ public sealed class UploadPipeline : IPackFiller
                 return true;
             }
 
-            string a = LanguageMapper.ToIso6392(quelleSprache) ?? LanguageMapper.Canonical(quelleSprache) ?? quelleSprache;
-            string b = LanguageMapper.ToIso6392(unserCode) ?? LanguageMapper.Canonical(unserCode) ?? unserCode;
+            string a = LanguageMapper.Canonical(quelleSprache) ?? quelleSprache;
+            string b = LanguageMapper.Canonical(unserCode) ?? unserCode;
             return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
         }
 

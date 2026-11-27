@@ -164,8 +164,10 @@ internal static class Program
         Check(Forms.Length == 4, "vier Formen (sub-einzeln-non-hi, sub-einzeln-hi, pack-non-hi, pack-hi)",
             string.Join(",", Forms));
         Check(Languages.Length == 4, "vier Sprachen je Durchlauf", string.Join(",", Languages.Select(l => l.Code)));
-        Check(Languages.Select(l => l.Iso).SequenceEqual(new[] { "ENG", "GER", "FRE", "SPA" }),
-            "die Store-Schreibweise der vier Sprachen kommt aus dem Mapper (ENG/GER/FRE/SPA, nicht DEU/FRA)",
+        // F-M790: der Kanon ist ISO 639-2/T, also DEU und FRA. Die alte Form (GER, FRE) ist nur noch
+        // Eingabe und wird beim Lesen uebersetzt — hier wird die Ausgabe geprueft, nicht die Eingabe.
+        Check(Languages.Select(l => l.Iso).SequenceEqual(new[] { "ENG", "DEU", "FRA", "SPA" }),
+            "der Kanon der vier Sprachen kommt aus dem Mapper (ENG/DEU/FRA/SPA, nicht mehr GER/FRE)",
             string.Join("/", Languages.Select(l => l.Code + "=" + l.Iso)));
         Check(Directions.Length == 2, "beide Richtungen (download, upload)", string.Join(",", Directions));
         Check(cells == 96, "3 x 4 x 4 x 2 = 96 Zellen", cells.ToString(CultureInfo.InvariantCulture));

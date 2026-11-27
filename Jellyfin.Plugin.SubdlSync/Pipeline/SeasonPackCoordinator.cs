@@ -1624,10 +1624,10 @@ public sealed class SeasonPackCoordinator
             return true;
         }
 
-        string a = Language.LanguageMapper.ToIso6392(quelleSprache)
+        string a = Language.LanguageMapper.Canonical(quelleSprache)
                    ?? Language.LanguageMapper.Canonical(quelleSprache)
                    ?? quelleSprache;
-        string b = Language.LanguageMapper.ToIso6392(unserCode)
+        string b = Language.LanguageMapper.Canonical(unserCode)
                    ?? Language.LanguageMapper.Canonical(unserCode)
                    ?? unserCode;
         return string.Equals(a, b, StringComparison.OrdinalIgnoreCase);

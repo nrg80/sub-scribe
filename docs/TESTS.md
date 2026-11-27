@@ -198,6 +198,8 @@ milliseconds it took and the rows the context carries afterwards.
 
 **T437:** One language code inside (F-M789), in `endpoints`. **4 checks**. The three spellings `en`, `eng` and `EN` meet in one form. The languages of a file are asked by id and named in ISO — not read off the object, not in the source spelling. The pack plan carries ISO everywhere and compares ISO against ISO. And the comparison is strict: a track without a language is never a match.
 
+**T438:** One form everywhere (F-M790), in `endpoints`. **4 checks**. The sidecar name carries T in lower case, whichever spelling the caller hands in. The reader answers in that same form for `deu`, `de` and `ger`, and the markers survive. The old spelling is translated on reading — `ger` becomes `DEU`, `cze` becomes `CES`, `dut` becomes `NLD`. And coverage keys on the canon, so a sidecar, a store row and a wish list meet under one key.
+
 
 **T428:** The season archive is not remembered at all (F-M766/F-M768), in `tvsubtitles`. **2 checks**. The entry type has `Name` but no `Data`, and a member read after a run that already paid for the archive comes back byte-identical with **0** requests — from disk, not from memory.
 

@@ -4397,6 +4397,42 @@ internal static class Program
             && helperBody.Contains("LanguageMapper.Canonical", StringComparison.Ordinal),
             "leere Angabe = kein Treffer");
 
+
+        // ---- 30. F-M790: eine Form ueberall — ISO 639-2/T -----------------------------------------
+        string bauDeu = Jellyfin.Plugin.SubScribe.Registry.SidecarNaming.Build(probeFilm, "DEU", false, 1);
+        string bauDe = Jellyfin.Plugin.SubScribe.Registry.SidecarNaming.Build(probeFilm, "DE", false, 1);
+        string bauGer = Jellyfin.Plugin.SubScribe.Registry.SidecarNaming.Build(probeFilm, "ger", false, 1);
+        Check(
+            "F-M790: the sidecar name carries the one form — T, lower case — whatever the caller hands in",
+            bauDeu.EndsWith(".deu.01.srt", StringComparison.Ordinal)
+            && bauDe == bauDeu
+            && bauGer == bauDeu,
+            $"{Path.GetFileName(bauDeu)} / {Path.GetFileName(bauDe)} / {Path.GetFileName(bauGer)}");
+        string baseNameDeu = Path.GetFileNameWithoutExtension(probeFilm);
+        var ausDeu = Jellyfin.Plugin.SubScribe.Registry.SidecarNaming.Parse(baseNameDeu + ".deu.02", baseNameDeu);
+        var ausDe = Jellyfin.Plugin.SubScribe.Registry.SidecarNaming.Parse(baseNameDeu + ".de.02", baseNameDeu);
+        var ausGer = Jellyfin.Plugin.SubScribe.Registry.SidecarNaming.Parse(baseNameDeu + ".ger.02", baseNameDeu);
+        var ausSdh = Jellyfin.Plugin.SubScribe.Registry.SidecarNaming.Parse(baseNameDeu + ".deu.sdh.03", baseNameDeu);
+        Check(
+            "F-M790: the reader answers in the same form for deu, de and ger — and the markers survive",
+            ausDeu?.Lang == "DEU" && ausDe?.Lang == "DEU" && ausGer?.Lang == "DEU"
+            && ausSdh?.Lang == "DEU" && ausSdh?.HearingImpaired == true,
+            $"{ausDeu?.Lang} / {ausDe?.Lang} / {ausGer?.Lang} / {ausSdh?.Lang}+sdh");
+        string tDeu = Jellyfin.Plugin.SubScribe.Language.LanguageMapper.Canonical("ger") ?? string.Empty;
+        string tCes = Jellyfin.Plugin.SubScribe.Language.LanguageMapper.Canonical("cze") ?? string.Empty;
+        string tNld = Jellyfin.Plugin.SubScribe.Language.LanguageMapper.Canonical("dut") ?? string.Empty;
+        string tEng = Jellyfin.Plugin.SubScribe.Language.LanguageMapper.Canonical("en") ?? string.Empty;
+        Check(
+            "F-M790: the old spelling is translated on reading — ger becomes DEU, cze becomes CES, dut becomes NLD",
+            tDeu == "DEU" && tCes == "CES" && tNld == "NLD" && tEng == "ENG",
+            $"ger->{tDeu}, cze->{tCes}, dut->{tNld}, en->{tEng}");
+        var abdeckung = new Jellyfin.Plugin.SubScribe.Registry.SubtitleRef("ger", false);
+        var abdeckungDeu = new Jellyfin.Plugin.SubScribe.Registry.SubtitleRef("deu", false);
+        Check(
+            "F-M790: coverage keys on the canon, so a sidecar, a store row and a wish list meet under one key",
+            abdeckung.Language == "DEU" && abdeckung.Equals(abdeckungDeu),
+            $"ger -> {abdeckung.Language}");
+
         if (_failures > 0)
         {
             Console.WriteLine($">>> ENDPUNKTE: {_failures} von {_checks} Pruefungen fehlgeschlagen");

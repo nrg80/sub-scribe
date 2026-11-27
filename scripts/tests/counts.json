@@ -1182,6 +1182,12 @@
       "checks": 4,
       "requirement": "F-M789",
       "title": "Ein Sprachcode im Client: en/eng/EN fallen auf ENG zusammen, Datei-Sprachen per Kennung und in ISO, Plan ISO gegen ISO, Vergleich streng"
+    },
+    "T438": {
+      "suite": "endpoints",
+      "checks": 4,
+      "requirement": "F-M790",
+      "title": "Eine Form ueberall: Seitendatei traegt T klein, Leser antwortet in T fuer deu/de/ger, alte Form wird beim Lesen uebersetzt, Abdeckung haengt am Kanon"
     }
   }
 }

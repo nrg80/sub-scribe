@@ -167,7 +167,7 @@ public static class MsubLanguages
 
         // Kein Alias: dann ueber die eine neutrale Umrechnung, und nur wenn sie ein Dreierkennzeichen
         // ergibt. Ein Zweierbuchstabe waere eine Behauptung, die niemand deckt — dann lieber null.
-        string? iso = Language.LanguageMapper.ToIso6392(code);
+        string? iso = Language.LanguageMapper.Canonical(code);
         return iso is { Length: 3 } ? iso.ToUpperInvariant() : null;
     }
 }

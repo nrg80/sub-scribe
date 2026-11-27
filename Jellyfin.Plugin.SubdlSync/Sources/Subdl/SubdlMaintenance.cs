@@ -256,7 +256,7 @@ public sealed class SubdlMaintenance : ISourceMaintenance
         }
 
         string value = language.Trim();
-        return LanguageMapper.ToIso6392(value)
+        return LanguageMapper.Canonical(value)
                ?? LanguageMapper.Canonical(value)
                ?? value;
     }

@@ -957,6 +957,62 @@ public sealed class ScribeDbContext : IDisposable
                 }
             }
 
+            // F-M790: seit 12.3.8.78 zielt der Kanon auf ISO 639-2/T (deu, ces, nld) statt auf die
+            // bibliografische Form (ger, cze, dut). Tracks und Sidecars zieht der Block oben mit; die
+            // drei uebrigen Spalten brauchen denselben Zug, sonst stuende in einem Bestand zweierlei.
+            foreach (var row in _db.PackRows.ToList())
+            {
+                string? iso = Language.LanguageMapper.Canonical(row.Language);
+                if (iso != null && !string.Equals(iso, row.Language, StringComparison.Ordinal))
+                {
+                    row.Language = iso;
+                    _db.PackRows.Update(row);
+                    geaendert++;
+                }
+            }
+
+            foreach (var row in _db.BadAppleRows.ToList())
+            {
+                string? iso = Language.LanguageMapper.Canonical(row.Language);
+                if (iso != null && !string.Equals(iso, row.Language, StringComparison.Ordinal))
+                {
+                    row.Language = iso;
+                    _db.BadAppleRows.Update(row);
+                    geaendert++;
+                }
+            }
+
+            // F-M790: die Urteile der Pack-Phase tragen die Sprache im SCHLUESSEL ("imdb|staffel|GER
+            // non-HI"). Sie sind aus den Dateien neu bildbar, also werden sie nicht umgeschrieben,
+            // sondern vergessen — die Staffel wird einmal neu angesehen, und danach steht der Schluessel
+            // in der einen Form. Die Pruefung ist idempotent: ein zweiter Start findet nichts mehr.
+            int urteile = 0;
+            foreach (var row in _db.PackSeasonRows.ToList())
+            {
+                int zweiter = row.Id.IndexOf('|', row.Id.IndexOf('|', StringComparison.Ordinal) + 1);
+                string tag = zweiter > 0 && zweiter + 1 < row.Id.Length ? row.Id[(zweiter + 1)..] : string.Empty;
+                string sprache = tag.Split(' ')[0];
+                if (sprache.Length != 3)
+                {
+                    continue;
+                }
+
+                string? kanon = Language.LanguageMapper.Canonical(sprache);
+                if (kanon != null && !string.Equals(kanon, sprache, StringComparison.OrdinalIgnoreCase))
+                {
+                    _db.PackSeasonRows.Remove(row);
+                    urteile++;
+                }
+            }
+
+            if (urteile > 0)
+            {
+                LogUtil.Normal(
+                    _logger,
+                    "[Sub Scribe] data file: {Count} stored season verdict(s) dropped — their key carried the older language spelling (F-M790).",
+                    urteile);
+            }
+
             // F-M668: der Block, der die Zugeh-Stempel der Medienzeile leerte (Schema-16-Wanderung), ist
             // mit den Spalten selbst entfallen — die Stempel stehen jetzt als `file`-Zeilen in der
             // Marken-Matrix. Die Sprachumstellung selbst bleibt unangetastet (bekanntes Verhalten).
@@ -964,7 +1020,7 @@ public sealed class ScribeDbContext : IDisposable
             int n = _db.SaveChanges();
             if (geaendert > 0)
             {
-                LogUtil.Normal(_logger, "[Sub Scribe] data file: {Count} language tag(s) rewritten to ISO 639-2 (schema 16).", geaendert);
+                LogUtil.Normal(_logger, "[Sub Scribe] data file: {Count} language tag(s) rewritten to ISO 639-2/T (F-M790).", geaendert);
             }
         }
         catch (Exception ex)

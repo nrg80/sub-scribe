@@ -71,7 +71,10 @@ public readonly record struct SubtitleRef
     /// <param name="forced">True for a forced track (foreign-language scenes only, F-M246).</param>
     public SubtitleRef(string? language, bool hearingImpaired, bool forced = false)
     {
-        Language = (language ?? string.Empty).Trim().ToUpperInvariant();
+        // F-M790: der Kanon, nicht die Schreibweise des Zulieferers — eine Seitendatei, eine
+        // Speicherzeile und eine Wunschliste sollen dieselbe Sprache unter demselben Schluessel
+        // treffen. B (ger/cze/dut) wird hierherein uebersetzt.
+        Language = Jellyfin.Plugin.SubScribe.Language.LanguageMapper.Canonical(language) ?? (language ?? string.Empty).Trim().ToUpperInvariant();
         HearingImpaired = hearingImpaired;
         Forced = forced;
     }
