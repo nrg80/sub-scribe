@@ -4737,6 +4737,35 @@ internal static class Program
             && uploadQuelle585.Contains("private bool SpurIstGesperrt(", StringComparison.Ordinal),
             "Exemption gefunden");
 
+        // ---- 39. F-M800: der Pack steht als ein geschlossenes Papier ------------------------------------
+        string packDoc = await File.ReadAllTextAsync(Path.Combine(root, "docs", "SEASON-PACK.md"));
+        Check(
+            "F-M800: the pack paper names the seven checks without extraction and both switches",
+            packDoc.Contains("seven checks without extraction", StringComparison.Ordinal)
+            && packDoc.Contains("`uploadEnabled`", StringComparison.Ordinal)
+            && packDoc.Contains("`preferSeasonZip`", StringComparison.Ordinal)
+            && packDoc.Contains("Neither switch is a licence to overrule a check", StringComparison.Ordinal),
+            "Papier gelesen: " + packDoc.Length + " Zeichen");
+        string spec800 = await File.ReadAllTextAsync(Path.Combine(root, "docs", "SPECIFICATION.md"));
+        Check(
+            "F-M800: the spec entry points at the paper and no longer narrows the origin to one source",
+            spec800.Contains("**F-M800 [U]:**", StringComparison.Ordinal)
+            && spec800.Contains("docs/SEASON-PACK.md", StringComparison.Ordinal)
+            && !spec800.Contains("originally comes from SubDL", StringComparison.Ordinal)
+            && spec800.Contains("a download of one of our sources", StringComparison.Ordinal),
+            "Eintrag und Wortlaut geprueft");
+        string hashQuelle800 = await File.ReadAllTextAsync(Path.Combine(
+            root, "Jellyfin.Plugin.SubdlSync", "Registry", "ContentHashRegistry.cs"));
+        string koordQuelle800 = await File.ReadAllTextAsync(Path.Combine(
+            root, "Jellyfin.Plugin.SubdlSync", "Pipeline", "SeasonPackCoordinator.cs"));
+        Check(
+            "F-M397: the question is asked for any source, and no call site uses the old name",
+            hashQuelle800.Contains("public bool IsDownloadedFromAnySource(string? contentHash)", StringComparison.Ordinal)
+            && koordQuelle800.Contains("IsDownloadedFromAnySource(", StringComparison.Ordinal)
+            && !koordQuelle800.Contains("IsSubdlOrigin(", StringComparison.Ordinal)
+            && !hashQuelle800.Contains("IsSubdlOrigin(", StringComparison.Ordinal),
+            "Name und Aufrufstelle geprueft");
+
         if (_failures > 0)
         {
             Console.WriteLine($">>> ENDPUNKTE: {_failures} von {_checks} Pruefungen fehlgeschlagen");

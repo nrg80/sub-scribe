@@ -1402,7 +1402,7 @@ public sealed class SeasonPackCoordinator
         => _registry == null
             ? new List<string>()
             : group
-                .Where(c => _registry.IsSubdlOrigin(ContentHashRegistry.ComputeHash(c.Srt)))
+                .Where(c => _registry.IsDownloadedFromAnySource(ContentHashRegistry.ComputeHash(c.Srt)))
                 .Select(c => $"S{season:00}E{c.Episode:00}")
                 .ToList();
 

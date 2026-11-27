@@ -2376,7 +2376,14 @@ public sealed class ContentHashRegistry : IDisposable
     /// been renamed, moved or re-attached since, and the hash is what actually travels.
     /// </para>
     /// </summary>
-    public bool IsSubdlOrigin(string? contentHash)
+    /// <summary>
+    /// F-M397/F-M800: kam dieser Text aus einem Download IRGENDEINER unserer Quellen? Der Name sagt die
+    /// Regel — bis 12.3.8.89 hiess die Methode <c>IsSubdlOrigin</c>, geprueft hat sie immer schon alle
+    /// Quellen: sie liest nur <c>Status == Downloaded</c> und fragt keine Quelle.
+    /// </summary>
+    /// <param name="contentHash">Content hash of the subtitle.</param>
+    /// <returns>True when a download row of any source carries this content.</returns>
+    public bool IsDownloadedFromAnySource(string? contentHash)
     {
         if (string.IsNullOrEmpty(contentHash))
         {

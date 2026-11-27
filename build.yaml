@@ -10,7 +10,7 @@
 # See the GNU General Public License for more details.
 name: "Sub Scribe"
 guid: "7d1c5a2e-3f4b-4d6e-9a8b-5c2f8e1d4a9b"
-version: "12.3.8.89"
+version: "12.3.8.90"
 targetAbi: "12.1.0.0"
 framework: "net10.0"
 owner: "nrg80"
@@ -26,6 +26,7 @@ artifacts:
 - "Jellyfin.Plugin.SubdlSync.dll"
 - "LanguageDetection.dll"
 changelog: >
+  v12.3.8.90: The pack now stands as one closed paper: when it may be formed, what is checked after extraction, and that two switches alone decide.
   v12.3.8.89: A single already uploaded may go into the pack as well; the pack lock no longer stops at "already there".
   v12.3.8.88: Each source reads its own language code in the file name it receives.
   v12.3.8.87: The language bridge is generated from the official ISO 639-2 list, and nothing is guessed any more.

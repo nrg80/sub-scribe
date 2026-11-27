@@ -1230,6 +1230,12 @@
       "checks": 2,
       "requirement": "F-M585",
       "title": "Ein bereits hochgeladener Einzel darf zusaetzlich in den Pack: beide Pack-Aufrufstellen fragen die Sperre fuer den Pack, und die Ausnahme deckt nur die beiden schon-da-Gruende"
+    },
+    "T446": {
+      "suite": "endpoints",
+      "checks": 3,
+      "requirement": "F-M800",
+      "title": "Der Pack steht als geschlossenes Papier: sieben Vorpruefungen ohne Extraktion, beide Schalter, und F-M397 fragt jede Quelle"
     }
   }
 }

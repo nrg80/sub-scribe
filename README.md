@@ -116,6 +116,7 @@ Do not release by tagging and pushing alone: a release must carry exactly one as
 - Specification and acceptance criteria: [docs/SPECIFICATION.md](docs/SPECIFICATION.md)
 - The test catalogue, one entry per test: [docs/TESTS.md](docs/TESTS.md)
 - The settings page as the operator meets it: [docs/GUI.md](docs/GUI.md)
+- How a season pack is formed, and when it may be formed: [docs/SEASON-PACK.md](docs/SEASON-PACK.md)
 - How the two subtitle sources work together (marks, completion, parallel download and upload): [docs/MULTI-SOURCE.md](docs/MULTI-SOURCE.md)
 - Release process: [docs/RELEASE.md](docs/RELEASE.md)
 - The plugin on one page, written for a person or an assistant answering one:

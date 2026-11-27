@@ -323,10 +323,13 @@ internal static class Program
         Check(reg.Contains("public int PruneOrphanedPacks()", StringComparison.Ordinal),
             "the registry owns that prune");
 
-        // ── 13. F-M397: eine srt aus SubDL-Herkunft tötet den Pack ─────────────
-        Console.WriteLine("13. A member of SubDL origin kills the pack");
-        Check(reg.Contains("public bool IsSubdlOrigin(string? contentHash)", StringComparison.Ordinal),
-            "the registry can answer whether a text came from SubDL");
+        // ── 13. F-M397: eine srt aus dem Download IRGENDEINER Quelle tötet den Pack ────
+        // Seit 12.3.8.90 sagt der Name die Regel: die Methode hiess bis dahin `IsSubdlOrigin`, geprueft
+        // hat sie immer schon alle Quellen (nur `Status == Downloaded`, ohne Quellenfilter).
+        Console.WriteLine("13. A downloaded member kills the pack, whichever source handed it out");
+        Check(reg.Contains("public bool IsDownloadedFromAnySource(string? contentHash)", StringComparison.Ordinal)
+              && !reg.Contains("IsSubdlOrigin(", StringComparison.Ordinal),
+            "the registry can answer whether a text came out of a download of any source");
         Check(reg.Contains("x.Status, SubtitleStatus.Downloaded", StringComparison.Ordinal),
             "and it answers from the downloaded sidecar row, not from a guess");
         Check(coord.Contains("season pack refused", StringComparison.Ordinal),
