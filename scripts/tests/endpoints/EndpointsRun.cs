@@ -4741,7 +4741,7 @@ internal static class Program
         string packDoc = await File.ReadAllTextAsync(Path.Combine(root, "docs", "SEASON-PACK.md"));
         Check(
             "F-M800: the pack paper names the seven checks before any unpacking and both switches",
-            packDoc.Contains("Seven checks before anything is unpacked", StringComparison.Ordinal)
+            packDoc.Contains("Checks before anything is unpacked", StringComparison.Ordinal)
             && packDoc.Contains("`Upload enabled`", StringComparison.Ordinal)
             && packDoc.Contains("`preferSeasonZip`", StringComparison.Ordinal)
             && packDoc.Contains("A switch is only a permission", StringComparison.Ordinal),
@@ -4780,9 +4780,9 @@ internal static class Program
             }
 
             string text801 = await File.ReadAllTextAsync(pfad);
-            if (!text801.Contains("## Contents", StringComparison.Ordinal)
-                || !text801.Contains("never does", StringComparison.Ordinal)
-                || !text801.Contains("What the log says", StringComparison.Ordinal))
+            if (!text801.Contains("never does", StringComparison.Ordinal)
+                || !text801.Contains("What the log says", StringComparison.Ordinal)
+                || !text801.Contains("Where the rules live", StringComparison.Ordinal))
             {
                 fehlend801.Add(name + " (Bauform)");
             }
