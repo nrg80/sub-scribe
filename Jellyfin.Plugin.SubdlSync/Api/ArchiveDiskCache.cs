@@ -449,6 +449,25 @@ public sealed class ArchiveDiskCache
     private bool IsExpired(FileInfo info) =>
         _ttlDays > 0 && info.LastWriteTimeUtc < DateTime.UtcNow.AddDays(-_ttlDays);
 
+    /// <summary>
+    /// Removes one entry by key — for an entry that is there but unusable (F-M787: a damaged entry is
+    /// removed, not repaired).
+    /// </summary>
+    /// <param name="key">The entry's key.</param>
+    /// <param name="reason">Why it goes, for the log line.</param>
+    public void Remove(string? key, string reason)
+    {
+        if (!Enabled || string.IsNullOrEmpty(key))
+        {
+            return;
+        }
+
+        lock (_sync)
+        {
+            Delete(PathFor(key), reason);
+        }
+    }
+
     private void Delete(string path, string reason)
     {
         try

@@ -395,7 +395,6 @@ public sealed class UploadPipeline : IPackFiller
     /// long as the run.
     /// </summary>
     // F-M441: the extracted texts of this run live on disk, one file per episode/language/track.
-    private readonly Api.RunWorkFiles _workFiles = new();
 
     /// <summary>Process-static cache so ffmpeg is resolved once per plugin lifetime.</summary>
     private static string? _cachedFfmpegPath;
@@ -603,7 +602,7 @@ public sealed class UploadPipeline : IPackFiller
         {
         // F-M441: a run that was killed leaves its working directory behind — swept here, so a crash
         // costs temp disk until the next start and never longer.
-        int sweptDirs = Api.RunWorkFiles.PurgeStale(null, TimeSpan.FromDays(2));
+        int sweptDirs = 0; // F-M785: der Laufcache entfaellt — es gibt keine Reste eines abgebrochenen Laufs mehr zu kehren.
         if (sweptDirs > 0)
         {
             LogUtil.Normal(_logger, "[Sub Scribe] upload: {Count} left-over working directorie(s) of an earlier run removed.", sweptDirs);
@@ -656,6 +655,14 @@ public sealed class UploadPipeline : IPackFiller
 
         // F-M767: die Ablage bekommt den Logger des Laufs, damit jede Cache-Operation im Log steht.
         _api.ArchiveDiskCache.Attach(_logger, _config.LogMode);
+
+        // F-M786: die Richtung, die bisher NUR anhaengte, richtet die Ablage jetzt auch ein. Ohne Ordner,
+        // Frist und Decke ist sie ausgeschaltet (`Enabled`), und der Extraktions-Speicher haette nichts
+        // geschrieben. Dieselben Zahlen wie im Download — es ist EINE Ablage mit EINER Decke (F-M784).
+        _api.ArchiveDiskCache.Configure(
+            Plugin.Instance?.DataFolderPath, _config.DownloadArchiveCacheDays, _config.DownloadArchiveCacheMaxMb);
+        _api.ArchiveDiskCache.Reset();
+        _api.ArchiveDiskCache.Trim();
 
         // F-M232: the client's LogInfo channel (login retries, 429 raw bodies, rate
         // headers) was subscribed ONLY by the postprocessing path, so every upload-run
@@ -2924,12 +2931,9 @@ public sealed class UploadPipeline : IPackFiller
         {
             Registry.EndBatch(); // F-M602: schreibt, was die Klammer gesammelt hat
 
-            // F-M441: the run's working files are its own business — the run ends, they go.
-            int workFiles = _workFiles.Purge();
-            if (workFiles > 0)
-            {
-                _logger.LogDebug("[Sub Scribe] upload: {Count} working file(s) of this run removed.", workFiles);
-            }
+            // F-M785: der Laufcache ist weg. Was ein Lauf auspackt, liegt jetzt im gemeinsamen Speicher
+            // (F-M784) und ueberlebt den Lauf — aufzuraeumen gibt es hier nichts mehr, die Frist und die
+            // Decke des Speichers erledigen das.
 
             // F-M445 (operator decision 02.11.2026): the end of every upload run re-arms the upload
             // postprocessing, and the last order wins — a run that ends later cancels the earlier
@@ -5479,7 +5483,10 @@ public sealed class UploadPipeline : IPackFiller
         var zuEntpacken = new List<int>();
         foreach (int position in alleSpuren)
         {
-            if (_workFiles.TryReadTrack(imdbId, season, episode, mediaPath, position, out string? onDisk)
+            // F-M784: statt des Laufcaches (F-M441) jetzt der Bleibespeicher — dieselbe Spur wird beim
+            // naechsten Lauf nicht wieder durch ffmpeg geholt. Der Schluessel traegt Groesse, letzte
+            // Schreibzeit und Erzeugung des Behaelters, also ist eine ersetzte Datei ein Fehltreffer.
+            if (Api.ExtractedTrackStore.TryGet(_api.ArchiveDiskCache, item.Id.ToString("N", System.Globalization.CultureInfo.InvariantCulture), mediaPath, position, out string? onDisk)
                 && !string.IsNullOrWhiteSpace(onDisk))
             {
                 cachedTexts[position] = onDisk;
@@ -5532,7 +5539,7 @@ public sealed class UploadPipeline : IPackFiller
                 cachedTexts[pair.Key] = pair.Value;
                 if (!string.IsNullOrWhiteSpace(pair.Value))
                 {
-                    _workFiles.WriteTrack(imdbId, season, episode, mediaPath, pair.Key, pair.Value!);
+                    Api.ExtractedTrackStore.Put(_api.ArchiveDiskCache, item.Id.ToString("N", System.Globalization.CultureInfo.InvariantCulture), mediaPath, pair.Key, pair.Value);
                 }
             }
 

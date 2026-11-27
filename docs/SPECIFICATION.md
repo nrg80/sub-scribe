@@ -3,7 +3,7 @@
 **Owner: the rules.** This is the master document: every other paper is derived from it and cites its `F-M` tags. The contract boundaries stand in `CONTRACTS.md`, the vocabulary in `TERMS.md`.
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.143
-**Status:** Implementation — v12.3.8.75.
+**Status:** Implementation — v12.3.8.76.
 
 **A rule stands here with its ground: the decision behind it in one sentence, under `Concept decision`, and the
 check that proves it. The detailed measurement archive — what was measured, which run showed it, what happened —
@@ -39,7 +39,7 @@ states the rule, its constants, its ground and its test.**
 - [10. Scheduler, Quota and Timing](#10-scheduler-quota-and-timing) — 24 requirements
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
-- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 45 requirements
+- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 50 requirements
 - [14. Data Model and Persistence](#14-data-model-and-persistence) — 93 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 61 requirements
 - [16. Non-Goals](#16-non-goals)
@@ -2162,6 +2162,16 @@ the rule rather than a reason (F-M745). Checked in `gui-structure`.
 **F-M764 [S]:** **The arrival question comes before the work, not after it.** Concept decision: an arrival run asks whether it builds a pack *before* the library is examined, so the completeness question is never put to it. Until 12.3.8.65 the scan ran first and the arrival branch then emptied the set. Measured in the arrival run of 26.11.2026: `pack phase done after 166343 ms` inside a 9 min 35 s run. In it stood 128 seasons with at least two episodes, 1,093 judgement lines over 124 seasons, 1,084 language pairs and 85 candidates — discarded two lines later. A guard that stands behind the work is not a guard. Checked in `packretry`.
 
 **F-M763 [S]:** **Every delivery counts — the statistics count per source, in both directions.** Concept decision: a subtitle that two sources accept is two deliveries, and the counter says two; a container likewise counts once per source. Until here the upload counter added one per subtitle, no matter how many sources took it, while the pack counter already counted per send — measured on 26.11.2026: 42 subtitles stayed 42 in the statistics but were 70 deliveries (SubDL 42, tvsubtitles 28). The download direction needs no change: a fetched subtitle comes from exactly one source, so counting per save already counts per source, and one archive counts one pack at the source that served it. A dry run still counts nothing. Checked in `seasonpack`.
+
+**F-M784 [S]:** **An extracted track outlives the run.** Concept decision: a track that left the media container is stored in the shared cache folder, under the retention and the ceiling of the download cache, in a key space of its own. A stored subtitle therefore never answers for a stored archive. What it saves is not the packing but the read of the container: one full pass of ffmpeg per track and per run, on a host whose disk stalls far longer than its memory is ever full. Checked by T436. <!-- Operator order 2026-11-27, verbatim: "Bau den extraktionscache. Unglaublich. Kann der laufcache dann weg und durch den extraktionscache ersetzt werden?" -->
+
+**F-M785 [S]:** **The run cache is gone.** Concept decision: the run-scoped working folder (`RunWorkFiles`, F-M441) existed only so that one run would not extract the same track twice. The store does that and survives the run, so the folder, its purge at the end of the run and the sweep of a killed run were removed with it. The upload direction configures the store itself now — folder, retention, ceiling, counters — because attaching alone leaves it switched off. Checked by T436.
+
+**F-M786 [S]:** **The name of a track needs no hash.** Concept decision: an entry is named from the item, the position of the track, the size of the container, its last write and its creation. A content hash costs a full read of the container, which is exactly the work the store exists to avoid; paying it before the lookup would make every hit as expensive as a miss. A replaced file is a miss because the numbers change; a remuxed container is a miss because its size does. Checked by T436.
+
+**F-M787 [S]:** **One track, one ZIP, unpacked on access, byte for byte the same.** Concept decision: an entry holds exactly one subtitle under one fixed member name, written with a fixed stamp, so the body is deterministic and a hit cannot be told from a fresh extraction. Reading unpacks in memory and keeps nothing. An entry that will not unpack is removed, not repaired, and counts as a miss. Checked by T436.
+
+**F-M788 [S]:** **Nothing unsuccessful is ever stored.** Concept decision: only a track that actually came out of the container is written, and only after the verdict of a pair has let it through. A failed pass leaves no entry, so a transient fault cannot poison the store and a later run is free to try again. Checked by T436.
 
 ## 14. Data Model and Persistence
 

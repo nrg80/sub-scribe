@@ -4,7 +4,7 @@
 sent anywhere. Today that extraction is repeated for every run, and what came out of it is thrown away
 when the run ends. This paper describes keeping it, under the rules the download cache already follows.
 
-**Status: proposal.** None of this is built. The operator approved the shape on 2026-11-27: one store
+**Status: built in 12.3.8.76.** The operator approved the shape on 2026-11-27: one store
 shared with the download cache, retention and ceiling included, one ZIP per track, a hit counts like a
 fresh extraction, and containers assembled from the stored single subtitles. Every rule below names the
 requirement it would become (§11); that number is deliberately not named here — see §11

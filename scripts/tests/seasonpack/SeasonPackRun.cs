@@ -822,20 +822,20 @@ internal static class Program
             "F-M442: the skip messages carry the real state of the season, not a guess");
 
         // ── F-M441: der Fill arbeitet über Dateien im Lauf-Ordner, nicht über den Speicher ────────
-        Check(uploadSrc.Contains("_workFiles.TryReadTrack(imdbId, season, episode, mediaPath, position, out string? onDisk)"),
-            "F-M441: the fill reads a text this run already extracted off the disk");
-        Check(uploadSrc.Contains("_workFiles.WriteTrack(imdbId, season, episode, mediaPath, pair.Key, pair.Value!)"),
-            "F-M441: an extracted text is written to the run's working directory");
+        Check(uploadSrc.Contains("Api.ExtractedTrackStore.TryGet(_api.ArchiveDiskCache") ,
+            "F-M784: the fill reads a track out of the shared store instead of extracting it again");
+        Check(uploadSrc.Contains("Api.ExtractedTrackStore.Put(_api.ArchiveDiskCache"),
+            "F-M784: an extracted track is written to the shared store and survives the run");
         Check(!uploadSrc.Contains("_fillTextCache") && !uploadSrc.Contains("_ownTexts"),
             "F-M441: no in-memory text cache and no persistent store");
         Check(!uploadSrc.Contains("Enumerable.Range(0, subtitleStreams.Count)"),
             "F-M441: the fill never extracts every subtitle track of the container");
-        Check(uploadSrc.Contains("Api.RunWorkFiles.PurgeStale(null, TimeSpan.FromDays(2))"),
-            "F-M441: the start of a run sweeps what a killed run left behind");
-        Check(uploadSrc.Contains("_workFiles.Purge()"),
-            "F-M441: the run removes its own working files when it ends");
+        Check(!uploadSrc.Contains("RunWorkFiles"),
+            "F-M785: there is nothing to sweep any more — the run cache is gone");
+        Check(!uploadSrc.Contains("_workFiles.Purge()") && uploadSrc.Contains("_api.ArchiveDiskCache.Trim()"),
+            "F-M785: nothing to remove at the end of the run — the store keeps its own house");
         Check(!File.Exists(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/OwnTextStore.cs")),
-            "F-M441: there is no persistent text store in the tree");
+            "F-M784: the store is the only place a text lives, and it belongs to the cache folder");
         var coordinatorSrc2 = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Pipeline/SeasonPackCoordinator.cs"));
         Check(!coordinatorSrc2.Contains("_ownTexts"),
             "F-M441: the pack coordinator carries no store either");

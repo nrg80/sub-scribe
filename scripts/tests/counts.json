@@ -1170,6 +1170,12 @@
       "checks": 3,
       "requirement": "F-M783",
       "title": "Der Takt haengt an der echten Anfrage: ein Treffer kostet keine Pause, ein Fehltreffer genau eine"
+    },
+    "T436": {
+      "suite": "endpoints",
+      "checks": 6,
+      "requirement": "F-M784",
+      "title": "Der Extraktions-Speicher: eine Spur ueberlebt den Lauf, ein ZIP mit einem Mitglied, deterministisch, ersetzte Datei = Fehltreffer, kaputter Eintrag faellt raus, Laufcache geloescht"
     }
   }
 }

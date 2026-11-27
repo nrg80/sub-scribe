@@ -4276,6 +4276,81 @@ internal static class Program
                 .Contains("new HttpClient(new PacingHandler(new SocketsHttpHandler()))", StringComparison.Ordinal),
             "Ablage aussen, Takt innen — auch dort");
 
+
+        // ---- 28. F-M784 bis F-M788: der Extraktions-Speicher ---------------------------------------
+        // Anlass (Operator-Auftrag 27.11.2026): „Bau den extraktionscache. Kann der laufcache dann weg und
+        // durch den extraktionscache ersetzt werden?" — ja: was ein Lauf auspackt, liegt jetzt im
+        // gemeinsamen Speicher und ueberlebt den Lauf; der Lauf-Cache ist geloescht.
+        string spurOrdner = Path.Combine(Path.GetTempPath(), "spuren-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(spurOrdner);
+        string probeFilm = Path.Combine(spurOrdner, "probe.mkv");
+        await File.WriteAllBytesAsync(probeFilm, new byte[1024]);
+        var spurenSpeicher = new Jellyfin.Plugin.SubScribe.Api.ArchiveDiskCache(null);
+        spurenSpeicher.Attach(null);
+        spurenSpeicher.Configure(spurOrdner, 14, 64);
+        string spurtText = "1\r\n00:00:01,000 --> 00:00:03,000\r\nHallo, Welt.\r\n";
+        bool geschrieben = Jellyfin.Plugin.SubScribe.Api.ExtractedTrackStore.Put(spurenSpeicher, "abc123", probeFilm, 3, spurtText);
+        bool gelesen = Jellyfin.Plugin.SubScribe.Api.ExtractedTrackStore.TryGet(spurenSpeicher, "abc123", probeFilm, 3, out string? zurueck);
+        Check(
+            "F-M784: a track survives the run — write it, read it back, byte for byte",
+            geschrieben && gelesen && zurueck == spurtText,
+            $"geschrieben {geschrieben}, gelesen {gelesen}, {zurueck?.Length ?? 0} Zeichen");
+        byte[]? koerper784 = null;
+        foreach (string datei in Directory.EnumerateFiles(Path.Combine(spurOrdner, "archive-cache"), "*.zip"))
+        {
+            koerper784 = await File.ReadAllBytesAsync(datei);
+        }
+
+        string? mitglied784 = null;
+        int mitglieder784 = 0;
+        if (koerper784 != null)
+        {
+            using var archiv = new System.IO.Compression.ZipArchive(new MemoryStream(koerper784), System.IO.Compression.ZipArchiveMode.Read);
+            mitglieder784 = archiv.Entries.Count;
+            if (mitglieder784 == 1)
+            {
+                mitglied784 = archiv.Entries[0].FullName;
+            }
+        }
+
+        string spurSchluessel = Jellyfin.Plugin.SubScribe.Api.ExtractedTrackStore.KeyFor("abc123", probeFilm, 3) ?? string.Empty;
+        Check(
+            "F-M784: one track is one ZIP with one member, and its name carries no path",
+            mitglieder784 == 1
+            && mitglied784 == Jellyfin.Plugin.SubScribe.Api.ExtractedTrackStore.MemberName
+            && spurSchluessel.StartsWith(Jellyfin.Plugin.SubScribe.Api.ExtractedTrackStore.KeyPrefix, StringComparison.Ordinal)
+            && !spurSchluessel.Contains("probe", StringComparison.OrdinalIgnoreCase)
+            && !spurSchluessel.Contains("spuren-", StringComparison.OrdinalIgnoreCase),
+            $"{mitglieder784} Mitglied(er), Name \"{mitglied784}\", Schluessel \"{spurSchluessel}\"");
+        byte[] gleichA = Jellyfin.Plugin.SubScribe.Api.ExtractedTrackStore.Pack(spurtText);
+        byte[] gleichB = Jellyfin.Plugin.SubScribe.Api.ExtractedTrackStore.Pack(spurtText);
+        Check(
+            "F-M787: the body is built deterministically, so a hit and a fresh extraction differ in nothing",
+            gleichA.SequenceEqual(gleichB) && koerper784 != null && koerper784.SequenceEqual(gleichA) && mitglied784 == Jellyfin.Plugin.SubScribe.Api.ExtractedTrackStore.MemberName,
+            $"{gleichA.Length} B, zweimal gleich");
+        await File.WriteAllBytesAsync(probeFilm, new byte[2048]);
+        Check(
+            "F-M785: a replaced container is a miss — the name carries size and times",
+            !Jellyfin.Plugin.SubScribe.Api.ExtractedTrackStore.TryGet(spurenSpeicher, "abc123", probeFilm, 3, out _),
+            "nach dem Ersetzen kein Treffer");
+        int vorher784 = spurenSpeicher.Count();
+        string kaputt784 = Path.Combine(Path.GetDirectoryName(Directory.EnumerateFiles(Path.Combine(spurOrdner, "archive-cache"), "*.zip").First())!, "absichtlich-kaputt.zip");
+        await File.WriteAllBytesAsync(kaputt784, new byte[] { 0x50, 0x4B, 0x03, 0x04, 0x00 });
+        Check(
+            "F-M787: an entry that will not unpack is removed, not repaired",
+            Jellyfin.Plugin.SubScribe.Api.ExtractedTrackStore.Unpack(await File.ReadAllBytesAsync(kaputt784)) == null,
+            $"{vorher784} Eintrag/Einträge vorher, der kaputte wird nicht als Treffer gewertet");
+        string uploadQuelle = ReadText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Pipeline", "UploadPipeline.cs"));
+        Check(
+            "F-M785: the run cache is gone — no RunWorkFiles left, and the upload configures the shared store",
+            !uploadQuelle.Contains("RunWorkFiles", StringComparison.Ordinal)
+            && uploadQuelle.Contains("Api.ExtractedTrackStore.TryGet(", StringComparison.Ordinal)
+            && uploadQuelle.Contains("Api.ExtractedTrackStore.Put(", StringComparison.Ordinal)
+            && uploadQuelle.Contains("_api.ArchiveDiskCache.Configure(", StringComparison.Ordinal)
+            && !File.Exists(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Api", "RunWorkFiles.cs")),
+            "kein Laufcache mehr, Ablage eingerichtet");
+        spurenSpeicher.Reset();
+
         if (_failures > 0)
         {
             Console.WriteLine($">>> ENDPUNKTE: {_failures} von {_checks} Pruefungen fehlgeschlagen");

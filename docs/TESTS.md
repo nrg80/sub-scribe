@@ -194,6 +194,8 @@ milliseconds it took and the rows the context carries afterwards.
 
 **T435:** The pause hangs on the real request (F-M783), in `endpoints`. **3 checks**. A miss pays the API pause and makes exactly one request; a hit costs no pause and makes no second request; and the season index and the status probe hang in the same order — the shelf outside, the pause inside.
 
+**T436:** The extraction store (F-M784 to F-M788), in `endpoints`. **6 checks**. A track is written and read back byte for byte. It is one ZIP with one member, and the key carries no path. The body is built deterministically, so two writes of the same text are the same bytes. A replaced container is a miss because the name carries size and times. An entry that will not unpack is removed rather than repaired, and the run cache is gone: no `RunWorkFiles` is left, and the upload configures the shared store itself.
+
 
 **T428:** The season archive is not remembered at all (F-M766/F-M768), in `tvsubtitles`. **2 checks**. The entry type has `Name` but no `Data`, and a member read after a run that already paid for the archive comes back byte-identical with **0** requests — from disk, not from memory.
 
