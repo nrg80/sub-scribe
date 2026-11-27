@@ -15,9 +15,10 @@ serves a film when the other two have nothing.
 ## The switches
 
 The card carries four switches: `Download` (on by default), `Upload` (off by default), `Packs` and
-`Report` (both on by default). `Packs` is what puts the source into a season-pack slot, and
-`Prefer season pack` on the same card decides that a season goes up as one ZIP rather than as single
-episodes. `Report` allows a broken entry to be reported back to the site.
+`Report` (both on by default). `Packs` is what puts the source into a season-pack slot and allows a season to go up as one ZIP.
+`Prefer season pack` sits on the same card under that switch, but it works in the other direction: it
+makes a download ask for an archive before a single. `Report` allows a broken entry to be reported back
+to the site.
 
 ## The account
 

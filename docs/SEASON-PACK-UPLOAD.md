@@ -5,9 +5,11 @@ builds it from the files on disk and hands it to a site.
 
 ## The switches
 
-`Upload enabled` on the source card lets a single go up; `Prefer season pack` (`preferSeasonZip`) lets
-the season go up as one ZIP. Both may be on at once: a subtitle that is already up as a single may go
-into a pack afterwards. A switch is only a permission, and the checks below decide whether it happens.
+`Upload enabled` on the source card lets a single go up, and `Packs` puts the source into the pack slot,
+which is what allows a season to go up as one ZIP. The two are independent: a subtitle that is already up
+as a single may go into a pack afterwards. `Prefer season pack` (`preferSeasonZip`) is not an upload
+switch, it belongs to the download side and makes a run ask for an archive before a single.
+A switch is only a permission, and the checks below decide whether it happens.
 
 ## Checks before anything is unpacked
 
