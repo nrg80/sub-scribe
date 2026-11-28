@@ -60,6 +60,20 @@ instances. `develop` releases freely and often while `main` moves deliberately a
 likes, and nothing carries `main` along: no CI workflow touches it, no scheduled job runs `release.sh`, and
 the script pushes only the branch it runs on.
 
+### Dev and main stand side by side, the manifests point at `main`
+
+A version that reaches `main` does not retire the `-dev` release of the same number: both stay published, so a
+build can always be traced back to the branch it was cut from. What changes is only where the manifests send
+their readers. Every manifest — `main`'s and `develop`'s — carries the STABLE asset of the released version,
+with that asset's checksum; the `-dev` ZIP stays downloadable but is no longer named by a manifest.
+
+The reason is that the two ZIPs are different builds of the same source: `release.sh` on `develop` and on
+`main` each compile and pack their own, so they differ in bytes and in checksum. A manifest entry must name
+the file whose checksum it states — pointing `develop` at the `-dev` URL while quoting the stable checksum
+would make every install fail the check, and pointing it at a deleted asset would make the version
+unreachable. So after a stable release the `develop` entry is set to the stable URL and the stable checksum,
+and the next `develop` release overwrites it again with its own `-dev` build.
+
 ## The traps
 
 - `main` serves the released line, so its `manifest.json` must stay its own: `git branch -f main develop`
