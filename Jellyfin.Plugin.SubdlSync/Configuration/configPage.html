@@ -122,27 +122,6 @@
                             <div class="fieldDescription">Tags subtitle tracks that carry no language, and names loose subtitle files by language. Default: off.</div>
                         </div>
 
-                        <!-- Workers (F-M265): run status, not a setting — same genre as Statistics, so it
-                             lives on the General tab with it. It used to sit OUTSIDE the tab containers
-                             (after the download tab closed), and subdlShowTab() only toggles elements
-                             with class="subdl-tab", so it stayed visible under every tab. -->
-                        <h3>Workers</h3>
-                        <div class="fieldDescription" id="WorkersLine" style="margin-bottom:0.25em;">&mdash;</div>
-                        <div id="WorkerRunList"></div>
-                        <!-- F-M445 (operator order 02.11.2026 "eine logzeile unter die worker schreiben wann ein
-                             postprocessing ansteht. Zeile entfällt wenn gestartet"): one line, filled from
-                             PostprocessDue; empty and invisible while no order is armed. -->
-                        <div class="fieldDescription" id="PostprocessDueLine" style="margin-top:0.25em; display:none;"></div>
-                        <!-- F-M623 (Operator-Anweisung 19.11.2026 "Nur das cycle deferral"): der Zyklus
-                             selbst hat keine Worker-Zeile — sein aufgeschobener Anker bekommt deshalb
-                             seine eigene Zeile. Leer und unsichtbar, solange nichts aufgeschoben ist. -->
-                        <div class="fieldDescription" id="CycleDueLine" style="margin-top:0.25em; display:none;"></div>
-                        <!-- The LOCAL deferral line (F-M288): sits under the last worker light, in the
-                             page's normal text colour. Empty while nothing is deferred, so it costs no
-                             space. It is NOT part of the quota box — those bars describe the server's
-                             allowance, this line describes our own wait, and mixing the two made a
-                             partly-used allowance read as a problem (user decision 03.10.2026). -->
-                        <div class="fieldDescription" id="ScribeLocalDeferLine" style="margin-top:0.5em;"></div>
 
                         <!-- Betreiberanweisung 25.11.2026, woertlich: "Status den gesamten block bitte unter
                              workers verschieben" — der Statusblock steht deshalb unter der Worker-Liste,
@@ -214,6 +193,28 @@
                             <button is="emby-button" type="button" class="raised button-submit block emby-button" id="RefreshSubdlStatus" style="display:block;width:100%;box-sizing:border-box;background-color:#424242;border-color:#5a5a5a;color:rgba(255,255,255,0.85);">Refresh status</button>
                         </div>
 
+                        <!-- Workers (F-M265): run status, not a setting — same genre as Statistics, so it
+                             lives on the General tab with it, and directly above it (operator
+                             order 28.11.2026: "Statistics weiterhin ganz unten, workers darueber"). It used to sit OUTSIDE the tab containers
+                             (after the download tab closed), and subdlShowTab() only toggles elements
+                             with class="subdl-tab", so it stayed visible under every tab. -->
+                        <h3>Workers</h3>
+                        <div class="fieldDescription" id="WorkersLine" style="margin-bottom:0.25em;">&mdash;</div>
+                        <div id="WorkerRunList"></div>
+                        <!-- F-M445 (operator order 02.11.2026 "eine logzeile unter die worker schreiben wann ein
+                             postprocessing ansteht. Zeile entfällt wenn gestartet"): one line, filled from
+                             PostprocessDue; empty and invisible while no order is armed. -->
+                        <div class="fieldDescription" id="PostprocessDueLine" style="margin-top:0.25em; display:none;"></div>
+                        <!-- F-M623 (Operator-Anweisung 19.11.2026 "Nur das cycle deferral"): der Zyklus
+                             selbst hat keine Worker-Zeile — sein aufgeschobener Anker bekommt deshalb
+                             seine eigene Zeile. Leer und unsichtbar, solange nichts aufgeschoben ist. -->
+                        <div class="fieldDescription" id="CycleDueLine" style="margin-top:0.25em; display:none;"></div>
+                        <!-- The LOCAL deferral line (F-M288): sits under the last worker light, in the
+                             page's normal text colour. Empty while nothing is deferred, so it costs no
+                             space. It is NOT part of the quota box — those bars describe the server's
+                             allowance, this line describes our own wait, and mixing the two made a
+                             partly-used allowance read as a problem (user decision 03.10.2026). -->
+                        <div class="fieldDescription" id="ScribeLocalDeferLine" style="margin-top:0.5em;"></div>
                         <!-- F-M757 (Betreiberanweisung 25.11.2026, woertlich: "Statistics in der gui ganz
                              nach unten in general"): die Statistik ist der LETZTE Block des Reiters, unter
                              dem Auffrischknopf. Sie beschreibt, was der Auffrischknopf neu holt — beides

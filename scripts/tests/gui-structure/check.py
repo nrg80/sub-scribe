@@ -264,9 +264,13 @@ def main():
             if idx[t] == -1:
                 continue
             check("refresh button absent from the %s tab" % t, btn < idx[t])
-    # It must sit at the tab's end, i.e. below the Workers list it also refreshes.
-    check("refresh button sits below the Workers list",
-          btn > html.find('id="WorkerRunList"'))
+    # It must sit at the tab's end, i.e. below the readouts it also refreshes — the Connections
+    # block and the Workers list follow it (operator order 28.11.2026 put the Workers list directly
+    # above Statistics, so the button no longer sits below the Workers list).
+    check("refresh button sits below the Connections block",
+          btn > html.find('id="ScribeDirStatusList"'))
+    check("refresh button sits above the Workers list",
+          btn < html.find('id="WorkerRunList"'))
 
     # ---- 2b. The refresh button looks and sits like Save, without being mistaken for it ----
     # User order 30.09.2026: "Wenn der refresh button jetzt nich genauso groß wie der save Button
@@ -2764,15 +2768,19 @@ def main():
     # stehen in der Reihenfolge, in der ein Nutzer sie braucht: erst der Schlüssel, ohne den nichts
     # laeuft (TMDb), dann die Konten, dann die Erreichbarkeit der beiden Webseiten. Die Reihenfolge
     # steht im HTML; die Skripte greifen ueber die Ids zu und sind davon unabhaengig.
-    check("F-M749: the Connections block stands under the Workers list",
-          page_src.find('<h3>Connections</h3>') > page_src.find('id="WorkerRunList"')
-          and page_src.find('id="ScribeStatusBox"') > page_src.find('id="WorkerRunList"')
-          and page_src.find('id="ScribeLocalDeferLine"') < page_src.find('<h3>Connections</h3>'),
-          "status heading after the worker list, deferral line above it")
+    check("F-M749: the Connections block stands above the Workers list",
+          page_src.find('<h3>Connections</h3>') < page_src.find('id="WorkerRunList"')
+          and page_src.find('id="ScribeStatusBox"') < page_src.find('id="WorkerRunList"')
+          and page_src.find('id="ScribeLocalDeferLine"') > page_src.find('<h3>Connections</h3>'),
+          "connections heading before the worker list, deferral line after it")
     check("F-M749: the refresh control stands below the Connections block",
           page_src.find('id="RefreshSubdlStatus"') > page_src.find('id="ScribeDirStatusList"')
           and page_src.find('id="ScribeDirStatusList"') > page_src.find('id="ScribeStatusBox"'),
-          "refresh button after the status block")
+          "refresh button after the connections block")
+    check("F-M749: the Workers list stands directly above Statistics",
+          page_src.find('id="WorkerRunList"') < page_src.find('<h3>Statistics</h3>')
+          and page_src.find('id="ScribeLocalDeferLine"') < page_src.find('<h3>Statistics</h3>'),
+          "workers above statistics, no block in between")
 
     # F-M757 (Betreiberanweisung 25.11.2026, woertlich: "Statistics in der gui ganz nach unten in
     # general"): die Statistik ist der LETZTE Block des Reiters. Sie beschreibt, was der
