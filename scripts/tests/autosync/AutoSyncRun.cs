@@ -970,11 +970,11 @@ public static class AutoSyncRun
 
         const string baseName = "Person Of Interest S02e06 The High Road";
         string media = $"/media/{baseName}.mkv";
-        string corrected = $"/media/{baseName}.en.srt";
+        string corrected = $"/media/{baseName}.eng.srt";
         var none = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
 
-        string? kept = SidecarNaming.PlanOriginalTarget(media, "EN", false, none);
-        bool nameOk = kept != null && System.IO.Path.GetFileName(kept) == $"{baseName}.en.51.srt";
+        string? kept = SidecarNaming.PlanOriginalTarget(media, "ENG", false, none);
+        bool nameOk = kept != null && System.IO.Path.GetFileName(kept) == $"{baseName}.eng.51.srt";
         Check("the first original takes slot 51", nameOk, kept ?? "(null)");
         f += nameOk ? 0 : 1;
 
@@ -987,7 +987,7 @@ public static class AutoSyncRun
 
         // And the parser must read it as a normal sidecar: right language, no HI, NOT forced.
         var parsed = kept == null ? null : SidecarNaming.Parse(System.IO.Path.GetFileNameWithoutExtension(kept), baseName);
-        bool parsedOk = parsed != null && parsed.Value.Lang == "EN"
+        bool parsedOk = parsed != null && parsed.Value.Lang == "ENG"
                         && !parsed.Value.HearingImpaired && !parsed.Value.Forced;
         Check("the name parses as EN, not HI, not forced", parsedOk,
             parsed == null ? "(not parsed)" : $"{parsed.Value.Lang} hi={parsed.Value.HearingImpaired} forced={parsed.Value.Forced}");
@@ -995,9 +995,9 @@ public static class AutoSyncRun
 
         // Numbering runs UPWARD and stops at 99. 51, 52, 53 … never 100, never 49.
         var takenFirst = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase)
-            { $"{baseName}.en.51.srt" };
-        string? second = SidecarNaming.PlanOriginalTarget(media, "EN", false, takenFirst);
-        bool secondOk = second != null && System.IO.Path.GetFileName(second) == $"{baseName}.en.52.srt";
+            { $"{baseName}.eng.51.srt" };
+        string? second = SidecarNaming.PlanOriginalTarget(media, "ENG", false, takenFirst);
+        bool secondOk = second != null && System.IO.Path.GetFileName(second) == $"{baseName}.eng.52.srt";
         Check("with 51 taken the next original takes 52", secondOk, second ?? "(null)");
         f += secondOk ? 0 : 1;
 
@@ -1005,10 +1005,10 @@ public static class AutoSyncRun
         var allTen = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
         for (int s = SidecarNaming.OriginalSlotMin; s <= SidecarNaming.OriginalSlotMax; s++)
         {
-            allTen.Add($"{baseName}.en.{s}.srt");
+            allTen.Add($"{baseName}.eng.{s}.srt");
         }
 
-        string? overflow = SidecarNaming.PlanOriginalTarget(media, "EN", false, allTen);
+        string? overflow = SidecarNaming.PlanOriginalTarget(media, "ENG", false, allTen);
         Check("every reserved slot taken → no name (never an overwrite)", overflow == null, overflow ?? "(null)");
         f += overflow == null ? 0 : 1;
 
@@ -1017,15 +1017,15 @@ public static class AutoSyncRun
         var allCorrected = new System.Collections.Generic.HashSet<string>(StringComparer.OrdinalIgnoreCase);
         for (int s = 1; s <= SidecarNaming.CorrectedSlotMax; s++)
         {
-            allCorrected.Add($"{baseName}.en.{s:D2}.srt");
+            allCorrected.Add($"{baseName}.eng.{s:D2}.srt");
         }
 
-        highestCorrected = SidecarNaming.PlanTarget(media, "EN", false, allCorrected);
+        highestCorrected = SidecarNaming.PlanTarget(media, "ENG", false, allCorrected);
         // The fallback name must never come out of the reserved block: that is the collision this
         // whole reservation exists to prevent. Slot 1 is the expected answer, and
         // its number is below the block by construction.
         string fallbackName = System.IO.Path.GetFileName(highestCorrected ?? "(null)");
-        bool below = fallbackName == $"{baseName}.en.01.srt";
+        bool below = fallbackName == $"{baseName}.eng.01.srt";
         Check("every corrected slot taken → slot 1, never a reserved one", below, fallbackName);
         f += below ? 0 : 1;
 
@@ -1041,40 +1041,40 @@ public static class AutoSyncRun
         Console.WriteLine("[5b] the slot is two digits and it orders the track list (F-M316)");
 
         // The writer: every slot, always a number, always two digits — slot 1 included.
-        bool w1 = System.IO.Path.GetFileName(SidecarNaming.Build(media, "EN", false, 1))
-                  == $"{baseName}.en.01.srt";
-        bool w2 = System.IO.Path.GetFileName(SidecarNaming.Build(media, "EN", false, 2))
-                  == $"{baseName}.en.02.srt";
-        bool w10 = System.IO.Path.GetFileName(SidecarNaming.Build(media, "EN", false, 10))
-                   == $"{baseName}.en.10.srt";
-        bool w99 = System.IO.Path.GetFileName(SidecarNaming.Build(media, "EN", false, 99))
-                   == $"{baseName}.en.99.srt";
+        bool w1 = System.IO.Path.GetFileName(SidecarNaming.Build(media, "ENG", false, 1))
+                  == $"{baseName}.eng.01.srt";
+        bool w2 = System.IO.Path.GetFileName(SidecarNaming.Build(media, "ENG", false, 2))
+                  == $"{baseName}.eng.02.srt";
+        bool w10 = System.IO.Path.GetFileName(SidecarNaming.Build(media, "ENG", false, 10))
+                   == $"{baseName}.eng.10.srt";
+        bool w99 = System.IO.Path.GetFileName(SidecarNaming.Build(media, "ENG", false, 99))
+                   == $"{baseName}.eng.99.srt";
         Check("slot 1 is written as .01, not as the bare name", w1,
-            System.IO.Path.GetFileName(SidecarNaming.Build(media, "EN", false, 1)));
+            System.IO.Path.GetFileName(SidecarNaming.Build(media, "ENG", false, 1)));
         Check("slots 2 / 10 / 99 are two digits", w2 && w10 && w99,
-            System.IO.Path.GetFileName(SidecarNaming.Build(media, "EN", false, 10)));
+            System.IO.Path.GetFileName(SidecarNaming.Build(media, "ENG", false, 10)));
         f += w1 ? 0 : 1;
         f += (w2 && w10 && w99) ? 0 : 1;
 
         // The marker sits BEFORE the number — the reader steps over the slot first and then reads
         // the markers, so the opposite order would make a variant unrecognizable.
-        bool markerFirst = System.IO.Path.GetFileName(SidecarNaming.Build(media, "DE", true, 1, true))
-                           == $"{baseName}.de.sdh.forced.01.srt";
-        Check("the markers come before the number (.de.sdh.forced.01.srt)", markerFirst,
-            System.IO.Path.GetFileName(SidecarNaming.Build(media, "DE", true, 1, true)));
+        bool markerFirst = System.IO.Path.GetFileName(SidecarNaming.Build(media, "DEU", true, 1, true))
+                           == $"{baseName}.deu.sdh.forced.01.srt";
+        Check("the markers come before the number (.deu.sdh.forced.01.srt)", markerFirst,
+            System.IO.Path.GetFileName(SidecarNaming.Build(media, "DEU", true, 1, true)));
         f += markerFirst ? 0 : 1;
 
         // The OLD form must still parse — the switch needs no migration shim.
         var oldBare = SidecarNaming.Parse($"{baseName}.en", baseName);
-        var oldOneDigit = SidecarNaming.Parse($"{baseName}.en.2", baseName);
+        var oldOneDigit = SidecarNaming.Parse($"{baseName}.eng.2", baseName);
         Check("a pre-F-M316 name without a number still parses",
-            oldBare != null && oldBare.Value.Lang == "EN" && !oldBare.Value.HearingImpaired,
+            oldBare != null && oldBare.Value.Lang == "ENG" && !oldBare.Value.HearingImpaired,
             oldBare?.ToString() ?? "null");
         Check("a pre-F-M316 one-digit slot still parses",
-            oldOneDigit != null && oldOneDigit.Value.Lang == "EN",
+            oldOneDigit != null && oldOneDigit.Value.Lang == "ENG",
             oldOneDigit?.ToString() ?? "null");
-        f += (oldBare != null && oldBare.Value.Lang == "EN") ? 0 : 1;
-        f += (oldOneDigit != null && oldOneDigit.Value.Lang == "EN") ? 0 : 1;
+        f += (oldBare != null && oldBare.Value.Lang == "ENG") ? 0 : 1;
+        f += (oldOneDigit != null && oldOneDigit.Value.Lang == "ENG") ? 0 : 1;
 
         // THE POINT of the number: the order Jellyfin lists is the ORDER OF THE NAMES. Asserted on
         // the names, not on the files, because that is what the player sorts. Corrected slots must
@@ -1082,12 +1082,12 @@ public static class AutoSyncRun
         var newForm = new List<string>();
         for (int s = 1; s <= SidecarNaming.CorrectedSlotMax; s++)
         {
-            newForm.Add(System.IO.Path.GetFileName(SidecarNaming.Build(media, "EN", false, s)));
+            newForm.Add(System.IO.Path.GetFileName(SidecarNaming.Build(media, "ENG", false, s)));
         }
 
         for (int s = SidecarNaming.OriginalSlotMin; s <= SidecarNaming.OriginalSlotMax; s++)
         {
-            newForm.Add(System.IO.Path.GetFileName(SidecarNaming.Build(media, "EN", false, s)));
+            newForm.Add(System.IO.Path.GetFileName(SidecarNaming.Build(media, "ENG", false, s)));
         }
 
         var ordered = newForm.OrderBy(n => n, StringComparer.Ordinal).ToList();
@@ -1101,10 +1101,10 @@ public static class AutoSyncRun
         // And the negative control: the PRE-F-M316 forms must FAIL that same sort, or the case above
         // proves nothing. A bare name sorts last ('s' of ".srt" > '9'), an unpadded slot sorts after
         // ".10" — both are the defect this rule removes.
-        var oldForm = new List<string> { $"{baseName}.en.srt", $"{baseName}.en.99.srt", $"{baseName}.en.10.srt", $"{baseName}.en.2.srt" };
+        var oldForm = new List<string> { $"{baseName}.eng.srt", $"{baseName}.eng.99.srt", $"{baseName}.eng.10.srt", $"{baseName}.eng.2.srt" };
         var oldOrdered = oldForm.OrderBy(n => n, StringComparer.Ordinal).ToList();
-        bool oldBareLast = oldOrdered[oldOrdered.Count - 1] == $"{baseName}.en.srt";
-        bool oldTenBeforeTwo = oldOrdered.IndexOf($"{baseName}.en.10.srt") < oldOrdered.IndexOf($"{baseName}.en.2.srt");
+        bool oldBareLast = oldOrdered[oldOrdered.Count - 1] == $"{baseName}.eng.srt";
+        bool oldTenBeforeTwo = oldOrdered.IndexOf($"{baseName}.eng.10.srt") < oldOrdered.IndexOf($"{baseName}.eng.2.srt");
         Check("NEGATIVE CONTROL: the old bare name sorts LAST (that was the defect)", oldBareLast,
             string.Join(" | ", oldOrdered.Select(n => n.Replace(baseName + ".", "…"))));
         Check("NEGATIVE CONTROL: the old form puts .10 before .2", oldTenBeforeTwo,
@@ -1453,23 +1453,23 @@ public static class AutoSyncRun
         string media = $"/media/{baseName}.mkv";
 
         // The two ranges, as the pipeline composes them.
-        string firstAligned = System.IO.Path.GetFileName(SidecarNaming.Build(media, "EN", false, 1));
-        string secondAligned = System.IO.Path.GetFileName(SidecarNaming.Build(media, "EN", false, 2));
+        string firstAligned = System.IO.Path.GetFileName(SidecarNaming.Build(media, "ENG", false, 1));
+        string secondAligned = System.IO.Path.GetFileName(SidecarNaming.Build(media, "ENG", false, 2));
         string firstUnprocessed = System.IO.Path.GetFileName(
-            SidecarNaming.Build(media, "EN", false, SidecarNaming.OriginalSlotMin));
+            SidecarNaming.Build(media, "ENG", false, SidecarNaming.OriginalSlotMin));
         string secondUnprocessed = System.IO.Path.GetFileName(
-            SidecarNaming.Build(media, "EN", false, SidecarNaming.OriginalSlotMin + 1));
+            SidecarNaming.Build(media, "ENG", false, SidecarNaming.OriginalSlotMin + 1));
 
-        Check("an aligned file starts at 01", firstAligned == $"{baseName}.en.01.srt", firstAligned);
-        Check("the next aligned file takes 02", secondAligned == $"{baseName}.en.02.srt", secondAligned);
+        Check("an aligned file starts at 01", firstAligned == $"{baseName}.eng.01.srt", firstAligned);
+        Check("the next aligned file takes 02", secondAligned == $"{baseName}.eng.02.srt", secondAligned);
         Check("an unprocessed file lands in the reserved block at 51",
-            firstUnprocessed == $"{baseName}.en.51.srt", firstUnprocessed);
+            firstUnprocessed == $"{baseName}.eng.51.srt", firstUnprocessed);
         Check("numbering runs UPWARD from 51",
-            secondUnprocessed == $"{baseName}.en.52.srt", secondUnprocessed);
-        f += firstAligned == $"{baseName}.en.01.srt" ? 0 : 1;
-        f += secondAligned == $"{baseName}.en.02.srt" ? 0 : 1;
-        f += firstUnprocessed == $"{baseName}.en.51.srt" ? 0 : 1;
-        f += secondUnprocessed == $"{baseName}.en.52.srt" ? 0 : 1;
+            secondUnprocessed == $"{baseName}.eng.52.srt", secondUnprocessed);
+        f += firstAligned == $"{baseName}.eng.01.srt" ? 0 : 1;
+        f += secondAligned == $"{baseName}.eng.02.srt" ? 0 : 1;
+        f += firstUnprocessed == $"{baseName}.eng.51.srt" ? 0 : 1;
+        f += secondUnprocessed == $"{baseName}.eng.52.srt" ? 0 : 1;
 
         // An unprocessed file IS the original, so it is written ONCE — the reserved-slot write that
         // runs AFTER a correction must be skipped on this path. The skip is the existing
