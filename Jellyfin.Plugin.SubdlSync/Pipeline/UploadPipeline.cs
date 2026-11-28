@@ -2132,8 +2132,7 @@ public sealed class UploadPipeline : IPackFiller
 
                 string? looseReject = Registry.SidecarRejectedReason(looseHashProbe);
 
-                // F-M804 (operator order 28.11.2026: „Sowohl das 5x er als auch das daraus gebildete 0x er
-                // sollen fuer den reup zu jedweder quelle gesperrt werden"): ein Seitenwagen, dessen
+                // F-M804: ein Seitenwagen, dessen
                 // INHALT dieses Plugin geholt hat, geht an keine Quelle zurueck — nicht an die, aus der er
                 // kam, und nicht an eine andere. Das behaltene Original (Slot 51–99) faellt schon beim
                 // Einreihen durch seinen Namen heraus (F-M315/F-M306); sein korrigierter Zwilling im
@@ -2150,7 +2149,7 @@ public sealed class UploadPipeline : IPackFiller
                     continue;
                 }
 
-                // F-M806 (Betreiberanweisung 28.11.2026: „Natürlich mitvererben"): eine korrigierte
+                // F-M806: eine korrigierte
                 // Kopie traegt andere Bytes als das behaltene Original und darum eine ANDERE
                 // Inhaltssumme — die Frage nach dem Inhalt (F-M804) kann sie deshalb nicht fangen.
                 // Der Bereich 51–99 entsteht ausschliesslich fuer ein geholtes Original (F-M315: die
@@ -3264,7 +3263,7 @@ public sealed class UploadPipeline : IPackFiller
             .ToList();
 
     /// <summary>
-    /// F-M806 (Betreiberanweisung 28.11.2026: „Natürlich mitvererben"): eine korrigierte Kopie
+    /// F-M806: eine korrigierte Kopie
     /// traegt andere Bytes als das behaltene Original und darum eine andere Inhaltssumme; die
     /// Frage nach dem Inhalt allein (F-M804) kann sie nicht fangen. Der Bereich 51–99 entsteht
     /// ausschliesslich fuer ein GEHOLTES Original (F-M315: die Sperre ist eine Eigenschaft der
