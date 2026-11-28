@@ -13,6 +13,8 @@ scripts/release.sh
 
 `scripts/release.sh --dry-run` builds and verifies without committing, tagging or uploading.
 
+`scripts/release.sh <version> --fast` is for a change that only touches the settings page or the papers. It diffs against the newest release tag and runs the checks that can see such a change — `spec-doc`, `gui-structure`, readability, doc-hygiene — while the forty code suites and the full metric run stand still (measured: 30 s instead of about five minutes). The lane is narrow on purpose: the moment a file outside `configPage.html`, `docs/`, `README.md`, `build.yaml` and `manifest.json` appears in the diff, the script aborts and demands the full gate list. It never skips the artifact check, the tag or the publish steps.
+
 ## The changelog entry is one line per change
 
 One bullet per change, one line, no prose: the entry names what changed, not why it was hard, what was
