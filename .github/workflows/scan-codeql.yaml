@@ -34,3 +34,29 @@ jobs:
     uses: jellyfin/jellyfin-meta-plugins/.github/workflows/scan-codeql.yaml@master
     with:
       repository-name: nrg80/sub-scribe
+
+  # Die Jellyfin-Vorlage scannt nur C#. Die Einstellungsseite ist JavaScript in einer HTML-Datei —
+  # genau dort sitzen die innerHTML-Senken, deshalb ein eigener Lauf fuer JavaScript.
+  javascript:
+    name: Analyze (javascript)
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
+    steps:
+      - uses: actions/checkout@v4
+      - uses: github/codeql-action/init@v3
+        with:
+          languages: javascript-typescript
+          queries: security-extended
+      - uses: github/codeql-action/analyze@v3
+        with:
+          output: sarif-js
+          upload: always
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: sarif-js
+          path: sarif-js
+          retention-days: 3
