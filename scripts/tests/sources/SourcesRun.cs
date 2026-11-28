@@ -1215,7 +1215,7 @@ internal static class Program
             // (2) Die Summenzeile: eine Zeile je Quelle, auf Normal, mit Aufrufen, Seiten, Fehlern, Dauer.
             SourceTraffic.WriteSummary(ruf, new[] { SubdlEngine.SourceKey });
             string summe = ruf.Lines.Last(l => l.Text.Contains("Aufrufe", StringComparison.Ordinal)).Text;
-            Check(summe.StartsWith("[N] SubDL: 5 Aufrufe, 0 Seiten, 4 Fehler, ", StringComparison.Ordinal)
+            Check(summe.StartsWith("[N] SubDL.com: 5 Aufrufe, 0 Seiten, 4 Fehler, ", StringComparison.Ordinal)
                   && summe.Contains(" s", StringComparison.Ordinal)
                   && summe.Contains("(5 Aufträge)", StringComparison.Ordinal),
                 "F-M684 (2): die Summenzeile nennt je Quelle Abrufe, Seiten, Fehler und Dauer — in EINER Zeile",

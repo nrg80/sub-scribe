@@ -161,6 +161,14 @@ path of the operator appears on the settings page (F-M299). No setting exists in
 The suite `scripts/tests/gui-structure` reads the built page and fails when a section, a field, a label or the required marker drifts. 35
 cases are bound to their entries in `docs/TESTS.md`, and `scripts/tests/counts.json` holds the binding.
 
+## Who may call the page's routes
+
+Every route the page calls needs a signed-in user, and the routes that write (stopping and resuming,
+resetting state or one path, adopting uploads, writing a source) need the administrator role — the
+page runs in the administrator's session and carries the token, so nothing changes for the operator
+(F-M805, checked by T449). The address never decides: a policy on the connection address is worthless
+behind a reverse proxy, because every request then arrives from a local address.
+
 ## Where the rules live
 
 The endpoint is `Plugins/SubdlSync/WorkerRuns`, and the registry holds the seven keys, the outcome words and the single write path. The due

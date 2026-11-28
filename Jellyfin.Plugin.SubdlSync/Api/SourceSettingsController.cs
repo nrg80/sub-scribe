@@ -34,13 +34,17 @@ namespace Jellyfin.Plugin.SubScribe.Api;
 /// </para>
 /// <para>
 /// ZUGANG: wie die übrigen Endpunkte des Plugins unter <c>Plugins/SubdlSync</c>, aber NICHT anonym —
-/// hier stehen Zugänge. Die Jellyfin-Regel <c>LocalAccessOrRequiresElevation</c> lässt nur einen
-/// angemeldeten Administrator (oder den Rechner selbst) heran.
+/// hier stehen Zugänge. Die Regel <c>RequiresElevation</c> lässt nur einen angemeldeten
+/// Administrator heran. Eine Regel auf der VERBINDUNGS-IP wäre hier wertlos: hinter einem
+/// Reverse-Proxy kommt jede Anfrage von einer lokalen Adresse (F-M805, gemessen 28.11.2026).
 /// </para>
 /// </summary>
 [ApiController]
 [Route("Plugins/SubdlSync")]
-[Authorize(Policy = "LocalAccessOrRequiresElevation")]
+[Authorize(Policy = "RequiresElevation")]
+// F-M805 (Befund 28.11.2026): die alte Policy prueft die VERBINDUNGS-IP — hinter einem Reverse-Proxy
+// ist jede Anfrage lokal, also war diese Route von aussen ohne Anmeldung erreichbar (live gemessen:
+// GET Plugins/SubdlSync/Sources antwortete 200 ohne Key). Die Rolle entscheidet, nicht die Adresse.
 public class SourceSettingsController : ControllerBase
 {
     /// <summary>

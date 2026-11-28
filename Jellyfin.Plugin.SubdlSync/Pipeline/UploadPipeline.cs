@@ -2150,6 +2150,24 @@ public sealed class UploadPipeline : IPackFiller
                     continue;
                 }
 
+                // F-M806 (Betreiberanweisung 28.11.2026: „Natürlich mitvererben"): eine korrigierte
+                // Kopie traegt andere Bytes als das behaltene Original und darum eine ANDERE
+                // Inhaltssumme — die Frage nach dem Inhalt (F-M804) kann sie deshalb nicht fangen.
+                // Der Bereich 51–99 entsteht ausschliesslich fuer ein geholtes Original (F-M315: die
+                // Sperre ist eine Eigenschaft der Nummer), also erbt eine Kopie, die neben einem
+                // solchen Original liegt, dessen Herkunft. Die Marke wird fuer IHREN Hash geschrieben,
+                // damit die Sperre ab dem naechsten Lauf auch ueber den Inhalt greift — und der
+                // Altbestand, fuer den keine Marke existiert, ist damit im ersten Lauf erledigt.
+                if (TryInheritKeptOriginalProvenance(mediaPath, loosePath, looseLang, looseHi, looseHashProbe, mediaHash, out string? erbeAus))
+                {
+                    summary.SkippedStreams++;
+                    LogUtil.PerItem(_config.LogMode, _logger,
+                        "[Sub Scribe] SKIP {File} [{Lang}] — provenance inherited from the kept original {Original}: downloaded by the plugin, locked against re-upload to every source (F-M806)",
+                        Path.GetFileName(loosePath), looseLang, erbeAus);
+
+                    continue;
+                }
+
                 if (looseReject != null)
                 {
                     // F-M298: `duplicate-content` is only a verdict while the content is NOT already up.
@@ -3244,6 +3262,77 @@ public sealed class UploadPipeline : IPackFiller
         => Jellyfin.Plugin.SubScribe.Registry.SidecarNaming.List(mediaPath)
             .Where(x => !Jellyfin.Plugin.SubScribe.Registry.SidecarNaming.IsOriginalSidecar(x.Path, mediaPath))
             .ToList();
+
+    /// <summary>
+    /// F-M806 (Betreiberanweisung 28.11.2026: „Natürlich mitvererben"): eine korrigierte Kopie
+    /// traegt andere Bytes als das behaltene Original und darum eine andere Inhaltssumme; die
+    /// Frage nach dem Inhalt allein (F-M804) kann sie nicht fangen. Der Bereich 51–99 entsteht
+    /// ausschliesslich fuer ein GEHOLTES Original (F-M315: die Sperre ist eine Eigenschaft der
+    /// Nummer), also erbt eine Kopie, die neben einem solchen Original derselben Sprache und
+    /// Variante liegt, dessen Herkunft. Die Marke wird fuer IHREN Hash geschrieben — damit greift
+    /// die Sperre ab dem naechsten Lauf auch ueber den Inhalt, und der Altbestand, fuer den keine
+    /// Marke existiert, ist im ersten Lauf mit erledigt.
+    /// </summary>
+    /// <param name="mediaPath">Media file the sidecar belongs to.</param>
+    /// <param name="loosePath">The sidecar under consideration for upload.</param>
+    /// <param name="looseLang">Its language token.</param>
+    /// <param name="looseHi">Whether it is the hearing-impaired variant.</param>
+    /// <param name="looseHash">Content hash of the sidecar as it lies on disk.</param>
+    /// <param name="mediaHash">Media hash, when known.</param>
+    /// <param name="inheritedFrom">File name of the kept original the provenance was inherited from.</param>
+    /// <returns>True when provenance was inherited — the caller must skip the file.</returns>
+    private bool TryInheritKeptOriginalProvenance(
+        string mediaPath,
+        string loosePath,
+        string looseLang,
+        bool looseHi,
+        string looseHash,
+        string? mediaHash,
+        out string? inheritedFrom)
+    {
+        inheritedFrom = null;
+        if (string.IsNullOrEmpty(mediaPath) || string.IsNullOrEmpty(loosePath) || string.IsNullOrEmpty(looseLang))
+        {
+            return false;
+        }
+
+        foreach (var (keptPath, keptLang, keptHi, keptForced) in Jellyfin.Plugin.SubScribe.Registry.SidecarNaming.List(mediaPath))
+        {
+            if (keptForced
+                || !Jellyfin.Plugin.SubScribe.Registry.SidecarNaming.IsOriginalSidecar(keptPath, mediaPath)
+                || !string.Equals(keptLang, looseLang, StringComparison.OrdinalIgnoreCase)
+                || keptHi != looseHi)
+            {
+                continue;
+            }
+
+            string kept;
+            try
+            {
+                kept = File.ReadAllText(keptPath);
+            }
+            catch
+            {
+                return false;
+            }
+
+            string keptHash = Jellyfin.Plugin.SubScribe.Registry.ContentHashRegistry.ComputeHash(kept);
+            (string? Origin, string? OriginId) herkunft = Registry.GetOrigin(keptHash);
+            Registry.MarkAndFlush(() => Registry.MarkDownloaded(
+                looseHash,
+                mediaHash ?? string.Empty,
+                looseLang,
+                looseHi,
+                fileName: Path.GetFileName(loosePath),
+                path: loosePath,
+                origin: herkunft.Origin,
+                originId: herkunft.OriginId));
+            inheritedFrom = Path.GetFileName(keptPath);
+            return true;
+        }
+
+        return false;
+    }
 
     /// <summary>
     /// F-M71: resolves a loose-file language token (2-letter direct, 3-letter ISO 639-2 via mapper).

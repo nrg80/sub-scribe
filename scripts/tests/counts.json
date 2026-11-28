@@ -1251,9 +1251,15 @@
     },
     "T449": {
       "suite": "endpoints",
-      "checks": 14,
+      "checks": 15,
       "requirement": "F-M805",
       "title": "Jede Route der Plugin-API verlangt eine Anmeldung: Lesen ein angemeldeter Nutzer, Schreiben und Loeschen RequiresElevation, keine AllowAnonymous-Route mehr"
+    },
+    "T450": {
+      "suite": "endpoints",
+      "checks": 6,
+      "requirement": "F-M806",
+      "title": "Die Herkunft wird mitvererbt: eine Kopie neben einem behaltenen Original erbt dessen Marke fuer ihren eigenen Hash, damit die Sperre sie ueber den Inhalt faengt"
     }
   }
 }
