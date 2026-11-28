@@ -965,7 +965,7 @@ public sealed class ScribeEventDispatcher : IDisposable
     /// F-M448: waits when a library scan is running. Returns true when the seed must not scan now.
     /// <para>
     /// The scan is what creates the item; its media streams arrive with the analysis that follows it.
-    /// Scanning in that window reads an empty stream list and the arrival is lost (measured: MobLand
+    /// Scanning in that window reads an empty stream list and the arrival is lost (measured: Sample Show
     /// S02E08 and Best.Medicine S02E06 both wrote a media row with no languages and were never queued).
     /// </para>
     /// <para>

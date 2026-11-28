@@ -175,12 +175,12 @@ public sealed class MovieSubtitlesClient
     private static readonly Regex RowYear = new(
         "class=\\\"myear\\\"[^>]*>\\s*(\\d{4})", RegexOptions.CultureInvariant);
 
-    // The upload view (add.php?let=… / add.php?filter=…): <li><a href="add.php?tvid=24811"><b>Oppenheimer</b></a> 2023</li>
+    // The upload view (add.php?let=… / add.php?filter=…): <li><a href="add.php?tvid=24811"><b>Sample Film</b></a> 2023</li>
     private static readonly Regex AddRow = new(
         "href=\\\"add\\.php\\?tvid=(\\d+)\\\">(.*?)</a>\\s*(\\d{4})",
         RegexOptions.Singleline | RegexOptions.CultureInvariant);
 
-    // The search result list (search.php?q=…): <a href="/movie-607.html">Dune (1984)</a> — the year is
+    // The search result list (search.php?q=…): <a href="/movie-607.html">Sample Film (1984)</a> — the year is
     // part of the link text here, not a separate cell.
     private static readonly Regex PlainMovieLink = new(
         "href=\\\"(?:/)?movie-(\\d+)\\.html\\\"[^>]*>([^<]+)</a>", RegexOptions.CultureInvariant);
@@ -245,12 +245,12 @@ public sealed class MovieSubtitlesClient
     private static readonly Regex TrailingYear = new(
         "\\((\\d{4})\\)\\s*$", RegexOptions.CultureInvariant);
 
-    // "Matrix, The" -> "the matrix": the site stores the article behind a comma.
+    // "Sample Film, The" -> "the sample film": the site stores the article behind a comma.
     private static readonly Regex InvertedArticle = new(
         "^(.*),\\s*(the|a|an)$", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
     // F-M507: the article the site moves to the back — only the English ones, because only those are
-    // what it inverts ("Matrix, The", not "Matrix, Der"). A German/French title keeps its article.
+    // what it inverts ("Sample Film, The", not "Sample Film, Der"). A German/French title keeps its article.
     private static readonly Regex LeadingArticle = new(
         "^(the|a|an)\\s+", RegexOptions.IgnoreCase | RegexOptions.CultureInvariant);
 
@@ -350,7 +350,7 @@ public sealed class MovieSubtitlesClient
     /// ohne Raten.
     /// <para>
     /// Die Suche der Seite ist ein Teilstring-Filter, kein Namensvergleich: <c>search.php?q=The
-    /// Matrix</c> findet <c>Matrix, The</c> NICHT, weil die Seite den Artikel hinter den Komma stellt.
+    /// <c>The Matrix</c> findet <c>Sample Film, The</c> NICHT, weil die Seite den Artikel hinter den Komma stellt.
     /// Deshalb werden die Schreibweisen der Reihe nach gefragt (<see cref="SearchTerms"/>: der Titel, der
     /// Titel ohne führenden Artikel, die invertierte Form) und jede Antwort durch
     /// <see cref="ResolveMovie"/> geschickt, das Titel UND Jahr vergleicht und bei Mehrdeutigkeit nichts
@@ -401,7 +401,7 @@ public sealed class MovieSubtitlesClient
     /// Versuchs.
     /// <para>
     /// <c>The Matrix</c> → <c>The Matrix</c>, <c>Matrix</c> (ohne führenden Artikel, weil der
-    /// Teilstring-Filter der Seite <c>Matrix, The</c> so findet), <c>Matrix, The</c>
+    /// Teilstring-Filter der Seite <c>Sample Film, The</c> so findet), <c>Sample Film, The</c>
     /// (die Inversion, die die Seite selbst schreibt). Leer, wenn der Titel nichts hergibt — dann wird
     /// gar nicht gesucht.
     /// </para>
@@ -434,7 +434,7 @@ public sealed class MovieSubtitlesClient
             var rest = name[leading.Length..].Trim().TrimStart(',');
             Add(rest);
 
-            // Die Schreibweise der Seite: "Matrix, The".
+            // Die Schreibweise der Seite: "Sample Film, The".
             Add(rest + ", " + leading.Groups[1].Value);
         }
 
@@ -618,7 +618,7 @@ public sealed class MovieSubtitlesClient
 
     /// <summary>
     /// F-M513: alle Filme einer Liste, deren Titel dem gesuchten entspricht — nach
-    /// <see cref="TitleKey"/>, also mit rueckgaengig gemachter Artikelstellung (<c>Matrix, The</c> =
+    /// <see cref="TitleKey"/>, also mit rueckgaengig gemachter Artikelstellung (<c>Sample Film, The</c> =
     /// <c>The Matrix</c>) und ohne ein wiederholtes Jahr. Die Liste ist die gemeinsame Grundlage beider
     /// Entscheidungen: <see cref="ResolveMovie"/> nimmt daraus die eindeutige Nummer, und der
     /// Doppeleintrag-Schutz (<see cref="ResolveForAdd"/>) sieht daraus, ob es den Titel schon gibt.
@@ -645,7 +645,7 @@ public sealed class MovieSubtitlesClient
     /// F-M506: der Film zu einem Titel und einem Jahr — eng verglichen, nach derselben Normalisierung,
     /// die <see cref="TvSubtitlesClient.NormalizeShowName"/> fuer Serien anwendet (Gross-/Kleinschreibung
     /// egal, <c>&amp;</c>/<c>and</c>/<c>und</c> als dasselbe Wort, Leerraum zu einem Leerzeichen), dazu
-    /// die Artikel-Inversion der Seite (<c>Matrix, The</c> = <c>The Matrix</c>) und das Jahr.
+    /// die Artikel-Inversion der Seite (<c>Sample Film, The</c> = <c>The Sample Film</c>) und das Jahr.
     /// <para>
     /// DIE REGEL BEI MEHRDEUTIGKEIT: bleibt nach Titel UND Jahr mehr als ein Kandidat, wird NICHTS
     /// geliefert. Die Seite hat keine Suche nach Jahr und keine Wunsch-Id; <c>filter=dune</c> antwortet
@@ -762,7 +762,7 @@ public sealed class MovieSubtitlesClient
         var inverted = InvertedArticle.Match(name);
         if (inverted.Success)
         {
-            // "Matrix, The" -> "The Matrix". Der Artikel wandert nach vorn, sonst vergleicht die
+            // "Sample Film, The" -> "The Sample Film". Der Artikel wandert nach vorn, sonst vergleicht die
             // Seite eine Schreibweise gegen eine andere.
             name = inverted.Groups[2].Value + " " + inverted.Groups[1].Value;
         }
@@ -959,8 +959,8 @@ public sealed class MovieSubtitlesClient
 
     /// <summary>
     /// F-M506: the target of the download redirect — a RELATIVE <c>Location</c>, e.g.
-    /// <c>files/Oppenheimer_2023.WEB-DL.MA.en.zip</c>, or with brackets because the name existed already:
-    /// <c>files/Matrix_The_1999.ru(2).zip</c>. The brackets are part of the name and stay.
+    /// <c>files/Sample_Film_JJJJ.WEB-DL.GRP.en.zip</c>, or with brackets because the name existed already:
+    /// <c>files/Sample_Film_JJJJ.ru(2).zip</c>. The brackets are part of the name and stay.
     /// </summary>
     /// <param name="location">The raw <c>Location</c> header value (or a whole URL, which is returned
     /// unchanged so a followed redirect and a raw header go through the same check).</param>
@@ -1632,7 +1632,7 @@ public sealed class MovieSubtitlesClient
     /// <summary>
     /// F-M513: die eine Suche VOR dem Anlegen — und zugleich die Aufloesung. Sie fragt die
     /// Schreibweisen aus <see cref="SearchTerms"/> der Reihe nach (der Titel, der Titel ohne fuehrenden
-    /// Artikel, die invertierte Form <c>Matrix, The</c>), sammelt die Titeltreffer ein und entscheidet
+    /// Artikel, die invertierte Form <c>Sample Film, The</c>), sammelt die Titeltreffer ein und entscheidet
     /// nach <see cref="ResolveForAdd"/>.
     /// <para>
     /// WARUM EINE SUCHRUNDE UND NICHT ZWEI: „vor dem Anlegen genau einmal suchen" heisst, dass die

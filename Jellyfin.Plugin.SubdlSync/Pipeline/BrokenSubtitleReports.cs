@@ -165,7 +165,7 @@ public static class BrokenSubtitleReports
     /// Cuts a finding back to the part the category is decided on.
     /// <para>
     /// A finding may name the pack member it belongs to — "cue span 2508s vs. runtime 1254s
-    /// ('The.Middle.S03E01.srt')". That suffix makes the report unambiguous for the reader, but it
+    /// ('Sample.Series.S03E01.srt')". That suffix makes the report unambiguous for the reader, but it
     /// must not change how the finding is classified, so the category is read from the head only.
     /// </para>
     /// </summary>

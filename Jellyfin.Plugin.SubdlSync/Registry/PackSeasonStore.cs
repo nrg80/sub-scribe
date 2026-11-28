@@ -289,7 +289,7 @@ public static class PackSeasonStore
     /// <c>packs</c>-Zeile; die Urteile der Pack-Phase liegen aber HIER, mit der Signatur der Dateien
     /// als Schluessel. Solange die Dateien unveraendert sind, passt die Signatur weiter — ein
     /// aufgehobener Spursperre zum Trotz bliebe die Staffel gesperrt (gemessen am 20.11.2026 an
-    /// MobLand S02: Spur frei, Plan uebersprungen). Deshalb gibt es diesen Weg, und er ist im
+    /// Sample Show S02: Spur frei, Plan uebersprungen). Deshalb gibt es diesen Weg, und er ist im
     /// Dropdown der Einstellungsseite waehlbar.
     /// </para>
     /// </summary>

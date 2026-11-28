@@ -216,7 +216,7 @@ public sealed class MsubMovieResolver
     /// <see cref="ContentHashRegistry.SetMsubMovieId"/> die Zeile über ihren PFAD
     /// (<c>FileEntity.Path</c>) und schreibt dieselbe Spalte <c>MsubMovieId</c>. Vorher kehrte diese
     /// Methode bei fehlendem Hash stumm zurück, obwohl die Zeile existierte — gemessen am 16.11.2026
-    /// 04:13 auf jf-test: `[moviesubtitles] ?: 'Hotel Transylvania 2' (2015) ist Film 13392 — nicht
+    /// 04:13 auf jf-test: `[moviesubtitles] ?: 'Sample Film' (2015) ist Film 13392 — nicht
     /// gespeichert: kein Medien-Hash bekannt`. Der Upload lief durch, die Nummer war weg.
     /// </para>
     /// </summary>
@@ -232,7 +232,7 @@ public sealed class MsubMovieResolver
     /// <summary>
     /// F-M514/F-M517: was die Logzeile über das Speichern sagen darf — und was nicht.
     /// <para>
-    /// Gemessen 16.11.2026 (jf-test 02:51): `[moviesubtitles] ?: 'Hotel Transylvania 2' (2015) ist
+    /// Gemessen 16.11.2026 (jf-test 02:51): `[moviesubtitles] ?: 'Sample Film' (2015) ist
     /// Film 13392 — gespeichert.` Das `?` ist der Platzhalter für „kein Medien-Hash bekannt"
     /// (<c>Registry.GetMediaHash</c> kennt die eben geschriebene Datei noch nicht, es gibt keine
     /// OSHash-Zeile oder die Datei ist nicht lesbar) — und in diesem Fall schrieb der alte Weg

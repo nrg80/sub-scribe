@@ -25,7 +25,7 @@ namespace Jellyfin.Plugin.SubScribe;
 /// <remarks>
 /// F-M189 (24.09.2026, user decision "das muss auch mit Unterverzeichnissen
 /// funktionieren"): a library whose path sits INSIDE another library's path
-/// (e.g. Test_SubDL = /data/movies2/Test_SubDL while Movies = /data/movies2)
+/// (e.g. Test_SubDL = /media/films/Testing while Movies = /media/films)
 /// does not own its items in Jellyfin — the scan logs "Found duplicate path",
 /// the items stay in the OUTER library and <c>GetCollectionFolders</c> returns
 /// that outer name. A name-only comparison therefore never matches the inner
@@ -282,7 +282,7 @@ internal sealed class LibraryScope
             return false;
         }
 
-        // Boundary check: "/data/movies2Extra" must NOT match root "/data/movies2".
+        // Boundary check: "/media/filmsExtra" must NOT match root "/media/films".
         var c = path[root.Length];
         return c == Path.DirectorySeparatorChar || c == Path.AltDirectorySeparatorChar;
     }

@@ -475,8 +475,8 @@ public class ScribeStatusController : ControllerBase
             // SELECTION, never about the walk scope. A nested selection's items
             // do live in the outer library (F-M189) and the walk must keep
             // enumerating it — but listing that outer library here showed a
-            // directory the user never picked (/data/movies2 next to the
-            // selected /data/movies2/Test_SubDL), which reads as "all of this is
+            // directory the user never picked (/media/films next to the
+            // selected /media/films/Testing), which reads as "all of this is
             // scanned". A status row therefore names what was selected.
             if (!scope.IsSelectedName(folder.Name))
             {

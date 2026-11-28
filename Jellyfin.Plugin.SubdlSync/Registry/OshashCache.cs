@@ -152,7 +152,7 @@ public sealed class OshashCache
     }
 
     /// <summary>
-    /// Derive the distinct roots a set of stored paths lives under — "/data/movies2/..." -> "/data/movies2".
+    /// Derive the distinct roots a set of stored paths lives under — "/media/films/..." -> "/media/films".
     /// <para>
     /// Shared by the refresh's two file-side sweeps (the OSHash cache and the media rows) so they cannot
     /// disagree about whether a volume is present. A fail-safe that guards one and not the other would
@@ -166,7 +166,7 @@ public sealed class OshashCache
         var roots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var path in paths)
         {
-            // two levels below filesystem root: "/data/movies2/..." → "/data/movies2"
+            // two levels below filesystem root: "/media/films/..." → "/media/films"
             var parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length >= 2)
             {

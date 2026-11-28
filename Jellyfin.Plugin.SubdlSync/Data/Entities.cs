@@ -1132,7 +1132,7 @@ public class BadAppleEntity
     /// Betreiber-Entscheidung 22.11.2026, wörtlich: „Halt fuer subs einzeln und im pack". Ein schlechter
     /// Download ist ein EINZELNER Untertitel, gleich ob er allein oder in einem Staffelpack kam: diese
     /// Spalte nennt die Datei im fremden Behälter (z. B.
-    /// <c>MobLand - 2x05 - Birdland.WEB.NeoNoir.en.srt</c>), leer bei einem Einzeldownload.
+    /// <c>Sample Show - 2x05 - Episode Title.WEB.GRP.en.srt</c>), leer bei einem Einzeldownload.
     /// </para>
     /// <para>
     /// WARUM SIE ZUM SCHLÜSSEL GEHÖRT: erst damit ist der Verbrauch je SUB möglich statt je EINTRAG —

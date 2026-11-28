@@ -135,8 +135,8 @@ public sealed class TvSubtitlesClient
         "<a href=\"/subtitle-(\\d+)\\.html\">", RegexOptions.CultureInvariant);
 
     // F-M662 (21.11.2026): the ear icon is the ONLY thing that tells a hearing-impaired entry from a
-    // regular one — both carry the same name on the page (measured: MobLand 2x10, subtitle-330929
-    // regular / subtitle-330930 with `images/hi.png`, both "MobLand 2x10 (WEB.NeoNoir)").
+    // regular one — both carry the same name on the page (measured: Sample Show 2x10, subtitle-330929
+    // regular / subtitle-330930 with `images/hi.png`, both "Sample Show 2x10 (WEB.GRP)").
     private static readonly Regex HiMark = new(
         "images/hi\\.png", RegexOptions.CultureInvariant);
 
@@ -144,7 +144,7 @@ public sealed class TvSubtitlesClient
     private static readonly Regex SeasonDownload = new(
         "href=\"?(?:/)?(download-\\d+-\\d+-([a-z]{2,3})\\.html)", RegexOptions.CultureInvariant);
 
-    // F-M662: "MobLand - 2x05 - Birdland.WEB.NeoNoir.HI.en.srt" — episode number, HI marker, language.
+    // F-M662: "Sample Show - 2x05 - Episode Title.WEB.GRP.HI.en.srt" — episode number, HI marker, language.
     private static readonly Regex PackMember = new(
         "(\\d+)x(\\d+)", RegexOptions.CultureInvariant);
     private static readonly Regex PackHi = new(
@@ -255,8 +255,8 @@ public sealed class TvSubtitlesClient
     private static readonly Regex AgeCell = new(
         "<small[^>]*>([\\d.]{8,10} [\\d:]+)</small>", RegexOptions.CultureInvariant);
 
-    // The download page holds the file name split over numbered JS variables: var s1='files/The Middle_2x24';
-    // var s2='_HDTV.FEVER.en.zip'; Concatenated in order they are the path under the site root.
+    // The download page holds the file name split over numbered JS variables: var s1='files/Sample Series_2x24';
+    // var s2='_HDTV.GRP.en.zip'; Concatenated in order they are the path under the site root.
     private static readonly Regex JsNameFragment = new(
         "var s\\d+= *'([^']*)';", RegexOptions.CultureInvariant);
 
@@ -319,7 +319,7 @@ public sealed class TvSubtitlesClient
     /// <para>
     /// Warum sie hier steht: der Endpunkt löst die Nummer beim Suchen auf und brauchte sie bisher nur
     /// für den einen Abruf. Schreiben konnte sie nur der Upload-Weg (<c>die Seite der Titel-Frage</c>) — deshalb
-    /// hatte The Middle 512 aus dem Staffel-Upload im Store, MobLand und Stranger Things aus dem
+    /// hatte Sample Series 512 aus dem Staffel-Upload im Store, Sample Show und eine dritte Serie aus dem
     /// Download aber nicht, und jeder Lauf holte die Serienliste erneut. Der Endpunkt legt die Nummer
     /// hier ab, die Download-Pipeline schreibt sie über denselben Weg wie die Filmnummer
     /// (<c>Registry.SetTvstShowId</c>, F-M517).
@@ -494,8 +494,8 @@ public sealed class TvSubtitlesClient
     /// zu einem einzelnen Leerzeichen.</description></item>
     /// </list>
     /// <para>
-    /// Was hier ABSICHTLICH NICHT passiert: führende Artikel werden nicht entfernt („The Middle“ bleibt
-    /// „The Middle“), es gibt keinen Teilstring-Treffer („The Middle“ findet „The Middle Man“ nicht) und
+    /// Was hier ABSICHTLICH NICHT passiert: führende Artikel werden nicht entfernt („Sample Series“ bleibt
+    /// „Sample Series“), es gibt keinen Teilstring-Treffer („Sample Series“ findet „Sample Series Two“ nicht) und
     /// kein Ähnlichkeitsmaß (kein Levenshtein, keine Token-Quote, keine Jahres-Toleranz). Genau diese
     /// Grenze hält Doppeleinträge draußen: eine Schreibweise, die nur „ähnlich“ ist, ist eine andere
     /// Serie.
@@ -974,7 +974,7 @@ public sealed class TvSubtitlesClient
     /// it in JavaScript from numbered fragments, which are concatenated in order.
     /// </summary>
     /// <param name="html">The source of <c>/download-&lt;id&gt;.html</c>.</param>
-    /// <returns>The path under the site root, e.g. <c>files/The Middle_2x24_HDTV.FEVER.en.zip</c>,
+    /// <returns>The path under the site root, e.g. <c>files/Sample Series_2x24_HDTV.GRP.en.zip</c>,
     /// or null when the page carries no fragment.</returns>
     public static string? ParseDownloadFileName(string html)
     {
@@ -1067,9 +1067,9 @@ public sealed class TvSubtitlesClient
     /// F-M662 (Bediener-Anweisung 21.11.2026: „bevorzugt staffelpacks von tvst und die dann auch cachen",
     /// „Auch auf tvst regulär und hi suchen"): the season archive of ONE language.
     /// <para>
-    /// Measured 21.11.2026 on MobLand S02: <c>/subtitle-3234-2-en.html</c> ("Download subtitles for
-    /// MobLand season 2 (season 2 episode 1-10)") carries the link <c>download-3234-2-en.html</c>,
-    /// which answers with a redirect to <c>/files/seasons/MobLand - season 2.en.zip</c> — 610.807 B,
+    /// Measured 21.11.2026 on Sample Show S02: <c>/subtitle-3234-2-en.html</c> ("Download subtitles for
+    /// Sample Show season 2 (season 2 episode 1-10)") carries the link <c>download-3234-2-en.html</c>,
+    /// which answers with a redirect to <c>/files/seasons/Sample Show - season 2.en.zip</c> — 610.807 B,
     /// 27 members for 9 episodes. BOTH sides are inside that ONE archive, told apart by <c>.HI.</c>
     /// in the member name, so no source needs two separate season packs.
     /// </para>
@@ -1144,7 +1144,7 @@ public sealed class TvSubtitlesClient
     /// <summary>
     /// F-M662: splits a season archive into its episodes, keeping the two sides apart.
     /// <para>
-    /// Member names look like <c>MobLand - 2x05 - Birdland.WEB.NeoNoir.HI.en.srt</c> — the episode
+    /// Member names look like <c>Sample Show - 2x05 - Episode Title.WEB.GRP.HI.en.srt</c> — the episode
     /// number sits between the dashes, the language is the last token before <c>.srt</c>, and
     /// <c>.HI.</c> marks the hearing-impaired side. A Hindi file would be named <c>…​.hi.srt</c> and
     /// therefore never matches <c>.hi.</c> (the trailing dot is what separates the two).
@@ -1200,7 +1200,7 @@ public sealed class TvSubtitlesClient
     /// F-M663 (21.11.2026): EIN Abruf je (Serie, Staffel, Sprache) pro Lauf.
     /// <para>
     /// Der Lauf fragt jede Folge EINZELN an (<c>SearchAsync</c> je Medium), die ZIP gilt aber fuer die
-    /// ganze Staffel: bei MobLand S02 sind das 9 Folgen je 610.807 B fuer dieselben 27 Dateien. Der
+    /// ganze Staffel: bei Sample Show S02 sind das 9 Folgen je 610.807 B fuer dieselben 27 Dateien. Der
     /// Merker haelt die GELESENEN Eintraege samt Bytes, damit sowohl die naechste Folge (Suche) als
     /// auch der Abruf eines Treffers keine zweite Anfrage kosten.
     /// </para>

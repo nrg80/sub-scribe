@@ -190,7 +190,7 @@ public static partial class SeasonPack
     /// <summary>
     /// F-M374: the one entry a season pack carries in `releases` — SubDL titles the pack after it
     /// and ignores `name`. Other uploaders put a season release there (measured 01.11.2026 on
-    /// tt0804484/tt0944947: "Foundation.2021.S03.COMPLETE.ATVP.WEB-DL…", "Game of Thrones, SEASON 8
+    /// tt0000002/tt0000003: "Sample.Show.2021.S03.COMPLETE.GRP.WEB-DL…", "Sample Show, SEASON 8
     /// 4K x265 [23.976 FPS]"), never a list of episode releases — and this plugin mixes nothing:
     /// only when EVERY episode reduces to the same season release ("…S01E05…" → "…S01…") is that
     /// release named. Different groups name no release at all; the neutral label stands in, so the
@@ -389,9 +389,9 @@ public static partial class SeasonPack
     /// <c>-</c>-segment and nothing else — read one of the four spellings the library uses. The reason
     /// for the misses was shape, not absence:
     /// <list type="bullet">
-    /// <item><description><c>…x264-NeoNoir</c> — dash.</description></item>
+    /// <item><description><c>…x264-GRP</c> — dash.</description></item>
     /// <item><description><c>…x264.YIFY</c> — dot-separated (scene releases).</description></item>
-    /// <item><description><c>…HEVC x265 BONE</c>, <c>…(1080p AMZN WEB-DL x265 Ghost)</c> — space-separated, sometimes inside brackets.</description></item>
+    /// <item><description><c>…HEVC x265 GRP</c>, <c>…(1080p AMZN WEB-DL x265 Ghost)</c> — space-separated, sometimes inside brackets.</description></item>
     /// <item><description><c>…x265-MeGusta[EZTVx.to]</c>, <c>…x264.[MPup]</c>, <c>…x264-[YTS.LT]</c> — a site tag or a bracketed group behind the group.</description></item>
     /// </list>
     /// The rule now: strip a trailing bracket or parenthesis (and read inside it only when the outside
@@ -444,8 +444,8 @@ public static partial class SeasonPack
         string name = releaseName.Trim();
 
         // F-M640 (Operator-Befund 20.11.2026: Pierre S1 meldete release group "?"): here comes a PATH,
-        // extension included. "…5.1 BONE.mkv" ends on ".mkv", so the last dot token is the extension and
-        // the group token in front of it ("BONE") is never examined. The extension is dropped first; for
+        // extension included. "…5.1 GRP.mkv" ends on ".mkv", so the last dot token is the extension and
+        // the group token in front of it ("GRP") is never examined. The extension is dropped first; for
         // dot-separated names ("…x264.YIFY.mkv") nothing changes — it was no candidate there anyway.
         int extensionAt = name.LastIndexOf('.');
         if (extensionAt > 0 && IsVideoExtension(name[(extensionAt + 1)..]))
@@ -495,7 +495,7 @@ public static partial class SeasonPack
 
     /// <summary>
     /// F-M761: ENDET der Abschnitt vor dem Bindestrich auf eine Folgenmarke (<c>S01E01</c>, <c>1x01</c>),
-    /// dann ist das, was danach kommt, ein Titel und keine Gruppe — <c>… - S04E01 - Smoke.mkv</c>.
+    /// dann ist das, was danach kommt, ein Titel und keine Gruppe — <c>… - S04E01 - Episode Title.mkv</c>.
     /// Nur das Ende zählt: <c>The.Rainmaker S02E01-HDTV-X64-NGP</c> trägt die Marke mitten im Abschnitt und
     /// die Gruppe dahinter ist echt (gemessen 26.11.2026).
     /// </summary>

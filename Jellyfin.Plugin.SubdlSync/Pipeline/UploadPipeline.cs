@@ -764,7 +764,7 @@ public sealed class UploadPipeline : IPackFiller
                 // bekommt KEINEN Pack-Umfang mehr. Bis 12.3.3.0 galt hier F-M424 — der Ankunftslauf
                 // packte seine eigenen Folgen, wenn sie zufällig eine ganze Staffel waren. Das war die
                 // Quelle der Ungleichheit: derselbe Lauf baute am 21.11.2026 um 09:58 zwei SubDL-Packs
-                // (MobLand S02, regular 524.500 B und HI 574.748 B), während tvsubtitles.net im selben
+                // (Sample Show S02, regular 524.500 B und HI 574.748 B), während tvsubtitles.net im selben
                 // Lauf mit „stays with a full run" ausgeschlossen wurde. Wer ankommt, lädt einzeln hoch;
                 // wer packt, ist der Refetch- oder der Manual-Lauf.
                 //
@@ -5942,7 +5942,7 @@ public sealed class UploadPipeline : IPackFiller
     /// ungefilterte Liste bildet, liegt um die Zahl der Beidateien daneben: ffmpeg bekommt dann
     /// `-map 0:s:2` auf einer Datei mit zwei Untertitelspuren, antwortet
     /// „Stream map '' matches no streams." und endet mit 234 — die Extraktion gilt als gescheitert,
-    /// obwohl die Spur im Container liegt (MobLand S02E02 mit zwei .de-SRT daneben).
+    /// obwohl die Spur im Container liegt (Sample Show S02E02 mit zwei .de-SRT daneben).
     /// Der Einzelpfad filtert seit jeher (UploadPipeline, `allSubs`), der Sammler nicht.
     /// </summary>
     /// <param name="item">Episode item.</param>

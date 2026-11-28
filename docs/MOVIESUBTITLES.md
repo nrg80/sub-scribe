@@ -26,14 +26,14 @@ tvsubtitles.net for series, moviesubtitles.org for films. The order setting rank
 | both | **SubDL** stays responsible for both; SubDL does not distinguish |
 
 The resolution runs through TMDb and not through the name, because **the same name means different works on
-the two sites**: `Dune` is here the film from 1984 (`movie-607.html`), and there the television miniseries
-from 2000, next to `Children of Dune` and `Dune: Prophecy`.
+the two sites**. One word names a film from 1984 here (`movie-607.html`). There it names a television
+miniseries from 2000, next to two sequels built on the same word.
 
 **A hit is known to be a film by five signs** (F-M506).
 
 - **The series addresses are dead.** `/tvshow-512.html` and `/episode-31911.html` answer with **302 to `/`**.
-- **No series stands in the list.** `add.php?filter=` returns 0 hits for „game of thrones", „the office",
-  „chernobyl" and „breaking bad s01", while „breaking bad" hits only `El Camino: A Breaking Bad Movie (2019)`.
+- **No series stands in the list.** `add.php?filter=` returns 0 hits for four series names, and one of their words
+  alone hits only a television film.
 - **Every row carries a four-digit year and nothing else.** No season or episode field exists anywhere, and
   the upload form has none either (`tvid`, `lang`, `rip`, `release`, `author`, `UFile`, `comments`).
 - **The site calls itself a film site.** The `<title>` of a film page ends in `… movie` and the heading reads
@@ -60,16 +60,16 @@ the name is not.
 - **`search.php` answers 500** on all seven checked fetches, with and without hits. The body is still the
   correct hit list and only breaks off where the secondary list begins, so the status code is no error sign
   and the content is.
-- **Titles stand inverted** (`Matrix, The (1999)`), and 52 of 492 O films end in `, The/A/An`. `filter=The
+- **Titles stand inverted** (`Sample Film, The (1999)`), and 52 of 492 O films end in `, The/A/An`. `filter=The
   Matrix` returns 0 hits, `filter=Matrix` five.
 - **The filter is a pure substring**, anywhere in the title: `filter=LOTR` hits `Allotria (Allegria)`,
   `filter=dark` 162 films, `filter=the` 6.674 rows in 548 KB. An appended year does not help.
-- **`tvid` is the film identifier**, one global number (Oppenheimer 24811, Matrix, The 4, Ocean's Thirteen
+- **`tvid` is the film identifier**, one global number (Sample Film 24811, Sample Film, The 4, Ocean's Thirteen
   239), with no season or episode level.
-- **The download answers with a relative 302** that can carry parentheses (`files/Matrix_The_1999.ru(2).zip`).
+- **The download answers with a relative 302** that can carry parentheses (`files/Sample_Film_JJJJ.ru(2).zip`).
 - **Unknown identifiers look like success**: `download-999999.html` → 302 to `files/` with no name,
   `subtitle-999999.html` → 200 with „size: 9140 kb". Both are checked before a row comes out.
-- **The zip holds 1 to 3 files and `parts` is only a hint** (Oppenheimer: 92.522 B, one entry of 246.829 B in UTF-8 with BOM): parts=2 on entry 2058 delivers one file, and
+- **The zip holds 1 to 3 files and `parts` is only a hint** (Sample Film: 92.522 B, one entry of 246.829 B in UTF-8 with BOM): parts=2 on entry 2058 delivers one file, and
   with several parts the files are segments that only joined make a film.
 - **The name inside the zip follows no pattern** (`<Titel>.<Rip>.<Release>.<lang>.srt` or
   `<Titel> (<Jahr>).<lang>.srt`) and differs from the name of the zip.
@@ -79,8 +79,8 @@ the name is not.
   upload list carries 492 O films against 487 in the film list, and 1.407 against 1.395 for A.
 
 **Ambiguity.** There is no search by year, no requested-identifier parameter and no disambiguation page:
-`filter=dune` gives five films, three „Dune" adaptations (1984, 2021, 2024), the documentary
-`Jodorowsky's Dune` (2013) and `Suna no onna (Woman of the Dunes)` (1964). The decision falls in the client —
+one filter word gives five films: three adaptations of the same work (1984, 2021, 2024), a
+documentary about it (2013) and a film whose title carries the same word (1964). The decision falls in the client —
 collect candidates, compare the year next to the link, compare the title narrowly when two carry the same
 year, and otherwise **not** guess (F-M506).
 
@@ -173,8 +173,8 @@ without an upload, since without tvid there is no form (F-M513, F-M515); an HTTP
 status as reason.
 
 ```
-[moviesubtitles] 'Paddington in Peru' (2026) newly created — id 4711
-[moviesubtitles] 'Dune' (2026): the site already carries this title — found year 2021, 1 hit; nothing created (F-M513)
+[moviesubtitles] 'Sample Film' (2026) newly created — id 4711
+[moviesubtitles] 'Another Film' (2026): the site already carries this title — found year 2021, 1 hit; nothing created (F-M513)
 [moviesubtitles] 'X' (2026) was created, but the follow-up search named no id — nothing stored (F-M513)
 ```
 
@@ -187,10 +187,10 @@ client says that and a second attempt never falls.
 
 ```
 GET /add.php?filter=oppenheimer   →  add.php?tvid=24811   (exactly one hit)
-GET /add.php?tvid=24811           →  <b>Movie:</b> Oppenheimer (2023)   … form
+GET /add.php?tvid=24811           →  <b>Movie:</b> Sample Film (2023)   … form
 ```
 
-`filter=The Matrix` (1999) → 0 hits, `filter=Matrix` → 5 hits, of which `Matrix, The (1999)` = `tvid=4`. The
+`filter=The Matrix` (1999) → 0 hits, `filter=Matrix` → 5 hits, of which `Sample Film, The (1999)` = `tvid=4`. The
 path leads over the **core** of the title and then over the year comparison, not over the full TMDb title.
 
 ## Languages
@@ -324,7 +324,7 @@ the media hash or, when no hash is known, by the path of the media file. No hash
 rows with the same path, means **nothing is written** (F-M517):
 
 ```
-[moviesubtitles] ?: 'Hotel Transylvania 2' (2015) is film 13392 — not stored: no media hash known — the number applies only for this run.
+[moviesubtitles] ?: 'Sample Film' (2015) is film 13392 — not stored: no media hash known — the number applies only for this run.
 ```
 
 The note names the address it took, `stored (via the media hash).` or `stored via the path (no media hash

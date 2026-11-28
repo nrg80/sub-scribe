@@ -117,7 +117,7 @@ public sealed class TvSubtitlesDownloadEndpoint : IDownloadEndpoint
         var hits = new List<SubtitleHit>();
         var hiTreffer = new List<SubtitleHit>();
 
-        // F-M663 (Bediener-Anweisung 21.11.2026): STUFE 1 ist die Staffel-ZIP. Gemessen an MobLand S02:
+        // F-M663 (Bediener-Anweisung 21.11.2026): STUFE 1 ist die Staffel-ZIP. Gemessen an einer Serie S02:
         // 27 Dateien fuer 9 Folgen in EINER ZIP je Sprache (610.807 B), Regular und HI durch `.HI.`
         // getrennt. Die ZIP liegt im Platten-Cache (F-M665), im Merker des Clients stehen nur die Namen
         // (F-M766) — also kostet die Staffel EINEN Abruf statt einen je Folge, und zwar ohne die Bytes

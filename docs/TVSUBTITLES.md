@@ -37,10 +37,10 @@ Five defects follow from this path, and each is answered by the client:
   block, from one subtitle anchor to the next, so that no entry inherits the flag of the following one. It
   skips an entry without a flag, because that language cannot be assigned.
 - **Page ids are not episode numbers.** The season list runs descending, so the number comes from the heading
-  of the episode page (`<h2>The Middle 2x24</h2>`), with the first `NxM` of the page as a fallback for changed
+  of the episode page (`<h2>Sample Series 2x24</h2>`), with the first `NxM` of the page as a fallback for changed
   markup.
 - **The file name is not in the link.** The download page builds it in JavaScript from numbered fragments
-  (`var s1='files/The Middle_2x24'; var s2='_HDTV.FEVER.en.zip';`), and the client joins them in order.
+  (`var s1='files/Sample Series_2x24'; var s2='_HDTV.GRP.en.zip';`), and the client joins them in order.
 - **The address answers either the „one moment" page or the ZIP.** The client decides on the bytes
   (`PK\x03\x04`), not on a Content-Type the site does not always set.
 - **The bytes arrive in several encodings.** They pass on untouched, UTF-8 next to cp1250, cp1251, cp1253,
@@ -245,8 +245,8 @@ DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 <dotnet>/dotnet run \
 ```
 
 The probe above only reads and is not part of the checks. It shows the series list, with 2.774 entries in the
-selection field including the placeholder `0`, and The Middle = 512. Then come the result of the site search
-for „The Middle", seasons 1–9, 24 episode pages in season 2, page 31911 = 2x24 with 3 entries, and the download
+selection field including the placeholder `0`, and Sample Series = 512. Then come the result of the site search
+for „Sample Series", seasons 1–9, 24 episode pages in season 2, page 31911 = 2x24 with 3 entries, and the download
 of an English entry. It **creates nothing**; the creation is expressly not part of the probe.
 
 ## Where the rules live

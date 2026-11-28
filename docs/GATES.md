@@ -84,7 +84,7 @@ no usable cues.` Three forms carry the exceptions. When the language is the defe
 `Package <id> ('<release>'): listed as <LANG>, no usable cues.` With an empty fetch the language drops and the
 bytes stand in: `Package <id> ('<release>') downloads with <bytes> bytes.` When the package held
 several files, the sentence ends in the name of the one the gate measured, e.g. `… cue span 2508s vs. runtime
-1254s ('The.Middle.S03E01.srt')`. The uploader would otherwise guess which member is broken, and the name is
+1254s ('Sample.Series.S03E01.srt')`. The uploader would otherwise guess which member is broken, and the name is
 cut off before the finding is classified, so it never changes the category. Under it stands one attribution
 line for every report: the plugin with its version and the account that files it.
 

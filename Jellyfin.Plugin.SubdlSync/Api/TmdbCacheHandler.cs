@@ -17,7 +17,7 @@ namespace Jellyfin.Plugin.SubScribe.Api;
 /// (u. a. <c>/tv/{id}/external_ids</c> und die Suche). Gemessen ueber den Tag: **1221** TMDb-Anfragen,
 /// **305** verschiedene Adressen, **916** Wiederholungen — dieselbe <c>/tv/1416</c> 21×, dieselbe
 /// <c>/movie/1423191</c> 19×, teils zweimal in derselben Sekunde. Und der „id test" lief **2173**×
-/// fuer 183 verschiedene Titel (The Middle 495×). Der Speicher half also nur dort, wo jemand daran
+/// fuer 183 verschiedene Titel (Sample Series 495×). Der Speicher half also nur dort, wo jemand daran
 /// gedacht hatte — genau die Bauform, die der Operator nicht will („Logiken die robust fuer alles
 /// sind, nicht casebycase").
 /// </para>

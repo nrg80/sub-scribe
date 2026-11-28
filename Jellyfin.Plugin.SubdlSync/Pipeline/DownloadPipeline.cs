@@ -2376,7 +2376,7 @@ public sealed class DownloadPipeline : IDisposable
             // F-M476 (operator finding 16.11.2026): the hearing-impaired pool is WALKED, and it also
             // carries the main track when the regular pool ran dry.
             //
-            // Two defects it repairs, both visible in one run of The Middle S02:
+            // Two defects it repairs, both visible in one run of Sample Series S02:
             //  * the pool was a single grab (FirstOrDefault) — one candidate, and if it turned out to
             //    be a duplicate or failed a gate, the pool was closed for that language although more
             //    uploads were listed;
@@ -2768,7 +2768,7 @@ public sealed class DownloadPipeline : IDisposable
                                 // verdicts as the main track — a cue running over the whole film, a
                                 // span 763 s off the runtime — and said nothing, because only the main
                                 // path filed reports. Measured that morning: two of the run's four
-                                // rejects were exactly this (Ratatouille EN structure, DE runtime).
+                                // rejects were exactly this (one film EN structure, DE runtime).
                                 // Same categories, same wording, same switch. Filed HERE and not at run
                                 // end, because the end-of-language flush only runs when nothing was
                                 // saved — and the main subtitle usually IS saved, which is how these
@@ -4657,7 +4657,7 @@ public sealed class DownloadPipeline : IDisposable
     /// regulaere Liste zurueck und schuettet die HI-Liste in den HI-Pool.
     /// </para>
     /// <para>
-    /// Gemessen an MobLand S02 liegen beide Fassungen in EINER Staffel-ZIP (9 von 27 Eintraegen tragen
+    /// Gemessen an einer Serie S02 liegen beide Fassungen in EINER Staffel-ZIP (9 von 27 Eintraegen tragen
     /// <c>.HI.</c>): ohne diese Trennung waere die Verwechslung der Normalfall, nicht die Ausnahme.
     /// </para>
     /// </summary>
@@ -5261,7 +5261,7 @@ public sealed class DownloadPipeline : IDisposable
     /// <summary>
     /// F-M536 (operator question 16.11.2026: „Die anders codierten files setzen wir um und werden die
     /// richtig dargestellt?"): Alt-Codepage je Sprache, gemessen an echten Dateien der Seite —
-    /// Arabisch lag als cp1256 (Prison Break 1x22), Griechisch als cp1253 (Game of Thrones 1x10),
+    /// Arabisch lag als cp1256 (one series 1x22), Griechisch als cp1253 (another series 1x10),
     /// Bulgarisch als cp1251 (dieselbe Folge), Russisch dagegen als UTF-8. Die Sprache des Kandidaten
     /// ist bekannt, also fuehrt sie: kein Raten ueber alle Codepages, sondern die eine, die zu dieser
     /// Sprache gehoert.
@@ -5678,9 +5678,9 @@ public sealed class DownloadPipeline : IDisposable
 
         // The pack IS the release: it answered this episode, so every member of the same entry
         // belongs to the release that just proved itself. No name comparison — measured on SubDL
-        // 13.11.2026 (The Middle S9, entry …-3055878) the pack is called
-        // "The.Middle.S09.1080p.AMZN.WEB-DL.DDP5.1.H.264-NTb" while its members are named
-        // "The Middle - S09E01 (2009) WEB.eng.srt" …, so any string comparison against the pack
+        // 13.11.2026 (Sample Series S9, entry …-3055878) the pack is called
+        // "Sample.Series.S09.1080p.AMZN.WEB-DL.DDP5.1.H.264-GRP" while its members are named
+        // "Sample Series - S09E01 (JJJJ) WEB.eng.srt" …, so any string comparison against the pack
         // name — or between member names — only invents a way to drop members that are in fact
         // the same release. What separates releases is the entry, and the entry has already matched.
         var episodes = new SortedSet<int>();

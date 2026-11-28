@@ -37,8 +37,8 @@ public static class MsubLanguages
     /// <para>
     /// The value carries (a) the display name exactly as the form spells it — <c>portugese(br)</c>, with
     /// the site's own typo — and (b) the code the site writes into the download name. That code is the
-    /// select value itself (measured: <c>Oppenheimer_2023.WEB-DL.MA.en.zip</c> and
-    /// <c>Matrix_The_1999.ru(2).zip</c>), not an ISO-639-2/B form — which is exactly the difference to
+    /// select value itself (measured: <c>Sample_Film_JJJJ.WEB-DL.GRP.en.zip</c> and
+    /// <c>Sample_Film_JJJJ.ru(2).zip</c>), not an ISO-639-2/B form — which is exactly the difference to
     /// <see cref="TvSubtitlesClient.Languages"/>, whose third column is an ISO3 code.
     /// </para>
     /// </summary>

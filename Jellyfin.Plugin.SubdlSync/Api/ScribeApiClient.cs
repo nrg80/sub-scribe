@@ -2954,7 +2954,7 @@ public sealed class SubtitleCandidate
         name = TextFold.Fold(name);
 
         // The bare "season.episode" form is tried LAST and is anchored at the start on purpose.
-        // Measured on SubDL (10.11.2026, "The Middle Season 6"): a whole season pack can name its
+        // Measured on SubDL (10.11.2026, "Sample Series Season 6"): a whole season pack can name its
         // entries "6.01 Unbraceable You.srt" … "6.10 Pam Freakin' Staggs.srt" while the API reports
         // season 0 and episode 0 for every member — without this form the episode counted as
         // "not in the pack" and the pack was thrown away although the file was right there.

@@ -1343,7 +1343,7 @@ public sealed class SeasonPackCoordinator
         var ordered = group.OrderBy(c => c.Episode).ToList();
 
         // F-M378 (measured 01.11.2026): SubDL reads season and episode out of each file's OWN name —
-        // `tt0804484.S01E01.<hash>.EN.srt` comes back as (s=1, e=1), `01 The Emperor's Peace.en.srt`
+        // `tt0000002.S01E01.<hash>.EN.srt` comes back as (s=1, e=1), `01 The Emperor's Peace.en.srt`
         // as (s=0, e=1). A member that names a season makes the whole submission an episode range
         // (episode_from/episode_end set, full_season=false, i.e. no pack). The members therefore
         // carry the episode NUMBER AND TITLE and no season, which is also how the seasoned

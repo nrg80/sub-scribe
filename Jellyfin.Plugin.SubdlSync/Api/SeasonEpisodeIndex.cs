@@ -22,7 +22,7 @@ namespace Jellyfin.Plugin.SubScribe.Api;
 /// <para>
 /// IMDb's own GraphQL endpoint answers it per season. Two details matter:
 /// every episode carries <c>series.episodeNumber</c>, and episode <b>0</b> is a real entry
-/// (Game of Thrones S01 reports 11 episodes: ten plus the unaired original pilot at E0),
+/// (another series S01 reports 11 episodes: ten plus the unaired original pilot at E0),
 /// so the aired set is the distinct numbers above zero.
 /// </para>
 /// </summary>

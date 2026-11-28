@@ -777,7 +777,7 @@ public class ScribeDatabaseRefreshTask : IScheduledTask
 
     /// <summary>
     /// Derive the distinct top-level folders (library roots) from the cached
-    /// media paths — e.g. all paths under /data/movies2 → "/data/movies2". The refresh
+    /// media paths — e.g. all paths under /media/films → "/media/films". The refresh
     /// verifies these exist AND list cleanly before removing anything (an offline
     /// mount would otherwise report every file as missing and nuke the cache).
     /// </summary>
@@ -791,13 +791,13 @@ public class ScribeDatabaseRefreshTask : IScheduledTask
     /// cache sweep and accepted by the media sweep in the same run.
     /// </summary>
     /// <param name="paths">Stored media paths.</param>
-    /// <returns>Distinct roots, e.g. "/data/movies2".</returns>
+    /// <returns>Distinct roots, e.g. "/media/films".</returns>
     private static List<string> collectRoots(IEnumerable<string> paths)
     {
         var roots = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
         foreach (var path in paths)
         {
-            // two levels below filesystem root: "/data/movies2/..." → "/data/movies2"
+            // two levels below filesystem root: "/media/films/..." → "/media/films"
             var parts = path.Split('/', StringSplitOptions.RemoveEmptyEntries);
             if (parts.Length >= 2)
             {

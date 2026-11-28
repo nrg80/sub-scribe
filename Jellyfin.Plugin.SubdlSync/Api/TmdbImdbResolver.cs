@@ -36,8 +36,8 @@ public sealed class TmdbImdbResolver
     /// <summary>
     /// F-M510: ein ABSCHLIESSENDES Klammer-Jahr am Titel — <c>(2023)</c>, <c>(2019–2023)</c>,
     /// <c>[2023]</c>. Es ist die Schreibweise, in der ein Datei- oder Ordnername sein Jahr mitfuehrt
-    /// (<c>Oppenheimer (2023).mkv</c>), und es gehoert NICHT zum Titel: TMDb sucht ihn unter
-    /// „Oppenheimer" und liefert fuer „Oppenheimer (2023)" keinen Treffer mit dem Jahr 2023 — gemessen
+    /// (<c>Sample Film (2023).mkv</c>), und es gehoert NICHT zum Titel: TMDb sucht ihn unter
+    /// „Sample Film" und liefert fuer „Sample Film (2023)" keinen Treffer mit dem Jahr 2023 — gemessen
     /// 15.11.2026 im ersten Film-Lauf auf jf-test (HTTP 200, kein Treffer, „id test: keeping Jellyfin's
     /// ids").
     /// <para>
@@ -196,9 +196,9 @@ public sealed class TmdbImdbResolver
         }
 
         // F-M510 (Messung 15.11.2026, erster Film-Lauf auf jf-test): der Vergleich bekommt den Titel
-        // OHNE ein abschliessendes Klammer-Jahr. „Oppenheimer (2023)" + 2023 fand nichts, weil sowohl
+        // OHNE ein abschliessendes Klammer-Jahr. „Sample Film (2023)" + 2023 fand nichts, weil sowohl
         // die Suchanfrage als auch der Jahr-Treffer den Namen mit der Jahresangabe tragen — TMDb
-        // fuehrt den Film unter „Oppenheimer". Abgetrennt wird NUR fuer diese Frage: der Anzeigename
+        // fuehrt den Film unter „Sample Film". Abgetrennt wird NUR fuer diese Frage: der Anzeigename
         // des Items, der Dateiname und jeder Sidecar-Name bleiben unveraendert.
         var lookupTitle = ComparisonTitle(title);
         if (!string.Equals(lookupTitle, title.Trim(), StringComparison.Ordinal))
@@ -628,7 +628,7 @@ public sealed class TmdbImdbResolver
         }
 
         // F-M510: dieselbe Abtrennung fuer die typisierte Suche — auch sie fragt TMDb nach einem TITEL,
-        // und „Oppenheimer (2023)" ist keiner. Der Anzeigename bleibt davon unberuehrt.
+        // und „Sample Film (2023)" ist keiner. Der Anzeigename bleibt davon unberuehrt.
         var lookupTitle = ComparisonTitle(title);
 
         var key = ("q:" + lookupTitle.ToUpperInvariant() + "|" + (year?.ToString(CultureInfo.InvariantCulture) ?? string.Empty), isSeries);
@@ -655,7 +655,7 @@ public sealed class TmdbImdbResolver
             // F-M217 (27.09.2026): the year is a JELLYFIN value and it is often the
             // IMPORT year, not the production year — measured 27.09.2026 on the test
             // library: Reacher carried ProductionYear 2025 (the show started 2022),
-            // Agent X 2026 (started 2015), Slow Horses 2026 (2022), MobLand 2026. A
+            // Three such titles (started 2015, 2022, 2026). A
             // series search with such a year returns 0 hits, while the identical
             // query WITHOUT the year finds them immediately. The film-only branch
             // below repeats the query the same way and takes the first hit when a

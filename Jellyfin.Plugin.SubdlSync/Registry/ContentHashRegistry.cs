@@ -102,7 +102,7 @@ public sealed class ContentHashRegistry : IDisposable
     /// <summary>
     /// Drops cues that are too short to be seen and renumbers the rest (operator decision
     /// 01.11.2026). One 1 ms cue (a doubled <c>♪ MTV ♪</c> line at 3.898 s) made the whole file fail
-    /// <c>qa-invalid-srt</c> — measured on MobLand S01E02 — and thereby cost the ENTIRE season pack:
+    /// <c>qa-invalid-srt</c> — measured on Sample Show S01E02 — and thereby cost the ENTIRE season pack:
     /// 9 of 10 episodes were left, so every episode went up as a single and E02 not at all. Nobody
     /// watching is bothered by such a cue, the rule that judged it cost far more than the cue.
     /// </summary>
