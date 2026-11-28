@@ -79,7 +79,9 @@ measures the file.
 ## What a report says
 
 The comment is one sentence about the bare finding and a blank line under it. The sentence names the package,
-the release and — except where the finding is about the listing itself — the language. `Package <id>
+the release and — except where the finding is about the listing itself — the language, and never the file
+inside the package: a report answers for the package whose identifier it carries. The member name appears in
+one place only, the log line that records a source refusing the report. `Package <id>
 ('<release>', <LANG>): no usable cues.` becomes `Package <id> ('<release>'): listed as <LANG>, no usable cues.`
 when the language is the defect, and the byte count of an empty fetch drops the language: `Package <id>
 ('<release>') downloads with <bytes> bytes.` Under it stands one attribution line for every report: the plugin
