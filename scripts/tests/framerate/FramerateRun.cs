@@ -55,7 +55,7 @@ void Check(bool ok, string what, string detail = "")
     }
 }
 
-string repo = args.Length > 0 ? args[0] : "/opt/data/subdl-scribe";
+string repo = args.Length > 0 ? args[0] : ScribeRepoPaths.Root;
 string clientPath = Path.Combine(repo, "Jellyfin.Plugin.SubdlSync", "Api", "ScribeApiClient.cs");
 string pipelinePath = Path.Combine(repo, "Jellyfin.Plugin.SubdlSync", "Pipeline", "UploadPipeline.cs");
 

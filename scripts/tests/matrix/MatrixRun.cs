@@ -145,7 +145,7 @@ internal static class Program
             File.Delete(f);
         }
 
-        _root = args.Length > 1 && !string.IsNullOrWhiteSpace(args[1]) ? args[1] : "/opt/data/subdl-scribe";
+        _root = args.Length > 1 && !string.IsNullOrWhiteSpace(args[1]) ? args[1] : ScribeRepoPaths.Root;
         _pluginVersion = typeof(TvSubtitlesClient).Assembly.GetName().Version?.ToString() ?? "0.0.0.0";
         _fileCarriesLanguageOrHi = HasLanguageOrHiOnFile();
 

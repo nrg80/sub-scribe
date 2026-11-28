@@ -54,7 +54,7 @@ internal static class HiPoolRun
 
     public static int Main(string[] args)
     {
-        string repo = args.Length > 0 ? args[0] : "/opt/data/subdl-scribe";
+        string repo = args.Length > 0 ? args[0] : ScribeRepoPaths.Root;
         string pipe = Path.Combine(repo, "Jellyfin.Plugin.SubdlSync", "Pipeline", "DownloadPipeline.cs");
         if (!File.Exists(pipe))
         {

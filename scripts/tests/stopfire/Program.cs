@@ -44,7 +44,7 @@ Check("the cancellation is PERSISTED (a restart cannot resurrect it)",
 
 // Source contract: the log line must print UTC without converting — the first live run claimed "UTC" on a
 // local time (02:30 for a fire armed at 00:30Z), which reads as a wrong deferral moment.
-string src = File.ReadAllText(Path.Combine("/opt/data/subdl-scribe", "Jellyfin.Plugin.SubdlSync", "ScheduledTasks", "ScribeSchedulerCoordinator.cs"));
+string src = File.ReadAllText(Path.Combine(ScribeRepoPaths.Root, "Jellyfin.Plugin.SubdlSync", "ScheduledTasks", "ScribeSchedulerCoordinator.cs"));
 int at = src.IndexOf("pending fire for", StringComparison.Ordinal);
 string block = at >= 0
     ? src.Substring(Math.Max(0, at - 500), Math.Min(900, src.Length - Math.Max(0, at - 500)))
@@ -74,7 +74,7 @@ Check("a failing row write cannot make the stop fail", cancels.Contains("catch (
 Check("the cancellation goes through MarkCancelled, NOT through Finish (which would keep the old start)",
     cancels.Contains("MarkCancelled(row.Key, row.Name, row.Detail)", StringComparison.Ordinal)
     && !cancels.Contains("Outcome.Cancelled, row.Detail", StringComparison.Ordinal), "MarkCancelled");
-string reg = File.ReadAllText(Path.Combine("/opt/data/subdl-scribe", "Jellyfin.Plugin.SubdlSync", "Registry", "WorkerRunRegistry.cs"));
+string reg = File.ReadAllText(Path.Combine(ScribeRepoPaths.Root, "Jellyfin.Plugin.SubdlSync", "Registry", "WorkerRunRegistry.cs"));
 int mc = reg.IndexOf("public void MarkCancelled", StringComparison.Ordinal);
 string mcBody = mc < 0 ? "" : reg.Substring(mc, Math.Min(1200, reg.Length - mc));
 Check("MarkCancelled stamps BOTH times with now — a cancellation has a moment, not a run",
@@ -82,7 +82,7 @@ Check("MarkCancelled stamps BOTH times with now — a cancellation has a moment,
     && mcBody.Contains("var now = DateTime.UtcNow;", StringComparison.Ordinal), "start=end=now");
 Check("MarkCancelled writes Outcome.Cancelled itself", mcBody.Contains("row.Outcome = Outcome.Cancelled", StringComparison.Ordinal), "outcome");
 Check("MarkCancelled cannot break the stop", mcBody.Contains("catch (Exception", StringComparison.Ordinal), "try/catch");
-string page = File.ReadAllText(Path.Combine("/opt/data/subdl-scribe", "Jellyfin.Plugin.SubdlSync", "Configuration", "configPage.html"));
+string page = File.ReadAllText(Path.Combine(ScribeRepoPaths.Root, "Jellyfin.Plugin.SubdlSync", "Configuration", "configPage.html"));
 Check("the operator's colour decision is pinned: cancel is ALWAYS grey #767676 (the state's colour, not the situation's)",
     page.Contains("case 'cancelled': return { color: '#767676', text: 'cancel' };", StringComparison.Ordinal)
     && !page.Contains("case 'cancelled': return { color: '#ffc107'", StringComparison.Ordinal), "cancel colour");
@@ -140,7 +140,7 @@ Check("a respaced fire names itself and does not borrow the quota wording",
     c3.PendingFireReason(upload: true) == "rate limit or lock busy — rescheduled",
     c3.PendingFireReason(upload: true) ?? "null");
 
-string disp = File.ReadAllText(Path.Combine("/opt/data/subdl-scribe", "Jellyfin.Plugin.SubdlSync", "ScheduledTasks", "ScribeEventDispatcher.cs"));
+string disp = File.ReadAllText(Path.Combine(ScribeRepoPaths.Root, "Jellyfin.Plugin.SubdlSync", "ScheduledTasks", "ScribeEventDispatcher.cs"));
 Check("the scan defer no longer runs an in-process timer", !disp.Contains("_scanDeferTimer", StringComparison.Ordinal), "timer still present");
 int td = disp.IndexOf("private bool TryDeferForLibraryScan", StringComparison.Ordinal);
 string deferBody = td < 0 ? string.Empty : disp.Substring(td, Math.Min(4000, disp.Length - td));
@@ -148,7 +148,7 @@ Check("the deferral arms the direction's own scheduled fire", deferBody.Contains
 Check("each direction is armed only when the cycle asked for it",
     deferBody.Contains("dir != CycleDirection.UploadOnly", StringComparison.Ordinal)
     && deferBody.Contains("dir != CycleDirection.DownloadOnly", StringComparison.Ordinal), "direction guards");
-string quotaSvc = File.ReadAllText(Path.Combine("/opt/data/subdl-scribe", "Jellyfin.Plugin.SubdlSync", "Api", "ScribeQuotaService.cs"));
+string quotaSvc = File.ReadAllText(Path.Combine(ScribeRepoPaths.Root, "Jellyfin.Plugin.SubdlSync", "Api", "ScribeQuotaService.cs"));
 Check("the status line takes the reason from the pending fire, not from the worker row",
     quotaSvc.Contains("fireReason ?? row!.Detail", StringComparison.Ordinal), "row detail still wins");
 Check("the reason token is persisted next to the moment",

@@ -65,7 +65,7 @@ internal static class ReportingRun
 
     private static int Main(string[] args)
     {
-        string root = args.Length > 0 ? args[0] : "/opt/data/subdl-scribe";
+        string root = args.Length > 0 ? args[0] : ScribeRepoPaths.Root;
         string plugin = Path.Combine(root, "Jellyfin.Plugin.SubdlSync");
 
         // --- 1. the text ------------------------------------------------------

@@ -12,7 +12,7 @@ set -u
 VER="${1:?usage: deploy-jf-test.sh <version> <zip>}"
 ZIP="${2:?usage: deploy-jf-test.sh <version> <zip>}"
 
-ROOT=/opt/data/subdl-scribe
+ROOT="$(cd "$(dirname "$0")/.." && pwd)"
 PLUGINS=/opt/data/jf-test/data/plugins
 TGT="$PLUGINS/Sub Scribe_$VER"
 PATTERN='jellyfin.*--datadir /opt/data/jf-test/data'

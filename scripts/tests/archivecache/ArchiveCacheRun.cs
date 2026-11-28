@@ -52,7 +52,7 @@ internal static class Program
 
     private static int Main(string[] args)
     {
-        var root = args.Length > 0 ? args[0] : "/opt/data/subdl-scribe";
+        var root = args.Length > 0 ? args[0] : ScribeRepoPaths.Root;
         var dir = Path.Combine(Path.GetTempPath(), "archivecache-" + Guid.NewGuid().ToString("N")[..8]);
         string InCache(string d) => Path.Combine(d, "archive-cache"); // Configure legt diesen Unterordner an
 

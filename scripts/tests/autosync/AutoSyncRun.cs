@@ -272,8 +272,8 @@ public static class AutoSyncRun
         int f = 0;
         Console.WriteLine("[7] the decoder streams levels; nothing persists them");
 
-        string gate = "/opt/data/subdl-scribe/Jellyfin.Plugin.SubdlSync/Qa/DriftGate.cs";
-        string fit = "/opt/data/subdl-scribe/Jellyfin.Plugin.SubdlSync/Qa/OffsetFit.cs";
+        string gate = System.IO.Path.Combine(ScribeRepoPaths.Root, "Jellyfin.Plugin.SubdlSync/Qa/DriftGate.cs");
+        string fit = System.IO.Path.Combine(ScribeRepoPaths.Root, "Jellyfin.Plugin.SubdlSync/Qa/OffsetFit.cs");
         if (!System.IO.File.Exists(gate) || !System.IO.File.Exists(fit))
         {
             Console.WriteLine("  [SKIP] sources not reachable from here");
@@ -315,7 +315,7 @@ public static class AutoSyncRun
         f += writesLevels ? 1 : 0;
 
         // (e) no DB entity carries a curve/blob field
-        string entities = "/opt/data/subdl-scribe/Jellyfin.Plugin.SubdlSync/Data/Entities.cs";
+        string entities = System.IO.Path.Combine(ScribeRepoPaths.Root, "Jellyfin.Plugin.SubdlSync/Data/Entities.cs");
         if (System.IO.File.Exists(entities))
         {
             string e = System.IO.File.ReadAllText(entities);
@@ -428,7 +428,7 @@ public static class AutoSyncRun
         // And the pipeline must actually USE the crediting pause at both transfer gaps, while the
         // alignment itself must be measured. Asserted on the source: a fit that runs unmeasured
         // leaves the credit at zero and the feature silently does nothing.
-        string pipe = "/opt/data/subdl-scribe/Jellyfin.Plugin.SubdlSync/Pipeline/DownloadPipeline.cs";
+        string pipe = System.IO.Path.Combine(ScribeRepoPaths.Root, "Jellyfin.Plugin.SubdlSync/Pipeline/DownloadPipeline.cs");
         if (System.IO.File.Exists(pipe))
         {
             string src = System.IO.File.ReadAllText(pipe);
@@ -452,7 +452,7 @@ public static class AutoSyncRun
             // pipeline. The assertion follows it — and gets stronger on the way: the pipeline must
             // contain NO raw call at all (a second fit path there would bypass the worker), and the
             // worker must contain exactly one.
-            string worker = "/opt/data/subdl-scribe/Jellyfin.Plugin.SubdlSync/Qa/AutoSyncWorker.cs";
+            string worker = System.IO.Path.Combine(ScribeRepoPaths.Root, "Jellyfin.Plugin.SubdlSync/Qa/AutoSyncWorker.cs");
             int raw = src.Split("SubtitleSync.SyncAsync(").Length - 1;
             Check("no raw fit call is left in the pipeline", raw == 0,
                 $"{raw} raw call(s) in the pipeline, expected 0 (they belong to the worker)");
@@ -1131,10 +1131,10 @@ public static class AutoSyncRun
         int f = 0;
         Console.WriteLine("[5f] the QA retry limit bounds the fit, not the gates (F-M320)");
 
-        const string pipeline = "/opt/data/subdl-scribe/Jellyfin.Plugin.SubdlSync/Pipeline/DownloadPipeline.cs";
-        const string tracker = "/opt/data/subdl-scribe/Jellyfin.Plugin.SubdlSync/Registry/QaFailTracker.cs";
-        const string seeder = "/opt/data/subdl-scribe/Jellyfin.Plugin.SubdlSync/ScheduledTasks/ScribeSeeder.cs";
-        const string refresh = "/opt/data/subdl-scribe/Jellyfin.Plugin.SubdlSync/ScheduledTasks/ScribeDatabaseRefreshTask.cs";
+        string pipeline = System.IO.Path.Combine(ScribeRepoPaths.Root, "Jellyfin.Plugin.SubdlSync/Pipeline/DownloadPipeline.cs");
+        string tracker = System.IO.Path.Combine(ScribeRepoPaths.Root, "Jellyfin.Plugin.SubdlSync/Registry/QaFailTracker.cs");
+        string seeder = System.IO.Path.Combine(ScribeRepoPaths.Root, "Jellyfin.Plugin.SubdlSync/ScheduledTasks/ScribeSeeder.cs");
+        string refresh = System.IO.Path.Combine(ScribeRepoPaths.Root, "Jellyfin.Plugin.SubdlSync/ScheduledTasks/ScribeDatabaseRefreshTask.cs");
         foreach (string p in new[] { pipeline, tracker, seeder, refresh })
         {
             if (!System.IO.File.Exists(p))
@@ -1251,8 +1251,8 @@ public static class AutoSyncRun
         int f = 0;
         Console.WriteLine("[5e] the correction hunt repeats, capped at the QA retry limit (F-M318)");
 
-        const string syncSource = "/opt/data/subdl-scribe/Jellyfin.Plugin.SubdlSync/Qa/SubtitleSync.cs";
-        const string pipeline = "/opt/data/subdl-scribe/Jellyfin.Plugin.SubdlSync/Pipeline/DownloadPipeline.cs";
+        string syncSource = System.IO.Path.Combine(ScribeRepoPaths.Root, "Jellyfin.Plugin.SubdlSync/Qa/SubtitleSync.cs");
+        string pipeline = System.IO.Path.Combine(ScribeRepoPaths.Root, "Jellyfin.Plugin.SubdlSync/Pipeline/DownloadPipeline.cs");
         if (!System.IO.File.Exists(syncSource) || !System.IO.File.Exists(pipeline))
         {
             Console.WriteLine("  [SKIP] sources not reachable from here");
@@ -1329,7 +1329,7 @@ public static class AutoSyncRun
         bool settingGone = !src.Contains("DownloadKeepBestPerLanguage", StringComparison.Ordinal);
         var cfgProbe = new Jellyfin.Plugin.SubScribe.Configuration.PluginConfiguration();
         bool fieldGone = cfgProbe.GetType().GetProperty("DownloadKeepBestPerLanguage") == null;
-        const string guiPage = "/opt/data/subdl-scribe/Jellyfin.Plugin.SubdlSync/Configuration/configPage.html";
+        string guiPage = System.IO.Path.Combine(ScribeRepoPaths.Root, "Jellyfin.Plugin.SubdlSync/Configuration/configPage.html");
         bool guiGone = !System.IO.File.Exists(guiPage)
                        || !System.IO.File.ReadAllText(guiPage).Contains("DownloadKeepBestPerLanguage", StringComparison.Ordinal);
         Check("the keep-best setting is gone from config, pipeline AND the page", settingGone && fieldGone && guiGone,
@@ -1475,7 +1475,7 @@ public static class AutoSyncRun
         // runs AFTER a correction must be skipped on this path. The skip is the existing
         // `unsyncPayload != null` guard, and this asserts the pipeline still ties the reserved write
         // to that variable rather than to "not aligned".
-        const string pipeline = "/opt/data/subdl-scribe/Jellyfin.Plugin.SubdlSync/Pipeline/DownloadPipeline.cs";
+        string pipeline = System.IO.Path.Combine(ScribeRepoPaths.Root, "Jellyfin.Plugin.SubdlSync/Pipeline/DownloadPipeline.cs");
         if (!System.IO.File.Exists(pipeline))
         {
             Console.WriteLine("  [SKIP] DownloadPipeline.cs not reachable from here");
@@ -1655,7 +1655,7 @@ public static class AutoSyncRun
 
         // The archive helpers may stay (they are pure and callers may be gone), but the pipeline must
         // no longer write one. This is the assertion that catches a half-reverted change.
-        const string pipeline = "/opt/data/subdl-scribe/Jellyfin.Plugin.SubdlSync/Pipeline/DownloadPipeline.cs";
+        string pipeline = System.IO.Path.Combine(ScribeRepoPaths.Root, "Jellyfin.Plugin.SubdlSync/Pipeline/DownloadPipeline.cs");
         if (System.IO.File.Exists(pipeline))
         {
             string src = System.IO.File.ReadAllText(pipeline);
@@ -1719,7 +1719,7 @@ public static class AutoSyncRun
             // IsContentKnown is what the seeder asks before queueing: a downloaded row counts as
             // known, an Observed row deliberately does not. Asserted here so a later change that
             // makes downloads non-terminal is caught.
-            const string registry = "/opt/data/subdl-scribe/Jellyfin.Plugin.SubdlSync/Registry/ContentHashRegistry.cs";
+            string registry = System.IO.Path.Combine(ScribeRepoPaths.Root, "Jellyfin.Plugin.SubdlSync/Registry/ContentHashRegistry.cs");
             bool knownCountsDownloaded = System.IO.File.Exists(registry)
                 && System.Text.RegularExpressions.Regex.IsMatch(
                     System.IO.File.ReadAllText(registry),
