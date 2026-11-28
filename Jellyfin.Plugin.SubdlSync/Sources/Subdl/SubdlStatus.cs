@@ -96,7 +96,7 @@ public sealed class SubdlStatus : ISourceStatus
         {
             lichter.Add(new SourceStatusLight(
                 ApiLightKey,
-                "SubDL API",
+                "SubDL.com API",
                 SourceHealth.Warn,
                 Configured: false,
                 Message: "no API key configured"));
@@ -120,7 +120,7 @@ public sealed class SubdlStatus : ISourceStatus
 
             lichter.Add(new SourceStatusLight(
                 ApiLightKey,
-                "SubDL API",
+                "SubDL.com API",
                 gelesen == QuotaRead.Unreadable ? SourceHealth.Bad : SourceHealth.Good,
                 Configured: true,
                 // F-M742: „reachable" — und KEINE Zahlen. Was das Kontingent verbraucht hat, steht in
