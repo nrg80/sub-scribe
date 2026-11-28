@@ -81,8 +81,8 @@ measures the file.
 The comment is one sentence about the bare finding and a blank line under it. The sentence names the package,
 the release and, where the finding is not about the listing, the language: `Package <id> ('<release>', <LANG>):
 no usable cues.` Three forms carry the exceptions. When the language is the defect the package stands alone:
-`Package <id> ('<release>'): listed as <LANG>, no usable cues.` When an empty fetch is the defect the language
-drops and the bytes stand in: `Package <id> ('<release>') downloads with <bytes> bytes.` When the package held
+`Package <id> ('<release>'): listed as <LANG>, no usable cues.` With an empty fetch the language drops and the
+bytes stand in: `Package <id> ('<release>') downloads with <bytes> bytes.` When the package held
 several files, the sentence ends in the name of the one the gate measured, e.g. `… cue span 2508s vs. runtime
 1254s ('The.Middle.S03E01.srt')`. The uploader would otherwise guess which member is broken, and the name is
 cut off before the finding is classified, so it never changes the category. Under it stands one attribution
