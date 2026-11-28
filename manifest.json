@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.93",
-        "changelog": "v12.3.8.93: A pack fill looks up only the tracks of the language it builds; the one-pass extraction starts only when one of them is missing.",
+        "version": "12.3.8.94",
+        "changelog": "v12.3.8.94: The connections block is called Connections, and the worker list stands directly above the statistics at the end of the General tab.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.93-dev/Jellyfin.Plugin.SubdlSync_12.3.8.93.zip",
-        "checksum": "ecfe3fd7d8f01513dce5567a499ef11d",
-        "timestamp": "2026-11-28T05:48:41Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.94-dev/Jellyfin.Plugin.SubdlSync_12.3.8.94.zip",
+        "checksum": "039f9820f23ca72a0f7e47d5750f6304",
+        "timestamp": "2026-11-28T06:34:32Z"
       }
     ]
   }
