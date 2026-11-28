@@ -79,9 +79,10 @@ measures the file.
 ## What a report says
 
 The comment is one sentence about the bare finding and a blank line under it. The sentence names the package,
-the release and — except where the finding is about the listing itself — the language, and never the file
-inside the package: a report answers for the package whose identifier it carries. The member name appears in
-one place only, the log line that records a source refusing the report. `Package <id>
+the release and — except where the finding is about the listing itself — the language. Where the package held
+several files, the sentence ends in the name of the one the gate measured, because the uploader otherwise has
+to guess which member is broken: `… cue span 2508s vs. runtime 1254s ('The.Middle.S03E01.srt')`. That name is
+cut off before the finding is classified, so it never changes the category. `Package <id>
 ('<release>', <LANG>): no usable cues.` becomes `Package <id> ('<release>'): listed as <LANG>, no usable cues.`
 when the language is the defect, and the byte count of an empty fetch drops the language: `Package <id>
 ('<release>') downloads with <bytes> bytes.` Under it stands one attribution line for every report: the plugin
