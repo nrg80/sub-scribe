@@ -83,9 +83,9 @@ the release and — except where the finding is about the listing itself — the
 ('<release>', <LANG>): no usable cues.` It becomes `Package <id> ('<release>'): listed as <LANG>, no usable
 cues.` when the language is the defect, and the byte count of an empty fetch drops the language: `Package <id>
 ('<release>') downloads with <bytes> bytes.` Where the package held several files, the sentence ends in the
-name of the one the gate measured — `… cue span 2508s vs. runtime 1254s ('The.Middle.S03E01.srt')` — because the
-uploader otherwise has to guess which member is broken. That name is cut off before the finding is classified,
-so it never changes the category. Under it stands one attribution line for every report: the plugin with its
+name of the one the gate measured, e.g. `… cue span 2508s vs. runtime 1254s ('The.Middle.S03E01.srt')`. The
+uploader would otherwise have to guess which member is broken. That name is cut off before the finding is
+classified, so it never changes the category. Under it stands one attribution line for every report: the plugin with its
 version and the account that files it.
 
 The kind travels in neutral words and the engine makes the site's category out of it. Five kinds exist —
