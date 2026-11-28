@@ -60,6 +60,37 @@ unknown origin may go everywhere, and then only the switch of that source and it
 decide. The duplicate gates ask the content: a hash the store recorded after a site called the text
 already published is `duplicate-remote`, a hash the store knows at all is `duplicate-content`.
 
+## After a refusal: the report
+
+A refusal in the download direction can leave the plugin, as a report to the site that delivered the text.
+The report needs two things and stays home without either: the foreign identifier of the candidate and a
+finding — the bare measured defect. It is filed once, in the run that observed it, and the stamp on the row
+is what keeps a second sighting from happening (`F-M687`).
+
+The switch belongs to the source card, not to the download section, and a source without its own value
+falls back to the global one (`F-M747`). Our own text is never reported, because it never has a foreign
+identifier to report against. The findings are queued and flushed at the end of the run; an answer that
+never comes puts the report back for the next run instead of ending the run (`F-M592`, `F-M450`).
+
+## What a report says
+
+The comment is one sentence about the bare finding and a blank line under it. The sentence names the package,
+the release and — except where the finding is about the listing itself — the language. `Package <id>
+('<release>', <LANG>): no usable cues.` becomes `Package <id> ('<release>'): listed as <LANG>, no usable cues.`
+when the language is the defect, and the byte count of an empty fetch drops the language: `Package <id>
+('<release>') downloads with <bytes> bytes.` Under it stands one attribution line for every report: the plugin
+with its version and the account that files it.
+
+The kind travels in neutral words and the engine makes the site's category out of it. Five kinds exist —
+missing, unplayable, wrong content, wrong language, other — and they collapse to three categories at the site:
+a missing or unplayable file is no subtitle, a wrong content or a wrong language is wrong release information,
+and everything else is other. The accepted report is logged as `reported to <source> (<category>) for subtitle
+<nid>`.
+
+That is the one switch that must be off in a test bench: a false report reaches a stranger's entry and
+cannot be taken back. The count of them sits under the Auto-Sync row of the page, because the fit is what
+measures the file.
+
 ## What is written, and what is not
 
 A failed extraction is no verdict: when a whole ffmpeg pass over a pack member fails and the retry
@@ -74,4 +105,4 @@ remembered against that content, so the next run does not ask again while the te
 
 [SPECIFICATION.md](SPECIFICATION.md), §3.1 and §3.3: F-M13, F-M14, F-M15, F-M16, F-M17c, F-M17x,
 F-M185, F-M298, F-M375, F-M416, F-M433, F-M442, F-M487, F-M488, F-M500, F-M539, F-M577, F-M595,
-F-M600, F-M611, F-M647, F-M650, F-M659 and F-M741.
+F-M600, F-M611, F-M647, F-M650, F-M659, F-M687, F-M741, F-M747, F-M450 and F-M592.
