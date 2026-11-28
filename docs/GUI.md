@@ -9,7 +9,7 @@ the log wording in `LOGGING.md`, the data model in `DATABASE.md`.
 
 | Tab | Carries |
 |---|---|
-| General | the libraries, the manual run buttons and the statistics reset (F-M18, F-M53); at its end the Status block, the refresh control, then the statistics with their reset button (F-M757) |
+| General | the libraries, the manual run buttons and the statistics reset (F-M18, F-M53); the Connections block and the refresh control right after the settings, then the Workers list and finally the statistics with their reset button (F-M757) |
 | Upload, Download | the switches of their own direction, and only those (F-M479); no provider tab of its own |
 | Expert | the lists edited by hand: the skip directories and the file-name patterns, one entry per line in a textarea, defaults pre-filled (F-M36) |
 

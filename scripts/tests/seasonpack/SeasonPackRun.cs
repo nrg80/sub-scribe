@@ -198,7 +198,7 @@ internal static class Program
 
     private static int Main(string[] args)
     {
-        var root = args.Length > 0 ? args[0] : "/opt/data/subdl-scribe";
+        var root = args.Length > 0 ? args[0] : ScribeRepoPaths.Root;
 
         // ── 1. What counts as aired ─────────────────────────────────────────────
         Console.WriteLine("1. Aired episode numbers");

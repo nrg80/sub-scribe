@@ -52,7 +52,7 @@ internal static class Program
 
     private static async Task<int> Main(string[] args)
     {
-        var root = args.Length > 0 ? args[0] : "/opt/data/subdl-scribe";
+        var root = args.Length > 0 ? args[0] : ScribeRepoPaths.Root;
         _fixtures = Path.Combine(root, "scripts/tests/tvsubtitles/fixtures");
 
         // ---- 1. four endpoints, two per direction ----------------------------------------------
@@ -429,7 +429,7 @@ internal static class Program
             !angemeldet.Ok && angemeldet.Reason!.Contains("Not logged in", StringComparison.Ordinal));
 
         // ---- 8. die Einbindung in den Lauf: Quelltext-Bindung (F-M485) -----------------------
-        var root2 = args.Length > 0 ? args[0] : "/opt/data/subdl-scribe";
+        var root2 = args.Length > 0 ? args[0] : ScribeRepoPaths.Root;
         var downloadSource = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Pipeline/DownloadPipeline.cs"));
         var uploadSource = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Pipeline/UploadPipeline.cs"));
         var orderSource = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Api/Endpoints/SourceOrder.cs"));

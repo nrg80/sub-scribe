@@ -16,12 +16,13 @@
 # Which file is delivered is not a guess: configPage.html is an EmbeddedResource in the
 # .csproj, so it ships inside the DLL — a GUI change needs a real build, release and deploy,
 # not a file copy. Asserted here so the next reader does not have to re-derive it.
+from pathlib import Path
 import re
 import subprocess
 import sys
 
-HTML = '/opt/data/subdl-scribe/Jellyfin.Plugin.SubdlSync/Configuration/configPage.html'
-CSPROJ = '/opt/data/subdl-scribe/Jellyfin.Plugin.SubdlSync/Jellyfin.Plugin.SubdlSync.csproj'
+HTML = str(Path(__file__).resolve().parents[3] / 'Jellyfin.Plugin.SubdlSync/Configuration/configPage.html')
+CSPROJ = str(Path(__file__).resolve().parents[3] / 'Jellyfin.Plugin.SubdlSync/Jellyfin.Plugin.SubdlSync.csproj')
 LIVE_URL = 'http://localhost:8096/web/configurationpage?name=SubDL%20Scribe'
 
 # Present: the one switch the section is.
@@ -60,7 +61,7 @@ for name, pat in CHECKS:
     print(f"  [{'ok' if ok else 'FAIL'}] {name}")
     fails += 0 if ok else 1
 
-CONFIG_CS = '/opt/data/subdl-scribe/Jellyfin.Plugin.SubdlSync/Configuration/PluginConfiguration.cs'
+CONFIG_CS = str(Path(__file__).resolve().parents[3] / 'Jellyfin.Plugin.SubdlSync/Configuration/PluginConfiguration.cs')
 for prop in REMOVED:
     n = len(re.findall(rf'{prop}', src))
     ok = n == 0
@@ -136,7 +137,7 @@ fails += 0 if ok else 1
 # Defaults of what REMAINS exposed. The removed props keep their C# defaults; only the one
 # visible switch is bound, and it must resolve an absent value (an older config) to TRUE —
 # `!!config.X` would silently switch a default-on correction off on every existing install.
-CFG = '/opt/data/subdl-scribe/Jellyfin.Plugin.SubdlSync/Configuration/PluginConfiguration.cs'
+CFG = str(Path(__file__).resolve().parents[3] / 'Jellyfin.Plugin.SubdlSync/Configuration/PluginConfiguration.cs')
 cfg = open(CFG, encoding='utf-8').read()
 m = re.search(r'public bool QaDownloadAutoSync \{ get; set; \}(.*?)(?=\n\n|/// <summary>)', cfg, re.S)
 ok = bool(m) and '= true' in m.group(1)

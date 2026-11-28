@@ -60,7 +60,7 @@ internal static class LangCorrectRun
 
     private static int Main(string[] args)
     {
-        string root = args.Length > 0 ? args[0] : "/opt/data/subdl-scribe";
+        string root = args.Length > 0 ? args[0] : ScribeRepoPaths.Root;
         Console.WriteLine("T164 / F-M375 — a lying language tag is corrected, not rejected");
         Console.WriteLine();
 

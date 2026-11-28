@@ -25,6 +25,8 @@
 # Usage:
 #   scripts/release.sh                 # version from build.yaml
 #   scripts/release.sh --dry-run       # build + verify, print the plan, touch nothing
+#   scripts/release.sh <ver> --fast    # settings page or papers only: skips the code suites
+#                                      # and the full metric run, refuses on any code change
 #   scripts/release.sh 12.1.12.82      # explicit version (must match build.yaml)
 
 set -euo pipefail
@@ -38,10 +40,12 @@ API="https://api.github.com"
 UPLOADS="https://uploads.github.com"
 
 DRY_RUN=0
+FAST=0
 ARG=""
 for a in "$@"; do
     case "$a" in
         --dry-run) DRY_RUN=1 ;;
+        --fast)    FAST=1 ;;
         *)         ARG="$a" ;;
     esac
 done
@@ -200,6 +204,32 @@ else
     ok "(dry-run: git state and token not checked)"
 fi
 
+# --- 1a. the fast lane ------------------------------------------------------
+# Operator order 28.11.2026: "Das dauert alles echt lange" — for a change that
+# touches only the settings page or the papers, running all forty suites is time
+# bought for nothing. The lane is deliberately narrow and refuses as soon as
+# anything else moved: code, projects and the test tooling always take the full
+# gate list. `--fast` never skips the document checker, the artifact check or the
+# publish steps — only the suites that cannot observe the change.
+if [[ $FAST -eq 1 ]]; then
+    say "Fast lane: what moved"
+    PREV_TAG="$(git tag --list 'v*' --sort=-creatordate | head -1)"
+    if [[ -z "$PREV_TAG" ]]; then
+        die "--fast needs a previous release tag to diff against"
+    fi
+    mapfile -t CHANGED < <(git diff --name-only "$PREV_TAG"..HEAD)
+    ok "against $PREV_TAG: ${#CHANGED[@]} file(s)"
+    for f in "${CHANGED[@]}"; do
+        case "$f" in
+            Jellyfin.Plugin.SubdlSync/Configuration/configPage.html|\
+            README.md|build.yaml|manifest.json|docs/*)
+                ok "  $f" ;;
+            *)
+                die "--fast refused: '$f' is code or tooling — run the full gate list" ;;
+        esac
+    done
+fi
+
 # --- 1b. the Lastenheft ------------------------------------------------------
 # NF-9 makes the specification the eighth suite: every Contents counter must match the definitions
 # in its section, every id must be defined once, the test numbering must stay gapless from T1, every
@@ -216,8 +246,19 @@ python3 scripts/tests/spec-doc/check.py | tail -3 \
 # every stated count to the suite that carries it (scripts/tests/counts.json) and holds the suite's own
 # total against the sum of its claims.
 say "Metriken"
-python3 scripts/tests/counts/check.py | tail -3 \
-    || die "counts check failed — a stated check count is not carried by its suite"
+if [[ $FAST -eq 1 ]]; then
+    ok "(fast lane: the full metric run is skipped — it would run all forty suites)"
+    python3 scripts/tests/gui-structure/check.py \
+        Jellyfin.Plugin.SubdlSync/Configuration/configPage.html | tail -2 \
+        || die "gui-structure is not green — the settings page does not match the papers"
+    python3 scripts/tests/readability/check.py "$ROOT" | tail -2 \
+        || die "readability is not green"
+    python3 scripts/tests/doc-hygiene/check.py "$ROOT" | tail -2 \
+        || die "doc-hygiene is not green"
+else
+    python3 scripts/tests/counts/check.py | tail -3 \
+        || die "counts check failed — a stated check count is not carried by its suite"
+fi
 
 # --- 2. build ----------------------------------------------------------------
 say "Build"
@@ -231,7 +272,9 @@ ZIP="$ROOT/out/Jellyfin.Plugin.SubdlSync_${VER}.zip"
 # different one. Skipped (not silently passed) when this host has no Jellyfin to reference.
 say "Test suites"
 JFDIR="${JF_TEST_DIR:-/opt/data/jf-test/jellyfin}"
-if [[ -d "$JFDIR" ]]; then
+if [[ $FAST -eq 1 ]]; then
+    ok "(fast lane: the code suites are skipped — nothing in the code moved)"
+elif [[ -d "$JFDIR" ]]; then
     for suite in anchorgate forcedtitle langcorrect archivecache seasonpack aifilter reporting; do
         OUT="$(DOTNET_SYSTEM_GLOBALIZATION_INVARIANT=1 /opt/data/.dotnet/dotnet run \
             --project "scripts/tests/$suite/$suite.csproj" -- "$ROOT" 2>&1 | tail -2)"

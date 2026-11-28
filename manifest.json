@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.92",
-        "changelog": "v12.3.8.92: Each of the four ways a subtitle travels now stands as one closed paper; the four are linked from the README.",
+        "version": "12.3.8.94",
+        "changelog": "v12.3.8.94: The connections block is called Connections, and the worker list stands directly above the statistics at the end of the General tab.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.92-dev/Jellyfin.Plugin.SubdlSync_12.3.8.92.zip",
-        "checksum": "cd20781f60f5db74c29d937b1a810e06",
-        "timestamp": "2026-11-27T11:47:16Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.94-dev/Jellyfin.Plugin.SubdlSync_12.3.8.94.zip",
+        "checksum": "039f9820f23ca72a0f7e47d5750f6304",
+        "timestamp": "2026-11-28T06:34:32Z"
       }
     ]
   }

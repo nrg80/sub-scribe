@@ -66,7 +66,7 @@ internal static class Program
 
     private static int Main(string[] args)
     {
-        var root = args.Length > 0 ? args[0] : "/opt/data/subdl-scribe";
+        var root = args.Length > 0 ? args[0] : ScribeRepoPaths.Root;
 
         // ── 1. The measured case ────────────────────────────────────────────────
         Console.WriteLine("1. Title is a source (The Deputy, forced=0)");

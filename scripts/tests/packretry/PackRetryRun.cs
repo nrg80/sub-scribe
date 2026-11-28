@@ -78,7 +78,7 @@ internal static class Program
 
     private static int Main(string[] args)
     {
-        var root = args.Length > 0 ? args[0] : "/opt/data/subdl-scribe";
+        var root = args.Length > 0 ? args[0] : ScribeRepoPaths.Root;
         var cand = Pack();
 
         // ── 1. Every matching file is offered, in listing order ─────────────────

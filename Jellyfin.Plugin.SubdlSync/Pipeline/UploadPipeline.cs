@@ -5525,8 +5525,15 @@ public sealed class UploadPipeline : IPackFiller
         }
 
         var cachedTexts = new Dictionary<int, string?>();
-        var zuEntpacken = new List<int>();
-        foreach (int position in alleSpuren)
+        var fehlend = new List<int>();
+
+        // F-M803 (28.11.2026): nachgeschlagen werden nur die Spuren DIESER Sprache. Vorher lief die
+        // Schleife ueber alle Dialogspuren der Datei, also ueber 36 bis 39 Positionen, von denen genau
+        // eine gebraucht wurde — und zwar je Sprache erneut, weil jeder Aufruf hier neu anfaengt.
+        // Gemessen im Lauf 05:43 bis 06:32: 27.274 Lesezugriffe auf 2.730 verschiedene Texte.
+        // Der Sammel-Durchgang darunter holt weiterhin alle Dialogspuren auf einmal (F-M441) und legt
+        // sie ab, aber erst wenn eine der gebrauchten fehlt.
+        foreach (int position in fillPositions)
         {
             // F-M784: statt des Laufcaches (F-M441) jetzt der Bleibespeicher — dieselbe Spur wird beim
             // naechsten Lauf nicht wieder durch ffmpeg geholt. Der Schluessel traegt Groesse, letzte
@@ -5538,14 +5545,14 @@ public sealed class UploadPipeline : IPackFiller
             }
             else
             {
-                zuEntpacken.Add(position);
+                fehlend.Add(position);
             }
         }
 
-        if (zuEntpacken.Count > 0)
+        if (fehlend.Count > 0)
         {
             var (extracted, exit) = await FfmpegTools
-                .ExtractAllAsync(_ffmpegPath, mediaPath, zuEntpacken, _logger, _config, ct)
+                .ExtractAllAsync(_ffmpegPath, mediaPath, alleSpuren, _logger, _config, ct)
                 .ConfigureAwait(false);
 
             // F-M659 (Operator-Frage 20.11.2026: „Sicher dass der Extraktionsfehler fuer alle ffmpeg

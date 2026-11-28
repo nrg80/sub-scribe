@@ -48,7 +48,7 @@ internal static class Program
 
     private static async Task<int> Main(string[] args)
     {
-        var root = args.Length > 0 ? args[0] : "/opt/data/subdl-scribe";
+        var root = args.Length > 0 ? args[0] : ScribeRepoPaths.Root;
         _fixtures = Path.Combine(root, "scripts/tests/tvsubtitles/fixtures");
 
         // ---- 1. the language table is the SITE's, not ISO 639-1 --------------------------------

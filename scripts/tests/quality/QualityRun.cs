@@ -28,7 +28,7 @@
 //      still sent "web" — the exact shape of the bug this replaced.
 //
 // Usage: dotnet run --project quality.csproj [repo-root]
-//        (repo-root defaults to /opt/data/subdl-scribe, where the sources are read from)
+//        (repo-root defaults to the repository the test was built in)
 
 using System;
 using System.Collections.Generic;
@@ -48,7 +48,7 @@ void Check(bool ok, string what, string detail = "")
     }
 }
 
-string repo = args.Length > 0 ? args[0] : "/opt/data/subdl-scribe";
+string repo = args.Length > 0 ? args[0] : ScribeRepoPaths.Root;
 string clientPath = Path.Combine(repo, "Jellyfin.Plugin.SubdlSync", "Api", "ScribeApiClient.cs");
 string pipelinePath = Path.Combine(repo, "Jellyfin.Plugin.SubdlSync", "Pipeline", "UploadPipeline.cs");
 

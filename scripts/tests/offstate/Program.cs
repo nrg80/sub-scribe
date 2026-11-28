@@ -8,7 +8,7 @@ using Jellyfin.Plugin.SubScribe.Registry;
 
 // T158 / F-M352 (operator order 19.10.2026): a worker that cannot start reads "off".
 // The conditions are the code's own hard refusals, so they are driven through the REAL gate.
-string root = "/opt/data/subdl-scribe";
+string root = ScribeRepoPaths.Root;
 int f = 0;
 
 const string DL = WorkerRunRegistry.DownloadWorkerKey;   // SubdlSyncDownloadTask
