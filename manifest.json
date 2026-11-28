@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.95",
-        "changelog": "v12.3.8.95: A subtitle the plugin downloaded is never sent back to a source, and the SubDL lights name their domain.",
+        "version": "12.3.8.97",
+        "changelog": "v12.3.8.97: A corrected copy inherits the provenance of the kept original it came from, so a subtitle the plugin downloaded never goes back to any source - not even shifted.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.95-dev/Jellyfin.Plugin.SubdlSync_12.3.8.95.zip",
-        "checksum": "26e05b77bd98bca33d6239e8c58946b7",
-        "timestamp": "2026-11-28T09:07:56Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.97-dev/Jellyfin.Plugin.SubdlSync_12.3.8.97.zip",
+        "checksum": "f061f902581d0bf475bc1ead847d139b",
+        "timestamp": "2026-11-28T09:52:57Z"
       }
     ]
   }
