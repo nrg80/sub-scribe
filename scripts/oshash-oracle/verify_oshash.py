@@ -44,7 +44,7 @@ PROBE = os.environ.get(
     "/opt/data/tmp/oshash-harness/bin/Debug/net10.0/oshashprobe.dll")
 DOTNET = "/opt/data/.dotnet/dotnet"
 ICU = "/opt/data/jf-test/libicu/usr/lib/aarch64-linux-gnu"
-REAL_DIR = "/data/movies2"
+REAL_DIR = "/media/films"
 FIXED = os.path.join(tempfile.gettempdir(), "oshash-verify")
 CANONICAL_MIN = 131072  # below this the published canonical algorithm refuses
 

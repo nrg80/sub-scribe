@@ -43,7 +43,7 @@ Console.WriteLine("\nF-M346 — an id in the name");
 Check("the canonical id is read", Id("The Counterfeiters 2007 tt0813547 sqi") == "tt0813547", Id("The Counterfeiters 2007 tt0813547 sqi"));
 Check("also with dots and a container suffix", Id("Zombies.2018.tt6878820.sqi.1080p.WEB-DL.mkv") == "tt6878820");
 Check("case-insensitive", Id("Zombies 2018 TT6878820 sqi") == "tt6878820");
-Check("no id → null", Id("MobLand S02E04 Blank Curtain 1080p") is null);
+Check("no id → null", Id("Sampleland S02E04 Blank Curtain 1080p") is null);
 Check("a six-digit id is not one", Id("Film 2020 tt123456 sqi") is null);
 Check("the id never ends up in the title", Field("Zombies 2018 tt6878820 sqi", "Title") == "Zombies", Field("Zombies 2018 tt6878820 sqi", "Title"));
 

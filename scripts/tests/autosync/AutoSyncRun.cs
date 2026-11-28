@@ -114,7 +114,7 @@ public static class AutoSyncRun
         string? ffmpeg = new[] { "/usr/local/bin/ffmpeg", "/usr/bin/ffmpeg" }
             .FirstOrDefault(System.IO.File.Exists);
         string? media = null;
-        foreach (string wurzel in new[] { "/data/movies", "/data/movies2" })
+        foreach (string wurzel in new[] { "/data/movies", "/media/films" })
         {
             if (!System.IO.Directory.Exists(wurzel))
             {
@@ -140,7 +140,7 @@ public static class AutoSyncRun
         // (gemessen: exit 234, kein Prozess zu sehen). Deshalb werden Kandidaten durchprobiert, bis
         // einer wirklich liest — ein Umgebungslueck darf den Fall nicht als Regression erscheinen lassen.
         var kandidaten = new System.Collections.Generic.List<string>();
-        foreach (string wurzel in new[] { "/data/movies", "/data/movies2" })
+        foreach (string wurzel in new[] { "/data/movies", "/media/films" })
         {
             if (!System.IO.Directory.Exists(wurzel))
             {

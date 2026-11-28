@@ -73,8 +73,8 @@ var dbPath = DbFiles.PathIn(workdir);
 //   schema 17 — die vier Tabellen MIT den breiten Quellen-Spalten, mit `SubdlId` und `source_marks`;
 //               keine `source_matrix`.
 //   schema 20 — ohne die breiten Spalten (F-M668/Schema 19 hat sie entfernt), aber mit `SubdlId` und
-//               `source_marks` (beide fallen erst mit Schema 21, F-M670). Matrix bleibt stehen.
-//   schema 21 — die vier Tabellen, wie sie dieses Projekt zuletzt geschrieben hat; die Matrix steht.
+//               `source_marks` (beide fallen erst mit Schema 21, F-M670). Gridfilm bleibt stehen.
+//   schema 21 — die vier Tabellen, wie sie dieses Projekt zuletzt geschrieben hat; die Gridfilm steht.
 // ---------------------------------------------------------------------------------------------
 void CreateOldTables(Action<string> sql, int schema)
 {
@@ -141,12 +141,12 @@ void CreateOldTables(Action<string> sql, int schema)
 
     if (schema < 18)
     {
-        // Eine 17er-Datei kennt die Marken-Matrix nicht — die Marken stehen nur in den breiten Spalten.
+        // Eine 17er-Datei kennt die Marken-Gridfilm nicht — die Marken stehen nur in den breiten Spalten.
         sql("DROP TABLE IF EXISTS source_matrix;");
     }
     else
     {
-        // F-M672: eine Datei aus Schema 18…22 trägt die Matrix. Sie wird hier aus ihrem ALTEN DDL
+        // F-M672: eine Datei aus Schema 18…22 trägt die Gridfilm. Sie wird hier aus ihrem ALTEN DDL
         // gebaut (die Tabelle fällt beim Aufstieg, also steht sie in der heutigen Datei nicht mehr).
         sql("DROP TABLE IF EXISTS source_matrix;");
         sql(Jellyfin.Plugin.SubScribe.Data.ScribeDbContext.SourceMatrixDdl);
@@ -477,7 +477,7 @@ using (var db = new ScribeDbContext(workdir, null))
         AbsorbedIds = "3753826,3753825",
     });
 
-    // F-M668: das URTEIL (Behälter-Kennung und Fingerabdruck) steht in der Matrix, nicht an der Zeile.
+    // F-M668: das URTEIL (Behälter-Kennung und Fingerabdruck) steht in der Gridfilm, nicht an der Zeile.
     Jellyfin.Plugin.SubScribe.Data.SourceStore.WritePackMark(
         db, "tt26545992", 1, "EN", false, PackEntity.SubdlSource,
         DateTime.UtcNow, "tt26545992.S01.abc123.EN", "fp-a", null, null, null);
@@ -507,7 +507,7 @@ using (var db = new ScribeDbContext(workdir, null))
     Check(db.Packs.Count() == 1, "a second write for the same season replaces, never duplicates",
         db.Packs.Count().ToString(System.Globalization.CultureInfo.InvariantCulture));
 
-    // F-M668: die neuere Kennung gewinnt — sie steht an DERSELBEN Matrix-Zeile (der Schlüssel ist
+    // F-M668: die neuere Kennung gewinnt — sie steht an DERSELBEN Gridfilm-Zeile (der Schlüssel ist
     // Medium + Quelle + Art + Sprache + Variante), also ersetzt sie die alte, statt eine zweite anzulegen.
     Jellyfin.Plugin.SubScribe.Data.SourceStore.WritePackMark(
         db, "tt26545992", 1, "EN", false, PackEntity.SubdlSource,
@@ -580,7 +580,7 @@ using (var db = new ScribeDbContext(workdir, null))
 using (var db = new ScribeDbContext(workdir, null))
 {
     var alteZeile = db.Packs.FindById(ScribeDbContext.PackKey("tt26545992", 2, "DE", false, PackEntity.SubdlSource));
-    // F-M668: die Behälter-Kennung gehört zum URTEIL und steht in der Matrix. Der Altbestand hier hat
+    // F-M668: die Behälter-Kennung gehört zum URTEIL und steht in der Gridfilm. Der Altbestand hier hat
     // keine — sie wird NICHT erfunden; was zählt, ist die Zuordnung der Zeile zu ihrer Quelle.
     var alteMarke = Jellyfin.Plugin.SubScribe.Data.SourceStore.PackMark(
         db, "tt26545992", 2, "DE", false, PackEntity.SubdlSource);
@@ -651,7 +651,7 @@ using (var db = new ScribeDbContext(workdir, null))
     string abdruck = Jellyfin.Plugin.SubScribe.Pipeline.SeasonPack.PackHash(new[] { "aaaa", "bbbb", "cccc" });
 
     reg.RecordPackRefusal("tt644", 3, "EN", false, "the source already holds this container (duplicate)", abdruck, PackEntity.SubdlSource);
-    // F-M668: das Urteil (Grund, Datum, Fingerabdruck) steht in der Matrix und kommt über GetPack.
+    // F-M668: das Urteil (Grund, Datum, Fingerabdruck) steht in der Gridfilm und kommt über GetPack.
     var abgelehnt = reg.GetPack("tt644", 3, "EN", false, PackEntity.SubdlSource);
     Check(abgelehnt != null
           && abgelehnt!.RefusalReason == "the source already holds this container (duplicate)"
@@ -714,7 +714,7 @@ using (var db = new ScribeDbContext(workdir, null))
 }
 
 // F-M668: die Urteils-Spalten sind aus der `packs`-Tabelle VERSCHWUNDEN — Grund, Datum und Beleg stehen
-// in der Marken-Matrix. Geprueft wird die Tabelle selbst, nicht der Quelltext: eine stehengebliebene
+// in der Marken-Gridfilm. Geprueft wird die Tabelle selbst, nicht der Quelltext: eine stehengebliebene
 // Spalte waere der zweite Datenbestand, den F-M668 verbietet.
 using (var db = new ScribeDbContext(workdir, null))
 {
@@ -760,10 +760,10 @@ using (var db = new ScribeDbContext(workdir, null))
 }
 
 // ---------------------------------------------------------------------------------------------
-// F-M667/F-M668: die Marken-Matrix ist die EINZIGE Wahrheit.
+// F-M667/F-M668: die Marken-Gridfilm ist die EINZIGE Wahrheit.
 //
 // Der Aufbau ist eine NACHRGEBAUTE Altdatei: ein vollständiger Store mit Marken in den breiten
-// Spalten, danach die Matrix-Tabelle entfernt, die Altspalten wieder angelegt und der Marker auf 17
+// Spalten, danach die Gridfilm-Tabelle entfernt, die Altspalten wieder angelegt und der Marker auf 17
 // zurückgesetzt — genau so sieht die Datei aus, die der Betrieb vor diesem Build geschrieben hat.
 // Gefahren wird gegen die echte Datei, nicht gegen den Quelltext: vorher und nachher werden die
 // Zeilen je Art GEZÄHLT, und geprüft wird, dass jedes Urteil danach GENAU EINMAL existiert.
@@ -979,11 +979,11 @@ int altFile = Q("SELECT COUNT(*) FROM media WHERE CompleteSubdl IS NOT NULL "
 int altPack = Q("SELECT COUNT(*) FROM packs;");
 Console.WriteLine("   alte Spalten: track=" + altTrack + " track-hi=" + altTrackHi + " file=" + altFile + " pack=" + altPack);
 Check(altTrack == 5 && altTrackHi == 1 && altFile == 2 && altPack == 2,
-    "die nachgebaute Altdatei trägt die Marken nur in den breiten Spalten (Matrix-Tabelle fehlt)",
+    "die nachgebaute Altdatei trägt die Marken nur in den breiten Spalten (Gridfilm-Tabelle fehlt)",
     altTrack + "/" + altTrackHi + "/" + altFile + "/" + altPack);
 Check(Q("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='source_matrix'") == 0
       && Q("SELECT SchemaVersion FROM meta WHERE Id='db'") == 17,
-    "und die Matrix-Tabelle gibt es darin nicht (Marker 17)");
+    "und die Gridfilm-Tabelle gibt es darin nicht (Marker 17)");
 
 // NACHHER: die Übernahme läuft beim Öffnen — vor dem Store, mit Sicherung der alten Datei.
 var belege = new Dictionary<string, int>(StringComparer.Ordinal);
@@ -1000,14 +1000,14 @@ using (var db = new ScribeDbContext(matrixDir, null))
     var dateien = Sicherungen(matrixDir);
     sicherungDa = dateien.Length == 1;
     sicherungPfad = dateien.FirstOrDefault() ?? string.Empty;
-    Console.WriteLine("   Matrix: " + string.Join(", ", belege.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => x.Key + "=" + x.Value)));
+    Console.WriteLine("   Gridfilm: " + string.Join(", ", belege.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => x.Key + "=" + x.Value)));
 
     Check(markenGesamt == 12 && belege.Count == 7
           && Beleg(belege, "subdl|track") == 5 && Beleg(belege, "tvsubtitles|track-hi") == 1
           && Beleg(belege, "moviesubtitles|track") == 1
           && Beleg(belege, "subdl|file") == 1 && Beleg(belege, "tvsubtitles|file") == 1
           && Beleg(belege, "moviesubtitles|file") == 1 && Beleg(belege, "subdl|pack") == 2,
-        "F-M668/F-M669: die Matrix ist aus den breiten Spalten gefüllt — 12 Marken in 7 Paaren aus Quelle und Art (die zwölfte kommt aus der Alt-Tabelle, F-M670)",
+        "F-M668/F-M669: die Gridfilm ist aus den breiten Spalten gefüllt — 12 Marken in 7 Paaren aus Quelle und Art (die zwölfte kommt aus der Alt-Tabelle, F-M670)",
         markenGesamt + " Marke(n): " + string.Join(",", belege.OrderBy(x => x.Key, StringComparer.Ordinal).Select(x => x.Key + "=" + x.Value)));
 
     // Die Zuordnung selbst: die Id bei der Quelle — und seit F-M669 je POSITION ein eigener Beleg.
@@ -1065,7 +1065,7 @@ Check(sicherungMarker == 17 && sicherungWert == "444"
     "marker=" + sicherungMarker + " id=" + (sicherungWert ?? "-"));
 
 // Die Altspalten sind WEG — in jeder Tabelle, Spalte für Spalte. Das ist die Regel „kein doppelter
-// Datenbestand": was übernommen ist, steht nur noch in der Matrix.
+// Datenbestand": was übernommen ist, steht nur noch in der Gridfilm.
 var uebrig = new List<string>();
 foreach (string table in new[] { "track", "sidecar", "file", "pack" })
 {
@@ -1105,7 +1105,7 @@ using (var db = new ScribeDbContext(matrixDir, null))
 }
 
 // F-M670: die Alt-Tabelle `source_marks` und die Id-Spalte `SubdlId` sind WEG — und ihre Werte stehen
-// jetzt in der Matrix, jede Kennung genau einmal.
+// jetzt in der Gridfilm, jede Kennung genau einmal.
 Check(Q("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='source_marks'") == 0,
     "F-M670: die Alt-Tabelle `source_marks` existiert nach der Übernahme nicht mehr",
     Q("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='source_marks'") + " Tabelle(n)");
@@ -1141,12 +1141,12 @@ Check(markeM21.UploadId == "sm-only",
 
 Check(Q("SELECT COUNT(*) FROM reference WHERE DownloadSourceId = '700' OR UploadedId = '700'") >= 1
       && Q("SELECT COUNT(*) FROM reference WHERE DownloadSourceId = '701' OR UploadedId = '701'") >= 1,
-    "F-M670: jede Quellen-Id steht genau einmal in der Matrix");
+    "F-M670: jede Quellen-Id steht genau einmal in der Gridfilm");
 
 Check(Q("SELECT COUNT(*) FROM reference WHERE DownloadSourceId = 'sm-orphan' OR UploadedId = 'sm-orphan'") == 0,
-    "F-M670: eine Alt-Marke ohne Besitzerzeile bekommt KEINE Matrix-Zeile (sie lebt in der Sicherung, der Lauf meldet sie)");
+    "F-M670: eine Alt-Marke ohne Besitzerzeile bekommt KEINE Gridfilm-Zeile (sie lebt in der Sicherung, der Lauf meldet sie)");
 
-// Zweiter Start: dieselbe Datei, dieselbe Matrix — kein zweiter Lauf, keine zweite Sicherung.
+// Zweiter Start: dieselbe Datei, dieselbe Gridfilm — kein zweiter Lauf, keine zweite Sicherung.
 int backups = Sicherungen(matrixDir).Length;
 int marksAgain;
 using (var db = new ScribeDbContext(matrixDir, null))
@@ -1157,7 +1157,7 @@ Check(marksAgain == markenGesamt && Sicherungen(matrixDir).Length == backups,
     "F-M668: der zweite Start übernimmt nicht erneut — gleiche Zeilenzahl, gleiche Zahl Sicherungen",
     marksAgain + " Marke(n), " + backups + " Sicherung(en)");
 
-// Der Leser: es gibt KEINEN zweiten Lesepfad mehr. Die Matrix antwortet — und wenn sie die Zeile nicht
+// Der Leser: es gibt KEINEN zweiten Lesepfad mehr. Die Gridfilm antwortet — und wenn sie die Zeile nicht
 // hat, bleibt die Antwort leer, statt in einer Altspalte nachzusehen (die es nicht mehr gibt).
 using (var db = new ScribeDbContext(matrixDir, null))
 {
@@ -1171,7 +1171,7 @@ using (var db = new ScribeDbContext(matrixDir, null))
 
     var spur = SourceStore.TrackMarkAt(db, "m1", "subdl", "EN", false, 0);
     Check(spur.IsClosed && spur.ClosedAt == t1 && spur.SourceId == "111",
-        "F-M668: die Spur-Marke kommt aus der Matrix (geschlossen, mit der Id bei der Quelle)",
+        "F-M668: die Spur-Marke kommt aus der Gridfilm (geschlossen, mit der Id bei der Quelle)",
         spur.ClosedAt + " / " + (spur.SourceId ?? "-"));
 
     // F-M669: dieselbe Sprache an einer anderen Position ist NICHT damit geschlossen — sonst gälte eine
@@ -1180,7 +1180,7 @@ using (var db = new ScribeDbContext(matrixDir, null))
     Check(!nachbar.IsClosed && nachbar.ClosedAt == null,
         "F-M669: eine Marke je Position — die Nachbarposition derselben Sprache bleibt offen");
 
-    // Die Matrix ist die EINZIGE Antwort: nimmt man die Zeile weg, ist die Quelle offen — es gibt
+    // Die Gridfilm ist die EINZIGE Antwort: nimmt man die Zeile weg, ist die Quelle offen — es gibt
     // keine Altspalte, die einspringen könnte. (Über den Store gelöscht, damit auch sein Zeilencache
     // die Zeile nicht mehr führt — ein rohes DELETE ließe sie dort stehen.)
     SourceStore.ForgetSubject(db, SourceStore.SubjectAt(db, "m1", 0));
@@ -1189,7 +1189,7 @@ using (var db = new ScribeDbContext(matrixDir, null))
 
     var spurWeg = SourceStore.TrackMarkAt(db, "m1", "subdl", "EN", false, 0);
     Check(!spurWeg.IsClosed && spurWeg.ClosedAt == null && spurWeg.SourceId == null,
-        "F-M668: ohne Matrix-Zeile ist die Spur für diese Quelle OFFEN — es gibt keinen Rückfall mehr",
+        "F-M668: ohne Gridfilm-Zeile ist die Spur für diese Quelle OFFEN — es gibt keinen Rückfall mehr",
         "closed=" + spurWeg.IsClosed);
 
     var dateiWeg = SourceStore.FileMark(db, "m2", "moviesubtitles");
@@ -1203,7 +1203,7 @@ using (var db = new ScribeDbContext(matrixDir, null))
 
 // ---- Der Formatwechsel (F-M637) baut seine neue Datei selbst — auch DORT muss die Übernahme laufen
 // und die Altspalten müssen fallen. Er öffnet die Kopie über denselben Kontext; stünde die Übernahme
-// nur auf dem normalen Weg, wäre die Matrix einer umgestellten Datei für immer leer.
+// nur auf dem normalen Weg, wäre die Gridfilm einer umgestellten Datei für immer leer.
 string seedDir = Path.Combine(workdir, "switch-seed");
 Directory.CreateDirectory(seedDir);
 
@@ -1240,7 +1240,7 @@ using (var db = new ScribeDbContext(switchDir, null))
 }
 
 // ---------------------------------------------------------------------------------------------
-// F-M670: der Weg 20 -> 21. Eine Datei aus Schema 20 trägt die Matrix bereits und hat KEINE breite
+// F-M670: der Weg 20 -> 21. Eine Datei aus Schema 20 trägt die Gridfilm bereits und hat KEINE breite
 // Spalte mehr — aber die zwei Reste stehen noch darin (die Alt-Tabelle und die Id-Spalte). Sie müssen
 // beim Öffnen genauso übernommen und niedergelegt werden; sonst bliebe der Bestand der schon
 // migrierten Dateien für immer ein zweiter Bestand.
@@ -1277,7 +1277,7 @@ using (var db = new ScribeDbContext(s20Dir, null))
 {
     void Sql(string sql) => db.Context.Database.ExecuteSqlRaw(sql);
 
-    // F-M671: eine Altdatei entsteht aus ihrem ALTEN DDL. Schema 20 heisst: die Matrix steht schon,
+    // F-M671: eine Altdatei entsteht aus ihrem ALTEN DDL. Schema 20 heisst: die Gridfilm steht schon,
     // die breiten Spalten sind weg, aber die zwei Reste stehen noch darin (`source_marks` und die
     // Id-Spalte an den Spuren). Die vier Ebenen des neuen Modells fallen.
     CreateOldTables(Sql, 20);
@@ -1301,7 +1301,7 @@ using (var db = new ScribeDbContext(s20Dir, null))
 Check(QIn("SELECT COUNT(*) FROM sqlite_master WHERE type='table' AND name='source_matrix'", s20Db) == 1
       && SpaltenVon("embeds", s20Db).Contains("SubdlId")
       && QIn("SELECT SchemaVersion FROM meta WHERE Id='db'", s20Db) == 20,
-    "die 20er-Datei trägt die Matrix UND die zwei Reste (Marker 20)");
+    "die 20er-Datei trägt die Gridfilm UND die zwei Reste (Marker 20)");
 
 string s20Spur = "#" + "s20aa" + "#aab";
 string s20Spur2 = "#" + "s20aa" + "#aac";
@@ -1616,8 +1616,8 @@ Check(m24Backups == 1 && m24Sicherungen.Length == 1 && !SpaltenVon("badapple", m
 
 // Der Schluessel: zwei Zeilen, die sich NUR im Member unterscheiden, sind zwei Zeilen. Und ein zweites
 // Melden DESSELBEN Subs bleibt eine Aktualisierung.
-const string memberEn = "MobLand - 2x05 - Birdland.WEB.NeoNoir.en.srt";
-const string memberDe = "MobLand - 2x05 - Birdland.WEB.NeoNoir.de.srt";
+const string memberEn = "Sampleland - 2x05 - Episode Title.WEB.GRP.en.srt";
+const string memberDe = "Sampleland - 2x05 - Episode Title.WEB.GRP.de.srt";
 using (var db = new ScribeDbContext(m24Dir, null))
 {
     SourceStore.RecordBadApple(db, m24Subjekt, SourceStore.Subdl, "380011", "EN",
@@ -1667,7 +1667,7 @@ Check(m24Backups2 == 1 && QIn("SELECT COUNT(*) FROM badapple", m24Db) == m24Zeil
 // F-M679, Weg 22 -> 24: ein Store aus Schema 22 traegt noch gar kein `badapple` — die Tabelle
 // entsteht beim Aufstieg frisch aus dem DDL, also MIT Member. Nachgebaut wird die 22er-Form aus einem
 // vollstaendigen Store: die Spalten `file.PackId` und `track.OriginId` zurueck (die 22 sie trug) und
-// die Marken-Matrix, die es damals noch gab.
+// die Marken-Gridfilm, die es damals noch gab.
 // ---------------------------------------------------------------------------------------------
 string m22Dir = Path.Combine(workdir, "member22");
 Directory.CreateDirectory(m22Dir);

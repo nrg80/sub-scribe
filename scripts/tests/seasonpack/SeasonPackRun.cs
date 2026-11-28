@@ -72,7 +72,7 @@ internal static class Program
         false,
         0,
         Srt(episode),
-        $"Show.S01E{episode:00}.1080p.WEB.x264-NTb",
+        $"Show.S01E{episode:00}.1080p.WEB.x264-GRP",
         "web",
         "23.976",
         1920,
@@ -205,7 +205,7 @@ internal static class Program
         var got = SeasonPack.AiredNumbers(new[] { 0, 3, 1, 2, 10, 2 });
         Check(got.SequenceEqual(new[] { 1, 2, 3, 10 }), "zero is dropped, rest sorted and deduplicated");
         Check(SeasonPack.AiredNumbers(Array.Empty<int>()).Count == 0, "no numbers, no season");
-        // Measured shape at IMDb: Game of Thrones S01 reports eleven entries — ten episodes
+        // Measured shape at IMDb: another series S01 reports eleven entries — ten episodes
         // plus the unaired original pilot at E0.
         var thrones = Enumerable.Range(0, 11).ToList();
         Check(SeasonPack.AiredNumbers(thrones).Count == 10, "eleven IMDb entries with an E0 are ten episodes");
@@ -375,20 +375,20 @@ internal static class Program
         // that must stay null because the name states no group.
         Check(SeasonPack.ReleaseGroup("Toy.Story.1995.1080p.BRrip.x264.YIFY") == "YIFY",
             "F-M430: a dot-separated scene group is read (x264.YIFY)");
-        Check(SeasonPack.ReleaseGroup("Too Good to be True 2024 S01E02 1080p WEB-DL HEVC x265 BONE") == "BONE",
-            "F-M430: a space-separated group is read (x265 BONE)");
-        Check(SeasonPack.ReleaseGroup("Mayor of Kingstown (2021) - S04E07 - My Way (1080p AMZN WEB-DL x265 Ghost)") == "Ghost",
+        Check(SeasonPack.ReleaseGroup("Too Good to be True 2024 S01E02 1080p WEB-DL HEVC x265 GRP") == "GRP",
+            "F-M430: a space-separated group is read (x265 GRP)");
+        Check(SeasonPack.ReleaseGroup("Mayor of Kingstown (2021) - S04E07 - My Way (1080p STRM WEB-DL x265 Ghost)") == "Ghost",
             "F-M430: a group inside a trailing parenthesis is read");
         Check(SeasonPack.ReleaseGroup("Cunk.on.Britain.s01e01.[MPup]") == "MPup",
             "F-M430: a bracketed group is read");
         Check(SeasonPack.ReleaseGroup("Unicorn.Academy.S03E01.1080p.WEB.h264-DOLORES[EZTVx.to]") == "DOLORES",
             "F-M430: a site tag behind the group does not hide it");
-        Check(SeasonPack.ReleaseGroup("The Middle.S01E05.MULTI.1080p.WEB-DL.H265-FTMVHD") == "FTMVHD",
+        Check(SeasonPack.ReleaseGroup("The Sample.S01E05.MULTI.1080p.WEB-DL.H265-GRP") == "GRP",
             "F-M505: the group is sent to tvst, not the file name — the name is what the site truncated");
         Check(SeasonPack.ReleaseGroup("A.Bona.Fide.Killer.S01E12.(THENKIRI.COM)") == null,
             "F-M430: a long site watermark is not a group");
-        Check(SeasonPack.ReleaseGroup("Toy.Story.4.2019.1080p.BluRay.x264-[YTS.LT]") == "YTS"
-              && SeasonPack.ReleaseGroup("Forgotten.Island.2026.1080p.WEBRip.x264.AAC5.1-[YTS.GG - YTS.BZ]") == "YTS",
+        Check(SeasonPack.ReleaseGroup("Toy.Story.4.2019.1080p.BluRay.x264-[GRP.LT]") == "GRP"
+              && SeasonPack.ReleaseGroup("Forgotten.Island.2026.1080p.WEBRip.x264.AAC5.1-[GRP.GG - GRP.BZ]") == "GRP",
             "F-M430: a short brand behind a domain inside the bracket is the group");
         Check(SeasonPack.ReleaseGroup("Pressure.2026.1080p.BluRay.x264-ZoroSenpai_EniaHD") == "ZoroSenpai",
             "F-M430: an uploader pair separated by an underscore yields the group");
@@ -408,13 +408,13 @@ internal static class Program
         // keinen Pack. Die Gruppe steht nur dann hinter dem Bindestrich, wenn davor ein technisches Wort
         // steht; endet der Abschnitt auf eine Folgenmarke, ist alles danach ein Titel.
         Check(SeasonPack.ReleaseGroup("/x/Blade Runner 2099 - S01E01 - Hades.mkv") == null
-              && SeasonPack.ReleaseGroup("/x/Better Call Saul - S04E01 - Smoke.mkv") == null
+              && SeasonPack.ReleaseGroup("/x/Sample Show - S04E01 - Episode Title.mkv") == null
               && SeasonPack.ReleaseGroup("/x/The Thundermans Undercover - S01E01 - Thundercover.mkv") == null
               && SeasonPack.ReleaseGroup(
                      "/x/Ginny & Georgia (2021) Season 3 Episode 1- Episode 1 - PrimeWire.mp4") == null,
-            "F-M761: ein Folgentitel hinter der Folgenmarke ist keine Release-Gruppe (Hades, Smoke, PrimeWire bleiben ohne)");
+            "F-M761: ein Folgentitel hinter der Folgenmarke ist keine Release-Gruppe (Hades, Episode Title, PrimeWire bleiben ohne)");
 
-        Check(SeasonPack.ReleaseGroup("/x/Show.S01E01.1080p.WEB-DL.DDP5.1.H.264-NTb.mkv") == "NTb"
+        Check(SeasonPack.ReleaseGroup("/x/Show.S01E01.1080p.WEB-DL.DDP5.1.H.264-GRP.mkv") == "GRP"
               && SeasonPack.ReleaseGroup("/x/Dustfall.S01E01.1080p.ABCiView.WEB-DL.AAC2.0.H.264-WH.mkv") == "WH"
               && SeasonPack.ReleaseGroup(
                      "/x/Unicorn.Academy.S02E03.Star.Showers.1080p.NF.WEB-DL.DDP5.1.H.264-XEBEC.mkv") == "XEBEC",
@@ -431,13 +431,13 @@ internal static class Program
             "F-M761: die gemessenen Sonderformen behalten ihre Gruppe (X64, ESub, SubS, H 264, Uploader-Paar)");
 
 
-        // F-M505 (measured 15.11.2026 on tvsubtitles.net, first Middle season, 193 entries read): the
-        // Release column of the page carries the GROUP — 2HD (28x), REWARD (24x), FQM (14x), FEVER,
+        // F-M505 (measured 15.11.2026 on tvsubtitles.net, first Sample season, 193 entries read): the
+        // Release column of the page carries the GROUP — 2HD (28x), REWARD (24x), FQM (14x), GRP,
         // POW4, CTU, LOL, DIMENSION, 91 empty, not one entry with a dot. Our uploads carried the media
-        // file name instead, and the page cut it at the dash: "The Middle.S01E21.MULTI.1080p.WEB-DL"
-        // stood there and the group (FTMVHD) was gone. This is the real library name of that episode.
-        Check(SeasonPack.ReleaseGroup("The Middle.S01E01.MULTI.1080p.WEB-DL.H265-FTMVHD") == "FTMVHD",
-            "F-M505: the group is read off the real library name (…WEB-DL.H265-FTMVHD → FTMVHD) — the page's release column carries the group, not the file name");
+        // file name instead, and the page cut it at the dash: "The Sample.S01E21.MULTI.1080p.WEB-DL"
+        // stood there and the group (GRP) was gone. This is the real library name of that episode.
+        Check(SeasonPack.ReleaseGroup("The Sample.S01E01.MULTI.1080p.WEB-DL.H265-GRP") == "GRP",
+            "F-M505: the group is read off the real library name (…WEB-DL.H265-GRP → GRP) — the page's release column carries the group, not the file name");
 
         Check(SeasonPack.PackRelease(new[] { "Reacher.3x04.1080p.WEB" }, "Reacher", "tt9288030", 3, "EN", false)
               == "Reacher.S03.1080p.WEB", "1x05 style markers reduce to the season too");
@@ -475,10 +475,10 @@ internal static class Program
               == "Foundation.S01.1080p.WEB.x264",
             "names without a release fall through to the built release");
         Check(SeasonPack.PackRelease(
-                new[] { "Foundation.S01E01.1080p.WEB.x264-NTb", "Foundation.S01E02.1080p.WEB.x264-NTb" },
+                new[] { "Foundation.S01E01.1080p.WEB.x264-GRP", "Foundation.S01E02.1080p.WEB.x264-GRP" },
                 "Foundation", "tt0804484", 1, "EN", false,
                 "Foundation.S01.1080p.WEB.x264")
-              == "Foundation.S01.1080p.WEB.x264-NTb",
+              == "Foundation.S01.1080p.WEB.x264-GRP",
             "a release the names carry still wins over the built one");
         Check(SeasonPack.PackRelease(
                 new[] { "S01E01 - One", "S01E02 - Two" },
@@ -496,7 +496,7 @@ internal static class Program
 
         // F-M505 (operator 15.11.2026: "Release on tvst is not perfect"): the tvst ticket carries the
         // GROUP, never the media file name. The page cuts the release at the dash, so a file name
-        // arrives there as "The Middle.S01E21.MULTI.1080p.WEB-DL" and the group is lost; an empty
+        // arrives there as "The Sample.S01E21.MULTI.1080p.WEB-DL" and the group is lost; an empty
         // field is allowed and is the majority on the page, hence the `?? string.Empty`. Bound as
         // source text, so a later edit cannot quietly put the file name back.
         {
@@ -516,7 +516,7 @@ internal static class Program
             Check(ticket.Length > 0
                   && ticket.Contains("SeasonPack.ReleaseGroup(releaseName) ?? string.Empty", StringComparison.Ordinal)
                   && !ticket.Contains("GetFileNameWithoutExtension", StringComparison.Ordinal),
-                "F-M505: the tvst order's release field is the GROUP (`SeasonPack.ReleaseGroup(releaseName) ?? string.Empty`) and never the media file name — the page cuts a name at the dash (\"The Middle.S01E21.MULTI.1080p.WEB-DL\") and the group would be lost, an empty field being allowed and the majority on the page");
+                "F-M505: the tvst order's release field is the GROUP (`SeasonPack.ReleaseGroup(releaseName) ?? string.Empty`) and never the media file name — the page cuts a name at the dash (\"The Sample.S01E21.MULTI.1080p.WEB-DL\") and the group would be lost, an empty field being allowed and the majority on the page");
         }
         Check(pipeline.Contains("&& !cand.IsLoose && !cand.Forced", StringComparison.Ordinal), "no pack for a loose sidecar or a forced track");
         Check(pipeline.Contains("await packCoordinator.FlushAsync(runCt)", StringComparison.Ordinal), "the run closes its buffers before the summary");
@@ -761,7 +761,7 @@ internal static class Program
         const string publishedWithBoth = """
         {"movie":{"name":"Crystal Lake","year":2026,"type":"tv","sd_id":1300275},
          "subtitle":{"id":3758706,"sd_id":1300275,"subtitles_uploaded_id":380828,"n_id":"xP0ZaRg3nR",
-         "name":"Crystal.Lake.S01.1080p.WEB.x265-NeoNoir","file_name":"Crystal.Lake.S01.1080p.WEB.x265-NeoNoir.zip",
+         "name":"Crystal.Lake.S01.1080p.WEB.x265-GRP","file_name":"Crystal.Lake.S01.1080p.WEB.x265-GRP.zip",
          "lang":"English","createdAt":"2026-11-03T21:14:06.000Z","status":"downloaded","season":1,"s":1,"episode":0,
          "ef":1,"ee":8,"is_full_season":null}}
         """;
@@ -797,7 +797,7 @@ internal static class Program
         var registrySrc = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Registry/ContentHashRegistry.cs"));
         Check(registrySrc.Contains("public int RemapSubdlId(string uploadId, string entryId)"),
             "F-M435: the registry can rewrite a stored handle");
-        // F-M668/F-M670: BEIDE Kennungen stehen in der Matrix — die Behälter-Kennung an der `pack`-Zeile,
+        // F-M668/F-M670: BEIDE Kennungen stehen in der Gridfilm — die Behälter-Kennung an der `pack`-Zeile,
         // die Untertitel-Kennung an der Spur-Marke. `RemapId` schreibt beide Zellen EINER Marke um
         // (`SourceId` und `UploadId`), also braucht es keinen zweiten Schreibweg und keine Id-Spalte mehr.
         Check(registrySrc.Contains("return SourceStore.RemapId(_db, uploadId, entryId);")
@@ -892,11 +892,11 @@ internal static class Program
 
         // F-M469 (operator 11.11.2026, "aber wir fassen nur denselben release zusammen"): a pack carries
         // ONE release. The real helper is asked with the measured situation — eight episodes over three
-        // encodes (NeoNoir 4, MeGusta 2, two renamed files without a release).
+        // encodes (GRP 4, MeGusta 2, two renamed files without a release).
         var aired = new[] { 1, 2, 3, 4, 5, 6, 7, 8 };
         var split = new (string Group, IEnumerable<int> Episodes)[]
         {
-            ("NeoNoir", new[] { 1, 2, 7, 8 }),
+            ("GRP", new[] { 1, 2, 7, 8 }),
             ("MeGusta", new[] { 5, 6 }),
             (SeasonPack.UnknownGroup, new[] { 3, 4 }),
         };
@@ -905,7 +905,7 @@ internal static class Program
 
         var whole = new (string Group, IEnumerable<int> Episodes)[]
         {
-            ("NeoNoir", new[] { 1, 2, 7, 8 }),
+            ("GRP", new[] { 1, 2, 7, 8 }),
             ("MeGusta", new[] { 1, 2, 3, 4, 5, 6, 7, 8 }),
         };
         Check(SeasonPack.GroupCoveringSeason(aired, whole) == "MeGusta",

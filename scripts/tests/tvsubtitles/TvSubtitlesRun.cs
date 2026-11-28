@@ -143,30 +143,30 @@ internal static class Program
             && refusal.Contains("gr", StringComparison.Ordinal)
             && refusal.Contains("cz", StringComparison.Ordinal),
             "found: " + (refusal ?? "<no refusal>"));
-        var isoName = Build(lang: "gre", fileName: "The Middle - 2x24.gre.srt", data: langData)!;
+        var isoName = Build(lang: "gre", fileName: "The Sample - 2x24.gre.srt", data: langData)!;
         var (isoBody, _) = TvSubtitlesClient.BuildUploadBody(isoName);
         Check("the upload's file name keeps its ISO3 ending from the table (F-M502)",
-            isoName.FileName == "The Middle - 2x24.gre.srt"
+            isoName.FileName == "The Sample - 2x24.gre.srt"
             && isoName.Iso3 == TvSubtitlesClient.Languages["gr"].Iso3
             && Encoding.UTF8.GetString(isoBody)
-                .Contains("filename=\"The Middle - 2x24.gre.srt\"", StringComparison.Ordinal));
+                .Contains("filename=\"The Sample - 2x24.gre.srt\"", StringComparison.Ordinal));
 
         // ---- 2. the comment: three lines, the author stays out -----------------------------------
         // F-M574 (Operator-Vorgabe 17.11.2026): "Imdb: xxx / tmdb: xxx" / "SxxEyy: Tvshow title/
         // Episode Title" / "Year" — offizielle Schreibweise IMDb/TMDb, kein Client-Tag.
         var kommentar = Jellyfin.Plugin.SubScribe.Api.Endpoints.UploadComment.Series(
-            "tt1442464", "1422", 2, 24, "The Middle", "The Man Hunt", 2009);
+            "tt1442464", "1422", 2, 24, "The Sample", "The Man Hunt", 2009);
         Check("the comment carries ids, episode line and year in three lines",
-            kommentar == "IMDb: tt1442464 / TMDb: 1422 — S02E24: The Middle / The Man Hunt — 2009",
+            kommentar == "IMDb: tt1442464 / TMDb: 1422 — S02E24: The Sample / The Man Hunt — 2009",
             "found: " + kommentar.Replace("\n", " | ", StringComparison.Ordinal));
         Check("one id is enough, an unknown part stays out",
-            Jellyfin.Plugin.SubScribe.Api.Endpoints.UploadComment.Series("tt1442464", null, 2, 24, "The Middle", "The Man Hunt", 0)
-                == "IMDb: tt1442464 — S02E24: The Middle / The Man Hunt"
-            && Jellyfin.Plugin.SubScribe.Api.Endpoints.UploadComment.Series(null, null, 2, 24, "The Middle", null, 0)
-                == "S02E24: The Middle");
+            Jellyfin.Plugin.SubScribe.Api.Endpoints.UploadComment.Series("tt1442464", null, 2, 24, "The Sample", "The Man Hunt", 0)
+                == "IMDb: tt1442464 — S02E24: The Sample / The Man Hunt"
+            && Jellyfin.Plugin.SubScribe.Api.Endpoints.UploadComment.Series(null, null, 2, 24, "The Sample", null, 0)
+                == "S02E24: The Sample");
         Check("a placeholder-free episode line keeps the show title only, a film drops the line",
-            Jellyfin.Plugin.SubScribe.Api.Endpoints.UploadComment.Movie("tt15398776", "872585", "Oppenheimer", 2023)
-                == "IMDb: tt15398776 / TMDb: 872585 — Oppenheimer — 2023");
+            Jellyfin.Plugin.SubScribe.Api.Endpoints.UploadComment.Movie("tt15398776", "872585", "Samplemovie", 2023)
+                == "IMDb: tt15398776 / TMDb: 872585 — Samplemovie — 2023");
 
         // ---- 3. the upload refuses what the form would silently swallow -------------------------
         var data = Encoding.UTF8.GetBytes("1\n00:00:01,000 --> 00:00:02,000\nhello\n");
@@ -183,7 +183,7 @@ internal static class Program
         Check("an unknown rip is refused", Refused(() => Build(rip: "HDTV.XviD", data: data)));
         Check("an upload without any id is refused — the comment would be empty",
             Refused(() => TvSubtitlesClient.BuildUpload(
-                512, 2, 24, "de", "x.srt", data, "HDTV", "FEVER", null, null)));
+                512, 2, 24, "de", "x.srt", data, "HDTV", "GRP", null, null)));
         Check("an empty file and a wrong extension are refused",
             Refused(() => Build(data: Array.Empty<byte>())) && Refused(() => Build(fileName: "x.ass", data: data)));
 
@@ -198,7 +198,7 @@ internal static class Program
         Check("the ids land in the comment field, the release stays its own field",
             upload.Fields.Single(f => f.Key == "comment").Value
                 == "IMDb: tt1442464 / TMDb: 1422 — S02E24"
-            && upload.Fields.Single(f => f.Key == "release").Value == "FEVER");
+            && upload.Fields.Single(f => f.Key == "release").Value == "GRP");
         var flags = BuildOk(data, doubleEpisode: true, hearingImpaired: true)!;
         Check("double episode and hearing-impaired are appended as \"1\" and only when set",
             flags.Fields.Single(f => f.Key == "double").Value == "1"
@@ -209,7 +209,7 @@ internal static class Program
         var (body, boundary) = TvSubtitlesClient.BuildUploadBody(upload);
         var text = Encoding.UTF8.GetString(body);
         Check("the body carries the file part with its name and octet-stream type",
-            text.Contains("name=\"upfile\"; filename=\"The Middle - 2x24.srt\"", StringComparison.Ordinal)
+            text.Contains("name=\"upfile\"; filename=\"The Sample - 2x24.srt\"", StringComparison.Ordinal)
             && text.Contains("Content-Type: application/octet-stream", StringComparison.Ordinal));
         Check("every field is a part of its own",
             upload.Fields.All(f => text.Contains("name=\"" + f.Key + "\"\r\n\r\n" + f.Value, StringComparison.Ordinal)));
@@ -238,16 +238,16 @@ internal static class Program
         // = Staffelzeile. Ein Pack ist eine Sprache und eine Variante — HI und Nicht-HI werden nie
         // gemischt, deshalb beschreibt das `hi`-Feld den ganzen Container.
         var packZip = ZipOf(
-            ("The Middle S02E01.de.srt", "1\n00:00:01,000 --> 00:00:02,000\nhallo\n"),
-            ("The Middle S02E02.de.srt", "1\n00:00:01,000 --> 00:00:02,000\nhallo\n"),
-            ("The Middle S02E02.de.srt", "1\n00:00:01,000 --> 00:00:02,000\nhallo\n"));
+            ("The Sample S02E01.de.srt", "1\n00:00:01,000 --> 00:00:02,000\nhallo\n"),
+            ("The Sample S02E02.de.srt", "1\n00:00:01,000 --> 00:00:02,000\nhallo\n"),
+            ("The Sample S02E02.de.srt", "1\n00:00:01,000 --> 00:00:02,000\nhallo\n"));
         var pack = TvSubtitlesClient.BuildSeasonPack(
-            512, 2, "de", "The.Middle.S02.GERMAN.1080p.WEB-FEVER.zip", packZip, "WEB",
-            "The.Middle.S02.GERMAN.1080p.WEB-FEVER", 1422, "tt1442464", false, "The Middle", 2009);
+            512, 2, "de", "The.Sample.S02.GERMAN.1080p.WEB-GRP.zip", packZip, "WEB",
+            "The.Sample.S02.GERMAN.1080p.WEB-GRP", 1422, "tt1442464", false, "The Sample", 2009);
         Check("a pack goes into the season slot: episode=0, pack name in release (F-M641)",
             pack.Fields.Single(f => f.Key == "episode").Value == "0"
             && pack.Fields.Single(f => f.Key == "season").Value == "2"
-            && pack.Fields.Single(f => f.Key == "release").Value == "The.Middle.S02.GERMAN.1080p.WEB-FEVER"
+            && pack.Fields.Single(f => f.Key == "release").Value == "The.Sample.S02.GERMAN.1080p.WEB-GRP"
             && pack.FileName.EndsWith(".zip", StringComparison.Ordinal),
             string.Join(",", pack.Fields.Select(f => f.Key + "=" + f.Value)));
         Check("the pack sends the form's fields in the form's order, no `double` (F-M641)",
@@ -256,7 +256,7 @@ internal static class Program
             string.Join(",", pack.Fields.Select(f => f.Key)));
         Check("the pack's comment names the season, not an episode (F-M641)",
             pack.Fields.Single(f => f.Key == "comment").Value
-                == "IMDb: tt1442464 / TMDb: 1422 — S02: The Middle — 2009"
+                == "IMDb: tt1442464 / TMDb: 1422 — S02: The Sample — 2009"
             && !pack.Fields.Single(f => f.Key == "comment").Value.Contains("S02E", StringComparison.Ordinal),
             pack.Fields.Single(f => f.Key == "comment").Value);
         Check("the comment carries neither version nor client name (F-M641)",
@@ -268,7 +268,7 @@ internal static class Program
             !pack.Fields.Any(f => f.Key is "hi" or "double")
             && TvSubtitlesClient.BuildSeasonPack(
                     512, 2, "de", "p.zip", packZip, "WEB", "P.S02.GERMAN.HI", 1422, "tt1442464",
-                    hearingImpaired: true, showTitle: "The Middle")
+                    hearingImpaired: true, showTitle: "The Sample")
                 .Fields.Single(f => f.Key == "hi").Value == "1");
         Check("a pack must be one .zip and must carry its name (F-M641)",
             Refused(() => TvSubtitlesClient.BuildSeasonPack(
@@ -283,7 +283,7 @@ internal static class Program
         var (packBody, _) = TvSubtitlesClient.BuildUploadBody(pack);
         Check("the pack leaves as the zip it is, bytes unchanged (F-M641)",
             Encoding.UTF8.GetString(packBody).Contains(
-                "name=\"upfile\"; filename=\"The.Middle.S02.GERMAN.1080p.WEB-FEVER.zip\"", StringComparison.Ordinal)
+                "name=\"upfile\"; filename=\"The.Sample.S02.GERMAN.1080p.WEB-GRP.zip\"", StringComparison.Ordinal)
             && packBody.AsSpan().IndexOf(packZip) >= 0);
 
         // ---- 5. creating a show: the form, the answer, the number (F-M516) -----------------------
@@ -392,18 +392,18 @@ internal static class Program
         var shows = TvSubtitlesClient.ParseShows(addHtml);
         Check("the show select parses into id -> name", shows.Count >= 8 && shows.ContainsKey(512),
             "parsed " + shows.Count + " entries");
-        Check("the show resolves by name", TvSubtitlesClient.ResolveShow(shows, "the middle") == 512);
+        Check("the show resolves by name", TvSubtitlesClient.ResolveShow(shows, "the sample") == 512);
         // F-M501: der Vergleich ist eng — Gross/Kleinschreibung und Leerraum zaehlen nicht, sonst gilt
-        // Gleichheit. Die fruehere "enthaelt"-Stufe ist weg: "The Middle" findet NICHT
-        // "Malcolm in the Middle" und nicht "The Middle Man".
+        // Gleichheit. Die fruehere "enthaelt"-Stufe ist weg: "The Sample" findet NICHT
+        // "Malcolm in the Sample" und nicht "The Sample Man".
         Check("the name comparison is narrow: case and whitespace only (F-M501)",
-            TvSubtitlesClient.ResolveShow(shows, "  The   MIDDLE ") == 512
-            && TvSubtitlesClient.ResolveShow(shows, "Malcolm in the Middle") == 422
-            && TvSubtitlesClient.ResolveShow(shows, "The Middle") == 512);
+            TvSubtitlesClient.ResolveShow(shows, "  The   SAMPLE ") == 512
+            && TvSubtitlesClient.ResolveShow(shows, "Malcolm in the Sample") == 422
+            && TvSubtitlesClient.ResolveShow(shows, "The Sample") == 512);
         Check("an unknown show resolves to null, and no substring matches (F-M501)",
             TvSubtitlesClient.ResolveShow(shows, "Nope-Nope-Nope") is null
-            && TvSubtitlesClient.ResolveShow(shows, "Middle") is null
-            && TvSubtitlesClient.ResolveShow(shows, "The Middle Ma") is null);
+            && TvSubtitlesClient.ResolveShow(shows, "Sample") is null
+            && TvSubtitlesClient.ResolveShow(shows, "The Sample Ma") is null);
 
         var seasons = TvSubtitlesClient.ParseSeasons(Fixture("tvshow-512.html"), 512);
         Check("the show page yields its nine seasons, ascending",
@@ -428,7 +428,7 @@ internal static class Program
 
         var fileName = TvSubtitlesClient.ParseDownloadFileName(Fixture("download-page.html"));
         Check("the download page's JavaScript fragments name the file",
-            fileName == "files/The Middle_2x24_HDTV.FEVER.en.zip", "found: " + fileName);
+            fileName == "files/The Sample_2x24_HDTV.GRP.en.zip", "found: " + fileName);
         Check("a page without fragments yields null instead of a broken path",
             TvSubtitlesClient.ParseDownloadFileName("<html>nothing</html>") is null);
         Check("a ZIP payload is recognised from its own bytes (the site answers in two shapes)",
@@ -444,7 +444,7 @@ internal static class Program
         // Der gemessene Anlass (16.11.2026, jf-test) war eine Datei, deren Pfad ein Symlink ohne Ziel
         // ist — `GetMediaHash` liefert dann null.
         const string fm517Pfad =
-            "/opt/data/jf-test/media/middle381/The Middle/Season 02/The Middle.S02E01.MULTI.1080p.WEB-DL.H265-FTMVHD.mkv";
+            "/opt/data/jf-test/media/middle381/The Sample/Season 02/The Sample.S02E01.MULTI.1080p.WEB-DL.H265-GRP.mkv";
         const string fm517Hash = "0deccedafea83e1a";
         string fm517Root = Path.Combine(Path.GetTempPath(), "tvst-fm517-" + Environment.ProcessId);
         try
@@ -520,11 +520,11 @@ internal static class Program
             var liveHttp = ScribeApiClient.NewHttpClient(TimeSpan.FromSeconds(60));
             var live = new TvSubtitlesClient(liveHttp);
             var liveShows = await live.ShowsAsync().ConfigureAwait(false);
-            var middle = TvSubtitlesClient.ResolveShow(liveShows, "The Middle");
-            Console.WriteLine($"  shows: {liveShows.Count}, The Middle -> {middle}");
-            var liveSearch = await live.SearchShowsAsync("The Middle").ConfigureAwait(false);
-            Console.WriteLine($"  search \"The Middle\": {liveSearch.Count} hit(s), narrow resolve -> "
-                + $"{TvSubtitlesClient.ResolveShow(liveSearch, "The Middle")}");
+            var middle = TvSubtitlesClient.ResolveShow(liveShows, "The Sample");
+            Console.WriteLine($"  shows: {liveShows.Count}, The Sample -> {middle}");
+            var liveSearch = await live.SearchShowsAsync("The Sample").ConfigureAwait(false);
+            Console.WriteLine($"  search \"The Sample\": {liveSearch.Count} hit(s), narrow resolve -> "
+                + $"{TvSubtitlesClient.ResolveShow(liveSearch, "The Sample")}");
             if (middle is int showId)
             {
                 var liveSeasons = await live.SeasonsAsync(showId).ConfigureAwait(false);
@@ -573,12 +573,12 @@ internal static class Program
 
         // ---- Season in the fixture, judged by what the site actually serves -----------------------
         // Operator 17.11.2026: "Staffel ins fixture und schauen das tvst das richtige macht". The
-        // pages below are season 1 of The Middle (show 512), captured page by page on 17.11.2026 and
+        // pages below are season 1 of The Sample (show 512), captured page by page on 17.11.2026 and
         // stored byte for byte. Nothing here builds its own HTML: the parser is asked the questions a
         // real run asks, and the release column answers the one that was wrong until F-M505 — the site
         // prints the uploader's GROUP there, not a file name. The single entry that does carry a file
         // name is our own upload from before that fix, and it is the reason the group is sent.
-        var seasonDir = Path.Combine(_fixtures, "season-middle-s01");
+        var seasonDir = Path.Combine(_fixtures, "season-sample-s01");
         var seasonPage = await File.ReadAllTextAsync(Path.Combine(seasonDir, "tvshow-512-1.html")).ConfigureAwait(false);
         var seasonEpisodes = TvSubtitlesClient.ParseEpisodePages(seasonPage);
         Check("the captured season page lists 24 episode pages", seasonEpisodes.Count == 24, $"{seasonEpisodes.Count}");
@@ -605,10 +605,10 @@ internal static class Program
             await File.ReadAllTextAsync(Path.Combine(seasonDir, "episode-22461.html")).ConfigureAwait(false));
         Check("1x05 carries ten subtitle entries", episode05.Count == 10, $"{episode05.Count}");
         Check("the release cells carry uploader groups — only our pre-F-M505 entry carries a file name",
-            episode05.Count(e => e.Release == "FEVER") == 3
+            episode05.Count(e => e.Release == "GRP") == 3
             && episode05.Count(e => e.Release == "REWARD") == 1
             && episode05.Count(e => e.Release.Length == 0) == 5
-            && episode05.Count(e => e.Release.StartsWith("The Middle.S01E05", StringComparison.Ordinal)) == 1,
+            && episode05.Count(e => e.Release.StartsWith("The Sample.S01E05", StringComparison.Ordinal)) == 1,
             string.Join(" | ", episode05.Select(e => $"{e.Language}:{e.Rip}:{e.Release}")));
         Check("the rip cells stay the site's own vocabulary",
             episode05.Count(e => e.Rip == "HDTV") == 8
@@ -651,7 +651,7 @@ internal static class Program
         await neuClient.ShowsAsync().ConfigureAwait(false);
         var anlegen = new TvSubtitlesAddShow(new[]
         {
-            new KeyValuePair<string, string>("tvshow", "The Middle"),
+            new KeyValuePair<string, string>("tvshow", "The Sample"),
             new KeyValuePair<string, string>("submit", "Add"),
         });
         await neuClient.AddShowAsync(anlegen, dryRun: false).ConfigureAwait(false);
@@ -665,7 +665,7 @@ internal static class Program
         // Vorher loeste der Download die Nummer bei jeder Suche neu auf und schrieb sie nie; nur der
         // Upload-Weg schrieb sie. Deshalb holte jeder Lauf die Serienliste erneut (F-M501).
         string staffelSeite = await File.ReadAllTextAsync(
-            Path.Combine(_fixtures, "season-middle-s01", "tvshow-512-1.html")).ConfigureAwait(false);
+            Path.Combine(_fixtures, "season-sample-s01", "tvshow-512-1.html")).ConfigureAwait(false);
         var fm523Handler = new CountingHandler
         {
             BodyFor = url => url.Contains("/add.html", StringComparison.Ordinal) ? listenHtml
@@ -673,13 +673,13 @@ internal static class Program
                 : url.Contains("/episode-", StringComparison.Ordinal)
                     ? File.ReadAllText(Path.Combine(
                         _fixtures,
-                        "season-middle-s01",
+                        "season-sample-s01",
                         url[(url.LastIndexOf('/') + 1)..].Split('?')[0]))
                     : "<html></html>",
         };
         var fm523Client = new TvSubtitlesClient(new HttpClient(fm523Handler));
         var fm523Endpoint = new TvSubtitlesDownloadEndpoint(fm523Client);
-        await fm523Endpoint.SearchAsync(new SubtitleQuery("The Middle", null, null, 1, 5, "EN"))
+        await fm523Endpoint.SearchAsync(new SubtitleQuery("The Sample", null, null, 1, 5, "EN"))
             .ConfigureAwait(false);
         Check(
             "F-M523: the download search reports the show number it resolved",
@@ -725,7 +725,7 @@ internal static class Program
 
         Console.WriteLine();
         // ---- F-M533: Robustheit und Meldeweg der Seite ------------------------------------------
-        var gut = new Jellyfin.Plugin.SubScribe.Api.TvSubtitlesEntry("123", "de", "WEB", "FTMVHD", "3 days");
+        var gut = new Jellyfin.Plugin.SubScribe.Api.TvSubtitlesEntry("123", "de", "WEB", "GRP", "3 days");
         Check("F-M533: a documented entry is not a finding",
             Jellyfin.Plugin.SubScribe.Api.TvstMetadataChecks.CheckEntry(gut).Count == 0);
 
@@ -790,9 +790,9 @@ internal static class Program
 
         // --- F-M662: die HI-Seite steht im Ohr-Bild, und eine Staffel-ZIP traegt beide Seiten ----------
         string entryHtml =
-            "<a href=\"/subtitle-1.html\"><div class=\"subtitlen\"><h5><img src=\"images/flags/en.gif\">MobLand 2x10 (WEB.NeoNoir)</h5>"
+            "<a href=\"/subtitle-1.html\"><div class=\"subtitlen\"><h5><img src=\"images/flags/en.gif\">Sampleland 2x10 (WEB.GRP)</h5>"
             + "<p title=\"downloaded\"><img src=\"images/downloads.png\">477</p></div></a>"
-            + "<a href=\"/subtitle-2.html\"><div class=\"subtitlen\"><h5><img src=\"images/flags/en.gif\">MobLand 2x10 (WEB.NeoNoir)</h5>"
+            + "<a href=\"/subtitle-2.html\"><div class=\"subtitlen\"><h5><img src=\"images/flags/en.gif\">Sampleland 2x10 (WEB.GRP)</h5>"
             + "<p title=\"downloaded\"><img src=\"images/downloads.png\">49</p>"
             + "<p title=\"downloaded\"><img src=\"images/hi.png\" width=\"16\" alt=\"hearing impaired\" title=\"hearing impaired\"></p></div></a>";
         var parsed = TvSubtitlesClient.ParseEntries(entryHtml);
@@ -821,12 +821,12 @@ internal static class Program
         var staffelEndpoint = new TvSubtitlesDownloadEndpoint(staffelClient);
 
         var ersteFolge = await staffelEndpoint
-            .SearchAsync(new SubtitleQuery("MobLand", null, null, 2, 1, "en")).ConfigureAwait(false);
+            .SearchAsync(new SubtitleQuery("Sampleland", null, null, 2, 1, "en")).ConfigureAwait(false);
         int trefferGesamt = ersteFolge.Count;
         for (int folge = 2; folge <= 5; folge++)
         {
             trefferGesamt += (await staffelEndpoint
-                .SearchAsync(new SubtitleQuery("MobLand", null, null, 2, folge, "en")).ConfigureAwait(false)).Count;
+                .SearchAsync(new SubtitleQuery("Sampleland", null, null, 2, folge, "en")).ConfigureAwait(false)).Count;
         }
 
         Check("F-M663: fuenf Folgen einer Staffel kosten EINEN ZIP-Abruf — Serienliste plus Staffelseite plus ZIP, keine Folgenseite",
@@ -856,7 +856,7 @@ internal static class Program
         var ohneZipHandler = new SeasonPackHandler { Zip = BuildSeasonZipFor(1, 5), EpisodesOnPages = { 1, 5 } };
         var ohneZip = new TvSubtitlesDownloadEndpoint(new TvSubtitlesClient(new HttpClient(ohneZipHandler)));
         var ohneZipTreffer = await ohneZip
-            .SearchAsync(new SubtitleQuery("MobLand", null, null, 2, 1, "en", PreferSeasonZip: false))
+            .SearchAsync(new SubtitleQuery("Sampleland", null, null, 2, 1, "en", PreferSeasonZip: false))
             .ConfigureAwait(false);
 
         Check("F-M693: mit ausgeschaltetem Staffel-ZIP-Schalter wird die Staffel-ZIP nicht geholt",
@@ -874,7 +874,7 @@ internal static class Program
 
         // Beide Seiten getrennt: der reguläre Treffer darf nie auf der HI-Seite landen und umgekehrt.
         var staffelSeite3 = await staffelEndpoint
-            .SearchAsync(new SubtitleQuery("MobLand", null, null, 2, 3, "en")).ConfigureAwait(false);
+            .SearchAsync(new SubtitleQuery("Sampleland", null, null, 2, 3, "en")).ConfigureAwait(false);
         var geteilt = Jellyfin.Plugin.SubScribe.Pipeline.DownloadPipeline.SplitByHearingImpaired(
             staffelSeite3, SubtitleProvider.TvSubtitles, "en", 2, 3);
         Check("F-M663: der HI-Eintrag der ZIP landet auf der HI-Seite, der regulaere auf der regulaeren",
@@ -901,7 +901,7 @@ internal static class Program
         var lueckeHandler = new SeasonPackHandler { Zip = BuildSeasonZipFor(1, 2), EpisodesOnPages = { 1, 5 } };
         var lueckeEndpoint = new TvSubtitlesDownloadEndpoint(new TvSubtitlesClient(new HttpClient(lueckeHandler)));
         var luecke = await lueckeEndpoint
-            .SearchAsync(new SubtitleQuery("MobLand", null, null, 2, 5, "en")).ConfigureAwait(false);
+            .SearchAsync(new SubtitleQuery("Sampleland", null, null, 2, 5, "en")).ConfigureAwait(false);
         Check("F-M663: eine Folge, die in der ZIP fehlt, kommt ueber ihre Folgenseite (Stufe 2) — kein Verlust",
             luecke.Count > 0
             && luecke.All(h => !h.Id.StartsWith("seasonpack:", StringComparison.Ordinal))
@@ -914,7 +914,7 @@ internal static class Program
         var kaputtClient = MitAblage(kaputtHandler, out string kaputtAblage);
         var kaputtEndpoint = new TvSubtitlesDownloadEndpoint(kaputtClient);
         var kaputtHits = await kaputtEndpoint
-            .SearchAsync(new SubtitleQuery("MobLand", null, null, 2, 1, "en")).ConfigureAwait(false);
+            .SearchAsync(new SubtitleQuery("Sampleland", null, null, 2, 1, "en")).ConfigureAwait(false);
         Check("F-M663: eine kaputte ZIP bricht nichts ab — Stufe 1 faellt aus, die Folgenseite traegt die Folge",
             kaputtHits.Count > 0
             && kaputtHits.All(h => !h.Id.StartsWith("seasonpack:", StringComparison.Ordinal))
@@ -923,7 +923,7 @@ internal static class Program
 
         int kaputtVorher = kaputtHandler.Requests;
         var kaputtZweiteFolge = await kaputtEndpoint
-            .SearchAsync(new SubtitleQuery("MobLand", null, null, 2, 2, "en")).ConfigureAwait(false);
+            .SearchAsync(new SubtitleQuery("Sampleland", null, null, 2, 2, "en")).ConfigureAwait(false);
         // F-M768: ohne Merker entpackt jeder Aufruf neu — die kaputte ZIP kommt dabei aus der Ablage
         // (sie traegt die PK-Signatur, also liegt sie dort), kostet also keine neue Anfrage. Nur wenn
         // die Ablage aus ist, wird sie je Aufruf neu geholt. Nichts bricht ab, der Einzelweg traegt.
@@ -946,7 +946,7 @@ internal static class Program
         var stufe1Handler = new SeasonPackHandler { Zip = BuildSeasonZipFor(1, 1), EpisodesOnPages = { 1 } };
         var stufe1Endpoint = new TvSubtitlesDownloadEndpoint(new TvSubtitlesClient(new HttpClient(stufe1Handler)));
         var stufe1 = await stufe1Endpoint
-            .SearchAsync(new SubtitleQuery("MobLand", null, null, 2, 1, "en")).ConfigureAwait(false);
+            .SearchAsync(new SubtitleQuery("Sampleland", null, null, 2, 1, "en")).ConfigureAwait(false);
         var stufe1Seiten = Jellyfin.Plugin.SubScribe.Pipeline.DownloadPipeline.SplitByHearingImpaired(
             stufe1, SubtitleProvider.TvSubtitles, "en", 2, 1);
         Check("F-M664: deckt die Staffel-ZIP die regulaere Seite, wird der Einzeleintrag der Folgenseite nicht gefragt",
@@ -964,7 +964,7 @@ internal static class Program
         var stufe2Handler = new SeasonPackHandler { Zip = BuildSeasonZipFor(1, 1, withHi: false), EpisodesOnPages = { 1 } };
         var stufe2Endpoint = new TvSubtitlesDownloadEndpoint(new TvSubtitlesClient(new HttpClient(stufe2Handler)));
         var stufe2 = await stufe2Endpoint
-            .SearchAsync(new SubtitleQuery("MobLand", null, null, 2, 1, "en")).ConfigureAwait(false);
+            .SearchAsync(new SubtitleQuery("Sampleland", null, null, 2, 1, "en")).ConfigureAwait(false);
         var stufe2Seiten = Jellyfin.Plugin.SubScribe.Pipeline.DownloadPipeline.SplitByHearingImpaired(
             stufe2, SubtitleProvider.TvSubtitles, "en", 2, 1);
         Check("F-M664: ein ZIP ohne HI-Fassung holt die HI-Seite von der Folgenseite — deren regulaerer Eintrag wird nicht uebernommen",
@@ -984,7 +984,7 @@ internal static class Program
         var stufe3Handler = new SeasonPackHandler { Zip = BuildSeasonZipFor(1, 1), EpisodesOnPages = { 5 } };
         var stufe3Endpoint = new TvSubtitlesDownloadEndpoint(new TvSubtitlesClient(new HttpClient(stufe3Handler)));
         var stufe3 = await stufe3Endpoint
-            .SearchAsync(new SubtitleQuery("MobLand", null, null, 2, 5, "en")).ConfigureAwait(false);
+            .SearchAsync(new SubtitleQuery("Sampleland", null, null, 2, 5, "en")).ConfigureAwait(false);
         int ersterHi = -1;
         int letzterRegulaer = -1;
         for (int i = 0; i < stufe3.Count; i++)
@@ -1155,7 +1155,7 @@ internal static class Program
         var fm665KaputtClient = new TvSubtitlesClient(new HttpClient(fm665KaputtHandler), fm665KaputtCache);
         var fm665KaputtEndpoint = new TvSubtitlesDownloadEndpoint(fm665KaputtClient);
         var fm665KaputtHits = await fm665KaputtEndpoint
-            .SearchAsync(new SubtitleQuery("MobLand", null, null, 2, 1, "en")).ConfigureAwait(false);
+            .SearchAsync(new SubtitleQuery("Sampleland", null, null, 2, 1, "en")).ConfigureAwait(false);
         Check("F-M665: eine kaputte ZIP im Cache faellt als Stufe 1 aus — der Einzelweg traegt die Folge, nichts bricht ab",
             fm665KaputtHits.Count > 0
             && fm665KaputtHits.All(h => !h.Id.StartsWith("seasonpack:", StringComparison.Ordinal))
@@ -1226,7 +1226,7 @@ internal static class Program
                 // wirklich erst NACH dem Einzelweg geholt wird.
                 foreach (bool hi in withHi ? new[] { false, true } : new[] { false })
                 {
-                    string member = "MobLand - 2x" + folge.ToString("00", CultureInfo.InvariantCulture)
+                    string member = "Sampleland - 2x" + folge.ToString("00", CultureInfo.InvariantCulture)
                         + " - Folge." + (hi ? "HI." : string.Empty) + "en.srt";
                     var bytes = Encoding.UTF8.GetBytes(
                         "1\n00:00:01,000 --> 00:00:02,000\n" + (hi ? "HI-FASSUNG" : "REGULAR") + "\n");
@@ -1295,13 +1295,13 @@ internal static class Program
             if (name == "add.html")
             {
                 ShowLists++;
-                return Html("<html><body><select name=\"tvshow\"><option value=\"3234\">MobLand</option></select></body></html>");
+                return Html("<html><body><select name=\"tvshow\"><option value=\"3234\">Sampleland</option></select></body></html>");
             }
 
             if (name.StartsWith("subtitle-3234-2-", StringComparison.Ordinal))
             {
                 SeasonPages++;
-                return Html("<html><body><a href=\"download-3234-2-en.html\">MobLand season 2</a></body></html>");
+                return Html("<html><body><a href=\"download-3234-2-en.html\">Sampleland season 2</a></body></html>");
             }
 
             if (name.StartsWith("download-", StringComparison.Ordinal))
@@ -1342,13 +1342,13 @@ internal static class Program
                         .Replace(".html", string.Empty, StringComparison.Ordinal),
                     CultureInfo.InvariantCulture) - 9000;
                 string nummer = folge.ToString("00", CultureInfo.InvariantCulture);
-                string body = "<html><body><h2>MobLand 2x" + nummer + "</h2>"
+                string body = "<html><body><h2>Sampleland 2x" + nummer + "</h2>"
                     + "<a href=\"/subtitle-" + (500000 + folge).ToString(CultureInfo.InvariantCulture)
-                    + ".html\"><div class=\"subtitlen\"><h5><img src=\"images/flags/en.gif\">MobLand 2x" + nummer
-                    + " (WEB.NeoNoir)</h5></div></a>"
+                    + ".html\"><div class=\"subtitlen\"><h5><img src=\"images/flags/en.gif\">Sampleland 2x" + nummer
+                    + " (WEB.GRP)</h5></div></a>"
                     + "<a href=\"/subtitle-" + (600000 + folge).ToString(CultureInfo.InvariantCulture)
-                    + ".html\"><div class=\"subtitlen\"><h5><img src=\"images/flags/en.gif\">MobLand 2x" + nummer
-                    + " (WEB.NeoNoir)</h5><p title=\"downloaded\"><img src=\"images/hi.png\" alt=\"hearing impaired\"></p></div></a>"
+                    + ".html\"><div class=\"subtitlen\"><h5><img src=\"images/flags/en.gif\">Sampleland 2x" + nummer
+                    + " (WEB.GRP)</h5><p title=\"downloaded\"><img src=\"images/hi.png\" alt=\"hearing impaired\"></p></div></a>"
                     + "</body></html>";
                 return Html(body);
             }
@@ -1377,9 +1377,9 @@ internal static class Program
         {
             foreach (string member in new[]
                      {
-                         "MobLand - 2x05 - Birdland.WEB.NeoNoir.en.srt",
-                         "MobLand - 2x05 - Birdland.WEB.NeoNoir.HI.en.srt",
-                         "MobLand - 2x10 - The Queen is Dead.WEB.NeoNoir.en.srt",
+                         "Sampleland - 2x05 - Episode Title.WEB.GRP.en.srt",
+                         "Sampleland - 2x05 - Episode Title.WEB.GRP.HI.en.srt",
+                         "Sampleland - 2x10 - The Queen is Dead.WEB.GRP.en.srt",
                      })
             {
                 var bytes = Encoding.UTF8.GetBytes("1\n00:00:01,000 --> 00:00:02,000\nText\n");
@@ -1427,7 +1427,7 @@ internal static class Program
 
     private static TvSubtitlesUpload? BuildOk(byte[] data, bool doubleEpisode = false, bool hearingImpaired = false) =>
         TvSubtitlesClient.BuildUpload(
-            512, 2, 24, "de", "The Middle - 2x24.srt", data, "HDTV", "FEVER",
+            512, 2, 24, "de", "The Sample - 2x24.srt", data, "HDTV", "GRP",
             1422, "tt1442464", null, doubleEpisode, hearingImpaired);
 
     /// <summary>
@@ -1458,7 +1458,7 @@ internal static class Program
         string? rip = "HDTV") =>
         TvSubtitlesClient.BuildUpload(
             showId, season, episode, lang, fileName, data ?? Encoding.UTF8.GetBytes("1\n"),
-            rip, "FEVER", 1422, "tt1442464");
+            rip, "GRP", 1422, "tt1442464");
 
     private static bool Refused(Action action)
     {

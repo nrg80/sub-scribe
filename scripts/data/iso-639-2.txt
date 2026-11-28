@@ -113,7 +113,7 @@ doi|||Dogri|dogri
 dra|||Dravidian languages|dravidiennes, langues
 dsb|||Lower Sorbian|bas-sorabe
 dua|||Duala|douala
-dum|||Dutch, Middle (ca.1050-1350)|néerlandais moyen (ca. 1050-1350)
+dum|||Dutch, Sample (ca.1050-1350)|néerlandais moyen (ca. 1050-1350)
 dut|nld|nl|Dutch; Flemish|néerlandais; flamand
 dyu|||Dyula|dioula
 dzo||dz|Dzongkha|dzongkha
@@ -122,7 +122,7 @@ egy|||Egyptian (Ancient)|égyptien
 eka|||Ekajuk|ekajuk
 elx|||Elamite|élamite
 eng||en|English|anglais
-enm|||English, Middle (1100-1500)|anglais moyen (1100-1500)
+enm|||English, Sample (1100-1500)|anglais moyen (1100-1500)
 epo||eo|Esperanto|espéranto
 est||et|Estonian|estonien
 ewe||ee|Ewe|éwé
@@ -136,7 +136,7 @@ fin||fi|Finnish|finnois
 fiu|||Finno-Ugrian languages|finno-ougriennes, langues
 fon|||Fon|fon
 fre|fra|fr|French|français
-frm|||French, Middle (ca.1400-1600)|français moyen (1400-1600)
+frm|||French, Sample (ca.1400-1600)|français moyen (1400-1600)
 fro|||French, Old (842-ca.1400)|français ancien (842-ca.1400)
 frr|||Northern Frisian|frison septentrional
 frs|||Eastern Frisian|frison oriental
@@ -155,7 +155,7 @@ gla||gd|Gaelic; Scottish Gaelic|gaélique; gaélique écossais
 gle||ga|Irish|irlandais
 glg||gl|Galician|galicien
 glv||gv|Manx|manx; mannois
-gmh|||German, Middle High (ca.1050-1500)|allemand, moyen haut (ca. 1050-1500)
+gmh|||German, Sample High (ca.1050-1500)|allemand, moyen haut (ca. 1050-1500)
 goh|||German, Old High (ca.750-1050)|allemand, vieux haut (ca. 750-1050)
 gon|||Gondi|gond
 gor|||Gorontalo|gorontalo
@@ -276,7 +276,7 @@ may|msa|ms|Malay|malais
 mdf|||Moksha|moksa
 mdr|||Mandar|mandar
 men|||Mende|mendé
-mga|||Irish, Middle (900-1200)|irlandais moyen (900-1200)
+mga|||Irish, Sample (900-1200)|irlandais moyen (900-1200)
 mic|||Mi'kmaq; Micmac|mi'kmaq; micmac
 min|||Minangkabau|minangkabau
 mis|||Uncoded languages|langues non codées

@@ -60,7 +60,7 @@ internal static class Program
     {
         var cand = new SubtitleCandidate
         {
-            ReleaseName = "The.Middle.S05.HDTV.XviD-FUM",
+            ReleaseName = "The.Sample.S05.HDTV.XviD-GRP",
             Url = "https://dl.subdl.com/subtitle/3752887-8674923.zip",
             Language = "EN",
             Season = 5,
@@ -69,10 +69,10 @@ internal static class Program
 
         // Two plain files for E05 (two release variants) and one SDH file — the exact shape the
         // retry exists for.
-        cand.UnpackFiles.Add(Member("The.Middle.S05E05.HDTV.XviD-FUM.srt", 5, 5, hi: false));
-        cand.UnpackFiles.Add(Member("The.Middle.S05E05.720p.HDTV.x264.srt", 5, 5, hi: false));
-        cand.UnpackFiles.Add(Member("The.Middle.S05E05.HDTV.XviD-FUM.sdh.srt", 5, 5, hi: true));
-        cand.UnpackFiles.Add(Member("The.Middle.S05E06.HDTV.XviD-FUM.srt", 5, 6, hi: false));
+        cand.UnpackFiles.Add(Member("The.Sample.S05E05.HDTV.XviD-GRP.srt", 5, 5, hi: false));
+        cand.UnpackFiles.Add(Member("The.Sample.S05E05.720p.HDTV.x264.srt", 5, 5, hi: false));
+        cand.UnpackFiles.Add(Member("The.Sample.S05E05.HDTV.XviD-GRP.sdh.srt", 5, 5, hi: true));
+        cand.UnpackFiles.Add(Member("The.Sample.S05E06.HDTV.XviD-GRP.srt", 5, 6, hi: false));
         return cand;
     }
 
@@ -85,7 +85,7 @@ internal static class Program
         Console.WriteLine("1. The retry list");
         var plain = cand.FindUnpackFiles(5, 5, hearingImpaired: false);
         Check(plain.Count == 2, "two plain files for E05 are offered", plain.Count.ToString());
-        Check(plain[0].Name == "The.Middle.S05E05.HDTV.XviD-FUM.srt",
+        Check(plain[0].Name == "The.Sample.S05E05.HDTV.XviD-GRP.srt",
             "the first listed file comes first", plain.FirstOrDefault()?.Name ?? "(none)");
         Check(plain.All(f => !f.HearingImpaired), "and none of them is an SDH file");
         Check(cand.FindUnpackFile(5, 5) == plain[0],
@@ -147,7 +147,7 @@ internal static class Program
             "and the reject line says the archive was exhausted, not that one file failed");
 
         // ── 5. F-M388: the download drops invisible cues too ────────────────────
-        // MobLand's real defect: a duplicate line timed 00:00:03,898 → 00:00:03,899, a cue of 1 ms.
+        // Sampleland's real defect: a duplicate line timed 00:00:03,898 → 00:00:03,899, a cue of 1 ms.
         // On the upload side it is dropped since F-M382; on the download side it used to convict the
         // file. Both sides now use one rule, and — the operator's condition — the STATE HASH is taken
         // over the corrected text, so it describes the bytes that end up on disk.
@@ -176,8 +176,8 @@ internal static class Program
             "and what is left is renumbered 1, 2 …", correctedText.Split('\n').FirstOrDefault() ?? "");
 
         // ── 5b. F-M536: the site serves some languages in a legacy codepage ──────────────
-        // Measured on the site's own files on 16.11.2026: Arabic arrived as cp1256 (Prison Break
-        // 1x22), Greek as cp1253 (Game of Thrones 1x10), Bulgarian as cp1251 (the same episode) —
+        // Measured on the site's own files on 16.11.2026: Arabic arrived as cp1256 (one series
+        // 1x22), Greek as cp1253 (another series 1x10), Bulgarian as cp1251 (the same episode) —
         // and every one of them was rendered as U+FFFD before this, because DecodeSrt only knew BOM
         // and UTF-8. The language of the candidate decides, not a guess over all codepages.
         Console.WriteLine("5b. Legacy codepages (F-M536)");
@@ -452,7 +452,7 @@ internal static class Program
         var adopt = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/ScribeAdoptController.cs"));
         Check(adopt.Contains("AdoptUploads", StringComparison.Ordinal)
               && adopt.Contains("SubtitleStatus.Uploaded", StringComparison.Ordinal)
-              // F-M670: die Kennung geht als Einsende-Id an die Marke (Matrix `UploadId`) — die Spalte
+              // F-M670: die Kennung geht als Einsende-Id an die Marke (Gridfilm `UploadId`) — die Spalte
               // `embeds.SubdlId`, in die sie frueher zusaetzlich ging, gibt es nicht mehr.
               && adopt.Contains("subdlUploadId: entry.SubdlId", StringComparison.Ordinal),
             "F-M423: the adoption endpoint writes an uploaded row that carries its SubDL id");
@@ -552,7 +552,7 @@ internal static class Program
         // ---------------------------------------------------------------------------------------
         var dotted = new SubtitleCandidate
         {
-            ReleaseName = "The Middle Season 6",
+            ReleaseName = "The Sample Season 6",
             Url = "https://dl.subdl.com/subtitle/1778462-2505150.zip",
             Language = "EN",
             Season = 6,
@@ -604,13 +604,13 @@ internal static class Program
             "F-M457: fullwidth forms fold too — east-asian releases are readable");
 
         var resolution = new SubtitleCandidate { ReleaseName = "Aufloesung", Url = "x.zip", Language = "EN" };
-        resolution.UnpackFiles.Add(Member("The.Middle.S06.1080p.srt", 0, 0, hi: false));
+        resolution.UnpackFiles.Add(Member("The.Sample.S06.1080p.srt", 0, 0, hi: false));
         Check(resolution.FindUnpackFile(6, 10) == null,
             "F-M454: \"S06.1080p\" carries no episode — the resolution is not read as one");
 
         var standard = new SubtitleCandidate { ReleaseName = "Standard", Url = "x.zip", Language = "EN" };
-        standard.UnpackFiles.Add(Member("The.Middle.S06E10.HDTV.x264-LOL.srt", 0, 0, hi: false));
-        Check(standard.FindUnpackFile(6, 10)?.Name == "The.Middle.S06E10.HDTV.x264-LOL.srt",
+        standard.UnpackFiles.Add(Member("The.Sample.S06E10.HDTV.x264-LOL.srt", 0, 0, hi: false));
+        Check(standard.FindUnpackFile(6, 10)?.Name == "The.Sample.S06E10.HDTV.x264-LOL.srt",
             "F-M454: the SxxExx form keeps working beside the new one");
 
         // F-M463 (measured 11.11.2026): the KangMus pack names its entries "16 - Relevance.en.srt".
@@ -704,7 +704,7 @@ internal static class Program
         string entitySource = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Data", "Entities.cs"));
         Check(entitySource.Contains("public string? Fingerprint { get; set; }", StringComparison.Ordinal),
             "F-M466: the memo row carries the fingerprint");
-        // F-M668: der Fingerabdruck steht in der Marken-Matrix (Kind = pack), nicht mehr als Spalte an
+        // F-M668: der Fingerabdruck steht in der Marken-Gridfilm (Kind = pack), nicht mehr als Spalte an
         // `packs`; ein älterer Bestand wird beim Öffnen dorthin übernommen und die Spalte fällt.
         string dbSource = File.ReadAllText(Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Data", "ScribeDbContext.cs"));
         // F-M671: der Fingerabdruck der Mitglieder steht seit Schema 22 am Behälter selbst

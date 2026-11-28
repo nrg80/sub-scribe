@@ -190,7 +190,7 @@ internal static class Program
         // ---- 4. the SubDL mapping is pure and complete ----------------------------------------
         var candidate = new SubtitleCandidate
         {
-            ReleaseName = "The.Middle.S02E24.720p.HDTV.x264-LOL",
+            ReleaseName = "The.Sample.S02E24.720p.HDTV.x264-LOL",
             Language = "DE",
             Url = "https://dl.subdl.com/subtitle/abc123.zip",
             Season = 2,
@@ -209,7 +209,7 @@ internal static class Program
 
         // ---- 5. the tvsubtitles download endpoint walks the captured pages ---------------------
         var tvDownload = new TvSubtitlesDownloadEndpoint(tvClient);
-        var query = new SubtitleQuery("The Middle", null, null, 2, 24, "en");
+        var query = new SubtitleQuery("The Sample", null, null, 2, 24, "en");
         var hits = await tvDownload.SearchAsync(query).ConfigureAwait(false);
         Check("the search finds the episode page and keeps the wanted language",
             hits.Count == 1 && hits[0].Language == "en" && hits[0].Id == "170678",
@@ -235,9 +235,9 @@ internal static class Program
         // ohne Lauf geprueft: regulaer auf die regulaere Seite, HI auf die HI-Seite, nie beide.
         var gemischt = new[]
         {
-            new SubtitleHit(SubtitleProvider.TvSubtitles, "seasonpack:3234:2:en:0", "en", string.Empty, "MobLand - 2x05 - Birdland.WEB.NeoNoir", false, false),
-            new SubtitleHit(SubtitleProvider.TvSubtitles, "seasonpack:3234:2:en:1", "en", string.Empty, "MobLand - 2x05 - Birdland.WEB.NeoNoir.HI", false, true),
-            new SubtitleHit(SubtitleProvider.TvSubtitles, "seasonpack:3234:2:en:2", "en", string.Empty, "MobLand - 2x06 - Titel.WEB.NeoNoir.HI", false, true),
+            new SubtitleHit(SubtitleProvider.TvSubtitles, "seasonpack:3234:2:en:0", "en", string.Empty, "Sampleland - 2x05 - Episode Title.WEB.GRP", false, false),
+            new SubtitleHit(SubtitleProvider.TvSubtitles, "seasonpack:3234:2:en:1", "en", string.Empty, "Sampleland - 2x05 - Episode Title.WEB.GRP.HI", false, true),
+            new SubtitleHit(SubtitleProvider.TvSubtitles, "seasonpack:3234:2:en:2", "en", string.Empty, "Sampleland - 2x06 - Titel.WEB.GRP.HI", false, true),
         };
         var getrennt = Jellyfin.Plugin.SubScribe.Pipeline.DownloadPipeline.SplitByHearingImpaired(
             gemischt, SubtitleProvider.TvSubtitles, "en", 2, 5);
@@ -292,12 +292,12 @@ internal static class Program
         // anderen wandert (jeder Kandidat traegt die Quelle seines eigenen Korbs).
         var tvstHi = new List<SubtitleCandidate>
         {
-            new() { Provider = SubtitleProvider.TvSubtitles, Language = "DE", Url = "seasonpack:3234:2:de:3", ReleaseName = "MobLand - 2x05 - de.HI", HearingImpaired = true },
+            new() { Provider = SubtitleProvider.TvSubtitles, Language = "DE", Url = "seasonpack:3234:2:de:3", ReleaseName = "Sampleland - 2x05 - de.HI", HearingImpaired = true },
         };
         var subdlHi = new List<SubtitleCandidate>
         {
-            new() { Provider = SubtitleProvider.Subdl, Language = "DE", Url = "170678", ReleaseName = "MobLand.S02E05.GERMAN.HI", HearingImpaired = true },
-            new() { Provider = SubtitleProvider.Subdl, Language = "EN", Url = "170679", ReleaseName = "MobLand.S02E05.ENGLISH.HI", HearingImpaired = true },
+            new() { Provider = SubtitleProvider.Subdl, Language = "DE", Url = "170678", ReleaseName = "Sampleland.S02E05.GERMAN.HI", HearingImpaired = true },
+            new() { Provider = SubtitleProvider.Subdl, Language = "EN", Url = "170679", ReleaseName = "Sampleland.S02E05.ENGLISH.HI", HearingImpaired = true },
         };
         var koerbe = new Dictionary<SubtitleProvider, List<SubtitleCandidate>>
         {
@@ -348,8 +348,8 @@ internal static class Program
         // ---- 6. the tvsubtitles upload endpoint: dry run, and refusals -------------------------
         var tvUpload = new TvSubtitlesUploadEndpoint(tvClient, dryRun: true);
         var ticket = new UploadTicket(
-            "The Middle", "tt1442464", "1422", 2, 24, "de", "The.Middle.S02E24.de.srt",
-            Encoding.UTF8.GetBytes("1\n00:00:01,000 --> 00:00:02,000\nhallo\n"), "HDTV", "FEVER", false, false, false);
+            "The Sample", "tt1442464", "1422", 2, 24, "de", "The.Sample.S02E24.de.srt",
+            Encoding.UTF8.GetBytes("1\n00:00:01,000 --> 00:00:02,000\nhallo\n"), "HDTV", "GRP", false, false, false);
         var dry = await tvUpload.SendAsync(ticket).ConfigureAwait(false);
         Check("a dry run reports a built body, sends nothing, and says it was a dry run",
             dry.Ok && dry.DryRun && dry.Bytes > ticket.Data.Length && dry.Provider == SubtitleProvider.TvSubtitles,
@@ -365,7 +365,7 @@ internal static class Program
             {
                 foreach (var folge in new[] { 1, 2 })
                 {
-                    var eintrag = archiv.CreateEntry("The Middle S02E0" + folge + ".de.srt");
+                    var eintrag = archiv.CreateEntry("The Sample S02E0" + folge + ".de.srt");
                     using var strom = await eintrag.OpenAsync().ConfigureAwait(false);
                     var bytes = Encoding.UTF8.GetBytes("1\n00:00:01,000 --> 00:00:02,000\nhallo\n");
                     await strom.WriteAsync(bytes).ConfigureAwait(false);
@@ -378,9 +378,9 @@ internal static class Program
         var packTicket = ticket with
         {
             SeasonPack = true,
-            FileName = "The.Middle.S02.GERMAN.1080p.WEB-FEVER.zip",
+            FileName = "The.Sample.S02.GERMAN.1080p.WEB-GRP.zip",
             Data = packZip,
-            Release = "The.Middle.S02.GERMAN.1080p.WEB-FEVER",
+            Release = "The.Sample.S02.GERMAN.1080p.WEB-GRP",
         };
         // F-M765: der Endpunkt kennt keinen Pack-Schalter mehr — wer packen darf, entscheidet die Quelle
         // (PackSlot). Frueher lehnte er hier mit einem Grund ab, den es seit F-M719 nicht mehr gibt.
@@ -535,7 +535,7 @@ internal static class Program
             // F-M501: der Marker steht auf 13 (media.TvstShowId kam dazu); die Pruefung fragt den
             // AKTUELLEN Stand, weil ein stehengebliebener Marker die Migration nicht mehr anzeigt.
             // F-M507: er steht inzwischen auf 14 (die Spalten der dritten Quelle).
-            // F-M669: 20 — die Spur-Position gehoert in den Schluessel der Matrix.
+            // F-M669: 20 — die Spur-Position gehoert in den Schluessel der Gridfilm.
             // F-M670: 21 — die Alt-Tabelle `source_marks` und die Id-Spalte `SubdlId` sind entfallen.
             // F-M671: 22 — die eigenen Kennungen der vier Ebenen.
             && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/ScribeDbContext.cs"))
@@ -545,15 +545,15 @@ internal static class Program
         var entities = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/Entities.cs"));
         var dbc = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/ScribeDbContext.cs"));
         Check("four own fields exist, one per source and direction",
-            // F-M668: die vier Spaltenpaare sind EINE Matrix-Zeile je Quelle und Richtung geworden —
+            // F-M668: die vier Spaltenpaare sind EINE Gridfilm-Zeile je Quelle und Richtung geworden —
             // `SourceId` (Abruf) und `UploadId` (Einsendung) nebeneinander, die Quelle als Wert.
             entities.Contains("public string? DownloadSourceId { get; set; }", StringComparison.Ordinal)
             && entities.Contains("public string? UploadedId { get; set; }", StringComparison.Ordinal)
             && !entities.Contains("public string? SubdlDownloadId { get; set; }", StringComparison.Ordinal)
             && !entities.Contains("public string? TvSubtitlesUploadId { get; set; }", StringComparison.Ordinal));
         Check("schema 11 adds them to sidecars AND embeds",
-            // F-M668: Statt neun Spalten je Tabelle trägt die Matrix die Quelle im WERT — Schema 19
-            // zieht die zwei Felder der Matrix nach und legt die Altspalten nieder.
+            // F-M668: Statt neun Spalten je Tabelle trägt die Gridfilm die Quelle im WERT — Schema 19
+            // zieht die zwei Felder der Gridfilm nach und legt die Altspalten nieder.
             // F-M671: der Marker steht auf 22.
             dbc.Contains("CurrentSchemaVersion = 24", StringComparison.Ordinal)
             && dbc.Contains("+ \"UploadedId TEXT NULL, \"", StringComparison.Ordinal)
@@ -574,14 +574,14 @@ internal static class Program
             && uploadSource.Contains("moviesubtitlesUploadId: msubMarke.Id", StringComparison.Ordinal)
             // die Marke kommt aus EINER Stelle, die die eigene Id der Quelle nimmt oder eine vergibt
             && uploadSource.Contains("knownId ?? ergebnis.SourceId", StringComparison.Ordinal));
-        var ownId = Provenance.OwnUploadId(SubtitleProvider.TvSubtitles, "abc123", "The.Middle.S02E24.720p", new DateTime(2026, 11, 15, 14, 30, 12, DateTimeKind.Utc));
+        var ownId = Provenance.OwnUploadId(SubtitleProvider.TvSubtitles, "abc123", "The.Sample.S02E24.720p", new DateTime(2026, 11, 15, 14, 30, 12, DateTimeKind.Utc));
         Check("a missing id is replaced by our own, unmistakably prefixed",
             ownId.StartsWith("own:tvsubtitles:20261115T143012Z:", StringComparison.Ordinal)
             && Provenance.IsOwnUploadId(ownId)
             && !Provenance.IsOwnUploadId("170678"));
         Check("the minted id is reproducible for the same input and differs for another subtitle",
-            ownId == Provenance.OwnUploadId(SubtitleProvider.TvSubtitles, "abc123", "The.Middle.S02E24.720p", new DateTime(2026, 11, 15, 14, 30, 12, DateTimeKind.Utc))
-            && ownId != Provenance.OwnUploadId(SubtitleProvider.TvSubtitles, "def456", "The.Middle.S02E24.720p", new DateTime(2026, 11, 15, 14, 30, 12, DateTimeKind.Utc)));
+            ownId == Provenance.OwnUploadId(SubtitleProvider.TvSubtitles, "abc123", "The.Sample.S02E24.720p", new DateTime(2026, 11, 15, 14, 30, 12, DateTimeKind.Utc))
+            && ownId != Provenance.OwnUploadId(SubtitleProvider.TvSubtitles, "def456", "The.Sample.S02E24.720p", new DateTime(2026, 11, 15, 14, 30, 12, DateTimeKind.Utc)));
         Check("only the source that took the upload gets its mark",
             uploadSource.Contains("subdlUploadId: subdlMarke.Id", StringComparison.Ordinal)
             && uploadSource.Contains("tvSubtitlesUploadId: tvstMarke.Id", StringComparison.Ordinal)
@@ -661,7 +661,7 @@ internal static class Program
         // ---- 12. "hochgeladen" je Quelle (F-M490) ---------------------------------------------
         var registrySource = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Registry/ContentHashRegistry.cs"));
         Check("each source has its own uploaded timestamp, sidecars and embeds alike",
-            // F-M668: „hochgeladen je Quelle" ist das Feld `ClosedAt` der Matrix-Zeile — je Quelle eine
+            // F-M668: „hochgeladen je Quelle" ist das Feld `ClosedAt` der Gridfilm-Zeile — je Quelle eine
             // Zeile, statt einer Spalte je Quelle an jeder Untertitel-Zeile.
             entities.Contains("public DateTime? UploadedAt { get; set; }", StringComparison.Ordinal)
             && !entities.Contains("public DateTime? SubdlUploadedAt { get; set; }", StringComparison.Ordinal)
@@ -674,12 +674,12 @@ internal static class Program
             // EIN Zeitpunkt fuer Id und Stempel — sonst traegt die Marke eine andere Sekunde als der Upload
             && uploadSource.Contains("var jetzt = DateTime.UtcNow;", StringComparison.Ordinal));
         Check("\"uploaded to this source\" is read from its own timestamp first",
-            // F-M668: eine Frage an die Matrix, je Quelle eine Zeile — `IsClosed` = Zeitpunkt oder
+            // F-M668: eine Frage an die Gridfilm, je Quelle eine Zeile — `IsClosed` = Zeitpunkt oder
             // Einsende-Id. Kein Spaltenpaar mehr, das die Antwort der anderen Quelle vortäuschen könnte.
             registrySource.Contains("SourceStore.TrackMark(_db, mediaHash, Quelle(provider), language, hearingImpaired).IsClosed", StringComparison.Ordinal)
             && !registrySource.Contains("x.TvSubtitlesUploadedAt != null", StringComparison.Ordinal));
         Check("a timestamp is never overwritten with nothing",
-            // dieselbe Regel, jetzt an der einen Schreibstelle der Matrix: was leer hereinkommt, löscht nichts.
+            // dieselbe Regel, jetzt an der einen Schreibstelle der Gridfilm: was leer hereinkommt, löscht nichts.
             ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/SourceStore.cs"))
                 .Contains("if (closedAt.HasValue)", StringComparison.Ordinal)
             && ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/Data/SourceStore.cs"))
@@ -948,7 +948,7 @@ internal static class Program
             || reg557.Contains("Language.LanguageMapper.Canonical(language) ?? language", StringComparison.Ordinal));
         Check("F-M557: Schema 16 schreibt den Bestand auf ISO um und leert die alten Stempel",
             // F-M668: die Sprachumstellung bleibt unangetastet; das Leeren der Stempel ist mit den
-            // Spalten selbst entfallen (die Stempel sind `file`-Zeilen der Matrix).
+            // Spalten selbst entfallen (die Stempel sind `file`-Zeilen der Gridfilm).
             db557.Contains("private void NormaliseLanguages()", StringComparison.Ordinal)
             && !db557.Contains("media.CompleteSignature = null;", StringComparison.Ordinal)
             && db557.Contains("NormaliseLanguages();", StringComparison.Ordinal));
@@ -1176,7 +1176,7 @@ internal static class Program
                 .Contains("private const string FillTagSuffix = Jellyfin.Plugin.SubScribe.Registry.PackSeasonStore.FillTagSuffix;", StringComparison.Ordinal));
 
         // --- F-M658: Positionen zaehlen nur die Spuren IM Container ---------------------------------
-        // Befund 20.11.2026: MobLand S02E02 hat zwei .de-SRT neben dem MKV; der Sammler bildete die
+        // Befund 20.11.2026: Sampleland S02E02 hat zwei .de-SRT neben dem MKV; der Sammler bildete die
         // Position ueber Jellyfins Liste MIT den Beidateien, ffmpeg bekam `-map 0:s:2` auf einer Datei
         // mit zwei Untertitelspuren, antwortete „Stream map '' matches no streams." (exit 234) — und
         // die Spur galt als „extraction failed", obwohl sie im Container liegt.
@@ -1780,7 +1780,7 @@ internal static class Program
         var refreshSource = ReadText(Path.Combine(root2, "Jellyfin.Plugin.SubdlSync/ScheduledTasks/ScribeDatabaseRefreshTask.cs"));
         Check("F-M583: nur Urteile ohne Marke und ohne bekannte Herkunft werden verworfen — eingebettet und Sidecar",
             registrySource580.Contains("public int ClearVerdictsWithoutEvidence()", StringComparison.Ordinal)
-            // F-M668: „Marke" heißt jetzt „irgendeine Quelle hat das Paar in der Matrix geschlossen".
+            // F-M668: „Marke" heißt jetzt „irgendeine Quelle hat das Paar in der Gridfilm geschlossen".
             && registrySource580.Contains("bool marke = AnySourceClosed(mediaHash, language, hearingImpaired ?? false);", StringComparison.Ordinal)
             && registrySource580.Contains("return !marke && herkunft.Origin is null;", StringComparison.Ordinal)
             // F-M671: eine Spur hat keinen Einzelschluessel mehr (er ist (FileId, TrackId)) — das
@@ -1947,7 +1947,7 @@ internal static class Program
             // — F-M668: dieselbe Regel, jetzt in EINER Prüfstelle für Zeilen und Paar.
             && registrySource.Contains("if (provider != SubtitleProvider.Subdl || !string.Equals(status, SubtitleStatus.Uploaded, StringComparison.Ordinal))", StringComparison.Ordinal)
             // F-M670: der Altbeleg aus der Id-Spalte ist entfallen — die Uebernahme hat ihn in die
-            // Matrix gehoben; geblieben ist die markenlose `uploaded`-Zeile (F-M500).
+            // Gridfilm gehoben; geblieben ist die markenlose `uploaded`-Zeile (F-M500).
             && registrySource.Contains("return !AnySourceClosed(mediaHash, language, hearingImpaired);", StringComparison.Ordinal));
 
         // Der Umbau wird nicht nur gelesen, sondern gefahren: ein Inhalt bei SubDL darf tvst nicht
@@ -1972,10 +1972,10 @@ internal static class Program
                 string hashDe = Jellyfin.Plugin.SubScribe.Registry.ContentHashRegistry.ComputeHash(textDe);
 
                 // Der Inhalt liegt bei SubDL (Marke der Quelle, F-M490), unter ANDERER Dateiidentitaet.
-                settleReg.EnsureFile(fileB, "tt7654321", "/data/movies2/film.mkv");
+                settleReg.EnsureFile(fileB, "tt7654321", "/media/films/film.mkv");
                 settleReg.MarkEmbed(fileB, 0, de, false, Jellyfin.Plugin.SubScribe.Data.SubtitleStatus.Uploaded,
                     contentHash: hashDe, subdlUploadedAt: DateTime.UtcNow);
-                settleReg.EnsureFile(fileA, "tt1234567", "/data/movies2/folge.mkv");
+                settleReg.EnsureFile(fileA, "tt1234567", "/media/films/folge.mkv");
 
                 Check("derselbe Inhalt bei SubDL erledigt tvsubtitles NICHT (F-M500)",
                     settleReg.IsContentUploadedFor(hashDe, SubtitleProvider.Subdl)
@@ -2023,7 +2023,7 @@ internal static class Program
                 var torUnbekannt = UploadGate.Decide(true, true, origin: null, false, false, false, false);
                 var markenText = "1\n00:00:20,000 --> 00:00:22,000\nZwei Marken.\n\n";
                 string markenHash = Jellyfin.Plugin.SubScribe.Registry.ContentHashRegistry.ComputeHash(markenText);
-                settleReg.EnsureFile("eeee5555ffff6666", "tt9999999", "/data/movies2/beide.mkv");
+                settleReg.EnsureFile("eeee5555ffff6666", "tt9999999", "/media/films/beide.mkv");
                 settleReg.MarkEmbed("eeee5555ffff6666", 0, de, false,
                     Jellyfin.Plugin.SubScribe.Data.SubtitleStatus.Uploaded, contentHash: markenHash,
                     subdlUploadId: "sd-1", subdlUploadedAt: DateTime.UtcNow);
@@ -2035,7 +2035,7 @@ internal static class Program
                     torUnbekannt.Subdl && torUnbekannt.TvSubtitles && torUnbekannt.SkipReason is null
                     && Jellyfin.Plugin.SubScribe.Api.Endpoints.Provenance.MayUpload(null)
                     && Jellyfin.Plugin.SubScribe.Api.Endpoints.Provenance.MayUpload(null)
-                    // F-M668: die zwei Marken stehen als ZWEI Zeilen derselben Spur in der Matrix — je
+                    // F-M668: die zwei Marken stehen als ZWEI Zeilen derselben Spur in der Gridfilm — je
                     // Quelle eine, jede mit ihrer eigenen Einsende-Id (vorher: zwei Spalten einer Zeile).
                     && beideRow != null
                     && Jellyfin.Plugin.SubScribe.Data.SourceStore.TrackMark(
@@ -2053,7 +2053,7 @@ internal static class Program
                 string hashHer = Jellyfin.Plugin.SubScribe.Registry.ContentHashRegistry.ComputeHash(textHer);
                 settleReg.MarkDownloaded(hashHer, fileA, de, false,
                     origin: Jellyfin.Plugin.SubScribe.Api.Endpoints.Provenance.Name(SubtitleProvider.Subdl),
-                    fileName: "folge.de.srt", path: "/data/movies2/folge.de.srt");
+                    fileName: "folge.de.srt", path: "/media/films/folge.de.srt");
                 string? herkunft = settleReg.GetOrigin(hashHer).Origin;
                 var torSubdl = UploadGate.Decide(true, true, herkunft, false, false, false, false);
                 Check("Herkunft=subdl: weder zu SubDL (kein Reup) noch zu tvsubtitles (F-M487 verschaerft)",
@@ -2072,7 +2072,7 @@ internal static class Program
                 string hashHer2 = Jellyfin.Plugin.SubScribe.Registry.ContentHashRegistry.ComputeHash(textHer2);
                 settleReg.MarkDownloaded(hashHer2, fileA, de, false,
                     origin: Jellyfin.Plugin.SubScribe.Api.Endpoints.Provenance.Name(SubtitleProvider.TvSubtitles),
-                    fileName: "folge2.de.srt", path: "/data/movies2/folge2.de.srt");
+                    fileName: "folge2.de.srt", path: "/media/films/folge2.de.srt");
                 string? herkunftTv = settleReg.GetOrigin(hashHer2).Origin;
                 var torTv = UploadGate.Decide(true, true, herkunftTv, false, false, false, false);
                 Check("Herkunft=tvsubtitles: weder zu tvsubtitles (kein Reup) noch zu SubDL (F-M487 verschaerft)",
@@ -2135,17 +2135,17 @@ internal static class Program
         // Artikel-Abschneiden.
         var namen = new Dictionary<int, string>
         {
-            [512] = "The Middle",
-            [422] = "Malcolm in the Middle",
-            [701] = "The Middle Man",
+            [512] = "The Sample",
+            [422] = "Malcolm in the Sample",
+            [701] = "The Sample Man",
             [700] = "Rick & Morty",
         };
         Check("tvst vergleicht eng: Gross/Kleinschreibung und Leerraum zaehlen nicht (F-M501)",
-            TvSubtitlesClient.ResolveShow(namen, "the middle") == 512
-            && TvSubtitlesClient.ResolveShow(namen, "  The   Middle ") == 512
-            && TvSubtitlesClient.NormalizeShowName("The   Middle") == "the middle",
-            "the middle=" + TvSubtitlesClient.ResolveShow(namen, "the middle")
-            + " doppelraum=" + TvSubtitlesClient.ResolveShow(namen, "  The   Middle "));
+            TvSubtitlesClient.ResolveShow(namen, "the sample") == 512
+            && TvSubtitlesClient.ResolveShow(namen, "  The   Sample ") == 512
+            && TvSubtitlesClient.NormalizeShowName("The   Sample") == "the sample",
+            "the middle=" + TvSubtitlesClient.ResolveShow(namen, "the sample")
+            + " doppelraum=" + TvSubtitlesClient.ResolveShow(namen, "  The   Sample "));
 
         Check("tvst vergleicht eng: & = and = und (F-M501)",
             TvSubtitlesClient.ResolveShow(namen, "Rick and Morty") == 700
@@ -2156,23 +2156,23 @@ internal static class Program
             "and=" + TvSubtitlesClient.ResolveShow(namen, "Rick and Morty"));
 
         Check("tvst vergleicht eng: kein Teilstring, kein Artikel-Abschneiden (F-M501)",
-            // "The Middle" findet NICHT "The Middle Man" und NICHT "Malcolm in the Middle"
-            TvSubtitlesClient.ResolveShow(namen, "The Middle") == 512
+            // "The Sample" findet NICHT "The Sample Man" und NICHT "Malcolm in the Sample"
+            TvSubtitlesClient.ResolveShow(namen, "The Sample") == 512
             // die fruehere "enthaelt"-Stufe haette hier 701 geliefert
-            && TvSubtitlesClient.ResolveShow(namen, "Middle") is null
-            && TvSubtitlesClient.ResolveShow(namen, "Middle Man") is null
-            && TvSubtitlesClient.ResolveShow(namen, "the middle man") == 701,
-            "Middle=" + (TvSubtitlesClient.ResolveShow(namen, "Middle")?.ToString() ?? "-"));
+            && TvSubtitlesClient.ResolveShow(namen, "Sample") is null
+            && TvSubtitlesClient.ResolveShow(namen, "Sample Man") is null
+            && TvSubtitlesClient.ResolveShow(namen, "the sample man") == 701,
+            "Sample=" + (TvSubtitlesClient.ResolveShow(namen, "Sample")?.ToString() ?? "-"));
 
         // Der TMDb-Serien-Datensatz, auf dem die Aufloesung beruht (Titel, Jahr, Staffelzahl).
         var tmdbInfo = await new TmdbImdbResolver(
                 new HttpClient(new JsonHandler(
-                    "{\"name\":\"The Middle\",\"original_name\":\"The Middle\"," +
+                    "{\"name\":\"The Sample\",\"original_name\":\"The Sample\"," +
                     "\"first_air_date\":\"2009-09-30\",\"number_of_seasons\":9}")),
                 "test-key")
             .SeriesInfoAsync("999001", CancellationToken.None).ConfigureAwait(false);
         Check("der TMDb-Serien-Datensatz traegt Titel, Erstausstrahlungsjahr und Staffelzahl (F-M501)",
-            tmdbInfo is { Name: "The Middle", FirstAirYear: 2009, Seasons: 9 },
+            tmdbInfo is { Name: "The Sample", FirstAirYear: 2009, Seasons: 9 },
             tmdbInfo is null ? "kein Datensatz" : tmdbInfo.Name + "/" + tmdbInfo.FirstAirYear + "/" + tmdbInfo.Seasons);
 
         string tvstRoot = Path.Combine(Path.GetTempPath(), "endpoints-tvst-" + Environment.ProcessId);
@@ -2187,7 +2187,7 @@ internal static class Program
             using (var tvstDb = new Jellyfin.Plugin.SubScribe.Data.ScribeDbContext(Path.Combine(tvstRoot, "db"), null))
             {
                 var tvstReg = new Jellyfin.Plugin.SubScribe.Registry.ContentHashRegistry(tvstDb, null, null);
-                var mitte = new TmdbSeriesInfo("The Middle", "The Middle", 2009, 9);
+                var mitte = new TmdbSeriesInfo("The Sample", "The Sample", 2009, 9);
 
                 // (a) F-M734: die gespeicherte Nummer fuehrt — der ABLAUF liest sie und gibt sie im
                 // Auftrag mit; die Engine antwortet darauf „bereit", ohne die Seite zu fragen. Der
@@ -2203,7 +2203,7 @@ internal static class Program
 
                 // (b) Ein Treffer in der Liste: die Nummer ist die Antwort, angelegt wird nichts. Den
                 // Bestand schreibt der Ablauf (F-M734) — die Seite der Titel-Frage kennt ihn nicht.
-                var handlerVorhanden = new TvstSiteHandler(512, "The Middle");
+                var handlerVorhanden = new TvstSiteHandler(512, "The Sample");
                 var seiteVorhanden = new TvstShowLookup(new TvSubtitlesClient(new HttpClient(handlerVorhanden)));
                 var vorhanden = await seiteVorhanden
                     .FindOrCreateAsync(mitte.Name, mitte.FirstAirYear, mitte.Seasons, "aaaa000000000002", dryRun: false, CancellationToken.None)
@@ -2215,7 +2215,7 @@ internal static class Program
 
                 // (c) Kein Treffer: genau EINE Anlage, danach wird erneut gesucht.
                 var neu = new TmdbSeriesInfo("Beispielserie Test", "Beispielserie Test", 2026, 3);
-                var handlerNeu = new TvstSiteHandler(512, "The Middle") { AddAfterPost = (9001, "Beispielserie Test") };
+                var handlerNeu = new TvstSiteHandler(512, "The Sample") { AddAfterPost = (9001, "Beispielserie Test") };
                 var seiteNeu = new TvstShowLookup(new TvSubtitlesClient(new HttpClient(handlerNeu)));
                 var angelegt = await seiteNeu
                     .FindOrCreateAsync(neu.Name, neu.FirstAirYear, neu.Seasons, "aaaa000000000003", dryRun: false, CancellationToken.None)
@@ -2233,11 +2233,11 @@ internal static class Program
                     handlerNeu.LastBody is null ? "kein Rumpf" : "Rumpf ohne die drei Felder");
 
                 // Staffelzahl: die Seite kennt nur 1..22 — 30 wird auf 22 gezogen, "keine Angabe" auf 1.
-                var handlerViele = new TvstSiteHandler(512, "The Middle") { AddAfterPost = (9002, "Viele Staffeln") };
+                var handlerViele = new TvstSiteHandler(512, "The Sample") { AddAfterPost = (9002, "Viele Staffeln") };
                 var seiteViele = new TvstShowLookup(new TvSubtitlesClient(new HttpClient(handlerViele)));
                 await seiteViele.FindOrCreateAsync("Viele Staffeln", 2001, 30, "aaaa000000000004", dryRun: false, CancellationToken.None)
                     .ConfigureAwait(false);
-                var handlerOhne = new TvstSiteHandler(512, "The Middle") { AddAfterPost = (9003, "Ohne Angabe") };
+                var handlerOhne = new TvstSiteHandler(512, "The Sample") { AddAfterPost = (9003, "Ohne Angabe") };
                 var seiteOhne = new TvstShowLookup(new TvSubtitlesClient(new HttpClient(handlerOhne)));
                 await seiteOhne.FindOrCreateAsync("Ohne Angabe", 2001, null, "aaaa000000000005", dryRun: false, CancellationToken.None)
                     .ConfigureAwait(false);
@@ -2251,7 +2251,7 @@ internal static class Program
 
                 // (d) Die Anlage scheitert: es gibt keine Kennung, und die Kette laeuft weiter (Skipped, kein
                 // Wurf). Geschrieben wird hier ohnehin nichts — die Seite der Titel-Frage kennt den Bestand nicht.
-                var handlerKaputt = new TvstSiteHandler(512, "The Middle") { PostStatus = 500 };
+                var handlerKaputt = new TvstSiteHandler(512, "The Sample") { PostStatus = 500 };
                 var seiteKaputt = new TvstShowLookup(new TvSubtitlesClient(new HttpClient(handlerKaputt)));
                 var kaputt = await seiteKaputt
                     .FindOrCreateAsync("Beispielserie Test", 2026, 3, "aaaa000000000006", dryRun: false, CancellationToken.None)
@@ -2483,7 +2483,7 @@ internal static class Program
                     "state=" + zweiterVersuch.State + " posts=" + handlerKaputt.Posts);
 
                 // (e) Trockenlauf: nichts anlegen, nichts schreiben.
-                var handlerTrocken = new TvstSiteHandler(512, "The Middle");
+                var handlerTrocken = new TvstSiteHandler(512, "The Sample");
                 var seiteTrocken = new TvstShowLookup(new TvSubtitlesClient(new HttpClient(handlerTrocken)));
                 var trocken = await seiteTrocken
                     .FindOrCreateAsync("Beispielserie Test", 2026, 3, "aaaa000000000007", dryRun: true, CancellationToken.None)
@@ -2495,7 +2495,7 @@ internal static class Program
                     "state=" + trocken.State + " posts=" + handlerTrocken.Posts);
 
                 // (f) Unklare Seite: einmal nachfragen, dann NICHT schreiben und tvst ueberspringen.
-                var handlerLeer = new TvstSiteHandler(512, "The Middle") { EmptyList = true };
+                var handlerLeer = new TvstSiteHandler(512, "The Sample") { EmptyList = true };
                 var seiteLeer = new TvstShowLookup(new TvSubtitlesClient(new HttpClient(handlerLeer)));
                 var leer = await seiteLeer
                     .FindOrCreateAsync("Beispielserie Test", 2026, 3, "aaaa000000000008", dryRun: false, CancellationToken.None)
@@ -2506,14 +2506,14 @@ internal static class Program
                     "state=" + leer.State + " gets=" + handlerLeer.Gets);
 
                 // (g) Der Endpunkt mit Nummer im Ticket: die Serienliste wird gar nicht erst geholt.
-                var handlerEndpunkt = new TvstSiteHandler(512, "The Middle");
+                var handlerEndpunkt = new TvstSiteHandler(512, "The Sample");
                 var endpunkt = new TvSubtitlesUploadEndpoint(
                     new TvSubtitlesClient(new HttpClient(handlerEndpunkt)), dryRun: false);
                 var antwort = await endpunkt.SendAsync(
                         new UploadTicket(
                             "Ein Name, den die Seite NICHT fuehrt", "tt1442464", "1422", 2, 24, "de",
                             "folge.srt", Encoding.UTF8.GetBytes("1\n00:00:01,000 --> 00:00:03,000\nSatz.\n"),
-                            "WEB", "The.Middle.S02E24", false, false, false, TvstShowId: 512),
+                            "WEB", "The.Sample.S02E24", false, false, false, TvstShowId: 512),
                         CancellationToken.None)
                     .ConfigureAwait(false);
                 // Die EINE Serienliste danach ist die Ruecklesung der eigenen Upload-Id (F-M488) — sie
@@ -2893,12 +2893,12 @@ internal static class Program
         // zweite Sprache KEINE zweite Suche, und die Filmseite wird fuer den Lauf einmal geholt.
         var filmTreffer = await msubEndpoint
             .SearchAsync(
-                new SubtitleQuery("Dune: Part One", null, "438631", 0, 0, "EN", 2021, MovieId: "102"),
+                new SubtitleQuery("Arena: Part One", null, "438631", 0, 0, "EN", 2021, MovieId: "102"),
                 CancellationToken.None)
             .ConfigureAwait(false);
         var filmTrefferDe = await msubEndpoint
             .SearchAsync(
-                new SubtitleQuery("Dune: Part One", null, "438631", 0, 0, "DE", 2021, MovieId: "102"),
+                new SubtitleQuery("Arena: Part One", null, "438631", 0, 0, "DE", 2021, MovieId: "102"),
                 CancellationToken.None)
             .ConfigureAwait(false);
         Check("der msub-Endpunkt loest ueber Titel und Jahr und holt die Filmseite EINMAL je Film (F-M507)",
@@ -2918,10 +2918,10 @@ internal static class Program
         var msubLeer = new MovieSubtitlesDownloadEndpoint(
             new MovieSubtitlesClient(new HttpClient(msubHandlerLeer)));
         var serieBeiMsub = await msubLeer
-            .SearchAsync(new SubtitleQuery("The Middle", null, null, 2, 24, "EN", 2011), CancellationToken.None)
+            .SearchAsync(new SubtitleQuery("The Sample", null, null, 2, 24, "EN", 2011), CancellationToken.None)
             .ConfigureAwait(false);
         var zhBeiMsub = await msubLeer
-            .SearchAsync(new SubtitleQuery("Dune: Part One", null, "438631", 0, 0, "ZH", 2021), CancellationToken.None)
+            .SearchAsync(new SubtitleQuery("Arena: Part One", null, "438631", 0, 0, "ZH", 2021), CancellationToken.None)
             .ConfigureAwait(false);
         Check("eine Serie und eine Sprache ohne Seitenkuerzel werden bei msub ohne einen einzigen Aufruf verneint (F-M507)",
             serieBeiMsub.Count == 0 && zhBeiMsub.Count == 0 && msubHandlerLeer.Gets == 0,
@@ -2940,7 +2940,7 @@ internal static class Program
                     .ResolveForMediaAsync(
                         new Jellyfin.Plugin.SubScribe.Registry.ContentHashRegistry(msubStore, null, null),
                         "bbbb000000000001",
-                        new TmdbMovieInfo("Dune: Part One", "Dune", 2021),
+                        new TmdbMovieInfo("Arena: Part One", "Arena", 2021),
                         dryRun: false,
                         CancellationToken.None)
                     .ConfigureAwait(false);
@@ -2949,7 +2949,7 @@ internal static class Program
                     .ResolveForMediaAsync(
                         new Jellyfin.Plugin.SubScribe.Registry.ContentHashRegistry(msubStore, null, null),
                         "bbbb000000000001",
-                        new TmdbMovieInfo("Dune: Part One", "Dune", 2021),
+                        new TmdbMovieInfo("Arena: Part One", "Arena", 2021),
                         dryRun: false,
                         CancellationToken.None)
                     .ConfigureAwait(false);
@@ -3061,7 +3061,7 @@ internal static class Program
                 Path.Combine(root, "Jellyfin.Plugin.SubdlSync/Api/Endpoints/Provenance.cs"));
             Check("Schema 14 ist der Marker, die Spalten stehen in EnsureReportColumns und EnsureMediaColumns (F-M507)",
                 // F-M668: Schema 19. Die Marken-Spalten der dritten Quelle stehen NICHT mehr in den
-                // Nachzieh-Listen; die Matrix führt die Quelle als Wert, und der Quellenname ist derselbe
+                // Nachzieh-Listen; die Gridfilm führt die Quelle als Wert, und der Quellenname ist derselbe
                 // wie in der API (eine Schreibweise, zwei Schichten).
                 // F-M671: der Marker steht auf 22; die Nummer am Medium steht in der DDL der Datei.
                 dbSource.Contains("public const int CurrentSchemaVersion = 24;", StringComparison.Ordinal)
@@ -3124,7 +3124,7 @@ internal static class Program
                 const string film = "ffff000011112222";
                 string text = "1\n00:00:01,000 --> 00:00:02,000\nEin Satz.\n\n";
                 string hash = Jellyfin.Plugin.SubScribe.Registry.ContentHashRegistry.ComputeHash(text);
-                markReg.EnsureFile(film, null, "/data/movies2/film.mkv");
+                markReg.EnsureFile(film, null, "/media/films/film.mkv");
                 markReg.MarkEmbed(film, 0, "DE", false, Jellyfin.Plugin.SubScribe.Data.SubtitleStatus.Uploaded,
                     contentHash: hash, moviesubtitlesUploadId: "own:moviesubtitles:20261115T180405Z:abcd1234",
                     moviesubtitlesUploadedAt: DateTime.UtcNow);
@@ -3139,7 +3139,7 @@ internal static class Program
                     + " tvst=" + markReg.IsUploadedTo(film, "DE", false, SubtitleProvider.TvSubtitles));
 
                 // Und das Settle schreibt dieselbe Marke, wenn NUR die Film-Adresse den Inhalt haelt.
-                markReg.EnsureFile("eeee000033334444", null, "/data/movies2/zweiter.mkv");
+                markReg.EnsureFile("eeee000033334444", null, "/media/films/zweiter.mkv");
                 bool gesetzt = markReg.RecordSkippedContent("eeee000033334444", false, 1, "DE", false, false, hash,
                     Jellyfin.Plugin.SubScribe.Data.RejectReason.DuplicateContent,
                     new[] { SubtitleProvider.MovieSubtitles });
@@ -3173,7 +3173,7 @@ internal static class Program
 
         // ---- 18. F-M510: das Etikett der Familien-Zeile nennt die Adresse, die gefragt wurde ------
         // Gemessen 15.11.2026 im ersten Film-Lauf auf jf-test (Filmbibliothek "Movies_Test"):
-        //   [V] [tvsubtitles-D] Oppenheimer (2023).mkv [EN] — 2 moviesubtitles candidate(s), 9 subdl
+        //   [V] [tvsubtitles-D] Samplemovie (2023).mkv [EN] — 2 moviesubtitles candidate(s), 9 subdl
         //       candidate(s), order moviesubtitles, subdl
         // Die Zeile zaehlte richtig (moviesubtitles stand da), trug aber das Etikett der SERIEN-Seite.
         // Der Text stand fest im Code; die Adresse kommt jetzt aus SourceOrder.FamilyPage(isSeries) —
@@ -3279,7 +3279,7 @@ internal static class Program
 
                 // Die Zeile, die JEDER Lauf anlegt (Beobachtung, MarkSearched) — sie sagt NICHTS ueber die Art.
                 const string stummHash = "e5e5e5e5f6f6f6f6";
-                kindReg.EnsureFile(stummHash, "0123456789abcdef0123456789abcdef", "/data/movies2/stumm.mkv");
+                kindReg.EnsureFile(stummHash, "0123456789abcdef0123456789abcdef", "/media/films/stumm.mkv");
 
                 bool? artSerie = kindReg.MediaKindIsSeries(serieHash);
                 bool? artFilm = kindReg.MediaKindIsSeries(filmHash);
@@ -3394,8 +3394,8 @@ internal static class Program
                 try
                 {
                     ghostReg.MarkDownloaded(geisterHash, null!, "EN",
-                        fileName: "Hotel Transylvania 2 (2015).en.srt",
-                        path: "/data/movies2/Hotel Transylvania 2 (2015).en.srt");
+                        fileName: "Sample Film 2 (2015).en.srt",
+                        path: "/media/films/Sample Film 2 (2015).en.srt");
                 }
                 catch (Exception)
                 {
@@ -3424,12 +3424,12 @@ internal static class Program
                     ghostDb.Files.Upsert(new Jellyfin.Plugin.SubScribe.Data.FileEntity
                     {
                         OsHash = null!,
-                        Path = "/data/movies2/ohne-schluessel.mkv",
+                        Path = "/media/films/ohne-schluessel.mkv",
                     });
                     ghostDb.Files.Upsert(new Jellyfin.Plugin.SubScribe.Data.FileEntity
                     {
                         OsHash = string.Empty,
-                        Path = "/data/movies2/leerer-schluessel.mkv",
+                        Path = "/media/films/leerer-schluessel.mkv",
                     });
                 }
                 catch (Exception)
@@ -3579,16 +3579,16 @@ internal static class Program
         // The original block (slot 50–99) holds the unsynchronized copies a correction keeps beside
         // its result. They are working files: uploading them would put the raw take next to the
         // corrected one under the same episode. The answer comes from the name alone.
-        const string ep = "/media/The Middle.S01E05.MULTI.1080p.WEB-DL.H265-FTMVHD.mkv";
+        const string ep = "/media/The Sample.S01E05.MULTI.1080p.WEB-DL.H265-GRP.mkv";
         Check("F-M519: the reserved original block is refused as an upload candidate",
-            SidecarNaming.IsOriginalSidecar("/media/The Middle.S01E05.MULTI.1080p.WEB-DL.H265-FTMVHD.en.51.srt", ep)
-            && SidecarNaming.IsOriginalSidecar("/media/The Middle.S01E05.MULTI.1080p.WEB-DL.H265-FTMVHD.en.52.srt", ep)
-            && SidecarNaming.IsOriginalSidecar("/media/The Middle.S01E05.MULTI.1080p.WEB-DL.H265-FTMVHD.en.50.srt", ep)
-            && SidecarNaming.IsOriginalSidecar("/media/The Middle.S01E05.MULTI.1080p.WEB-DL.H265-FTMVHD.de.sdh.99.srt", ep));
+            SidecarNaming.IsOriginalSidecar("/media/The Sample.S01E05.MULTI.1080p.WEB-DL.H265-GRP.en.51.srt", ep)
+            && SidecarNaming.IsOriginalSidecar("/media/The Sample.S01E05.MULTI.1080p.WEB-DL.H265-GRP.en.52.srt", ep)
+            && SidecarNaming.IsOriginalSidecar("/media/The Sample.S01E05.MULTI.1080p.WEB-DL.H265-GRP.en.50.srt", ep)
+            && SidecarNaming.IsOriginalSidecar("/media/The Sample.S01E05.MULTI.1080p.WEB-DL.H265-GRP.de.sdh.99.srt", ep));
         Check("F-M519: the corrected block (slots 1–49) stays an upload candidate",
-            !SidecarNaming.IsOriginalSidecar("/media/The Middle.S01E05.MULTI.1080p.WEB-DL.H265-FTMVHD.en.01.srt", ep)
-            && !SidecarNaming.IsOriginalSidecar("/media/The Middle.S01E05.MULTI.1080p.WEB-DL.H265-FTMVHD.en.49.srt", ep)
-            && !SidecarNaming.IsOriginalSidecar("/media/The Middle.S01E05.MULTI.1080p.WEB-DL.H265-FTMVHD.de.srt", ep));
+            !SidecarNaming.IsOriginalSidecar("/media/The Sample.S01E05.MULTI.1080p.WEB-DL.H265-GRP.en.01.srt", ep)
+            && !SidecarNaming.IsOriginalSidecar("/media/The Sample.S01E05.MULTI.1080p.WEB-DL.H265-GRP.en.49.srt", ep)
+            && !SidecarNaming.IsOriginalSidecar("/media/The Sample.S01E05.MULTI.1080p.WEB-DL.H265-GRP.de.srt", ep));
         Check("F-M519: the upload candidate list drops the originals and keeps the corrected files",
             Jellyfin.Plugin.SubScribe.Pipeline.UploadPipeline.FindLooseSrts(ep)
                 .All(x => !SidecarNaming.IsOriginalSidecar(x.Path, ep)));
@@ -3718,7 +3718,7 @@ internal static class Program
         Check(
             "F-M620: the stamps of all three sources and the track signature fall",
             registryDatei.Contains("public (int Stamps, int Verdicts) ReopenForRetry(", StringComparison.Ordinal)
-            // F-M668: die Stempel sind `file`-Zeilen der Matrix — sie fallen mit ihrer Signatur, weil die
+            // F-M668: die Stempel sind `file`-Zeilen der Gridfilm — sie fallen mit ihrer Signatur, weil die
             // Signatur ihr Fingerabdruck ist.
             && registryDatei.Contains("stempel = SourceStore.ClearFileMarks(_db, mediaHash);", StringComparison.Ordinal)
             && !registryDatei.Contains("m.CompleteSubdl = null", StringComparison.Ordinal));
@@ -3871,7 +3871,7 @@ internal static class Program
 
         // -----------------------------------------------------------------------------------------
         // F-M740: eine Staffel vollstaendig aus dem Store nehmen. Der Store fuehrt zu einer Staffel
-        // ein Geflecht (Dateien, Spuren, Beiwerk, Marken-Matrix, Behaelter, Urteile, ausgestrahlte
+        // ein Geflecht (Dateien, Spuren, Beiwerk, Marken-Gridfilm, Behaelter, Urteile, ausgestrahlte
         // Folgen, Absagen am Medienhash, Titel-Erschoepfung am quelle|titel-Schluessel) — eine
         // Tabelle zu leeren laesst den Rest stehen, und der naechste Lauf haelt die Staffel weiter
         // fuer erledigt.
@@ -5042,7 +5042,7 @@ internal static class Program
 
     /// <summary>
     /// F-M507: die Seiten von moviesubtitles.org, die der Endpunkt braucht — die Suche (zwei Filme,
-    /// „Dune" 1984 und „Dune: Part One" 2021) und die Filmseite mit drei Eintraegen (zwei englische,
+    /// „Arena" 1984 und „Arena: Part One" 2021) und die Filmseite mit drei Eintraegen (zwei englische,
     /// ein deutscher). Der Handler zaehlt jede Anfrage, damit „ein Abruf je Quelle und Sprache" messbar
     /// ist statt behauptet.
     /// </summary>
@@ -5073,13 +5073,13 @@ internal static class Program
             if (url.Contains("/search.php", StringComparison.Ordinal))
             {
                 // Die Suchliste: das Jahr steht im Linktext, die Seite schreibt den Artikel hinter den
-                // Komma ("Dune" hat keinen).
+                // Komma ("Arena" hat keinen).
                 return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
                 {
                     Content = new StringContent(
                         "<html><div class=\"movies\">"
-                        + "<a href=\"/movie-101.html\">Dune (1984)</a>"
-                        + "<a href=\"/movie-102.html\">Dune: Part One (2021)</a>"
+                        + "<a href=\"/movie-101.html\">Arena (1984)</a>"
+                        + "<a href=\"/movie-102.html\">Arena: Part One (2021)</a>"
                         + "</div></html>", Encoding.UTF8, "text/html"),
                 });
             }
@@ -5097,7 +5097,7 @@ internal static class Program
 
         private static readonly string FilmSeite =
             "<html><body>"
-            + "<h2>Dune: Part One (2021)</h2>"
+            + "<h2>Arena: Part One (2021)</h2>"
             + "<p class=\"description\"><img src=\"images/flags/en.gif\"> 3 subtitles, 12 downloads</p>"
             + Eintrag("5001", "en", "WEB-DL", "GROUPA")
             + Eintrag("5002", "en", "BluRay", "GROUPB")
@@ -5107,8 +5107,8 @@ internal static class Program
             + "</body></html>";
 
         private static string Eintrag(string id, string lang, string rip, string release) =>
-            "<a href=\"/subtitle-" + id + ".html\" title=\"Download Dune: Part One (2021) subtitles\">"
-            + "<div class=\"subtitle\"><b>Dune: Part One 2021 " + lang + " subtitles (" + rip + "." + release
+            "<a href=\"/subtitle-" + id + ".html\" title=\"Download Arena: Part One (2021) subtitles\">"
+            + "<div class=\"subtitle\"><b>Arena: Part One 2021 " + lang + " subtitles (" + rip + "." + release
             + ")</b><table><tr>"
             + "<td title=\"lang\"><img src=\"images/flags/" + lang + ".gif\"></td>"
             + "<td title=\"Rip\">" + rip + "</td>"
@@ -5161,7 +5161,7 @@ internal static class Program
                 using var buffer = new MemoryStream();
                 using (var archive = new ZipArchive(buffer, ZipArchiveMode.Create, leaveOpen: true))
                 {
-                    var entry = archive.CreateEntry("The Middle - 2x24 - Back To Summer.HDTV.FEVER.en.srt");
+                    var entry = archive.CreateEntry("The Sample - 2x24 - Back To Summer.HDTV.GRP.en.srt");
                     using var stream = entry.OpenForRead();
                     var body = Encoding.UTF8.GetBytes("1\n00:00:01,000 --> 00:00:02,000\nhello\n");
                     WriteAll(stream, body);

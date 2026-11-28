@@ -60,7 +60,7 @@ verbatim, exactly those of the form on `/add.html`:
 | `double` | `1` for a double episode (only set when applicable) |
 | `lang` | language code **of the site**, not ISO (see *Languages*) |
 | `rip` | `WEB HDTV HEVC DVDRip DVDSCR BDRip BluRay` or empty |
-| `release` | free text (release group, e.g. `FEVER`) |
+| `release` | free text (release group, e.g. `GRP`) |
 | `hi` | `1` for a hearing-impaired version (only set when applicable) |
 | `upfile` | file, `.srt` or `.zip` |
 | `comment` | **carries the identifiers and the client here**: `TMDB 1422 / IMDb tt1442464 / Sub Scribe 12.1.12.380` |

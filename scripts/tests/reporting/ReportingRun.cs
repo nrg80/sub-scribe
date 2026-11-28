@@ -119,9 +119,9 @@ internal static class ReportingRun
         Check(BrokenSubtitleReports.FindingFromGateFailure("runtime (span 2433s vs runtime 1290s (tolerance ±600s))")
               == BrokenSubtitleReports.RuntimeMismatch(2433, 1290),
             "the runtime gate's two numbers become the finding");
-        string memberFinding = BrokenSubtitleReports.RuntimeMismatch(2508, 1254) + " ('The.Middle.S03E01.srt')";
-        var memberReport = BrokenSubtitleReports.Build("1901632-1458818", "The.Middle.S03 Complete", "EN", memberFinding, "12.1.12.344", "rosetestdev");
-        Check(memberReport?.Comment.Contains(": cue span 2508s vs. runtime 1254s ('The.Middle.S03E01.srt').", StringComparison.Ordinal) == true,
+        string memberFinding = BrokenSubtitleReports.RuntimeMismatch(2508, 1254) + " ('The.Sample.S03E01.srt')";
+        var memberReport = BrokenSubtitleReports.Build("1901632-1458818", "The.Sample.S03 Complete", "EN", memberFinding, "12.1.12.344", "rosetestdev");
+        Check(memberReport?.Comment.Contains(": cue span 2508s vs. runtime 1254s ('The.Sample.S03E01.srt').", StringComparison.Ordinal) == true,
             "a pack report names the member the gate measured");
         Check(memberReport?.Category == BrokenSubtitleReports.CategoryOther,
             "the member name does not change the category");

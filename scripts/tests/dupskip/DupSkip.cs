@@ -66,7 +66,7 @@ internal static class DupSkip
         string contentHash = ContentHashRegistry.ComputeHash(text);
 
         // ---- Zustand vor dem Tag-Schreiben: die Sprache ist oben und als uploaded vermerkt.
-        reg.EnsureFile(oldHash, "tt1234567", "/data/movies2/Lanterns/S01/Lanterns.S01E08.mkv");
+        reg.EnsureFile(oldHash, "tt1234567", "/media/films/Lanterns/S01/Lanterns.S01E08.mkv");
         reg.MarkEmbed(oldHash, 0, lang, false, SubtitleStatus.Uploaded, contentHash: contentHash);
         Console.WriteLine("Schritt 1  alt=" + oldHash + " uploaded-Zeilen=" + UploadedRows(db, contentHash));
 
@@ -147,7 +147,7 @@ internal static class DupSkip
         // Eigenes Medium: auf `newHash` traegt Fall A bereits die EN-Marke fuer SubDL, und die
         // Paar-Frage wuerde den Seitenwagen fuer SubDL erledigen — der Test prueft dann nicht mehr das Nein.
         const string looseMedia = "b41d0c7a55e21f83";
-        reg.EnsureFile(looseMedia, "tt1234567", "/data/movies2/Loose/Loose.mkv");
+        reg.EnsureFile(looseMedia, "tt1234567", "/media/films/Loose/Loose.mkv");
         SourceRefusalStore.Put(looseMedia, -1, "EN non-HI", SubtitleProvider.MovieSubtitles.ToString(),
             looseRefusedHash, "film-source-title-closed");
         bool looseClosedForMst = !Jellyfin.Plugin.SubScribe.Pipeline.UploadPipeline.SidecarsNeedWorkFor(

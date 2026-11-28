@@ -3,7 +3,7 @@
 //
 // T164 / F-M382: a cue that is too short to be seen is DROPPED, not used to convict the file.
 //
-// Measured 01.11.2026 on MobLand S01E02: a doubled "♪ MTV ♪" line at 00:00:03,898 with a 1 ms
+// Measured 01.11.2026 on Sampleland S01E02: a doubled "♪ MTV ♪" line at 00:00:03,898 with a 1 ms
 // duration made the whole 1040-cue file fail qa-invalid-srt, which cost the ENTIRE season pack —
 // 9 of 10 episodes were left, so every episode went up as a single and E02 not at all.
 //

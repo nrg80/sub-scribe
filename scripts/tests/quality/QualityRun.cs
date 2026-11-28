@@ -77,7 +77,7 @@ Check(
 // Real names from the operator's library first: the two that motivated the change.
 (string Name, string Expect)[] table =
 {
-    ("Dark.Matter.2024.S02E07.The.Pyramid.1080p.WEBRip.10Bit.DDP5.1.x265-NeoNoir.mkv", "web"),
+    ("Dark.Matter.2024.S02E07.The.Pyramid.1080p.WEBRip.10Bit.DDP5.1.x265-GRP.mkv", "web"),
     ("Dinosaurs (1991) - S01E01 - The Mighty Megalosaurus (480p DVD x265 Panda).mkv", "dvd"),
 
     ("Movie.2019.1080p.BluRay.x264-GROUP.mkv", "bluray"),
@@ -96,7 +96,7 @@ Check(
     ("Movie.2019.1080p.DVDRip.XviD-GROUP.avi", "dvd"),
     ("Movie.2019.PAL.DVD5.x264-GROUP.iso", "dvd"),
 
-    ("Movie.2024.2160p.AMZN.WEB-DL.DDP5.1.HDR.x265-GROUP.mkv", "web"),
+    ("Movie.2024.2160p.STRM.WEB-DL.DDP5.1.HDR.x265-GROUP.mkv", "web"),
     ("Movie.2024.1080p.DSNP.WEB-DL.DDP5.1.H.264-GROUP.mkv", "web"),
     ("Movie.2024.1080p.NF.WEBRip.DDP5.1.x264-GROUP.mkv", "web"),
 

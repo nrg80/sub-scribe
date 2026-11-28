@@ -144,11 +144,11 @@ internal static class Program
             "found: " + string.Join(",", MovieSubtitlesClient.Rips.Take(9)
                 .Select(r => r + "→" + MovieSubtitlesClient.RipFromQuality(r))));
         Check("WEB-DL stays WEB-DL and does not collapse into WEB",
-            MovieSubtitlesClient.RipFromQuality("Oppenheimer.2023.WEB-DL.x265") == "WEB-DL"
+            MovieSubtitlesClient.RipFromQuality("Samplemovie.2023.WEB-DL.x265") == "WEB-DL"
             && MovieSubtitlesClient.RipFromQuality("WEBRip") == "WEBRip"
             && MovieSubtitlesClient.RipFromQuality("WEB") == "WEB"
             && MovieSubtitlesClient.RipFromQuality("BluRay.x265-GROUP") == "BluRay",
-            "source before codec: found " + MovieSubtitlesClient.RipFromQuality("Oppenheimer.2023.WEB-DL.x265"));
+            "source before codec: found " + MovieSubtitlesClient.RipFromQuality("Samplemovie.2023.WEB-DL.x265"));
         // DIE RIP-FRAGE: die Seite kennt KEINEN Codec. tvst zieht x265 auf HEVC, weil sein Auswahlfeld
         // HEVC fuehrt; hier gibt es diesen Wert nicht, und ein Codec als Rip waere eine Behauptung ueber
         // die Quelle, die die Seite nicht macht. Ein Codec allein laesst das Feld deshalb LEER (die
@@ -156,7 +156,7 @@ internal static class Program
         // weiter greift ("BluRay.x265" → BluRay).
         Check("a codec alone is NO rip here (x265 is not HEVC — the site has no codec)",
             MovieSubtitlesClient.RipFromQuality("x265") == string.Empty
-            && MovieSubtitlesClient.RipFromQuality("1080p.x265.BONE") == string.Empty
+            && MovieSubtitlesClient.RipFromQuality("1080p.x265.GRP") == string.Empty
             && MovieSubtitlesClient.RipFromQuality("HEVC") == string.Empty
             && MovieSubtitlesClient.RipFromQuality("H.265") == string.Empty,
             "found x265→'" + MovieSubtitlesClient.RipFromQuality("x265") + "'");
@@ -170,15 +170,15 @@ internal static class Program
 
         // ---- 2. the resolver: inverted titles, the year, no guessing ------------------------------
         Check("the title key undoes the article inversion of the site",
-            MovieSubtitlesClient.TitleKey("Matrix, The") == MovieSubtitlesClient.TitleKey("The Matrix")
+            MovieSubtitlesClient.TitleKey("Gridfilm, The") == MovieSubtitlesClient.TitleKey("The Gridfilm")
             && MovieSubtitlesClient.TitleKey("Old Man and the Sea, The")
                 == MovieSubtitlesClient.TitleKey("The Old Man and the Sea")
             && MovieSubtitlesClient.TitleKey("Ocean's Thirteen") == "ocean's thirteen",
-            "found: " + MovieSubtitlesClient.TitleKey("Matrix, The"));
+            "found: " + MovieSubtitlesClient.TitleKey("Gridfilm, The"));
         Check("the title key uses the same three adjustments as the series resolver (case, &/and/und, space)",
             MovieSubtitlesClient.TitleKey("Fast  &   Furious") == MovieSubtitlesClient.TitleKey("Fast and Furious")
             && MovieSubtitlesClient.TitleKey("Fast und Furious") == MovieSubtitlesClient.TitleKey("Fast and Furious")
-            && MovieSubtitlesClient.TitleKey("  THE   MATRIX ") == MovieSubtitlesClient.TitleKey("The Matrix")
+            && MovieSubtitlesClient.TitleKey("  THE   GRIDFILM ") == MovieSubtitlesClient.TitleKey("The Gridfilm")
             && MovieSubtitlesClient.TitleKey(string.Empty).Length == 0,
             "found: " + MovieSubtitlesClient.TitleKey("Fast  &   Furious"));
 
@@ -191,25 +191,25 @@ internal static class Program
             && oList.First(f => f.Id == 239).Languages.Contains("ua"),
             "first row: " + oList[0]);
         Check("a year repeated inside the name is the year, not part of the name",
-            oList.First(f => f.Id == 16856).Name == "O Beautiful"
+            oList.First(f => f.Id == 16856).Name == "Fine Beauty"
             && oList.First(f => f.Id == 16856).Year == 2002,
             "found: " + oList.First(f => f.Id == 16856).Name);
         Check("the inverted spelling of the site is kept in the name (the key undoes it)",
             oList.Any(f => f.Id == 15994 && f.Name == "Object of My Affection, The" && f.Year == 1998),
             "an entry ending in ', The' did not survive the parse");
 
-        var dune = MovieSubtitlesClient.ParseMovieList(Fixture("search-dune.html"));
+        var dune = MovieSubtitlesClient.ParseMovieList(Fixture("search-arena.html"));
         Check("the 500-answer of search.php still parses into its five films",
-            dune.Count == 5 && dune[0].Id == 607 && dune[0].Name == "Dune" && dune[0].Year == 1984,
+            dune.Count == 5 && dune[0].Id == 607 && dune[0].Name == "Arena" && dune[0].Year == 1984,
             "parsed " + dune.Count + ": " + string.Join(" | ", dune.Select(d => d.Name + " (" + d.Year + ")")));
         Check("a bracketed part of a search title is not mistaken for the year",
-            dune[4].Name == "Suna no onna (Woman of the Dunes AKA Woman in the Dunes)" && dune[4].Year == 1964,
+            dune[4].Name == "Suna no onna (Woman of the Arenas AKA Woman in the Arenas)" && dune[4].Year == 1964,
             "found: " + dune[4].Name + " / " + dune[4].Year);
 
         var addList = MovieSubtitlesClient.ParseMovieList(Fixture("add-let-O.html"));
-        var filtered = MovieSubtitlesClient.ParseMovieList(Fixture("add-filter-oppenheimer.html"));
+        var filtered = MovieSubtitlesClient.ParseMovieList(Fixture("add-filter-samplemovie.html"));
         Check("the upload view of the same letter parses too — and it is the longer list (492)",
-            addList.Count == 492 && addList.Any(f => f.Id == 24811 && f.Name == "Oppenheimer" && f.Year == 2023),
+            addList.Count == 492 && addList.Any(f => f.Id == 24811 && f.Name == "Samplemovie" && f.Year == 2023),
             "parsed " + addList.Count);
         Check("the filter view answers exactly one film",
             filtered.Count == 1 && filtered[0].Id == 24811 && filtered[0].Year == 2023,
@@ -218,15 +218,15 @@ internal static class Program
             MovieSubtitlesClient.ParseMovieList(string.Empty).Count == 0
             && MovieSubtitlesClient.ParseMovieList("<html><body>nope</body></html>").Count == 0);
 
-        Check("Dune by year: 1984 and 2021 are two different films",
-            MovieSubtitlesClient.ResolveMovie(dune, "Dune", 1984) == 607
-            && MovieSubtitlesClient.ResolveMovie(dune, "Dune: Part One", 2021) == 24043,
-            "1984→" + MovieSubtitlesClient.ResolveMovie(dune, "Dune", 1984)
-            + ", 2021→" + MovieSubtitlesClient.ResolveMovie(dune, "Dune: Part One", 2021));
+        Check("Arena by year: 1984 and 2021 are two different films",
+            MovieSubtitlesClient.ResolveMovie(dune, "Arena", 1984) == 607
+            && MovieSubtitlesClient.ResolveMovie(dune, "Arena: Part One", 2021) == 24043,
+            "1984→" + MovieSubtitlesClient.ResolveMovie(dune, "Arena", 1984)
+            + ", 2021→" + MovieSubtitlesClient.ResolveMovie(dune, "Arena: Part One", 2021));
         Check("a wrong year is no hit — the year is not a hint",
-            MovieSubtitlesClient.ResolveMovie(dune, "Dune", 2022) is null
-            && MovieSubtitlesClient.ResolveMovie(dune, "Dune", 1999) is null,
-            "2022→" + (MovieSubtitlesClient.ResolveMovie(dune, "Dune", 2022)?.ToString() ?? "<null>"));
+            MovieSubtitlesClient.ResolveMovie(dune, "Arena", 2022) is null
+            && MovieSubtitlesClient.ResolveMovie(dune, "Arena", 1999) is null,
+            "2022→" + (MovieSubtitlesClient.ResolveMovie(dune, "Arena", 2022)?.ToString() ?? "<null>"));
         Check("the TMDb spelling finds the site's inverted title",
             MovieSubtitlesClient.ResolveMovie(oList, "The Opposite of Sex", 1998) == 9830
             && MovieSubtitlesClient.ResolveMovie(oList, "The Object of My Affection", 1998) == 15994,
@@ -238,19 +238,19 @@ internal static class Program
             "an article-less spelling must not match an inverted title");
         var ambiguous = new[]
         {
-            new MovieSubtitlesMovie(11, "Dune", 1984, Array.Empty<string>()),
-            new MovieSubtitlesMovie(12, "Dune", 1984, Array.Empty<string>()),
+            new MovieSubtitlesMovie(11, "Arena", 1984, Array.Empty<string>()),
+            new MovieSubtitlesMovie(12, "Arena", 1984, Array.Empty<string>()),
         };
         Check("two candidates with the same name and year are NOT guessed",
-            MovieSubtitlesClient.ResolveMovie(ambiguous, "Dune", 1984) is null
-            && MovieSubtitlesClient.ResolveMovie(ambiguous, "Dune", null) is null
+            MovieSubtitlesClient.ResolveMovie(ambiguous, "Arena", 1984) is null
+            && MovieSubtitlesClient.ResolveMovie(ambiguous, "Arena", null) is null
             && MovieSubtitlesClient.ResolveMovie(ambiguous, string.Empty, 1984) is null,
             "a guesshere would put a wrong id into the store");
 
         // ---- 3. the parsers against the pages the site served -------------------------------------
         var small = MovieSubtitlesClient.ParseMoviePage(Fixture("movie-24811.html"));
         Check("a film page yields its heading and its entries grouped by language",
-            small.Name == "Oppenheimer" && small.Year == 2023 && small.Entries.Count == 3
+            small.Name == "Samplemovie" && small.Year == 2023 && small.Entries.Count == 3
             && small.Sections.SequenceEqual(new[] { "en", "br" }),
             "found " + small.Name + " (" + small.Year + "), " + small.Entries.Count + " entries, sections "
             + string.Join(",", small.Sections));
@@ -258,7 +258,7 @@ internal static class Program
         Check("an entry carries the language of its FLAG plus rip, release, parts and id",
             first.SubtitleId == "132989" && first.Language == "en" && first.Rip == "WEB-DL"
             && first.Release == "MA" && first.Parts == 1 && first.Downloads == 315
-            && first.Title == "Oppenheimer 2023 english subtitles (WEB-DL.MA)",
+            && first.Title == "Samplemovie 2023 english subtitles (WEB-DL.GRP)",
             "found: " + first);
         Check("an entry without rip or release in its cells keeps them empty instead of inventing them",
             small.Entries[2].Release == string.Empty && small.Entries[2].Rip == "BluRay"
@@ -288,8 +288,8 @@ internal static class Program
             "an entry names a language its section does not");
 
         var doubleYear = MovieSubtitlesClient.ParseMoviePage(Fixture("movie-16856.html"));
-        Check("a year written twice in the heading is read once (O Beautiful (2002) (2002))",
-            doubleYear.Name == "O Beautiful" && doubleYear.Year == 2002,
+        Check("a year written twice in the heading is read once (Fine Beauty (2002) (2002))",
+            doubleYear.Name == "Fine Beauty" && doubleYear.Year == 2002,
             "found: " + doubleYear.Name + " / " + doubleYear.Year);
         var emptyFilm = MovieSubtitlesClient.ParseMoviePage(Fixture("movie-6928.html"));
         Check("a film without subtitles is a page with no entries, not an error",
@@ -300,17 +300,17 @@ internal static class Program
         var entryPage = MovieSubtitlesClient.ParseSubtitlePage(Fixture("subtitle-132989.html"));
         Check("an entry page parses film id, language, rip, release and file name",
             entryPage is not null && entryPage.IsUsable
-            && entryPage.MovieId == 24811 && entryPage.MovieName == "Oppenheimer" && entryPage.Year == 2023
+            && entryPage.MovieId == 24811 && entryPage.MovieName == "Samplemovie" && entryPage.Year == 2023
             && entryPage.Language == "en" && entryPage.Rip == "WEB-DL" && entryPage.Release == "MA"
-            && entryPage.FileNames.SequenceEqual(new[] { "Oppenheimer.WEB-DL.MA.en.srt" })
+            && entryPage.FileNames.SequenceEqual(new[] { "Samplemovie.WEB-DL.GRP.en.srt" })
             && entryPage.Parts == 0 && entryPage.DownloadId == "132989",
             "found: " + entryPage);
         var partsEntry = MovieSubtitlesClient.ParseSubtitlePage(Fixture("subtitle-2058.html"));
         Check("an entry that states parts=2 lists its candidate names — a hint, not the archive",
             partsEntry is not null && partsEntry.Parts == 2 && partsEntry.Language == "ru"
             && partsEntry.FileNames.Count == 4
-            && partsEntry.FileNames[0] == "Matrix The.part1.ru.srt"
-            && partsEntry.FileNames[1] == "Matrix The.part2.ru.srt"
+            && partsEntry.FileNames[0] == "Gridfilm The.part1.ru.srt"
+            && partsEntry.FileNames[1] == "Gridfilm The.part2.ru.srt"
             && partsEntry.MovieId == 4 && partsEntry.Rip == string.Empty,
             "the page names five, one of them twice: " + string.Join(" | ", partsEntry?.FileNames ?? Array.Empty<string>()));
         Check("an unknown entry id is not an entry — HTTP 200 with garbage parses to null",
@@ -320,17 +320,17 @@ internal static class Program
 
         // ---- 3b. the redirect target ---------------------------------------------------------------
         Check("the relative Location of the download survives, brackets and all",
-            MovieSubtitlesClient.ParseDownloadTarget("files/Oppenheimer_2023.WEB-DL.MA.en.zip")
-                == "files/Oppenheimer_2023.WEB-DL.MA.en.zip"
-            && MovieSubtitlesClient.ParseDownloadTarget("files/Matrix_The_1999.ru(2).zip")
-                == "files/Matrix_The_1999.ru(2).zip",
-            "found: " + MovieSubtitlesClient.ParseDownloadTarget("files/Matrix_The_1999.ru(2).zip"));
+            MovieSubtitlesClient.ParseDownloadTarget("files/Samplemovie_2023.WEB-DL.GRP.en.zip")
+                == "files/Samplemovie_2023.WEB-DL.GRP.en.zip"
+            && MovieSubtitlesClient.ParseDownloadTarget("files/Gridfilm_The_1999.ru(2).zip")
+                == "files/Gridfilm_The_1999.ru(2).zip",
+            "found: " + MovieSubtitlesClient.ParseDownloadTarget("files/Gridfilm_The_1999.ru(2).zip"));
         Check("the target becomes an absolute address without escaping the brackets away",
-            MovieSubtitlesClient.DownloadUrl("files/Matrix_The_1999.ru(2).zip")
-                == "https://www.moviesubtitles.org/files/Matrix_The_1999.ru(2).zip"
+            MovieSubtitlesClient.DownloadUrl("files/Gridfilm_The_1999.ru(2).zip")
+                == "https://www.moviesubtitles.org/files/Gridfilm_The_1999.ru(2).zip"
             && MovieSubtitlesClient.DownloadUrl("/files/Ocean´s Rising.zip")
                 == "https://www.moviesubtitles.org/files/Ocean%C2%B4s%20Rising.zip",
-            "found: " + MovieSubtitlesClient.DownloadUrl("files/Matrix_The_1999.ru(2).zip")
+            "found: " + MovieSubtitlesClient.DownloadUrl("files/Gridfilm_The_1999.ru(2).zip")
             + " / " + MovieSubtitlesClient.DownloadUrl("/files/Ocean´s Rising.zip"));
         Check("an unknown id redirects to 'files/' — that is the error signature, not a target",
             MovieSubtitlesClient.ParseDownloadTarget("files/") is null
@@ -368,30 +368,30 @@ internal static class Program
             && BuildOk(data, author: "Hermes")!.Fields.Single(f => f.Key == "author").Value == "Hermes",
             "an absent part is the only way to keep whatever the page pre-fills");
         Check("release carries the release GROUP, never the file name",
-            upload.Fields.Single(f => f.Key == "release").Value == "FTMVHD"
-            && upload.ReleaseGroup == "FTMVHD",
+            upload.Fields.Single(f => f.Key == "release").Value == "GRP"
+            && upload.ReleaseGroup == "GRP",
             "found: '" + upload.Fields.Single(f => f.Key == "release").Value + "'");
         Check("a release name that states no group sends an empty release field",
-            BuildOk(data, releaseName: "Oppenheimer (2023)")!.ReleaseGroup == string.Empty
+            BuildOk(data, releaseName: "Samplemovie (2023)")!.ReleaseGroup == string.Empty
             && BuildOk(data, releaseName: null)!.ReleaseGroup == string.Empty,
-            "found: '" + BuildOk(data, releaseName: "Oppenheimer (2023)")!.ReleaseGroup + "'");
+            "found: '" + BuildOk(data, releaseName: "Samplemovie (2023)")!.ReleaseGroup + "'");
         Check("comments carries ids, film title and year (F-M574)",
             upload.Fields.Single(f => f.Key == "comments").Value
-                == Jellyfin.Plugin.SubScribe.Api.Endpoints.UploadComment.Movie("tt15398776", "872585", "Oppenheimer", 2023)
+                == Jellyfin.Plugin.SubScribe.Api.Endpoints.UploadComment.Movie("tt15398776", "872585", "Samplemovie", 2023)
             && MovieSubtitlesClient.Comment(872585, "tt15398776")
                 == TvSubtitlesClient.Comment(872585, "tt15398776")
             && MovieSubtitlesClient.Comment(872585, null) == "TMDb: 872585"
             && !MovieSubtitlesClient.Comment(872585, "tt15398776").Contains("Sub Scribe", StringComparison.Ordinal),
             "found: " + MovieSubtitlesClient.Comment(872585, "tt15398776"));
         Check("UFile2 and UFile3 are sent only when given, and then in their slots",
-            upload.Files.Count == 1 && upload.Parts.Single(p => p.Name == "UFile").FileName == "Oppenheimer.WEB-DL.MA.gr.srt",
+            upload.Files.Count == 1 && upload.Parts.Single(p => p.Name == "UFile").FileName == "Samplemovie.WEB-DL.GRP.gr.srt",
             "found " + upload.Files.Count + " file parts");
         var twoCds = BuildOk(
             data,
             extraFiles: new[]
             {
-                new MovieSubtitlesUploadFile("Oppenheimer.CD2.srt", data),
-                new MovieSubtitlesUploadFile("Oppenheimer.CD3.srt", data),
+                new MovieSubtitlesUploadFile("Samplemovie.CD2.srt", data),
+                new MovieSubtitlesUploadFile("Samplemovie.CD3.srt", data),
             })!;
         Check("a multi-CD upload puts the extra files behind UFile, before the comments",
             twoCds.Parts.Select(p => p.Name).SequenceEqual(new[]
@@ -403,7 +403,7 @@ internal static class Program
         var (body, boundary) = MovieSubtitlesClient.BuildUploadBody(upload);
         var text = Encoding.UTF8.GetString(body);
         Check("the body carries the file part with its name and octet-stream type",
-            text.Contains("name=\"UFile\"; filename=\"Oppenheimer.WEB-DL.MA.gr.srt\"", StringComparison.Ordinal)
+            text.Contains("name=\"UFile\"; filename=\"Samplemovie.WEB-DL.GRP.gr.srt\"", StringComparison.Ordinal)
             && text.Contains("Content-Type: application/octet-stream", StringComparison.Ordinal));
         Check("every text field is a part of its own",
             upload.Fields.All(f => text.Contains("name=\"" + f.Key + "\"\r\n\r\n" + f.Value, StringComparison.Ordinal)));
@@ -477,10 +477,10 @@ internal static class Program
 
         static UploadTicket FilmTicket(
             string lang = "gre", int season = 0, int episode = 0, bool seasonPack = false,
-            int? movieId = 24811, int year = 2023, string title = "Oppenheimer", string tmdb = "872585",
-            string imdb = "tt15398776", string? release = "Oppenheimer.2023.1080p.WEB-DL.DDP5.1.Atmos.H.264-FTMVHD",
+            int? movieId = 24811, int year = 2023, string title = "Samplemovie", string tmdb = "872585",
+            string imdb = "tt15398776", string? release = "Samplemovie.2023.1080p.WEB-DL.DDP5.1.Atmos.H.264-GRP",
             byte[]? data = null, string? rip = "WEB-DL") =>
-            new(title, imdb, tmdb, season, episode, lang, "Oppenheimer.WEB-DL.MA.gr.srt",
+            new(title, imdb, tmdb, season, episode, lang, "Samplemovie.WEB-DL.GRP.gr.srt",
                 data ?? Encoding.UTF8.GetBytes("1\n00:00:01,000 --> 00:00:03,000\nEin Satz.\n\n"),
                 rip, release, HearingImpaired: false, DoubleEpisode: false, SeasonPack: seasonPack,
                 TvstShowId: null, MsubMovieId: movieId, MovieYear: year);
@@ -529,11 +529,11 @@ internal static class Program
             && gesendeterRumpf.Contains("name=\"tvid\"\r\n\r\n24811", StringComparison.Ordinal)
             && gesendeterRumpf.Contains("name=\"lang\"\r\n\r\ngr", StringComparison.Ordinal)
             && gesendeterRumpf.Contains("name=\"rip\"\r\n\r\nWEB-DL", StringComparison.Ordinal)
-            && gesendeterRumpf.Contains("name=\"release\"\r\n\r\nFTMVHD", StringComparison.Ordinal)
-            && !gesendeterRumpf.Contains("Oppenheimer.2023.1080p", StringComparison.Ordinal)
+            && gesendeterRumpf.Contains("name=\"release\"\r\n\r\nGRP", StringComparison.Ordinal)
+            && !gesendeterRumpf.Contains("Samplemovie.2023.1080p", StringComparison.Ordinal)
             // author bleibt weg, solange das Plugin keinen nennt — ein fehlender Teil ueberschreibt nichts
             && !gesendeterRumpf.Contains("name=\"author\"", StringComparison.Ordinal)
-            && gesendeterRumpf.Contains("name=\"UFile\"; filename=\"Oppenheimer.WEB-DL.MA.gr.srt\"", StringComparison.Ordinal)
+            && gesendeterRumpf.Contains("name=\"UFile\"; filename=\"Samplemovie.WEB-DL.GRP.gr.srt\"", StringComparison.Ordinal)
             && gesendeterRumpf.IndexOf("name=\"tvid\"", StringComparison.Ordinal)
                < gesendeterRumpf.IndexOf("name=\"comments\"", StringComparison.Ordinal)
             && gesendeterRumpf.IndexOf("name=\"comments\"", StringComparison.Ordinal)
@@ -546,7 +546,7 @@ internal static class Program
             "ok=" + angenommen.Ok + " id=" + (angenommen.Id ?? "<null>") + " answer=" + angenommen.Answer);
 
         var eigeneKennung = Jellyfin.Plugin.SubScribe.Api.Endpoints.Provenance.OwnUploadId(
-            SubtitleProvider.MovieSubtitles, "abc123", "Oppenheimer.2023.1080p.WEB-DL", new DateTime(2026, 11, 15, 18, 4, 5, DateTimeKind.Utc));
+            SubtitleProvider.MovieSubtitles, "abc123", "Samplemovie.2023.1080p.WEB-DL", new DateTime(2026, 11, 15, 18, 4, 5, DateTimeKind.Utc));
         var kennungTeile = eigeneKennung.Split(':');
         Check("the mark for an id-less upload is ours, prefixed with the source (F-M488/F-M508)",
             kennungTeile.Length == 4
@@ -556,7 +556,7 @@ internal static class Program
             && kennungTeile[3].All(c => (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'))
             && Jellyfin.Plugin.SubScribe.Api.Endpoints.Provenance.IsOwnUploadId(eigeneKennung)
             && eigeneKennung != Jellyfin.Plugin.SubScribe.Api.Endpoints.Provenance.OwnUploadId(
-                SubtitleProvider.MovieSubtitles, "abc124", "Oppenheimer.2023.1080p.WEB-DL", new DateTime(2026, 11, 15, 18, 4, 5, DateTimeKind.Utc)),
+                SubtitleProvider.MovieSubtitles, "abc124", "Samplemovie.2023.1080p.WEB-DL", new DateTime(2026, 11, 15, 18, 4, 5, DateTimeKind.Utc)),
             "found: " + eigeneKennung);
 
         endpointHandler.Status = HttpStatusCode.InternalServerError;
@@ -663,19 +663,19 @@ internal static class Program
         // Seite auf den POST ANTWORTET, ist unbelegt. Deshalb wird die Id nachgesehen, nicht geraten —
         // und der Doppeleintrag-Schutz entscheidet vorher. Kein POST gegen die Seite: alles gegen
         // Zaehl-Handler.
-        var anlage = MovieSubtitlesClient.BuildAddMovie("  Paddington in Peru  ", 2026);
+        var anlage = MovieSubtitlesClient.BuildAddMovie("  Sample Film  ", 2026);
         Check("das Anlege-Formular traegt name, year, go in der Reihenfolge der Seite (F-M513)",
             anlage.Fields.Count == 3
-            && anlage.Fields[0].Key == "name" && anlage.Fields[0].Value == "Paddington in Peru"
+            && anlage.Fields[0].Key == "name" && anlage.Fields[0].Value == "Sample Film"
             && anlage.Fields[1].Key == "year" && anlage.Fields[1].Value == "2026"
             && anlage.Fields[2].Key == "go" && anlage.Fields[2].Value == "1"
-            && anlage.Name == "Paddington in Peru" && anlage.Year == 2026,
+            && anlage.Name == "Sample Film" && anlage.Year == 2026,
             "fields: " + string.Join(",", anlage.Fields.Select(f => f.Key + "=" + f.Value)));
 
         var (anlageRumpf, _) = MovieSubtitlesClient.BuildAddMovieBody(anlage);
         var anlageText = Encoding.UTF8.GetString(anlageRumpf);
         Check("der Rumpf traegt genau diese drei Felder, in dieser Reihenfolge — und nichts sonst (F-M513)",
-            anlageText.Contains("name=\"name\"\r\n\r\nPaddington in Peru\r\n", StringComparison.Ordinal)
+            anlageText.Contains("name=\"name\"\r\n\r\nSample Film\r\n", StringComparison.Ordinal)
             && anlageText.Contains("name=\"year\"\r\n\r\n2026\r\n", StringComparison.Ordinal)
             && anlageText.Contains("name=\"go\"\r\n\r\n1\r\n", StringComparison.Ordinal)
             && anlageText.IndexOf("name=\"name\"", StringComparison.Ordinal)
@@ -713,7 +713,7 @@ internal static class Program
 
         // Der Ernstfall gegen einen Zaehl-Handler: POST an /add-movie.php, danach die Nachsuche.
         var anlageSeite = new AddMovieSiteHandler();
-        anlageSeite.Films.Add((4242, "Paddington in Peru", 2026));
+        anlageSeite.Films.Add((4242, "Sample Film", 2026));
         var anlageClient = new MovieSubtitlesClient(new HttpClient(anlageSeite));
         var anlageErnst = await anlageClient.AddMovieAsync(anlage, dryRun: false).ConfigureAwait(false);
         var gesendeteAnlage = anlageSeite.LastPostBody == null
@@ -725,7 +725,7 @@ internal static class Program
             && anlageSeite.LastPostUrl == "https://www.moviesubtitles.org/add-movie.php"
             && anlageSeite.LastReferer == "https://www.moviesubtitles.org/add-movie.php"
             && anlageSeite.LastContentType!.StartsWith("multipart/form-data; boundary=", StringComparison.Ordinal)
-            && gesendeteAnlage.Contains("name=\"name\"\r\n\r\nPaddington in Peru\r\n", StringComparison.Ordinal)
+            && gesendeteAnlage.Contains("name=\"name\"\r\n\r\nSample Film\r\n", StringComparison.Ordinal)
             && anlageErnst.BodyBytes == anlageRumpf.Length,
             "outcome=" + anlageErnst.Outcome + " id=" + (anlageErnst.MovieId?.ToString() ?? "<null>")
             + " posts=" + anlageSeite.Posts + " gets=" + anlageSeite.Gets
@@ -754,7 +754,7 @@ internal static class Program
         // ist die ECHTE Antwort der Seite vom 16.11.2026 (8467 Bytes, „Movie has been added. Thank you.").
         var stummSeite = new AddMovieSiteHandler { PostBody = Fixture("add-movie-added.html") };
         var stumm = await new MovieSubtitlesClient(new HttpClient(stummSeite))
-            .AddMovieAsync(MovieSubtitlesClient.BuildAddMovie("The Matrix", 2026), dryRun: false)
+            .AddMovieAsync(MovieSubtitlesClient.BuildAddMovie("The Gridfilm", 2026), dryRun: false)
             .ConfigureAwait(false);
         Check("angelegt ohne lesbare Id: ehrliches Ergebnis mit dem Text der Antwort, keine erfundene Nummer (F-M513)",
             stumm.Ok && stumm.Outcome == MovieSubtitlesAddOutcome.CreatedIdUnknown
@@ -762,7 +762,7 @@ internal static class Program
             && stumm.Response!.Contains("Movie has been added", StringComparison.Ordinal)
             && stumm.Response!.Contains("Thank you", StringComparison.Ordinal)
             && stummSeite.Posts == 1 && stummSeite.Gets == 3
-            && stummSeite.Queries.SequenceEqual(new[] { "The Matrix", "Matrix", "Matrix, The" }),
+            && stummSeite.Queries.SequenceEqual(new[] { "The Gridfilm", "Gridfilm", "Gridfilm, The" }),
             "outcome=" + stumm.Outcome + " gets=" + stummSeite.Gets
             + " queries=" + string.Join(" | ", stummSeite.Queries));
 
@@ -803,9 +803,9 @@ internal static class Program
         // „existiert schon" + Nachsuche nennt den Film: Ok=false (NICHTS angelegt), die Nummer wird
         // uebernommen, und es faellt KEIN zweiter POST.
         var besitzSeite = new AddMovieSiteHandler { PostBody = Fixture("add-movie-exists.html") };
-        besitzSeite.Films.Add((23716, "Paddington 2", 2017));
+        besitzSeite.Films.Add((23716, "Sample Film 2", 2017));
         var besitz = await new MovieSubtitlesClient(new HttpClient(besitzSeite))
-            .AddMovieAsync(MovieSubtitlesClient.BuildAddMovie("Paddington 2", 2017), dryRun: false)
+            .AddMovieAsync(MovieSubtitlesClient.BuildAddMovie("Sample Film 2", 2017), dryRun: false)
             .ConfigureAwait(false);
         Check("'This Movie already exist' fuehrt zur Nachsuche und zur vorhandenen Nummer — kein zweiter POST (F-M515)",
             !besitz.Ok && besitz.Outcome == MovieSubtitlesAddOutcome.Exists && besitz.MovieId == 23716
@@ -858,52 +858,52 @@ internal static class Program
 
 
         // ---- der Doppeleintrag-Schutz: drei Faelle, je eine Entscheidung --------------------------
-        var vorhanden = new[] { new MovieSubtitlesMovie(4, "Matrix, The", 1999, Array.Empty<string>()) };
-        var gleichesJahr = MovieSubtitlesClient.ResolveForAdd(vorhanden, "The Matrix", 1999);
+        var vorhanden = new[] { new MovieSubtitlesMovie(4, "Gridfilm, The", 1999, Array.Empty<string>()) };
+        var gleichesJahr = MovieSubtitlesClient.ResolveForAdd(vorhanden, "The Gridfilm", 1999);
         Check("Doppeleintrag, gleiches Jahr: die vorhandene Nummer wird genommen, nichts angelegt (F-M513)",
             gleichesJahr.Status == MovieSubtitlesAddStatus.Take && gleichesJahr.MovieId == 4
             && gleichesJahr.Hits == 1 && gleichesJahr.Answers == 1,
             "status=" + gleichesJahr.Status + " id=" + (gleichesJahr.MovieId?.ToString() ?? "<null>"));
 
-        var anderesJahr = MovieSubtitlesClient.ResolveForAdd(vorhanden, "The Matrix", 2026);
+        var anderesJahr = MovieSubtitlesClient.ResolveForAdd(vorhanden, "The Gridfilm", 2026);
         Check("Doppeleintrag, anderes Jahr: verweigert, und das gefundene Jahr steht im Ergebnis (F-M513)",
             anderesJahr.Status == MovieSubtitlesAddStatus.Refuse && anderesJahr.MovieId is null
             && anderesJahr.FoundYear == 1999 && anderesJahr.Hits == 1,
             "status=" + anderesJahr.Status + " foundYear=" + anderesJahr.FoundYear);
 
         var keinTreffer = MovieSubtitlesClient.ResolveForAdd(
-            Array.Empty<MovieSubtitlesMovie>(), "The Matrix", 1999);
+            Array.Empty<MovieSubtitlesMovie>(), "The Gridfilm", 1999);
         Check("Doppeleintrag, kein Treffer: anlegen (F-M513)",
             keinTreffer.Status == MovieSubtitlesAddStatus.Create && keinTreffer.MovieId is null
             && keinTreffer.Hits == 0);
 
         var zweimal = new[]
         {
-            new MovieSubtitlesMovie(4, "Matrix, The", 1999, Array.Empty<string>()),
-            new MovieSubtitlesMovie(77, "The Matrix", 1999, Array.Empty<string>()),
+            new MovieSubtitlesMovie(4, "Gridfilm, The", 1999, Array.Empty<string>()),
+            new MovieSubtitlesMovie(77, "The Gridfilm", 1999, Array.Empty<string>()),
         };
-        var mehrdeutig = MovieSubtitlesClient.ResolveForAdd(zweimal, "The Matrix", 1999);
+        var mehrdeutig = MovieSubtitlesClient.ResolveForAdd(zweimal, "The Gridfilm", 1999);
         Check("zwei Zeilen mit demselben Titel und Jahr sind kein Treffer, sondern ein Grund, nichts anzulegen (F-M513)",
             mehrdeutig.Status == MovieSubtitlesAddStatus.Refuse && mehrdeutig.MovieId is null
             && mehrdeutig.Hits == 2,
             "status=" + mehrdeutig.Status + " hits=" + mehrdeutig.Hits);
 
-        // Die eine Suchrunde im Netz: der Teilstring-Filter der Seite findet „The Matrix" NICHT, den
+        // Die eine Suchrunde im Netz: der Teilstring-Filter der Seite findet „The Gridfilm" NICHT, den
         // Kern schon — und nach dem ersten Treffer mit diesem Jahr wird nicht weitergefragt.
         var suchSeite = new AddMovieSiteHandler();
-        suchSeite.Films.Add((4, "Matrix, The", 1999));
+        suchSeite.Films.Add((4, "Gridfilm, The", 1999));
         var such = await new MovieSubtitlesClient(new HttpClient(suchSeite))
-            .CheckForAddAsync("The Matrix", 1999).ConfigureAwait(false);
+            .CheckForAddAsync("The Gridfilm", 1999).ConfigureAwait(false);
         Check("die eine Suchrunde nimmt die Schreibweise, die die Seite versteht — und hoert beim Treffer auf (F-M513)",
             such.Status == MovieSubtitlesAddStatus.Take && such.MovieId == 4
-            && suchSeite.Gets == 2 && suchSeite.Queries[0] == "The Matrix"
+            && suchSeite.Gets == 2 && suchSeite.Queries[0] == "The Gridfilm"
             && suchSeite.Posts == 0,
             "status=" + such.Status + " gets=" + suchSeite.Gets
             + " queries=" + string.Join(" | ", suchSeite.Queries));
 
         var blindSeite = new AddMovieSiteHandler { ThrowOnSearch = true };
         var blind = await new MovieSubtitlesClient(new HttpClient(blindSeite))
-            .CheckForAddAsync("Paddington in Peru", 2026).ConfigureAwait(false);
+            .CheckForAddAsync("Sample Film", 2026).ConfigureAwait(false);
         Check("eine unlesbare Suche belegt NICHT, dass es den Film nicht gibt — nichts wird angelegt (F-M513)",
             blind.Status == MovieSubtitlesAddStatus.Unclear && blind.MovieId is null && blind.Answers == 0
             && blindSeite.Posts == 0,
@@ -935,13 +935,13 @@ internal static class Program
                 .Contains("media.MsubMovieId = movieId.ToString(", StringComparison.Ordinal));
 
         // ---- F-M517: die Nummer geht AUCH OHNE Medien-Hash in die Zeile, die ihr PFAD adressiert ----
-        // Gemessen 16.11.2026, 04:13 auf jf-test: `[moviesubtitles] ?: 'Hotel Transylvania 2' (2015) ist
+        // Gemessen 16.11.2026, 04:13 auf jf-test: `[moviesubtitles] ?: 'Sample Film 2' (2015) ist
         // Film 13392 — nicht gespeichert: kein Medien-Hash bekannt`. Die Datei ist ein Symlink ohne Ziel,
         // `GetMediaHash` liefert deshalb null — die Medienzeile existierte aber (aus einem Lauf, der sie
         // über ihren Hash angelegt hatte) und trägt den Pfad. Genau diese Zeile wird jetzt geschrieben;
         // ohne Hash UND ohne Zeile bleibt es beim ehrlichen „nicht gespeichert".
         const string fm517Pfad =
-            "/opt/data/jf-test/media/movies-test/Hotel Transylvania 2 (2015)/Hotel Transylvania 2 (2015).mkv";
+            "/opt/data/jf-test/media/films-test/Sample Film 2 (2015)/Sample Film 2 (2015).mkv";
         const string fm517Hash = "a1b2c3d4e5f60718";
         string fm517Root = Path.Combine(Path.GetTempPath(), "msub-fm517-" + Environment.ProcessId);
         try
@@ -955,7 +955,7 @@ internal static class Program
 
             // (a) Zeile vorhanden, Hash nicht: schreiben über den Pfad, Zeilenzahl unverändert.
             var pfadSeite = new AddMovieSiteHandler();
-            pfadSeite.Films.Add((13392, "Hotel Transylvania 2", 2015));
+            pfadSeite.Films.Add((13392, "Sample Film 2", 2015));
             using (var db = new Jellyfin.Plugin.SubScribe.Data.ScribeDbContext(
                 Path.Combine(fm517Root, "mit-zeile"), null))
             {
@@ -968,7 +968,7 @@ internal static class Program
                     .ResolveForMediaAsync(
                         reg,
                         mediaHash: null,
-                        new TmdbMovieInfo("Hotel Transylvania 2", "Hotel Transylvania 2", 2015),
+                        new TmdbMovieInfo("Sample Film 2", "Sample Film 2", 2015),
                         dryRun: false,
                         CancellationToken.None,
                         mediaPath: fm517Pfad)
@@ -988,7 +988,7 @@ internal static class Program
                     .ResolveForMediaAsync(
                         reg,
                         mediaHash: null,
-                        new TmdbMovieInfo("Hotel Transylvania 2", "Hotel Transylvania 2", 2015),
+                        new TmdbMovieInfo("Sample Film 2", "Sample Film 2", 2015),
                         dryRun: false,
                         CancellationToken.None,
                         mediaPath: fm517Pfad)
@@ -1000,7 +1000,7 @@ internal static class Program
 
             // (b) Keine Zeile, kein Hash: nichts wird geschrieben, und der Text sagt warum.
             var leereSeite = new AddMovieSiteHandler();
-            leereSeite.Films.Add((13392, "Hotel Transylvania 2", 2015));
+            leereSeite.Films.Add((13392, "Sample Film 2", 2015));
             using (var dbLeer = new Jellyfin.Plugin.SubScribe.Data.ScribeDbContext(
                 Path.Combine(fm517Root, "ohne-zeile"), null))
             {
@@ -1009,10 +1009,10 @@ internal static class Program
                     .ResolveForMediaAsync(
                         regLeer,
                         mediaHash: null,
-                        new TmdbMovieInfo("Hotel Transylvania 2", "Hotel Transylvania 2", 2015),
+                        new TmdbMovieInfo("Sample Film 2", "Sample Film 2", 2015),
                         dryRun: false,
                         CancellationToken.None,
-                        mediaPath: "/opt/data/jf-test/media/movies-test/Ohne Zeile (2000)/Ohne Zeile (2000).mkv")
+                        mediaPath: "/opt/data/jf-test/media/films-test/Ohne Zeile (2000)/Ohne Zeile (2000).mkv")
                     .ConfigureAwait(false);
                 Check("ohne Hash UND ohne Pfad-Zeile: nichts geschrieben, die Nummer gilt nur fuer diesen Lauf (F-M517)",
                     ohneZeile.Resolved && ohneZeile.MovieId == 13392
@@ -1060,7 +1060,7 @@ internal static class Program
         var downloadClient = new MovieSubtitlesClient(new HttpClient(downloadHandler));
         var download = await downloadClient.DownloadAsync(2058, "ru").ConfigureAwait(false);
         Check("the client follows the 302 and hands back the member the language names",
-            download.Name == "Matrix The.part1.ru.srt" && download.Data.Length == 2
+            download.Name == "Gridfilm The.part1.ru.srt" && download.Data.Length == 2
             && download.Members.Count == 2 && download.PickedByLanguage && download.IsMultiPart,
             "both segments carry '.ru', so the first one wins: " + download.Name
             + ", members=" + string.Join(",", download.Members));
@@ -1071,34 +1071,34 @@ internal static class Program
         Check("a redirect to 'files/' is refused as the unknown-id signature",
             emptyTargetRefused,
             "an empty target must not become a download");
-        downloadHandler.Target = "files/Matrix_The_1999.ru(2).srt";
+        downloadHandler.Target = "files/Gridfilm_The_1999.ru(2).srt";
         downloadHandler.Payload = Encoding.UTF8.GetBytes("1\r\n00:00:01,000 --> 00:00:02,000\r\n");
         var bare = await downloadClient.DownloadAsync(2058, "ru").ConfigureAwait(false);
         Check("bare .srt bytes are returned as they are, without unpacking",
-            bare.Members.Count == 1 && bare.Name == "Matrix_The_1999.ru(2).srt" && !bare.IsMultiPart
+            bare.Members.Count == 1 && bare.Name == "Gridfilm_The_1999.ru(2).srt" && !bare.IsMultiPart
             && bare.Data.Length == downloadHandler.Payload.Length,
             "the site serves the archive and the bare file; found " + bare.Name + " with " + bare.Members.Count + " member(s)");
 
         // ---- 4f. F-M510: der Titel-Jahr-Vergleich gegen TMDb --------------------------------
-        // Gemessen 15.11.2026 im ersten Film-Lauf auf jf-test: das Item heisst "Oppenheimer (2023)",
+        // Gemessen 15.11.2026 im ersten Film-Lauf auf jf-test: das Item heisst "Samplemovie (2023)",
         // TMDb wurde mit genau diesem Text gefragt und antwortete ohne Treffer —
-        //   [TMDB] strict title+year test found no hit for "Oppenheimer (2023)" (2023) — not confirming
-        // —, obwohl der Film unter "Oppenheimer" mit release_date 2023-07-19 die richtige Antwort ist.
+        //   [TMDB] strict title+year test found no hit for "Samplemovie (2023)" (2023) — not confirming
+        // —, obwohl der Film unter "Samplemovie" mit release_date 2023-07-19 die richtige Antwort ist.
         // Der Handler unten bildet die gemessene Antwort nach: die Fassung MIT Klammer findet nichts,
         // die reine Fassung findet den Film. Abgetrennt wird nur ein ABSCHLIESSENDES Klammer-Jahr.
         var tmdbHandler = new TmdbHandler();
         var tmdb = new TmdbImdbResolver(new HttpClient(tmdbHandler), "test-key");
 
         Check("ein abschliessendes (Jahr) wird fuer den Vergleich abgetrennt — der gemessene Film-Fall",
-            TmdbImdbResolver.ComparisonTitle("Oppenheimer (2023)") == "Oppenheimer",
-            "got \"" + TmdbImdbResolver.ComparisonTitle("Oppenheimer (2023)") + "\"");
+            TmdbImdbResolver.ComparisonTitle("Samplemovie (2023)") == "Samplemovie",
+            "got \"" + TmdbImdbResolver.ComparisonTitle("Samplemovie (2023)") + "\"");
         Check("eine Jahres-SPANNE in Klammern wird genauso abgetrennt",
             TmdbImdbResolver.ComparisonTitle("The Office (2019–2023)") == "The Office"
             && TmdbImdbResolver.ComparisonTitle("The Office (2019-2023)") == "The Office",
             "got \"" + TmdbImdbResolver.ComparisonTitle("The Office (2019–2023)") + "\"");
         Check("ein Jahr in eckigen Klammern wird abgetrennt",
-            TmdbImdbResolver.ComparisonTitle("Dune [2023]") == "Dune",
-            "got \"" + TmdbImdbResolver.ComparisonTitle("Dune [2023]") + "\"");
+            TmdbImdbResolver.ComparisonTitle("Arena [2023]") == "Arena",
+            "got \"" + TmdbImdbResolver.ComparisonTitle("Arena [2023]") + "\"");
         Check("ein echter Klammer-Titel bleibt unangetastet — nur ein ABSCHLIESSENDES Jahr zaehlt",
             TmdbImdbResolver.ComparisonTitle("(Ghost) Riders In the Sky (American Outlaws_ Live …)")
                 == "(Ghost) Riders In the Sky (American Outlaws_ Live …)",
@@ -1106,10 +1106,10 @@ internal static class Program
         Check("ein Jahr im Titel ohne Klammer bleibt stehen",
             TmdbImdbResolver.ComparisonTitle("Blade Runner 2049") == "Blade Runner 2049");
         Check("nur EIN abschliessendes Jahr geht — ein doppeltes laesst das erste stehen",
-            TmdbImdbResolver.ComparisonTitle("O Beautiful (2002) (2002)") == "O Beautiful (2002)",
-            "got \"" + TmdbImdbResolver.ComparisonTitle("O Beautiful (2002) (2002)") + "\"");
+            TmdbImdbResolver.ComparisonTitle("Fine Beauty (2002) (2002)") == "Fine Beauty (2002)",
+            "got \"" + TmdbImdbResolver.ComparisonTitle("Fine Beauty (2002) (2002)") + "\"");
 
-        var strictFilm = await tmdb.ResolveByTitleYearAsync("Oppenheimer (2023)", 2023, preferSeries: false, CancellationToken.None)
+        var strictFilm = await tmdb.ResolveByTitleYearAsync("Samplemovie (2023)", 2023, preferSeries: false, CancellationToken.None)
             .ConfigureAwait(false);
         Check("der strenge Titel+Jahr-Test findet den Film fuer einen Namen, der sein Jahr mittraegt",
             strictFilm.Found && strictFilm.Tmdb == "872585" && strictFilm.Imdb == "tt15398776"
@@ -1119,7 +1119,7 @@ internal static class Program
         var suchUrls = tmdbHandler.Urls.Where(u => u.Contains("search/", StringComparison.Ordinal)).ToList();
         Check("die Suchanfrage trug den reinen Titel — das Klammer-Jahr ging nie an TMDb",
             suchUrls.Count == 1
-            && suchUrls[0].Contains("query=Oppenheimer&", StringComparison.Ordinal)
+            && suchUrls[0].Contains("query=Samplemovie&", StringComparison.Ordinal)
             && !tmdbHandler.Urls.Any(u => u.Contains("2023", StringComparison.Ordinal)),
             "gefragt: " + string.Join(" | ", suchUrls));
 
@@ -1127,7 +1127,7 @@ internal static class Program
         // und die Zeile im Log lautete "keeping Jellyfin's ids". Mit dem reinen Titel ist die Antwort
         // eine Korrektur, keine Duldung.
         var pruefung = await tmdb.VerifyIdsAgainstTmdbAsync(
-            "tt1442464", "1422", "Oppenheimer (2023)", 2023, isSeries: false, CancellationToken.None).ConfigureAwait(false);
+            "tt1442464", "1422", "Samplemovie (2023)", 2023, isSeries: false, CancellationToken.None).ConfigureAwait(false);
         Check("der gemessene Store-Stand (tmdb 1422) wird jetzt korrigiert statt geduldet",
             pruefung.Corrected && pruefung.Tmdb == "872585",
             "corrected=" + pruefung.Corrected + " tmdb=" + (pruefung.Tmdb ?? "<null>"));
@@ -1147,7 +1147,7 @@ internal static class Program
                 Console.WriteLine("    " + hit.Id + "  " + hit.Name + " (" + hit.Year + ")");
             }
 
-            var id = MovieSubtitlesClient.ResolveMovie(hits, "Oppenheimer", 2023);
+            var id = MovieSubtitlesClient.ResolveMovie(hits, "Samplemovie", 2023);
             Console.WriteLine("  resolves to: " + (id?.ToString() ?? "<nothing>"));
             if (id is int movieId)
             {
@@ -1210,7 +1210,7 @@ internal static class Program
     /// <summary>
     /// F-M513: die Seite fuer das ANLEGEN — <c>/add-movie.php</c> nimmt den POST an (oder nicht), und
     /// <c>/search.php</c> antwortet wie ihr Teilstring-Filter: nur Filme, deren Titel den Suchbegriff
-    /// traegt. Genau daran haengt die Nachsuche nach der neuen Nummer, und genau darum ist „The Matrix"
+    /// traegt. Genau daran haengt die Nachsuche nach der neuen Nummer, und genau darum ist „The Gridfilm"
     /// der interessante Fall: den findet die Seite nur ueber den Kern oder die invertierte Form.
     /// </summary>
     private sealed class AddMovieSiteHandler : HttpMessageHandler
@@ -1295,13 +1295,13 @@ internal static class Program
     private static MovieSubtitlesUpload? BuildOk(
         byte[] data,
         string? author = null,
-        string? releaseName = "Oppenheimer.2023.1080p.WEB-DL.DDP5.1.Atmos.H.264-FTMVHD",
+        string? releaseName = "Samplemovie.2023.1080p.WEB-DL.DDP5.1.Atmos.H.264-GRP",
         IReadOnlyList<MovieSubtitlesUploadFile>? extraFiles = null) =>
         MovieSubtitlesClient.BuildUpload(
-            24811, "gre", releaseName, "Oppenheimer.WEB-DL.MA.gr.srt", data,
+            24811, "gre", releaseName, "Samplemovie.WEB-DL.GRP.gr.srt", data,
             "WEB-DL", author, 872585, "tt15398776", null, extraFiles,
             // F-M574: Filmtitel und Jahr gehen in den Kommentar.
-            movieTitle: "Oppenheimer", year: 2023);
+            movieTitle: "Samplemovie", year: 2023);
 
     private static MovieSubtitlesUpload? Build(
         int movieId = 24811,
@@ -1311,7 +1311,7 @@ internal static class Program
         string? rip = "WEB-DL",
         IReadOnlyList<MovieSubtitlesUploadFile>? extraFiles = null) =>
         MovieSubtitlesClient.BuildUpload(
-            movieId, lang, "Oppenheimer.2023.1080p.WEB-DL.x265-FTMVHD", fileName,
+            movieId, lang, "Samplemovie.2023.1080p.WEB-DL.x265-GRP", fileName,
             data ?? Encoding.UTF8.GetBytes("1\n"), rip, null, 872585, "tt15398776", null, extraFiles);
 
     private static bool Refused(Action action)
@@ -1369,7 +1369,7 @@ internal static class Program
 
     /// <summary>
     /// F-M510: TMDb, wie es am 15.11.2026 geantwortet hat — die Fassung MIT Klammer-Jahr findet nichts,
-    /// die reine Fassung findet "Oppenheimer" (2023, tmdb 872585, tt15398776). Jede Anfrage wird
+    /// die reine Fassung findet "Samplemovie" (2023, tmdb 872585, tt15398776). Jede Anfrage wird
     /// mitgeschrieben, damit eine Pruefung belegen kann, WELCHE Frage hinausging.
     /// </summary>
     private sealed class TmdbHandler : HttpMessageHandler
@@ -1386,13 +1386,13 @@ internal static class Program
             if (url.Contains("/search/", StringComparison.Ordinal))
             {
                 // Genau die gemessene Antwort: der reine Titel trifft, der Klammer-Text nicht.
-                body = url.Contains("query=Oppenheimer&", StringComparison.Ordinal)
-                    ? "{\"page\":1,\"results\":[{\"media_type\":\"movie\",\"id\":872585,\"title\":\"Oppenheimer\",\"release_date\":\"2023-07-19\"}]}"
+                body = url.Contains("query=Samplemovie&", StringComparison.Ordinal)
+                    ? "{\"page\":1,\"results\":[{\"media_type\":\"movie\",\"id\":872585,\"title\":\"Samplemovie\",\"release_date\":\"2023-07-19\"}]}"
                     : "{\"page\":1,\"results\":[]}";
             }
             else
             {
-                body = "{\"id\":872585,\"imdb_id\":\"tt15398776\",\"title\":\"Oppenheimer\",\"release_date\":\"2023-07-19\"}";
+                body = "{\"id\":872585,\"imdb_id\":\"tt15398776\",\"title\":\"Samplemovie\",\"release_date\":\"2023-07-19\"}";
             }
 
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.OK)
@@ -1452,11 +1452,11 @@ internal static class Program
     /// </summary>
     private sealed class RedirectHandler : HttpMessageHandler
     {
-        public string Target { get; set; } = "files/Matrix_The_1999.ru(2).zip";
+        public string Target { get; set; } = "files/Gridfilm_The_1999.ru(2).zip";
 
         public byte[] Payload { get; set; } = ZipOf(
-            ("Matrix The.part1.ru.srt", Encoding.UTF8.GetBytes("ab")),
-            ("Matrix The.part2.ru.srt", Encoding.UTF8.GetBytes("xyz")));
+            ("Gridfilm The.part1.ru.srt", Encoding.UTF8.GetBytes("ab")),
+            ("Gridfilm The.part2.ru.srt", Encoding.UTF8.GetBytes("xyz")));
 
         protected override Task<HttpResponseMessage> SendAsync(
             HttpRequestMessage request, CancellationToken cancellationToken)

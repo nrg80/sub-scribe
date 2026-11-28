@@ -97,7 +97,7 @@ address (F-M507).
 | `tvid` | hidden | film identifier; already stands in the form (`24811`) |
 | `lang` | select | the site's language code, 13 values (see *Languages*) |
 | `rip` | select | `DVDRip BluRay BrRip BDRip HDRip WEB WEBRip WEB-DL` or empty |
-| `release` | text | free text (release group), e.g. `MA`, `YTS`, `KiSS` |
+| `release` | text | free text (release group), e.g. `MA`, `YTS`, `GRP` |
 | `author` | text | free text — **mandatory or not: unchecked**, see *What is not proven* |
 | `UFile` | file | file 1 |
 | `UFile2` | file | „only if 2 and more CD" |

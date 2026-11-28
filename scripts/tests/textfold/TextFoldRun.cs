@@ -132,7 +132,7 @@ internal static class Program
         Check(TextFold.NeedsFold("Ｓ０２Ｅ０７") && TextFold.NeedsFold("ꜱ01ᴇ05") && !TextFold.NeedsFold("A Bona Fide Killer S01E10"),
             "F-M724: NeedsFold says exactly what Fold would change");
 
-        string plain = "The.Middle.S09E23.1080p.WEB-DL.H265-FTMVHD.mkv";
+        string plain = "The.Sample.S09E23.1080p.WEB-DL.H265-GRP.mkv";
         string folded = TextFold.Fold(plain);
         Check(ReferenceEquals(folded, plain) && folded == plain,
             "F-M724: an ordinary name comes back as the SAME instance — byte-identical, no copy",

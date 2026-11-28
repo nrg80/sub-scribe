@@ -344,7 +344,7 @@ internal static class Program
         Check(hits.All(h => string.Equals(h.Language, "en", StringComparison.Ordinal)),
             "msub: die Sprache eines Eintrags kommt aus SEINER Flagge (en)", string.Join(",", hits.Select(h => h.Language)));
 
-        var seasonQuery = await msub.SearchAsync(new SubtitleQuery("Oppenheimer", null, null, 1, 1, "EN", 2023, "24811"))
+        var seasonQuery = await msub.SearchAsync(new SubtitleQuery("Samplemovie", null, null, 1, 1, "EN", 2023, "24811"))
             .ConfigureAwait(false);
         Check(seasonQuery.Count == 0, "msub: eine Staffel-Suche liefert NICHTS — die Quelle fuehrt keine Staffeln",
             seasonQuery.Count.ToString(CultureInfo.InvariantCulture) + " Treffer");
@@ -352,8 +352,8 @@ internal static class Program
         var msubUpload = new MovieSubtitlesUploadEndpoint(msubClient, dryRun: true, null);
         byte[] srt = SrtBytes();
         var answer = await msubUpload.SendAsync(new UploadTicket(
-            "Oppenheimer", "tt15398776", "872585", 1, 1, "EN", "Oppenheimer.2023.en.srt", srt,
-            null, "Oppenheimer.2023.1080p.WEB-DL", false, false, true, null, 24811, 2023, null)).ConfigureAwait(false);
+            "Samplemovie", "tt15398776", "872585", 1, 1, "EN", "Samplemovie.2023.en.srt", srt,
+            null, "Samplemovie.2023.1080p.WEB-DL", false, false, true, null, 24811, 2023, null)).ConfigureAwait(false);
         Check(!answer.Ok
               && ((answer.Reason ?? string.Empty).Contains("no season packs", StringComparison.Ordinal)
                   || (answer.Reason ?? string.Empty).Contains("no season and no episode", StringComparison.Ordinal)),
@@ -398,7 +398,7 @@ internal static class Program
         int episode = 7;
         string showTitle = "Matrix " + lang.Code;
         bool isSeries = !string.Equals(source, SourceStore.MovieSubtitles, StringComparison.Ordinal);
-        string release = "Matrix.S03." + lang.Iso + "." + (hi ? "HI." : string.Empty) + "WEB-NTb";
+        string release = "Matrix.S03." + lang.Iso + "." + (hi ? "HI." : string.Empty) + "WEB-GRP";
         string siteLang = SiteLanguageOf(source, lang.Code);
         string downloadId = ForeignId(source, pack, n, siteLang);
         string ownUploadId = OwnUploadId(source, n);
@@ -691,7 +691,7 @@ internal static class Program
 
         var endpoint = new MovieSubtitlesDownloadEndpoint(client, null);
         var hits = await endpoint.SearchAsync(
-            new SubtitleQuery("Oppenheimer", null, null, 3, 7, lang.Code, 2023, "24811")).ConfigureAwait(false);
+            new SubtitleQuery("Samplemovie", null, null, 3, 7, lang.Code, 2023, "24811")).ConfigureAwait(false);
         Check(hits.Count == 0,
             cell + ": die Staffel-Suche der Quelle ist leer — moviesubtitles.org fuehrt keine Staffel",
             hits.Count.ToString(CultureInfo.InvariantCulture) + " Treffer");
@@ -699,9 +699,9 @@ internal static class Program
         // Derselbe Befund auch als Regel der Quelle: ihr Upload-Endpunkt lehnt einen Pack ab.
         var upload = new MovieSubtitlesUploadEndpoint(client, dryRun: true, null);
         var answer = await upload.SendAsync(new UploadTicket(
-            "Oppenheimer", "tt15398776", "872585", 3, 7, lang.Code,
+            "Samplemovie", "tt15398776", "872585", 3, 7, lang.Code,
             "Matrix.S03." + lang.Iso + (hi ? ".HI" : string.Empty) + ".zip",
-            ZipBytes(), null, "Oppenheimer.2023.1080p.WEB-DL", hi, false, true, null, 24811, 2023, null))
+            ZipBytes(), null, "Samplemovie.2023.1080p.WEB-DL", hi, false, true, null, 24811, 2023, null))
             .ConfigureAwait(false);
         Check(!answer.Ok
               && ((answer.Reason ?? string.Empty).Contains("no season packs", StringComparison.Ordinal)
@@ -729,11 +729,11 @@ internal static class Program
             TvSubtitlesUpload payload = pack
                 ? TvSubtitlesClient.BuildSeasonPack(
                     512, season, lang.Code, "Matrix.S03." + lang.Iso + (hi ? ".HI" : string.Empty) + ".zip",
-                    ZipBytes(), release: "Matrix.S03." + lang.Iso + "-NTb", tmdbId: tmdbId, imdbId: imdb,
+                    ZipBytes(), release: "Matrix.S03." + lang.Iso + "-GRP", tmdbId: tmdbId, imdbId: imdb,
                     hearingImpaired: hi, showTitle: showTitle, year: 2021)
                 : TvSubtitlesClient.BuildUpload(
                     512, season, episode, lang.Code, "Matrix.S03E07." + lang.Iso + ".srt", srt,
-                    release: "Matrix.S03E07." + lang.Iso + "-NTb", tmdbId: tmdbId, imdbId: imdb,
+                    release: "Matrix.S03E07." + lang.Iso + "-GRP", tmdbId: tmdbId, imdbId: imdb,
                     showTitle: showTitle, episodeTitle: "Pilot", year: 2021);
             string comment = Field(payload.Fields, "comment");
             string expected = pack
@@ -745,11 +745,11 @@ internal static class Program
         if (Is(source, SourceStore.MovieSubtitles))
         {
             var payload = MovieSubtitlesClient.BuildUpload(
-                24811, lang.Code, "Oppenheimer.2023.1080p.WEB-DL", "Oppenheimer.2023." + lang.Iso + ".srt", srt,
+                24811, lang.Code, "Samplemovie.2023.1080p.WEB-DL", "Samplemovie.2023." + lang.Iso + ".srt", srt,
                 rip: null, author: null, tmdbId: tmdbId, imdbId: imdb,
-                movieTitle: "Oppenheimer", year: 2023);
+                movieTitle: "Samplemovie", year: 2023);
             string comment = Field(payload.Fields, "comments");
-            string expected = UploadComment.Movie(imdb, tmdb, "Oppenheimer", 2023);
+            string expected = UploadComment.Movie(imdb, tmdb, "Samplemovie", 2023);
             return (comment, expected, "UploadComment.Movie (Filmzeile)");
         }
 

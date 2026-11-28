@@ -1565,9 +1565,9 @@ Now: (1) **`TvSubtitlesClient.SiteLanguage(code)`** is the only mapping place. I
 
 **The upload's file name is not rewritten:** it keeps its ending, and the three letters for the name continue to come from the site's language mapping (`gre`, `cze`, `chi`, `jpn`, `pob`, `rum`). **No common mapping:** SubDL maps in `ScribeApiClient` and stays untouched (F-M499). Verified by T224.
 
-**F-M505 [D]:** **The release field of the tvst upload carries the release GROUP, not the file name — and stays empty when the name names no group.** Finding on the site: in the release column of tvsubtitles.net stands the group. 193 entries of the first season of *Sample Series* read out — 2HD (28×), REWARD (24×), FQM (14×), FEVER, POW4, CTU, LOL, DIMENSION, **91 entries empty**, and **not a single one** with dots.
+**F-M505 [D]:** **The release field of the tvst upload carries the release GROUP, not the file name — and stays empty when the name names no group.** Finding on the site: in the release column of tvsubtitles.net stands the group. 193 entries of the first season of *Sample Series* read out — 2HD (28×), REWARD (24×), FQM (14×), GRP, POW4, CTU, LOL, DIMENSION, **91 entries empty**, and **not a single one** with dots.
 
-Our upload carried the media file name instead: on `episode-26403.html` stood literally `Sample Series.S01E21.MULTI.1080p.WEB-DL`. The rest `.H265-FTMVHD` was missing, because the site cuts the value at the hyphen server-side, and the group (FTMVHD) did not appear in the field at all.
+Our upload carried the media file name instead: on `episode-26403.html` stood literally `Sample Series.S01E21.MULTI.1080p.WEB-DL`. The rest `.H265-GRP` was missing, because the site cuts the value at the hyphen server-side, and the group (GRP) did not appear in the field at all.
 
 Rule: the field is filled from the release name via `SeasonPack.ReleaseGroup` (the same rule as for the download rank, F-M430). If the name names no group (`null`), an **empty field** is sent — that is a permitted value and the majority of the site, so neither a reason to refuse the upload nor an invention. The file name may no longer occur in the tvst ticket. Verified by T227.
 

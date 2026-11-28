@@ -1748,13 +1748,13 @@ internal static class Program
             new SourceEngineContext(new HttpClient(), NullLogger.Instance, TimeProvider.System, Tvst: tvNeuClient),
             seasonPacks: true);
 
-        var tvQuery = new SubtitleQuery("The Middle", null, null, 2, 24, "en");
+        var tvQuery = new SubtitleQuery("The Sample", null, null, 2, 24, "en");
         System.Collections.Generic.IReadOnlyList<SubtitleHit> tvAlt = await tvAltWeg
             .SearchAsync(tvQuery, CancellationToken.None).ConfigureAwait(false);
         SourceSearchAnswer tvNeu = await tvNeuEngine.SearchAsync(
             new SourceSearchRequest
             {
-                Name = "The Middle",
+                Name = "The Sample",
                 IsSeries = true,
                 Season = 2,
                 Episode = 24,
@@ -1792,12 +1792,12 @@ internal static class Program
             new SourceEngineContext(new HttpClient(), NullLogger.Instance, TimeProvider.System, Msub: msubClient));
 
         var msubAlt = await msubAltEngine.SearchAsync(
-            new SubtitleQuery("Dune: Part One", null, "438631", 0, 0, "EN", 2021, MovieId: "102"),
+            new SubtitleQuery("Arena: Part One", null, "438631", 0, 0, "EN", 2021, MovieId: "102"),
             CancellationToken.None).ConfigureAwait(false);
         SourceSearchAnswer msubNeu = await msubNeuEngine.SearchAsync(
             new SourceSearchRequest
             {
-                Name = "Dune: Part One",
+                Name = "Arena: Part One",
                 TmdbId = "438631",
                 Year = 2021,
                 IsSeries = false,
@@ -1930,9 +1930,9 @@ internal static class Program
             var altClient = new TvSubtitlesClient(new HttpClient(altHuelle));
             TvSubtitlesUpload altRumpf = TvSubtitlesClient.BuildUpload(
                 512, 2, 24, "EN",
-                "The Middle - 2x24 - Back To Summer.WEB-DL.EN.srt", daten,
-                rip: "WEB", release: "FTMVHD", tmdbId: 271087, imdbId: "tt1442464",
-                hearingImpaired: false, showTitle: "The Middle", episodeTitle: "Back To Summer", year: 2009);
+                "The Sample - 2x24 - Back To Summer.WEB-DL.EN.srt", daten,
+                rip: "WEB", release: "GRP", tmdbId: 271087, imdbId: "tt1442464",
+                hearingImpaired: false, showTitle: "The Sample", episodeTitle: "Back To Summer", year: 2009);
             TvSubtitlesUploadResult altAntwort = await altClient
                 .UploadAsync(altRumpf, dryRun: false, CancellationToken.None).ConfigureAwait(false);
 
@@ -1946,14 +1946,14 @@ internal static class Program
                 new SourceSendRequest
                 {
                     Bytes = daten,
-                    FileName = "The Middle - 2x24 - Back To Summer.WEB-DL.EN.srt",
+                    FileName = "The Sample - 2x24 - Back To Summer.WEB-DL.EN.srt",
                     Language = "EN",
                     HearingImpaired = false,
-                    ReleaseName = "FTMVHD",
+                    ReleaseName = "GRP",
                     Quality = "WEB",
                     EpisodeTitle = "Back To Summer",
                     Target = new SourceSendTarget(
-                        IsSeries: true, Title: "The Middle", Year: 2009, ImdbId: "tt1442464",
+                        IsSeries: true, Title: "The Sample", Year: 2009, ImdbId: "tt1442464",
                         TmdbId: "271087", Season: 2, Episode: 24)
                     {
                         MediaId = "512",
@@ -1994,10 +1994,10 @@ internal static class Program
             var altHuelle = new MsubUploadFixture { Fall = fall };
             var altClient = new MovieSubtitlesClient(new HttpClient(altHuelle));
             MovieSubtitlesUpload altRumpf = MovieSubtitlesClient.BuildUpload(
-                102, "en", "Dune.Part.One.2021.1080p.WEB-DL", "Dune.Part.One.2021.EN.srt", daten,
+                102, "en", "Arena.Part.One.2021.1080p.WEB-DL", "Arena.Part.One.2021.EN.srt", daten,
                 rip: MovieSubtitlesClient.RipFromQuality("WEB-DL"), author: null,
                 tmdbId: 438631, imdbId: "tt1160419", commentExtra: null,
-                movieTitle: "Dune: Part One", year: 2021);
+                movieTitle: "Arena: Part One", year: 2021);
             MovieSubtitlesUploadResult altAntwort = await altClient
                 .UploadAsync(altRumpf, dryRun: false, CancellationToken.None).ConfigureAwait(false);
 
@@ -2010,13 +2010,13 @@ internal static class Program
                 new SourceSendRequest
                 {
                     Bytes = daten,
-                    FileName = "Dune.Part.One.2021.EN.srt",
+                    FileName = "Arena.Part.One.2021.EN.srt",
                     Language = "EN",
                     HearingImpaired = false,
-                    ReleaseName = "Dune.Part.One.2021.1080p.WEB-DL",
+                    ReleaseName = "Arena.Part.One.2021.1080p.WEB-DL",
                     Quality = "WEB-DL",
                     Target = new SourceSendTarget(
-                        IsSeries: false, Title: "Dune: Part One", Year: 2021,
+                        IsSeries: false, Title: "Arena: Part One", Year: 2021,
                         ImdbId: "tt1160419", TmdbId: "438631", Season: 0, Episode: 0)
                     {
                         MediaId = "102",
@@ -2550,7 +2550,7 @@ internal static class Program
                 using (var archiv = new System.IO.Compression.ZipArchive(
                     puffer, System.IO.Compression.ZipArchiveMode.Create, leaveOpen: true))
                 {
-                    var eintrag = archiv.CreateEntry("The Middle - 2x24 - Back To Summer.HDTV.FEVER.en.srt");
+                    var eintrag = archiv.CreateEntry("The Sample - 2x24 - Back To Summer.HDTV.GRP.en.srt");
                     using var strom = await eintrag.OpenAsync(cancellationToken).ConfigureAwait(false);
                     byte[] inhalt = Encoding.UTF8.GetBytes("1\n00:00:01,000 --> 00:00:02,000\nhello\n");
                     await strom.WriteAsync(inhalt, cancellationToken).ConfigureAwait(false);
@@ -2597,8 +2597,8 @@ internal static class Program
             if (url.Contains("/search.php", StringComparison.Ordinal))
             {
                 return Html("<html><div class=\"movies\">"
-                    + "<a href=\"/movie-101.html\">Dune (1984)</a>"
-                    + "<a href=\"/movie-102.html\">Dune: Part One (2021)</a>"
+                    + "<a href=\"/movie-101.html\">Arena (1984)</a>"
+                    + "<a href=\"/movie-102.html\">Arena: Part One (2021)</a>"
                     + "</div></html>");
             }
 
@@ -2617,15 +2617,15 @@ internal static class Program
             });
 
         private static readonly string Seite =
-            "<html><body><h2>Dune: Part One (2021)</h2>"
+            "<html><body><h2>Arena: Part One (2021)</h2>"
             + Eintrag("5001", "en", "WEB-DL", "GROUPA")
             + Eintrag("5002", "en", "BluRay", "GROUPB")
             + Eintrag("5003", "de", "WEB-DL", "GROUPC")
             + "</body></html>";
 
         private static string Eintrag(string id, string lang, string rip, string release) =>
-            "<a href=\"/subtitle-" + id + ".html\" title=\"Download Dune: Part One (2021) subtitles\">"
-            + "<div class=\"subtitle\"><b>Dune: Part One 2021 " + lang + " subtitles (" + rip + "." + release
+            "<a href=\"/subtitle-" + id + ".html\" title=\"Download Arena: Part One (2021) subtitles\">"
+            + "<div class=\"subtitle\"><b>Arena: Part One 2021 " + lang + " subtitles (" + rip + "." + release
             + ")</b><table><tr>"
             + "<td title=\"lang\"><img src=\"images/flags/" + lang + ".gif\"></td>"
             + "<td title=\"Rip\">" + rip + "</td>"

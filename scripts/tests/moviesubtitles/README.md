@@ -32,22 +32,22 @@ the site. Fetched on 15.11.2026 between 20:18 and 20:26 UTC with
 | `add-let-O.html` | `/add.php?let=O` | 200 | 45.377 | the same list in the **upload** view: 492 movies, `add.php?tvid=<id>` + year |
 | `add-filter-oppenheimer.html` | `/add.php?filter=oppenheimer` | 200 | 9.640 | filter search (GET!) — exactly one hit, field stays filled |
 | — *(measured only)* | `/add.html` | 200 | 113.143 | letter A of the same upload list, 1.407 movies; without `let`/`filter` A is the default |
-| `add-tvid-24811.html` | `/add.php?tvid=24811` | 200 | 10.191 | **upload form** for Oppenheimer (2023): `lang`, `rip` selection, `UFile`/`UFile2`/`UFile3` |
+| `add-tvid-24811.html` | `/add.php?tvid=24811` | 200 | 10.191 | **upload form** for Samplemovie (2023): `lang`, `rip` selection, `UFile`/`UFile2`/`UFile3` |
 | `add-tvid-unknown.html` | `/add.php?tvid=99999999` | 200 | 10.188 | the same form for an id that does not exist: "Movie:  ()" — no error message |
 | `add-movie.html` | `/add-movie.php` | 200 | 8.399 | form "Add Movie": `name`, `year`, `go` |
-| `movie-4.html` | `/movie-4.html` | 200 | 104.870 | **movie page** "Matrix, The (1999)": 54 entries, 12 language sections, `parts` 1/2/3, rip free (`1080p`, `720p.BluRay` …) |
+| `movie-4.html` | `/movie-4.html` | 200 | 104.870 | **movie page** "Gridfilm, The (1999)": 54 entries, 12 language sections, `parts` 1/2/3, rip free (`1080p`, `720p.BluRay` …) |
 | `movie-239.html` | `/movie-239.html` | 200 | 100.247 | "Ocean's Thirteen (2007)": 51 entries, **all 13** language sections incl. Ukrainian |
-| `movie-24811.html` | `/movie-24811.html` | 200 | 14.149 | small movie page, Oppenheimer (2023), 3 entries, 2 sections (en, Portugese(br)) |
+| `movie-24811.html` | `/movie-24811.html` | 200 | 14.149 | small movie page, Samplemovie (2023), 3 entries, 2 sections (en, Portugese(br)) |
 | `movie-16856.html` | `/movie-16856.html` | 200 | 10.430 | year doubled in the heading: "O Beautiful (2002) (2002)" |
 | `movie-6928.html` | `/movie-6928.html` | 200 | 8.458 | movie **without** subtitles: "0 subtitles downloaded  times" (two spaces) |
 | `subtitle-132989.html` | `/subtitle-132989.html` | 200 | 11.461 | **download page**: rip, release, `filename:`, size, date, compatible releases, link `download-132989.html` |
 | `subtitle-2058.html` | `/subtitle-2058.html` | 200 | 11.254 | Russian entry, `parts`=2 in the list, `filename: Matrix The.part1.ru.srt` |
 | `subtitle-unknown.html` | `/subtitle-999999.html` | 200 | 10.848 | id does not exist: **HTTP 200** with empty title, empty language and "size: 9140 kb" — no error |
 | `search-dune.html` | `/search.php?q=dune` | **500** | 3.311 | search hit list (5 movies with year); body ends after the movie list in the middle of the markup |
-| `download-132989.headers.txt` | `/download-132989.html` | 302 | 374 | the headers with `Location: files/Oppenheimer_2023.WEB-DL.MA.en.zip` |
+| `download-132989.headers.txt` | `/download-132989.html` | 302 | 374 | the headers with `Location: files/Samplemovie_2023.WEB-DL.MA.en.zip` |
 
 Not kept: the zips themselves. The bytes are evidence, but no page content; the measurements stand
-in `docs/MOVIESUBTITLES.md` (Oppenheimer zip 92.522 B, one `.srt`; Matrix `KiSS` zip 36.385 B, three
+in `docs/MOVIESUBTITLES.md` (Samplemovie zip 92.522 B, one `.srt`; Matrix `GRP` zip 36.385 B, three
 `.partN` files). Whoever needs them fetches them again with `download-<id>.html` — that is a GET.
 
 ## What these pages are meant to prove
