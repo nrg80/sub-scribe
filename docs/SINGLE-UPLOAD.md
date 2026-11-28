@@ -41,6 +41,11 @@ site either. The origin alone decides that, once per file, before any site is lo
 already holds of our own texts is a second and separate question, read from that site's own submission
 id rather than from a shared flag, and it holds for an embedded track and for a loose sidecar alike.
 
+A corrected copy inherits that lock from the original it was formed from (F-M806). The copy beside
+the kept original (slots 51–99) carries different bytes, so the content hash alone cannot recognize
+it; the reserved block proves the file was fetched, and the origin is carried over to the copy's own
+hash — once written, every later run asks the content and nothing else.
+
 ## What the log says
 
 `SKIP {File} — item settled before extraction`, `SKIP {File} — every text stream was rejected earlier`,

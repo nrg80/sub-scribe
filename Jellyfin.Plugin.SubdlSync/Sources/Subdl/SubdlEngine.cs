@@ -233,7 +233,7 @@ public sealed class SubdlEngine : ISourceEngine
         Capabilities = new SourceCapabilities
         {
             Key = SourceKey,
-            DisplayName = "SubDL",
+            DisplayName = "SubDL.com",
             TabName = "SubDL",   // F-M746: Beschriftung des Reiters
             CanUpload = true,
             // F-M762: SubDL haengt an jeden Upload einen Nachlauf — erst der holt die endgueltige

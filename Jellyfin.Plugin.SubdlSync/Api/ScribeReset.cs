@@ -46,6 +46,7 @@ public class ScribeReset : ControllerBase
     /// <param name="imdb">Nur bei <c>pack</c> und <c>season</c>: eine Serie (IMDb-Kennung); leer = alle Urteile.</param>
     /// <param name="season">Nur bei <c>pack</c> und <c>season</c>: die Staffel zu <paramref name="imdb"/>.</param>
     /// <param name="dry">Nur bei <c>season</c>: nur zählen, nichts löschen.</param>
+    [Authorize(Policy = "RequiresElevation")]
     [HttpPost]
     public IActionResult Reset(
         [FromQuery] string confirm = "",
@@ -257,6 +258,7 @@ public class ScribeReset : ControllerBase
     }
 
     /// <summary>Lists restorable database backups.</summary>
+    [Authorize]
     [HttpGet]
     public IActionResult List()
     {
@@ -287,6 +289,7 @@ public class ScribeReset : ControllerBase
     /// </summary>
     /// <param name="confirm">Must be exactly "true".</param>
     /// <param name="stamp">Backup timestamp in yyyyMMdd-HHmmss format.</param>
+    [Authorize(Policy = "RequiresElevation")]
     [HttpPost]
     public IActionResult Restore([FromQuery] string confirm = "", [FromQuery] string stamp = "")
     {
@@ -371,6 +374,7 @@ public class ScribeReset : ControllerBase
     /// both (Vorgabe) | stamps | verdicts | pack — einzeln oder mit '+' verbunden, z. B.
     /// <c>verdicts+pack</c>. `pack` raeumt die Urteile der Pack-Phase fuer diese Staffel (F-M660).
     /// </param>
+    [Authorize(Policy = "RequiresElevation")]
     [HttpPost]
     public IActionResult ResetPath(
         [FromQuery] string confirm = "",

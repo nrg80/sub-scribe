@@ -4802,6 +4802,164 @@ internal static class Program
             paare801.All(n => spec800.Contains("docs/" + n + ".md", StringComparison.Ordinal)),
             "Eintrag geprueft");
 
+        // ---- 41. F-M805: jede Route der Plugin-API verlangt eine Anmeldung ----------------------------
+        // Befund 28.11.2026 auf prod: saemtliche Plugin-Routen standen mit [AllowAnonymous] im Code,
+        // also ohne jede Anmeldung erreichbar — lesbar und ausloesbar von jedem, der den Jellyfin-Port
+        // erreicht. Lesen verlangt jetzt einen angemeldeten Nutzer, Schreiben und Loeschen zusaetzlich
+        // die Admin-Rolle. Bewusst NICHT "LocalAccessOrRequiresElevation": diese Policy prueft die
+        // Verbindungs-IP, und hinter einem Reverse-Proxy ist jede Anfrage lokal — sie waere wirkungslos.
+        string[] controller805 =
+        {
+            "ScribeDiagnosticsController.cs",
+            "ScribeStatusController.cs",
+            "ScribePostprocessController.cs",
+            "ScribeAdoptController.cs",
+            "ScribeStopController.cs",
+            "ScribeReset.cs",
+            "ScribeQuotaService.cs",
+            "SourceSettingsController.cs"
+        };
+        var quellen805 = new Dictionary<string, string>(StringComparer.Ordinal);
+        foreach (string datei805 in controller805)
+        {
+            quellen805[datei805] = (await File.ReadAllTextAsync(
+                Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Api", datei805)))
+                .Replace("\r\n", "\n", StringComparison.Ordinal);
+        }
+
+        static bool Traegt805(string quelle, string attribut, string route)
+            => quelle.Contains(attribut + "\n    [" + route, StringComparison.Ordinal);
+
+        // Eine Regel an der KLASSE deckt jede Aktion — dann steht sie eingerueckt vor nichts,
+        // sondern unveraendert am Zeilenanfang (F-M805, Fall SourceSettingsController).
+        static bool Klassenregel805(string quelle)
+            => quelle.Contains("\n[Authorize(Policy = \"RequiresElevation\")]", StringComparison.Ordinal)
+               || quelle.Contains("\n[Authorize]", StringComparison.Ordinal);
+
+        static int Zaehle805(string quelle, string nadel)
+        {
+            int n805 = 0;
+            int at805 = 0;
+            while ((at805 = quelle.IndexOf(nadel, at805, StringComparison.Ordinal)) >= 0)
+            {
+                n805++;
+                at805 += nadel.Length;
+            }
+
+            return n805;
+        }
+
+        const string Lesen805 = "    [Authorize]";
+        const string Schreiben805 = "    [Authorize(Policy = \"RequiresElevation\")]";
+
+        Check(
+            "F-M805: no route of the plugin API is anonymous any more",
+            quellen805.Values.All(q => !q.Contains("[AllowAnonymous]", StringComparison.Ordinal)),
+            string.Join(", ", quellen805.Where(p => p.Value.Contains("[AllowAnonymous]", StringComparison.Ordinal)).Select(p => p.Key)));
+        Check(
+            "F-M805: every action in the seven controllers carries an Authorize attribute",
+            quellen805.All(p => Klassenregel805(p.Value)
+                || Zaehle805(p.Value, "    [Http") == Zaehle805(p.Value, "    [Authorize")),
+            string.Join(", ", quellen805.Where(p => Zaehle805(p.Value, "    [Http") != Zaehle805(p.Value, "    [Authorize")).Select(p => p.Key)));
+        Check(
+            "F-M805: the diagnostics dump needs a signed-in user",
+            Traegt805(quellen805["ScribeDiagnosticsController.cs"], Lesen805, "HttpGet(\"Diagnostics\")]"),
+            "Diagnostics geprueft");
+        Check(
+            "F-M805: Status, Stats and WorkerRuns need a signed-in user",
+            Traegt805(quellen805["ScribeStatusController.cs"], Lesen805, "HttpGet(\"Status\")]")
+            && Traegt805(quellen805["ScribeStatusController.cs"], Lesen805, "HttpGet(\"Stats\")]")
+            && Traegt805(quellen805["ScribeStatusController.cs"], Lesen805, "HttpGet(\"WorkerRuns\")]"),
+            "drei Lese-Routen geprueft");
+        Check(
+            "F-M805: the statistics reset is an administrator action",
+            Traegt805(quellen805["ScribeStatusController.cs"], Schreiben805, "HttpPost(\"StatsReset\")]"),
+            "StatsReset geprueft");
+        Check(
+            "F-M805: triggering an upload postprocess is an administrator action",
+            Traegt805(quellen805["ScribePostprocessController.cs"], Schreiben805, "HttpPost(\"PostprocessUploads\")]"),
+            "PostprocessUploads geprueft");
+        Check(
+            "F-M805: counting the own subtitles is an administrator action",
+            Traegt805(quellen805["ScribePostprocessController.cs"], Schreiben805, "HttpPost(\"CountMySubtitles\")]"),
+            "CountMySubtitles geprueft");
+        Check(
+            "F-M805: the postprocess status needs a signed-in user",
+            Traegt805(quellen805["ScribePostprocessController.cs"], Lesen805, "HttpGet(\"PostprocessStatus\")]"),
+            "PostprocessStatus geprueft");
+        Check(
+            "F-M805: stopping and resuming the pipeline are administrator actions",
+            Traegt805(quellen805["ScribeStopController.cs"], Schreiben805, "HttpPost(\"Stop\")]")
+            && Traegt805(quellen805["ScribeStopController.cs"], Schreiben805, "HttpPost(\"Resume\")]"),
+            "Stop und Resume geprueft");
+        Check(
+            "F-M805: adopting uploads is an administrator action",
+            Traegt805(quellen805["ScribeAdoptController.cs"], Schreiben805, "HttpPost(\"AdoptUploads\")]"),
+            "AdoptUploads geprueft");
+        Check(
+            "F-M805: resetting state, resetting one path and restoring a backup are administrator actions",
+            Zaehle805(quellen805["ScribeReset.cs"], Schreiben805) == 3,
+            "drei schreibende Aktionen gezaehlt");
+        Check(
+            "F-M805: listing the backups needs a signed-in user",
+            Traegt805(quellen805["ScribeReset.cs"], Lesen805, "HttpGet]"),
+            "List geprueft");
+        Check(
+            "F-M805: the quota is readable for a signed-in user",
+            Traegt805(quellen805["ScribeQuotaService.cs"], Lesen805, "HttpGet]"),
+            "Quota geprueft");
+        Check(
+            "F-M805: writing one source is an administrator action, decided by the role and not by the address",
+            Klassenregel805(quellen805["SourceSettingsController.cs"])
+            && !quellen805["SourceSettingsController.cs"].Contains("LocalAccessOrRequiresElevation", StringComparison.Ordinal),
+            "Quellen-Schreibroute geprueft");
+        Check(
+            "F-M805: the role decides, not the address - no route uses LocalAccessOrRequiresElevation",
+            quellen805.Values.All(q => !q.Contains("LocalAccessOrRequiresElevation", StringComparison.Ordinal)),
+            "IP-abhaengige Policy nirgends benutzt");
+
+        // ---- 42. F-M806: die Herkunft wird MITVERERBT ------------------------------------------------
+        // Betreiberanweisung 28.11.2026: „Natuerlich mitvererben". Eine korrigierte Kopie traegt andere
+        // Bytes als das behaltene Original und darum eine andere Inhaltssumme — die Frage nach dem
+        // Inhalt (F-M804) kann sie allein nicht fangen. Der Bereich 51–99 entsteht ausschliesslich fuer
+        // ein geholtes Original, also erbt die Kopie daneben dessen Herkunft.
+        string upload805 = await File.ReadAllTextAsync(
+            Path.Combine(root, "Jellyfin.Plugin.SubdlSync", "Pipeline", "UploadPipeline.cs"));
+        string uploadFlach806 = upload805.Replace("\r\n", "\n", StringComparison.Ordinal);
+        int stelleFrage = uploadFlach806.IndexOf("IsDownloadedFromAnySource(looseHashProbe)", StringComparison.Ordinal);
+        int stelleErbe = uploadFlach806.IndexOf("TryInheritKeptOriginalProvenance(mediaPath", StringComparison.Ordinal);
+        Check(
+            "F-M806: the inheritance is asked in the loose-sidecar path and defined once",
+            stelleErbe > 0
+            && uploadFlach806.Contains("private bool TryInheritKeptOriginalProvenance(", StringComparison.Ordinal),
+            stelleErbe > 0 ? "Aufruf und Definition vorhanden" : "Aufruf fehlt");
+        Check(
+            "F-M806: it is asked AFTER the content question of F-M804, never instead of it",
+            stelleFrage > 0 && stelleErbe > stelleFrage,
+            $"F-M804 an {stelleFrage}, F-M806 an {stelleErbe}");
+        Check(
+            "F-M806: the anchor is the reserved block, matched in language and variant",
+            uploadFlach806.Contains("IsOriginalSidecar(keptPath, mediaPath)", StringComparison.Ordinal)
+            && uploadFlach806.Contains("string.Equals(keptLang, looseLang, StringComparison.OrdinalIgnoreCase)", StringComparison.Ordinal)
+            && uploadFlach806.Contains("keptHi != looseHi", StringComparison.Ordinal),
+            "Anker geprueft");
+        Check(
+            "F-M806: the mark is written for the copy's OWN hash, not the original's",
+            uploadFlach806.Contains("MarkDownloaded(\n                looseHash,", StringComparison.Ordinal)
+            && uploadFlach806.Contains("path: loosePath", StringComparison.Ordinal),
+            "Hash der Kopie geprueft");
+        Check(
+            "F-M806: the provenance itself is taken from the kept original",
+            uploadFlach806.Contains("Registry.GetOrigin(keptHash)", StringComparison.Ordinal)
+            && uploadFlach806.Contains("origin: herkunft.Origin", StringComparison.Ordinal)
+            && uploadFlach806.Contains("originId: herkunft.OriginId", StringComparison.Ordinal),
+            "Herkunft geprueft");
+        Check(
+            "F-M806: an inherited file is skipped and named in the log",
+            uploadFlach806.Contains("provenance inherited from the kept original", StringComparison.Ordinal)
+            && uploadFlach806.Contains("summary.SkippedStreams++", StringComparison.Ordinal),
+            "Skip und Logzeile geprueft");
+
         if (_failures > 0)
         {
             Console.WriteLine($">>> ENDPUNKTE: {_failures} von {_checks} Pruefungen fehlgeschlagen");

@@ -38,8 +38,8 @@ public class ScribeStopController : ControllerBase
     /// Request a stop for the given direction. Creates a marker file that the
     /// pipeline will see and stop itself.
     /// </summary>
+    [Authorize(Policy = "RequiresElevation")]
     [HttpPost("Stop")]
-    [AllowAnonymous]
     public IActionResult RequestStop([FromQuery] string direction)
     {
         try
@@ -103,8 +103,8 @@ public class ScribeStopController : ControllerBase
     /// <summary>
     /// Cancel (remove) stop markers.
     /// </summary>
+    [Authorize(Policy = "RequiresElevation")]
     [HttpPost("Resume")]
-    [AllowAnonymous]
     public IActionResult ClearStop([FromQuery] string direction)
     {
         try

@@ -137,7 +137,7 @@ public sealed class SubdlStatus : ISourceStatus
         {
             lichter.Add(new SourceStatusLight(
                 LoginLightKey,
-                "SubDL Login",
+                "SubDL.com Login",
                 SourceHealth.Warn,
                 Configured: false,
                 Message: "no account configured — uploading is off"));
@@ -173,7 +173,7 @@ public sealed class SubdlStatus : ISourceStatus
                 _logger.LogDebug("[Sub Scribe-Q] {Source} status: login failed: {Msg}", Key, ex.Message);
             }
 
-            lichter.Add(new SourceStatusLight(LoginLightKey, "SubDL Login", licht, Configured: true, Message: meldung));
+            lichter.Add(new SourceStatusLight(LoginLightKey, "SubDL.com Login", licht, Configured: true, Message: meldung));
         }
 
         uhr.Stop();

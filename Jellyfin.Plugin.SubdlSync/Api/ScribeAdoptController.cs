@@ -59,8 +59,8 @@ public class ScribeAdoptController : ControllerBase
     /// </summary>
     /// <param name="entries">One entry per (file, stream position, language) with its SubDL id.</param>
     /// <returns>How many rows were written, and why the rest were not.</returns>
+    [Authorize(Policy = "RequiresElevation")]
     [HttpPost("AdoptUploads")]
-    [AllowAnonymous]
     public IActionResult AdoptUploads([FromBody] List<AdoptEntry>? entries)
     {
         Plugin? plugin = Plugin.Instance;

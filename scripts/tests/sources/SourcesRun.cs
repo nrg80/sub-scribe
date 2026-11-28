@@ -1072,10 +1072,13 @@ internal static class Program
                 geheimMitVorgabe.Count == 0 ? "0 Geheimnisse mit Vorgabe" : string.Join(", ", geheimMitVorgabe));
 
             // ---- C: die Routen und der Zugang ----
+            // F-M805: der Zugang ist die ROLLE, nicht die Adresse. Die frühere Regel
+            // LocalAccessOrRequiresElevation fragt die Verbindungs-IP — hinter einem Reverse-Proxy
+            // ist jede Anfrage lokal, damit war die Route von außen ohne Anmeldung erreichbar.
             string controller = File.ReadAllText(Path.Combine(plugin, "Api", "SourceSettingsController.cs"));
             Check(controller.Contains("[HttpGet(\"Sources\")]", StringComparison.Ordinal)
                   && controller.Contains("[HttpPost(\"Sources/{key}\")]", StringComparison.Ordinal)
-                  && controller.Contains("[Authorize(Policy = \"LocalAccessOrRequiresElevation\")]", StringComparison.Ordinal)
+                  && controller.Contains("[Authorize(Policy = \"RequiresElevation\")]", StringComparison.Ordinal)
                   && !controller.Contains("AllowAnonymous", StringComparison.Ordinal),
                 "F-M683 (C): die Routen stehen als GET Sources und POST Sources/{key}, und der Zugang ist der eines Administrators — nicht anonym");
         }
@@ -1215,7 +1218,7 @@ internal static class Program
             // (2) Die Summenzeile: eine Zeile je Quelle, auf Normal, mit Aufrufen, Seiten, Fehlern, Dauer.
             SourceTraffic.WriteSummary(ruf, new[] { SubdlEngine.SourceKey });
             string summe = ruf.Lines.Last(l => l.Text.Contains("Aufrufe", StringComparison.Ordinal)).Text;
-            Check(summe.StartsWith("[N] SubDL: 5 Aufrufe, 0 Seiten, 4 Fehler, ", StringComparison.Ordinal)
+            Check(summe.StartsWith("[N] SubDL.com: 5 Aufrufe, 0 Seiten, 4 Fehler, ", StringComparison.Ordinal)
                   && summe.Contains(" s", StringComparison.Ordinal)
                   && summe.Contains("(5 Aufträge)", StringComparison.Ordinal),
                 "F-M684 (2): die Summenzeile nennt je Quelle Abrufe, Seiten, Fehler und Dauer — in EINER Zeile",

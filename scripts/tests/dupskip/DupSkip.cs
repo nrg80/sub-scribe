@@ -155,6 +155,36 @@ internal static class DupSkip
         bool looseOpenForSubdl = Jellyfin.Plugin.SubScribe.Pipeline.UploadPipeline.SidecarsNeedWorkFor(
             loose, looseMedia, SubtitleProvider.Subdl, reg);
 
+        // ---- F-M804 / T391: der Reup-Riegel. Ein Seitenwagen, dessen INHALT dieses Plugin geholt hat,
+        // ist an KEINE Quelle zurueckzugeben. Das behaltene Original (Slot 51–99) faellt schon beim
+        // Einreihen durch seinen Namen heraus (F-M315); sein korrigierter Zwilling traegt andere Bytes
+        // und braucht darum die Frage auf dem Inhalt. Geprueft wird der Inhalt, nicht die Quelle —
+        // eine Sperre, die nur die eigene Quelle nennt, laesst die Kreuzkontamination durch (F-M489).
+        string dlText = "1\r\n00:00:30,000 --> 00:00:32,000\r\nDownloaded line.\r\n\r\n";
+        string dlHash = ContentHashRegistry.ComputeHash(dlText);
+        const string dlMedia = "c9f2a1b7d0e45836";
+        reg.EnsureFile(dlMedia, "tt1234567", "/media/films/Downloaded/Downloaded.mkv");
+        reg.MarkDownloaded(dlHash, dlMedia, "EN", fileName: "Downloaded.en.srt",
+            path: "/media/films/Downloaded/Downloaded.en.srt",
+            origin: "subdl", originId: "12345");
+        bool dlLockedAnySource = reg.IsDownloadedFromAnySource(dlHash);
+
+        // Der korrigierte Zwilling: eigene Bytes, eigene Zeile, ebenfalls als Fund vermerkt (F-M493).
+        string corrText = "1\r\n00:00:30,500 --> 00:00:32,500\r\nDownloaded line.\r\n\r\n";
+        string corrHash = ContentHashRegistry.ComputeHash(corrText);
+        reg.MarkDownloaded(corrHash, dlMedia, "EN", fileName: "Downloaded.en.01.srt",
+            path: "/media/films/Downloaded/Downloaded.en.01.srt",
+            origin: "subdl", originId: "12345");
+        bool correctedLockedToo = corrHash != dlHash && reg.IsDownloadedFromAnySource(corrHash);
+
+        // Die Gegenprobe: ein Inhalt, den WIR hochgeladen haben, darf der Riegel nicht treffen.
+        bool uploadedNotLocked = !reg.IsDownloadedFromAnySource(contentHash);
+
+        // Und die 5xer sind ueber ihren NAMEN ausgenommen, nicht ueber den Inhalt.
+        bool reservedByName = Jellyfin.Plugin.SubScribe.Registry.SidecarNaming.IsOriginalSlot(51)
+            && Jellyfin.Plugin.SubScribe.Registry.SidecarNaming.IsOriginalSlot(99)
+            && !Jellyfin.Plugin.SubScribe.Registry.SidecarNaming.IsOriginalSlot(1);
+
         int checks = 0;
         void Case(bool ok, string what)
         {
@@ -168,16 +198,20 @@ internal static class DupSkip
         Case(asksAgainOnNewText, "T391: neuer Text auf derselben Spur wird wieder gefragt");
         Case(looseClosedForMst, "T391: Seitenwagen (Position -1) schliesst fuer mst");
         Case(looseOpenForSubdl, "T391: Seitenwagen bleibt fuer SubDL offen");
+        Case(dlLockedAnySource, "F-M804: ein Fund ist an jede Quelle gesperrt (Inhalt, nicht Quelle)");
+        Case(correctedLockedToo, "F-M804: der korrigierte 0x aus dem 5x ist ebenso gesperrt");
+        Case(uploadedNotLocked, "F-M804: Gegenprobe — selbst Hochgeladenes bleibt frei");
+        Case(reservedByName, "F-M804: die 5xer sind ueber den Namen ausgenommen (51-99, nicht 1)");
 
         Console.WriteLine();
         Console.WriteLine("Fall A (Inhalt oben -> uploaded bleibt): " + (caseA ? "OK" : "FEHLER"));
         Console.WriteLine("Fall B (Inhalt nicht oben -> rejected):  " + (caseB ? "OK" : "FEHLER"));
         Console.WriteLine();
-        bool all = caseA && caseB && checks == 5;
+        bool all = caseA && caseB && checks == 9;
         Console.WriteLine(all
             ? ">>> OK: ein duplicate-content-Skip loescht keine uploaded-Marke, erfindet aber auch keine;"
-              + " das Nein einer Quelle schliesst die Spur dieser Quelle (F-M298, F-M728)"
-            : ">>> FEHLER: F-M298/F-M728 nicht erfuellt");
+              + " das Nein einer Quelle schliesst die Spur dieser Quelle; kein Fund geht zurueck (F-M298, F-M728, F-M804)"
+            : ">>> FEHLER: F-M298/F-M728/F-M804 nicht erfuellt");
         Console.WriteLine("dupskip: " + (checks + 2) + " checks");
         return all ? 0 : 1;
     }
