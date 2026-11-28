@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.97",
-        "changelog": "v12.3.8.97: A corrected copy inherits the provenance of the kept original it came from, so a subtitle the plugin downloaded never goes back to any source - not even shifted.",
+        "version": "12.3.8.98",
+        "changelog": "v12.3.8.98: The settings page sends its session token with every request, so the connection lights and the library light come back; the SubDL API light is called SubDL.com API.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.97-dev/Jellyfin.Plugin.SubdlSync_12.3.8.97.zip",
-        "checksum": "f061f902581d0bf475bc1ead847d139b",
-        "timestamp": "2026-11-28T09:52:57Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.98-dev/Jellyfin.Plugin.SubdlSync_12.3.8.98.zip",
+        "checksum": "01b3c7babd58f37e1d486d74e8655719",
+        "timestamp": "2026-11-28T10:23:09Z"
       }
     ]
   }
