@@ -12,8 +12,8 @@
         "version": "12.3.8.98",
         "changelog": "v12.3.8.98: The settings page sends its session token with every request, so the connection lights and the library light come back; the SubDL API light is called SubDL.com API.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.98-dev/Jellyfin.Plugin.SubdlSync_12.3.8.98.zip",
-        "checksum": "01b3c7babd58f37e1d486d74e8655719",
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.98/Jellyfin.Plugin.SubdlSync_12.3.8.98.zip",
+        "checksum": "16a3a446fc5029b6fef311f5675afcbc",
         "timestamp": "2026-11-28T10:23:09Z"
       }
     ]
