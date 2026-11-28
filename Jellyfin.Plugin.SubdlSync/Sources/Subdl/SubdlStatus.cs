@@ -96,7 +96,7 @@ public sealed class SubdlStatus : ISourceStatus
         {
             lichter.Add(new SourceStatusLight(
                 ApiLightKey,
-                "SubDL API (subdl.com)",
+                "SubDL API",
                 SourceHealth.Warn,
                 Configured: false,
                 Message: "no API key configured"));
@@ -120,7 +120,7 @@ public sealed class SubdlStatus : ISourceStatus
 
             lichter.Add(new SourceStatusLight(
                 ApiLightKey,
-                "SubDL API (subdl.com)",
+                "SubDL API",
                 gelesen == QuotaRead.Unreadable ? SourceHealth.Bad : SourceHealth.Good,
                 Configured: true,
                 // F-M742: „reachable" — und KEINE Zahlen. Was das Kontingent verbraucht hat, steht in
@@ -137,7 +137,7 @@ public sealed class SubdlStatus : ISourceStatus
         {
             lichter.Add(new SourceStatusLight(
                 LoginLightKey,
-                "SubDL Login (subdl.com)",
+                "SubDL.com Login",
                 SourceHealth.Warn,
                 Configured: false,
                 Message: "no account configured — uploading is off"));
@@ -173,7 +173,7 @@ public sealed class SubdlStatus : ISourceStatus
                 _logger.LogDebug("[Sub Scribe-Q] {Source} status: login failed: {Msg}", Key, ex.Message);
             }
 
-            lichter.Add(new SourceStatusLight(LoginLightKey, "SubDL Login (subdl.com)", licht, Configured: true, Message: meldung));
+            lichter.Add(new SourceStatusLight(LoginLightKey, "SubDL.com Login", licht, Configured: true, Message: meldung));
         }
 
         uhr.Stop();

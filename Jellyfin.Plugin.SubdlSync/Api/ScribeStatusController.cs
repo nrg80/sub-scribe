@@ -68,8 +68,8 @@ public class ScribeStatusController : ControllerBase
     /// Get a traffic-light status overview.
     /// </summary>
     /// <returns>Status object with subdl, tmdb and directory entries.</returns>
+    [Authorize]
     [HttpGet("Status")]
-    [AllowAnonymous]
     public async Task<IActionResult> GetStatus(CancellationToken ct)
     {
         var cfg = Plugin.Instance?.Configuration ?? new PluginConfiguration();
@@ -148,8 +148,8 @@ public class ScribeStatusController : ControllerBase
 
         var result = new StatusDto
         {
-            Subdl = Kachel("subdl", "SubDL API (subdl.com)"),
-            SubdlLogin = Kachel("subdlLogin", "SubDL Login (subdl.com)"),
+            Subdl = Kachel("subdl", "SubDL API"),
+            SubdlLogin = Kachel("subdlLogin", "SubDL.com Login"),
             Tmdb = await CheckTmdbAsync(cfg, ct).ConfigureAwait(false),
             Tvst = Kachel("tvst", "tvst (tvsubtitles.net)"),
             Mst = Kachel("mst", "mst (moviesubtitles.org)"),
@@ -167,8 +167,8 @@ public class ScribeStatusController : ControllerBase
     /// </para>
     /// </summary>
     /// <returns>Uploaded/downloaded totals and the period start.</returns>
+    [Authorize]
     [HttpGet("Stats")]
-    [AllowAnonymous]
     public IActionResult GetStats()
     {
         var plugin = Plugin.Instance;
@@ -236,8 +236,8 @@ public class ScribeStatusController : ControllerBase
         return row.DryRun;
     }
 
+    [Authorize]
     [HttpGet("WorkerRuns")]
-    [AllowAnonymous]
     public IActionResult GetWorkerRuns()
     {
         var plugin = Plugin.Instance;
@@ -358,6 +358,7 @@ public class ScribeStatusController : ControllerBase
     /// </summary>
     /// <param name="confirm">Must be exactly "true".</param>
     /// <returns>The zeroed counters.</returns>
+    [Authorize(Policy = "RequiresElevation")]
     [HttpPost("StatsReset")]
     public IActionResult ResetStats([FromQuery] string confirm = "")
     {

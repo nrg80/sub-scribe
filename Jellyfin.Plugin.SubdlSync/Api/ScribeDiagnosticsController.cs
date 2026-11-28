@@ -39,8 +39,8 @@ public class ScribeDiagnosticsController : ControllerBase
     /// Get a diagnostic dump of the plugin database: counters, subtitle totals,
     /// per-media upload state and recent pipeline runs.
     /// </summary>
+    [Authorize]
     [HttpGet("Diagnostics")]
-    [AllowAnonymous]
     public IActionResult GetDiagnostics()
     {
         try

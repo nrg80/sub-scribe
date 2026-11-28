@@ -60,6 +60,7 @@ public class ScribeQuota : ControllerBase
     /// GET /Plugins/ScribeQuota/Get — live quota for the configured API key.
     /// </summary>
     /// <returns>JSON: { requestUsage:{today,total,limit}, downloadUsage:{…}, cached:bool } or { error }.</returns>
+    [Authorize]
     [HttpGet]
     public async Task<IActionResult> Get(CancellationToken cancellationToken)
     {

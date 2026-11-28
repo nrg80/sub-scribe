@@ -3,7 +3,7 @@
 This is the master document: every other paper is derived from it and cites its `F-M` tags. The contract boundaries stand in `CONTRACTS.md`, the vocabulary in `TERMS.md`.
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.144
-**Status:** Implementation — v12.3.8.95.
+**Status:** Implementation — v12.3.8.96.
 
 **A rule stands here with its ground: the decision behind it in one sentence, under `Concept decision`, and the
 check that proves it. The detailed measurement archive — what was measured, which run showed it, what happened —
@@ -51,7 +51,7 @@ states the rule, its constants, its ground and its test.**
  - [21.2 What goes wrong (measured)](#212-what-goes-wrong-measured) — pitfalls
  - [21.3 What stays off limits](#213-what-stays-off-limits) — taboos
 
-- [22. Subtitle Sources — one contract](#22-subtitle-sources-one-contract) — 45 requirements
+- [22. Subtitle Sources — one contract](#22-subtitle-sources-one-contract) — 46 requirements
 - [20. References](#20-references) — 4 requirements
 
 ## 1. Objective and Scope
@@ -3529,3 +3529,5 @@ Checked in `anchorgate` (22 checks: an open anchor holds the refetch, the reason
 (3) **It is never a client that is asked by name, but the source** — in the chain, in the enqueuer and in the settings view; the mappings themselves live with the source, not in the fetch. (4) **The spelling of the plugin database arises at the boundary:** the return path delivers the ISO identifier; if none is evidenced, the answer reads empty, and nothing is guessed. (5) **The one neutral conversion stays above the sources** (F-M557), because the plugin database and the pack need it too.
 
 **F-M736 [D]:** **Names are normalised at input at ONE place, namely as a function above the packages.** Filename, archive entry, entry of a source list and row name in the plugin database come from four directions. Before, every place prepared them a little differently (trimmed once, not another time, double spaces now yes, now no), and a comparison of two names was thereby a question of the call path. (1) **The normalisation is a public function** — fold (F-M724), trim at the ends, collapse inner whitespace to one space — and the routines call it instead of folding or trimming themselves. (2) **The comparison normalises BOTH sides** via the same function; there is no second way to compare two names. (3) **The normalised version is never stored** — it is a reading aid, not a correction of anybody's filenames; if nothing is to be done, the same string comes back. (4) **Unicode normalisation in the sense of the runtime environment stays forbidden**, because without ICU it silently does nothing and thereby produces two answers for the same name, depending on the host.
+
+**F-M805 [U]:** **No route of the plugin API answers an anonymous caller.** On 28.11.2026 the whole plugin API stood with `[AllowAnonymous]`: the diagnostics dump (database path, counters, memory figures), the status, statistics and worker routes, and the writing routes — stopping the pipeline, triggering an upload postprocess, counting the own subtitles, adopting uploads, resetting one path or the whole state — were readable and triggerable by anyone who could reach the Jellyfin port. (1) **Reading requires a signed-in user** (`[Authorize]`). (2) **Writing and deleting require the administrator role** (`[Authorize(Policy = "RequiresElevation")]`): Stop, Resume, Reset, ResetPath, Restore, StatsReset, PostprocessUploads, CountMySubtitles, AdoptUploads. (3) **The address never decides:** `LocalAccessOrRequiresElevation` was deliberately NOT used — the policy reads the connection address, and behind a reverse proxy every call arrives from a local address, so it would hand the internet what it denies the LAN. (4) **`[AllowAnonymous]` appears nowhere in the plugin API any more**, and every action carries an `Authorize` attribute; a new route without one fails the test. Checked by T449. <!-- Operator-Anweisung 2026-11-28: „Nur das plugin" — die Haertung im Plugin, nicht am Proxy -->

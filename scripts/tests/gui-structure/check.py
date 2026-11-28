@@ -86,7 +86,7 @@ def run_case_probe(page_src):
 {
   "sources": [
     {
-      "Key": "subdl", "DisplayName": "SubDL", "Configured": true,
+      "Key": "subdl", "DisplayName": "SubDL.com", "Configured": true,
       "File": "sources/subdl.json",
       "Capabilities": {
         "CanUpload": true, "CanSeasonPacks": true, "CanQuota": true,
@@ -165,7 +165,7 @@ def run_case_probe(page_src):
 
     subdl, tvst = quellen[0], quellen[1]
     fehler = []
-    if subdl.get("displayName") != "SubDL":
+    if subdl.get("displayName") != "SubDL.com":
         fehler.append("displayName=%r" % subdl.get("displayName"))
     if subdl.get("configured") is not True:
         fehler.append("configured=%r" % subdl.get("configured"))

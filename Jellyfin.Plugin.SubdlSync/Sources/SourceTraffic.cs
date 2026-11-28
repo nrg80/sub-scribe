@@ -522,7 +522,7 @@ public static class SourceTraffic
     /// <returns>Der Name, wie der Betreiber ihn schreibt.</returns>
     public static string DisplayName(string key) => key switch
     {
-        "subdl" => "SubDL",
+        "subdl" => "SubDL.com",
         "tvsubtitles" => "tvsubtitles.net",
         "moviesubtitles" => "moviesubtitles.org",
         _ => key,

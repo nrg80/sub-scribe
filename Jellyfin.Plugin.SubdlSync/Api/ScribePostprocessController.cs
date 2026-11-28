@@ -37,8 +37,8 @@ public class ScribePostprocessController : ControllerBase
     /// <summary>
     /// Run upload postprocessing immediately (cleans up rejected entries from /user/mySubtitles).
     /// </summary>
+    [Authorize(Policy = "RequiresElevation")]
     [HttpPost("PostprocessUploads")]
-    [AllowAnonymous]
     public async Task<IActionResult> PostprocessUploads()
     {
         var plugin = Plugin.Instance;
@@ -58,8 +58,8 @@ public class ScribePostprocessController : ControllerBase
     /// <summary>
     /// Count /user/mySubtitles entries on the first N pages for verification.
     /// </summary>
+    [Authorize(Policy = "RequiresElevation")]
     [HttpPost("CountMySubtitles")]
-    [AllowAnonymous]
     public async Task<IActionResult> CountMySubtitles([FromQuery] int pages = 5)
     {
         var plugin = Plugin.Instance;
@@ -169,8 +169,8 @@ public class ScribePostprocessController : ControllerBase
     /// <summary>
     /// Get the current postprocessing run status and result of the last run.
     /// </summary>
+    [Authorize]
     [HttpGet("PostprocessStatus")]
-    [AllowAnonymous]
     public IActionResult GetPostprocessStatus()
     {
         var plugin = Plugin.Instance;

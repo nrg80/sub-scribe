@@ -1248,6 +1248,12 @@
       "checks": 6,
       "requirement": "F-M802",
       "title": "Der Spracherkenner gibt die Hausform: DetectLanguage liefert DEU statt DE, die Familientabelle spricht T, und DEU gegen deutschen Text korrigiert nichts mehr"
+    },
+    "T449": {
+      "suite": "endpoints",
+      "checks": 14,
+      "requirement": "F-M805",
+      "title": "Jede Route der Plugin-API verlangt eine Anmeldung: Lesen ein angemeldeter Nutzer, Schreiben und Loeschen RequiresElevation, keine AllowAnonymous-Route mehr"
     }
   }
 }
