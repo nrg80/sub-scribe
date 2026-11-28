@@ -141,7 +141,7 @@ number when it moves to another chapter, and a number is never reused.
 
 **T412:** The eye in the page (F-M748), in `gui-structure`. **3 checks**. The eye asks on pointer down and gives the value back on release; a late answer after the release shows nothing. It sits inside the field at the right edge and the field keeps its width. Both API keys carry it, a secret the eye is showing does not count as a change, and the eye stands only where a secret is stored.
 
-**T413:** The place of the Status block (F-M749), in `gui-structure`. **2 checks**. The Status heading and its lights stand below the Worker list, with the deferral line still directly under that list. The refresh control stays the last block of the tab, now below the Status block.
+**T413:** The place of the Connections block (F-M749), in `gui-structure`. **2 checks**. The Connections heading and its lights stand below the Worker list, with the deferral line still directly under that list. The refresh control stays the last block of the tab, now below the Status block.
 
 **T414:** The self-naming settings line (F-M750/F-M751), in `sources`. **4 checks**. A write logs exactly the changed fields, on the debug level, with old → new, and the value of a text field stays out of the line. A written plugin setting names every changed property, character strings only as `gesetzt`/`leer` — no value, no length. A replaced secret reads as `gesetzt -> gesetzt (neu)`. The path the page actually takes carries the hook: the plugin configuration write compares before and after.
 
