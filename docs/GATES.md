@@ -72,6 +72,10 @@ falls back to the global one (`F-M747`). Our own text is never reported, because
 identifier to report against. The findings are queued and flushed at the end of the run; an answer that
 never comes puts the report back for the next run instead of ending the run (`F-M592`, `F-M450`).
 
+That is the one switch that must be off in a test bench: a false report reaches a stranger's entry and
+cannot be taken back. The count of them sits under the Auto-Sync row of the page, because the fit is what
+measures the file.
+
 ## What a report says
 
 The comment is one sentence about the bare finding and a blank line under it. The sentence names the package,
@@ -86,10 +90,6 @@ missing, unplayable, wrong content, wrong language, other — and they collapse 
 a missing or unplayable file is no subtitle, a wrong content or a wrong language is wrong release information,
 and everything else is other. The accepted report is logged as `reported to <source> (<category>) for subtitle
 <nid>`.
-
-That is the one switch that must be off in a test bench: a false report reaches a stranger's entry and
-cannot be taken back. The count of them sits under the Auto-Sync row of the page, because the fit is what
-measures the file.
 
 ## What is written, and what is not
 
