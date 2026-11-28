@@ -27,7 +27,7 @@
     <InvariantGlobalization>false</InvariantGlobalization>
     <NoWarn>$(NoWarn);CA1305;CA1862;CA1307;CA1725</NoWarn>
     <JellyfinDir>/opt/data/jf-test/jellyfin</JellyfinDir>
-    <PluginDir>/opt/data/subdl-scribe/Jellyfin.Plugin.SubdlSync/bin/Release/net10.0</PluginDir>
+    <PluginDir>$(ScribeRepoRoot)/Jellyfin.Plugin.SubdlSync/bin/Release/net10.0</PluginDir>
   </PropertyGroup>
   <ItemGroup>
     <Reference Include="Jellyfin.Plugin.SubdlSync"><HintPath>$(PluginDir)/Jellyfin.Plugin.SubdlSync.dll</HintPath></Reference>

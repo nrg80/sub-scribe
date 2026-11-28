@@ -2131,6 +2131,25 @@ public sealed class UploadPipeline : IPackFiller
                 }
 
                 string? looseReject = Registry.SidecarRejectedReason(looseHashProbe);
+
+                // F-M804 (operator order 28.11.2026: „Sowohl das 5x er als auch das daraus gebildete 0x er
+                // sollen fuer den reup zu jedweder quelle gesperrt werden"): ein Seitenwagen, dessen
+                // INHALT dieses Plugin geholt hat, geht an keine Quelle zurueck — nicht an die, aus der er
+                // kam, und nicht an eine andere. Das behaltene Original (Slot 51–99) faellt schon beim
+                // Einreihen durch seinen Namen heraus (F-M315/F-M306); sein korrigierter Zwilling im
+                // 01er-Bereich traegt eine ANDERE Inhaltssumme und braucht darum diese Frage. Sie wird
+                // auf dem Inhalt gestellt und nennt keine Quelle (IsDownloadedFromAnySource) — das ist
+                // die Sperre fuer alle drei Quellen in einer Zeile.
+                if (Registry.IsDownloadedFromAnySource(looseHashProbe))
+                {
+                    summary.SkippedStreams++;
+                    LogUtil.PerItem(_config.LogMode, _logger,
+                        "[Sub Scribe] SKIP {File} [{Lang}] — this content was downloaded by the plugin, locked against re-upload to every source (F-M804)",
+                        Path.GetFileName(loosePath), looseLang);
+
+                    continue;
+                }
+
                 if (looseReject != null)
                 {
                     // F-M298: `duplicate-content` is only a verdict while the content is NOT already up.

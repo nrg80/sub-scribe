@@ -953,7 +953,7 @@
     },
     "T391": {
       "suite": "dupskip",
-      "checks": 7
+      "checks": 11
     },
     "T392": {
       "suite": "sources",

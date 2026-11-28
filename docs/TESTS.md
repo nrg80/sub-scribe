@@ -1154,7 +1154,7 @@ Counting happens in T205: the same suite carries both.
 
 **T285:** The collection cards in `endpoints`: both tables are read once per run, the individual questions have disappeared from the chain. **1 check** in `endpoints` (244 → 245).
 
-**T391:** A remembered no closes the track of its source, in `dupskip`. **7 checks**: `IsEmbedTerminalFor` answers `true` after `SourceRefusalStore.Put` for the refusing source and `false` for the other. A **new** text on the same track (different signature) is asked again. The loose subtitle (position `-1`) closes for the refusing source and stays open for the other. Plus the two old cases from T113 (uploaded mark remains, rejection remains rejection).
+**T391:** A remembered no closes the track of its source, and a fetched subtitle goes back to no source, in `dupskip`. **11 checks**: `IsEmbedTerminalFor` answers `true` for the refusing source and `false` for the other. A new text on the same track is asked again, and the sidecar position follows the same rule. `IsDownloadedFromAnySource` locks a download and its corrected sibling, leaves an own upload free, and the reserved slots stay excluded by name (F-M298, F-M728, F-M804).
 
 **T403:** No document carries a credential, an address or an operator path (NF-10), in `spec-doc`. The check reads every Markdown file under `docs/` plus the README, and a credential value behind `api_key`/`token`/`password`/`secret`, a provider key shape, a hex string of 32+ characters, a foreign e-mail address, a private host address, an IBAN or an absolute operator path is a failure. A state word (`apiKey = set`) and a template (`{key}`) are not. **1 check** in `spec-doc` (8 → 9).
 
