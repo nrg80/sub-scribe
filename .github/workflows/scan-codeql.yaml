@@ -25,6 +25,12 @@ on:
 
 jobs:
   call:
+    # Der Repo-Default steht auf "read"; ohne diesen Block darf der Lauf seine
+    # Ergebnisse (SARIF) nicht hochladen und bricht mit InvalidAuthenticationInfo ab.
+    permissions:
+      contents: read
+      actions: read
+      security-events: write
     uses: jellyfin/jellyfin-meta-plugins/.github/workflows/scan-codeql.yaml@master
     with:
       repository-name: nrg80/sub-scribe
