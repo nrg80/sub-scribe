@@ -9,12 +9,12 @@
     "imageUrl": "https://raw.githubusercontent.com/nrg80/sub-scribe/main/logo.png",
     "versions": [
       {
-        "version": "12.3.8.94",
-        "changelog": "v12.3.8.94: The connections block is called Connections, and the worker list stands directly above the statistics at the end of the General tab.",
+        "version": "12.3.8.97",
+        "changelog": "v12.3.8.97: A corrected copy inherits the provenance of the kept original it came from, so a subtitle the plugin downloaded never goes back to any source - not even shifted.",
         "targetAbi": "12.1.0.0",
-        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.94/Jellyfin.Plugin.SubdlSync_12.3.8.94.zip",
-        "checksum": "a675efbc6cde8ce9f093203652425bee",
-        "timestamp": "2026-11-28T07:00:16Z"
+        "sourceUrl": "https://github.com/nrg80/sub-scribe/releases/download/v12.3.8.97/Jellyfin.Plugin.SubdlSync_12.3.8.97.zip",
+        "checksum": "27aa6cb920c624fb589991eaf232acb9",
+        "timestamp": "2026-11-28T10:16:08Z"
       }
     ]
   }
