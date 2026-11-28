@@ -142,7 +142,7 @@
                             </div>
                             <div class="subdl-status-row" id="ScribeApiStatus">
                                 <span class="subdl-light"></span>
-                                <span class="subdl-label">SubDL API</span>
+                                <span class="subdl-label">SubDL.com API</span>
                                 <span class="subdl-msg">—</span>
                             </div>
                             <div class="subdl-status-row" id="TvstStatus">
@@ -1490,12 +1490,26 @@ workers.forEach(function (w) {
                     // F-M272: the quota box has its own 60 s timer, stopped and restarted around Save.
                     subdlQuotaTimer = setInterval(subdlLoadQuota, 60000);
                 }
+                /* F-M807: jede Route des Plugins verlangt eine Anmeldung (F-M805). Ein blankes fetch()
+                   schickt KEIN Token — die Antwort war 401, und die Seite zeigte "failed" statt der
+                   Ampeln. Der Kopf kommt jetzt aus derselben Sitzung, die ApiClient.ajax ohnehin nutzt;
+                   zusaetzliche Koepfe (Content-Type) werden durchgereicht. */
+                function subdlAuthHeaders(zusatz) {
+                    var h = zusatz || {};
+                    h['Accept'] = 'application/json';
+                    try {
+                        var token = (typeof ApiClient !== 'undefined' && ApiClient.accessToken)
+                            ? ApiClient.accessToken() : null;
+                        if (token) { h['Authorization'] = 'MediaBrowser Token="' + token + '"'; }
+                    } catch (e) { }
+                    return h;
+                }
                 function subdlLoadQuota() {
                     var box = document.querySelector('#ScribeQuotaBox');
                     if (!box) { return; }
                     var subdlQ = ApiClient.getUrl('Plugins/SubdlQuota/Get');
                     subdlQ += (subdlQ.indexOf('?') === -1 ? '?' : '&') + '_t=' + Date.now();
-                    fetch(subdlQ, { headers: { 'Accept': 'application/json' } }).then(function (r) { return r.json(); }).then(function (res) {
+                    fetch(subdlQ, { headers: subdlAuthHeaders() }).then(function (r) { return r.json(); }).then(function (res) {
                         function n(v) { return (typeof v === 'number') ? v.toLocaleString() : v; }
                         function t(iso) {
                             // FetchedAt is UTC ISO — render in the viewer's timezone (Europe/Berlin)
@@ -1587,7 +1601,7 @@ workers.forEach(function (w) {
                         }
                         var lines = [];
                         lines.push('<div style="font-weight:600;">Plan: ' + (res.plan || 'Free') + '</div>');
-                        lines.push(renderBar('SubDL API calls', res.search.used, res.search.limit, resetLocal(res.search.reset_at)));
+                        lines.push(renderBar('SubDL.com API calls', res.search.used, res.search.limit, resetLocal(res.search.reset_at)));
                         if (res.downloads) {
                             lines.push(renderBar('SubDL downloads', res.downloads.used, res.downloads.limit, resetLocal(res.downloads.reset_at)));
                         }
@@ -1941,7 +1955,7 @@ workers.forEach(function (w) {
 
                 var statusUrl = ApiClient.getUrl('Plugins/SubdlSync/Status');
                 statusUrl += (statusUrl.indexOf('?') === -1 ? '?' : '&') + '_t=' + Date.now();
-                fetch(statusUrl, { headers: { 'Accept': 'application/json' } }).then(function (r) { return r.json(); }).then(function (data) {
+                fetch(statusUrl, { headers: subdlAuthHeaders() }).then(function (r) { return r.json(); }).then(function (data) {
                     var login = data.SubdlLogin || {};
                     var api = data.Subdl || {};
                     var tmdb = data.Tmdb || {};
@@ -2402,7 +2416,7 @@ workers.forEach(function (w) {
                         subdlAugeVerbinden(auge, input, function () {
                             var url = ApiClient.getUrl('Plugins/SubdlSync/Sources/' + encodeURIComponent(entry.key)
                                 + '/secret/' + encodeURIComponent(field.key));
-                            return fetch(url, { headers: { 'Accept': 'application/json' } })
+                            return fetch(url, { headers: subdlAuthHeaders() })
                                 .then(function (r) { return r.ok ? r.json() : null; });
                         });
                         huelle.appendChild(auge);
@@ -2640,7 +2654,7 @@ workers.forEach(function (w) {
                 }
                 fetch(ApiClient.getUrl('Plugins/SubdlSync/Sources/' + encodeURIComponent(key)), {
                     method: 'POST',
-                    headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+                    headers: subdlAuthHeaders({ 'Content-Type': 'application/json' }),
                     body: JSON.stringify(rumpf)
                 }).then(function (r) {
                     return r.text().then(function (text) {
@@ -2917,7 +2931,7 @@ workers.forEach(function (w) {
                 if (!box) { return; }
                 var url = ApiClient.getUrl('Plugins/SubdlSync/Sources');
                 url += (url.indexOf('?') === -1 ? '?' : '&') + '_t=' + Date.now();
-                fetch(url, { headers: { 'Accept': 'application/json' } })
+                fetch(url, { headers: subdlAuthHeaders() })
                     .then(function (r) {
                         return r.text().then(function (text) {
                             var res = null;

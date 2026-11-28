@@ -148,7 +148,7 @@ public class ScribeStatusController : ControllerBase
 
         var result = new StatusDto
         {
-            Subdl = Kachel("subdl", "SubDL API"),
+            Subdl = Kachel("subdl", "SubDL.com API"),
             SubdlLogin = Kachel("subdlLogin", "SubDL.com Login"),
             Tmdb = await CheckTmdbAsync(cfg, ct).ConfigureAwait(false),
             Tvst = Kachel("tvst", "tvst (tvsubtitles.net)"),

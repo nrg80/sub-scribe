@@ -348,7 +348,22 @@ def main():
     # quota covers BOTH the API/search allowance and the download allowance
     # Operator order 16.11.2026: both bars belong to SubDL and say so — the tvst family has its
     # own lights now, so an unlabelled "Downloads" bar would be read as the whole plugin's.
-    check("quota loader renders the SubDL API calls bar", "renderBar('SubDL API calls'" in html)
+    check("quota loader renders the SubDL.com API calls bar", "renderBar('SubDL.com API calls'" in html)
+    # F-M807: die Seite schickt das Token mit. Jede Route des Plugins verlangt eine Anmeldung (F-M805);
+    # ein blankes fetch() traegt keinen Kopf und bekommt 401 — die Ampeln standen dann auf "failed".
+    stelle808 = html.find("function subdlAuthHeaders(")
+    check("F-M807: the page has one helper that builds the auth header",
+          stelle808 >= 0 and "ApiClient.accessToken" in html[stelle808:stelle808 + 700]
+          and "MediaBrowser Token=" in html[stelle808:stelle808 + 700])
+    blanke808 = re.findall(r"fetch\([^;]{0,400}?\{\s*headers:\s*\{[^}]*\}", html, re.S)
+    check("F-M807: no fetch() sends a bare Accept header instead of the token",
+          all("subdlAuthHeaders" in b for b in blanke808),
+          f"{len(blanke808)} fetch()-Aufrufe mit eigenem Kopf, "
+          f"{sum('subdlAuthHeaders' in b for b in blanke808)} davon mit Token")
+    check("F-M807: the helper is used by every fetch() that calls a plugin route",
+          html.count("subdlAuthHeaders(") >= 6,
+          f"{html.count('subdlAuthHeaders(')} Stellen")
+
     check("quota loader renders the SubDL downloads bar", "renderBar('SubDL downloads'" in html)
     # status covers the lights AND the library read/write rows
     check("status loader renders the library read/write rows",

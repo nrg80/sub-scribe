@@ -3,7 +3,7 @@
 This is the master document: every other paper is derived from it and cites its `F-M` tags. The contract boundaries stand in `CONTRACTS.md`, the vocabulary in `TERMS.md`.
 **Project:** Native Jellyfin plugin: automatic upload of embedded subtitles to SubDL.com + download pipeline for missing external subtitles — both in ONE plugin
 **Version:** 2.144
-**Status:** Implementation — v12.3.8.97.
+**Status:** Implementation — v12.3.8.98.
 
 **A rule stands here with its ground: the decision behind it in one sentence, under `Concept decision`, and the
 check that proves it. The detailed measurement archive — what was measured, which run showed it, what happened —
@@ -39,7 +39,7 @@ states the rule, its constants, its ground and its test.**
 - [10. Scheduler, Quota and Timing](#10-scheduler-quota-and-timing) — 24 requirements
 - [11. Content Registry and Identity](#11-content-registry-and-identity) — 27 requirements
 - [12. Library Scope and Skip Filters](#12-library-scope-and-skip-filters) — 8 requirements
-- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 50 requirements
+- [13. Configuration and Settings Page](#13-configuration-and-settings-page) — 51 requirements
 - [14. Data Model and Persistence](#14-data-model-and-persistence) — 93 requirements
 - [15. Logging, Status and Transparency](#15-logging-status-and-transparency) — 61 requirements
 - [16. Non-Goals](#16-non-goals)
@@ -2197,6 +2197,16 @@ the rule rather than a reason (F-M745). Checked in `gui-structure`.
 
 **F-M788 [S]:** **Nothing unsuccessful is ever stored.** Concept decision: only a track that actually came out of the container is written, and only after the verdict of a pair has let it through. A failed pass leaves no entry, so a transient fault cannot poison the store and a later run is free to try again. Checked by T436.
 
+**F-M807 [G]:** **Every request the settings page makes carries the session token.** F-M805 makes every
+plugin route demand a signed-in caller, and a bare `fetch()` sends no credential at all: the answer became
+**401**, the page showed `failed` in all four connection lights, and the library traffic light disappeared
+although the routes were healthy. (1) **One helper** (`subdlAuthHeaders`) builds the header set from the
+session the page already has (`ApiClient.accessToken()`) and passes extra headers such as `Content-Type`
+through; (2) **every** `fetch()` of the page goes through it — the quota box, the status probe, the source
+list, a source's secret read and the source write — while the calls that already use `ApiClient.ajax` keep
+their own token handling; (3) **no** `fetch()` may send an `Accept` header alone. Checked by T451. The
+labels of the same page name the source "SubDL.com" (tab), "SubDL.com Login", "SubDL.com API" and the source
+list entry "SubDL.com".
 ## 14. Data Model and Persistence
 
 **F-M38 [B1]:** **Persistent state split by the kind of thing described** (section 14). Embedded tracks live under their video file, keyed by media hash + stream position; loose subtitles are keyed by normalized content hash; the file's own record carries path, IDs, season/episode and the derived language aggregate. The **hearing-impaired flag belongs to each subtitle datum**, never to the file (F-M282), and **completeness is derived rather than stored** (F-M283) — so the file record carries no download mark and no HI aggregate. Both pipelines read and write the same plugin database.

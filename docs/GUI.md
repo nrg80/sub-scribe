@@ -165,7 +165,9 @@ cases are bound to their entries in `docs/TESTS.md`, and `scripts/tests/counts.j
 
 Every route the page calls needs a signed-in user, and the routes that write (stopping and resuming,
 resetting state or one path, adopting uploads, writing a source) need the administrator role — the
-page runs in the administrator's session and carries the token, so nothing changes for the operator
+page runs in the administrator's session and carries the token on EVERY request — through
+`ApiClient.ajax` or the one `subdlAuthHeaders` helper, never a bare `fetch()`, which would answer 401 and
+show `failed` in all lights (F-M807) — so nothing changes for the operator
 (F-M805, checked by T449). The address never decides: a policy on the connection address is worthless
 behind a reverse proxy, because every request then arrives from a local address.
 
