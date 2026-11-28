@@ -139,5 +139,3 @@ Do not release by tagging and pushing alone: a release must carry exactly one as
 - Release process: [docs/RELEASE.md](docs/RELEASE.md)
 - The plugin on one page, written for a person or an assistant answering one:
   [docs/briefings/short.md](docs/briefings/short.md).
-- Was das Plugin tut, in einfachen deutschen Worten:
-  [docs/briefings/wie-ein-untertitel-laeuft.md](docs/briefings/wie-ein-untertitel-laeuft.md).
