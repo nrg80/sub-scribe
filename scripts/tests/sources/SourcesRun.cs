@@ -1072,10 +1072,13 @@ internal static class Program
                 geheimMitVorgabe.Count == 0 ? "0 Geheimnisse mit Vorgabe" : string.Join(", ", geheimMitVorgabe));
 
             // ---- C: die Routen und der Zugang ----
+            // F-M805: der Zugang ist die ROLLE, nicht die Adresse. Die frühere Regel
+            // LocalAccessOrRequiresElevation fragt die Verbindungs-IP — hinter einem Reverse-Proxy
+            // ist jede Anfrage lokal, damit war die Route von außen ohne Anmeldung erreichbar.
             string controller = File.ReadAllText(Path.Combine(plugin, "Api", "SourceSettingsController.cs"));
             Check(controller.Contains("[HttpGet(\"Sources\")]", StringComparison.Ordinal)
                   && controller.Contains("[HttpPost(\"Sources/{key}\")]", StringComparison.Ordinal)
-                  && controller.Contains("[Authorize(Policy = \"LocalAccessOrRequiresElevation\")]", StringComparison.Ordinal)
+                  && controller.Contains("[Authorize(Policy = \"RequiresElevation\")]", StringComparison.Ordinal)
                   && !controller.Contains("AllowAnonymous", StringComparison.Ordinal),
                 "F-M683 (C): die Routen stehen als GET Sources und POST Sources/{key}, und der Zugang ist der eines Administrators — nicht anonym");
         }
